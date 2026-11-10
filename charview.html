@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Figuren-Test</title>
+<style>body{margin:0;background:#222;color:#ddd;font:13px sans-serif}canvas{display:block}#i{position:fixed;left:8px;top:8px}</style></head>
+<body><div id="i"></div>
+<script type="module">
+// Nur für die Entwicklung: Original-GLB (links) und gepackte Version aus chars.js (rechts) nebeneinander
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+const name = new URLSearchParams(location.search).get('n') || 'merchant', t = +(new URLSearchParams(location.search).get('t') || 1);
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.background = new THREE.Color(0x30343a);
+sc.add(new THREE.HemisphereLight(0xffffff, 0x404040, 3)); const dl = new THREE.DirectionalLight(0xffffff, 2); dl.position.set(2, 4, 3); sc.add(dl);
+const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 100); cam.position.set(0, 1, 6); cam.lookAt(0, 0.9, 0);
+const L = new GLTFLoader(), info = [];
+async function add(src, x, label) {
+  const g = typeof src === 'string' ? await L.loadAsync(src) : await L.parseAsync(src, '');
+  g.scene.position.x = x; sc.add(g.scene);
+  const m = new THREE.AnimationMixer(g.scene);
+  if (g.animations[0]) { m.clipAction(g.animations[0]).play(); m.update(t); }
+  const b = new THREE.Box3().setFromObject(g.scene, true);
+  info.push(`${label}: ${g.animations.map(a => a.name).join(',')} box ${b.min.toArray().map(v => v.toFixed(2))} … ${b.max.toArray().map(v => v.toFixed(2))}`);
+}
+await add(`/assets/chars/${name}.glb`, -1.2, 'original');
+await new Promise(res => { const s = document.createElement('script'); s.src = '/chars.js'; s.onload = res; document.head.appendChild(s); });
+const b64 = window.CHARDATA[name];
+if (b64) { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); await add(u.buffer, 1.2, 'gepackt'); }
+document.getElementById('i').innerHTML = info.join('<br>');
+r.render(sc, cam);
+</script></body></html>

@@ -1,0 +1,25 @@
+{
+  "name": "letzte-flotte",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5179 --strictPort",
+    "check": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 5180 --strictPort",
+    "server": "node server/server.mjs",
+    "start": "node server/server.mjs"
+  },
+  "dependencies": {
+    "three": "0.170.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/three": "0.170.0",
+    "sharp": "^0.33.5",
+    "typescript": "5.6.3",
+    "vite": "5.4.11",
+    "vite-plugin-singlefile": "2.0.3"
+  }
+}

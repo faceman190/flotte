@@ -1,0 +1,16 @@
+# Abhängigkeiten und Build (Render baut selbst)
+node_modules/
+dist/
+
+# Rohdaten: werden nur von den Skripten in scripts/ gebraucht, das Spiel nutzt die fertigen Daten in public/
+assets/
+models/
+sounds/
+
+# Sonstiges
+*.log
+.DS_Store
+Thumbs.db
+
+# Lokale Werkzeug-Einstellungen
+.claude/

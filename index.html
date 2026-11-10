@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Letzte Flotte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap">
+<link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="ui"></canvas>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="locP" class="panel">
+    <div class="h" id="locName">—</div>
+    <div class="row"><span>Zone</span><b id="locZone"></b></div>
+    <div class="row"><span>Gefahr</span><span id="locDanger"></span></div>
+    <div class="row"><span>Credits</span><b id="locCr" class="amb"></b></div>
+    <div class="row"><span>Heimathafen</span><span id="locHome"></span></div>
+    <div class="row"><span>Aufträge</span><span id="locJobs"></span></div>
+    <div class="row"><span>Netz</span><span id="locNet"></span></div>
+  </div>
+  <div id="banner"><div class="t" id="bannerT"></div><div class="s" id="bannerS"></div></div>
+  <!-- rechts oben: Aufgaben und Funk -->
+  <div id="objP">
+    <div id="objBox" class="holo hidden"><div class="ot" id="objT"></div><div id="objL"></div></div>
+    <div id="radio"></div>
+  </div>
+  <div id="prompt" class="hidden"></div>
+  <div id="speed"></div>
+</div>
+<!-- links unten: Steuerung, passend zur Lage -->
+<div id="ctrlP" class="hidden"></div>
+<input id="chatIn" class="hidden" maxlength="200" autocomplete="off" placeholder="Nachricht an alle Piloten · Enter senden · Esc abbrechen">
+<div id="flash"></div>
+
+<!-- Hauptmenü -->
+<div id="menu" class="screen">
+  <div class="menuBox">
+    <div class="logo">LETZTE FLOTTE</div>
+    <div class="tag">Die Ferrox halten den Osten. Der Menschenraum braucht Piloten.</div>
+    <div class="menuBtns">
+      <button class="mbtn pri" id="mContinue">Weiterspielen</button>
+      <button class="mbtn" id="mNew">Neues Spiel</button>
+      <button class="mbtn" id="mMp">Mehrspieler</button>
+      <button class="mbtn" id="mSettings">Einstellungen</button>
+      <button class="mbtn" id="mControls">Steuerung</button>
+      <button class="mbtn" id="mAbout">Über das Spiel</button>
+    </div>
+    <div class="ver">Alpha 0.13 · Mehrspieler</div>
+  </div>
+</div>
+
+<!-- Neues Spiel -->
+<div id="newGame" class="overlay hidden"><div class="card narrow">
+  <h2>NEUER PILOT</h2>
+  <p>Du startest im Hangar der <b class="amb">Bastion</b> im Sektor Heimstatt, mit einem leichten Jäger und 300 Credits.</p>
+  <label class="fld">Rufzeichen<input id="ngName" maxlength="16" value="Falke" autocomplete="off"></label>
+  <p class="hint" id="ngWarn"></p>
+  <div class="btnRow"><button id="ngBack">Zurück</button><button class="pri" id="ngGo">Starten</button></div>
+</div></div>
+
+<!-- Pause -->
+<div id="pause" class="overlay hidden"><div class="card narrow center">
+  <h2>PAUSE</h2>
+  <div class="menuBtns">
+    <button class="mbtn pri" id="pResume">Weiterfliegen</button>
+    <button class="mbtn" id="pMap">Galaxiekarte</button>
+    <button class="mbtn" id="pMp">Mehrspieler</button>
+    <button class="mbtn" id="pSettings">Einstellungen</button>
+    <button class="mbtn" id="pControls">Steuerung</button>
+    <button class="mbtn" id="pQuit">Speichern &amp; Hauptmenü</button>
+  </div>
+</div></div>
+
+<!-- Mehrspieler -->
+<div id="mp" class="overlay hidden"><div class="card narrow">
+  <h2>MEHRSPIELER</h2>
+  <p>Verbinde dich mit einem Server der Letzten Flotte. Piloten im selben Sektor siehst du mit Schiff und Namen, der Funk-Chat geht an alle. Dein Spielstand bleibt auf diesem Gerät.</p>
+  <label class="fld">Server-Adresse<input id="mpUrl" autocomplete="off" spellcheck="false"></label>
+  <div class="hint" id="mpStatus" style="margin-top:8px"></div>
+  <div id="mpList" style="margin-top:10px"></div>
+  <div class="btnRow"><button id="mpBack">Zurück</button><button id="mpOff">Trennen</button><button class="pri" id="mpGo">Verbinden</button></div>
+</div></div>
+
+<!-- Einstellungen -->
+<div id="settings" class="overlay hidden"><div class="card narrow">
+  <h2>EINSTELLUNGEN</h2>
+  <div class="set">
+    <label>Grafikqualität<select id="sQuality"><option value="high">Hoch (Bloom, volle Auflösung)</option><option value="low">Niedrig (schneller)</option></select></label>
+    <label>Sichtfeld <span id="sFovV"></span><input type="range" id="sFov" min="55" max="90" step="1"></label>
+    <label>Maus-Empfindlichkeit <span id="sSensV"></span><input type="range" id="sSens" min="0.4" max="2" step="0.05"></label>
+    <label class="chk"><input type="checkbox" id="sInvert"> Y-Achse umkehren</label>
+    <label class="chk"><input type="checkbox" id="sWalk"> Stationen zu Fuß betreten (sonst direkt ins Stationsmenü)</label>
+    <label>Musik <span id="sMusicV"></span><input type="range" id="sMusic" min="0" max="1" step="0.05"></label>
+    <label>Effekte <span id="sVolV"></span><input type="range" id="sVol" min="0" max="1" step="0.05"></label>
+    <label>HUD-Größe <span id="sHudV"></span><input type="range" id="sHud" min="0.7" max="1.3" step="0.05"></label>
+  </div>
+  <div class="btnRow"><button class="pri" id="sBack">Fertig</button></div>
+</div></div>
+
+<!-- Steuerung -->
+<div id="controls" class="overlay hidden"><div class="card narrow">
+  <h2>STEUERUNG</h2>
+  <div class="ctrl">
+    <kbd>Maus</kbd><span>Lenken (Zeiger weg von der Mitte)</span>
+    <kbd>W / S</kbd><span>Schub / Bremsen</span>
+    <kbd>A / D</kbd><span>Seitwärts ausweichen</span>
+    <kbd>Klick / Leertaste</kbd><span>Feuern (Kanonen oder Bergbaulaser)</span>
+    <kbd>1 / 2 / 3 / Tab</kbd><span>Kanonen / Bergbaulaser / Sprengladung</span>
+    <kbd>4</kbd><span>Bergbaudrohnen an/aus (Maulwurf)</span>
+    <kbd>R</kbd><span>Scanner: zeigt Erze in Asteroiden</span>
+    <kbd>F / Rechtsklick</kbd><span>Rakete auf erfasstes Ziel</span>
+    <kbd>E</kbd><span>An Station andocken / in der Station: benutzen, ansprechen</span>
+    <kbd>WASD / Umschalt</kbd><span>In der Station laufen / rennen, auf Planeten Rover fahren</span>
+    <kbd>E (Planet)</kbd><span>Tief und langsam: landen und Rover aussetzen · mit dem Rover am Schiff: an Bord gehen</span>
+    <kbd>E (Schiff)</kbd><span>Im Hangar am eigenen Schiff: an Bord gehen · drinnen Pilotensitz, Logbuch, Werkbank, Luke</span>
+    <kbd>Tab</kbd><span>Flug: Werkzeug wechseln · Station: Stationsmenü</span>
+    <kbd>B / F1</kbd><span>Flottenband: Übersicht, Aufträge, Karte, Fuhrpark, Fracht, Funk</span>
+    <kbd>M</kbd><span>Galaxiekarte im Flottenband (Routenplanung)</span>
+    <kbd>Enter</kbd><span>Mehrspieler: Chat-Nachricht an alle Piloten</span>
+    <kbd>Esc</kbd><span>Pausenmenü</span>
+  </div>
+  <p class="hint">Bergbau: mit <kbd>R</kbd> scannen, mit <kbd>2</kbd> den Laser wählen und auf einen Asteroiden halten. Der Laser fördert das Erz direkt in den Frachtraum, wird aber heiß. Kanonen zerschlagen Asteroiden schneller, verschwenden aber den Großteil des Erzes. Sprungtore bringen dich in Nachbarsektoren: einfach mittig durchfliegen. Durch die blaue Anflugzone gelangst du auf den Planeten des Sektors; steil aufsteigen bringt dich zurück in den Orbit.</p>
+  <div class="btnRow"><button class="pri" id="cBack">Zurück</button></div>
+</div></div>
+
+<!-- Über -->
+<div id="about" class="overlay hidden"><div class="card narrow">
+  <h2>ÜBER DAS SPIEL</h2>
+  <p>Nach Jahren der Flucht hat die Flotte um die <b class="amb">Bastion</b> eine Zuflucht gefunden. Aus ihr ist der Menschenraum entstanden: ein Netz von Sektoren, verbunden durch Sprungtore.</p>
+  <p>Im Osten herrschen die <b style="color:var(--vio)">Ferrox</b>, eine Maschinenintelligenz. In ihren Sektoren liegen die wertvollsten Rohstoffe, aber auch ihre Bienenstöcke.</p>
+  <p class="hint">Alpha 0.13: Mehrspieler (andere Piloten sehen, Funk-Chat, Online-Liste) über einen eigenen Server; Flottenband (Armbandrechner mit Übersicht, Aufträgen, Karte, Fuhrpark, Fracht und Funk), neues HUD mit Aufgaben und Steuerungsleiste; begehbare eigene Schiffe mit Cockpit, Frachtraum (sichtbare Ladung), Logbuch, Werkbank, Drohnenbucht und Quartier; animierte Figuren in den Stationen (Händler und Stationsarbeiter), neue 3D-Modelle für Stationen, Außenposten und Planetenbasen, eigene Planetenoberflächen mit Wolken, Stadtlichtern und Ringen, Bodentexturen auf den Planeten, überarbeitete Grafik (Filmkurve, Schatten, Kantenglättung) und neue Oberfläche, feste Galaxie mit 18 Sektoren, 10 landbare Planeten mit Bergbau-Rover, begehbare Stationen mit Hangar und Promenade, Handel mit Stationshändlern, fünf Schiffsklassen, Bergbau mit Scanner, Laser, Sprengladungen und Drohnen, sechs Erzarten nach Region, Raffinerie, Stationslager, Marktpreise mit Angebot und Nachfrage, Lieferaufträge. Geplant: gemeinsamer Bergbau und Handel zwischen Piloten.</p>
+  <p class="hint">Raumschiffmodelle: „Ultimate Spaceships“ von Quaternius (CC0). Musik und Soundeffekte (Bergbaulaser, Bordkanone, Antrieb): vom Projektinhaber bereitgestellt. Texturen, Nebel-Panoramen, Planetenkarten, Stations- und Figurenmodelle: KI-generiert (Higgsfield, Tripo, Meshy-Rigging).</p>
+  <div class="btnRow"><button class="pri" id="aBack">Zurück</button></div>
+</div></div>
+
+<!-- Station -->
+<div id="dock" class="overlay hidden"><div class="card wide" id="dockCard"></div></div>
+
+<!-- Galaxiekarte -->
+<!-- Flottenband: Armbandrechner der Piloten (Übersicht, Aufträge, Karte, Fuhrpark, Fracht, Funk) -->
+<div id="band" class="hidden">
+  <div class="bandFrame">
+    <div class="bandHead">
+      <svg class="bandLogo" viewBox="0 0 40 40" width="44" height="44"><path d="M20 3 36 12v16L20 37 4 28V12z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 25 20 9l8 16-8-4z" fill="currentColor"/></svg>
+      <div><div class="bt" id="bandTitle">Übersicht</div><div class="bs" id="bandSub"></div></div>
+      <div class="bandNote" id="bandNote"></div>
+      <button class="bandX" id="bandX" title="Schließen [Esc]">✕</button>
+    </div>
+    <div class="bandBody" id="bandBody"></div>
+    <div id="map" class="hidden"><canvas id="mapC"></canvas><div id="mapSide"></div></div>
+  </div>
+  <div class="bandBar">
+    <div class="bandId"><b id="bandCr"></b><span id="bandName"></span></div>
+    <div class="bandApps" id="bandApps"></div>
+    <div class="bandBrand">FLOTTENBAND</div>
+  </div>
+</div>
+
+<div id="err" class="hidden"></div>
+
+<script src="./textures.js"></script>
+<script src="./nebulae.js"></script>
+<script src="./planets.js"></script>
+<script src="./ships.js"></script>
+<script src="./stations.js"></script>
+<script src="./chars.js"></script>
+<script src="./sounds.js"></script>
+<script type="module" src="./src/main.ts"></script>
+</body>
+</html>

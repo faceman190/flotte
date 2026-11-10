@@ -1,0 +1,275 @@
+import { $, esc, fmtN, fmtD, d3 } from '../core/util';
+import { snd } from '../core/audio';
+import { releaseAll } from '../core/input';
+import { P, G, stats, cargoUsed, saveGame, type Mode, type ShipRec } from '../game/state';
+import { world } from '../game/world';
+import { SECTOR, SECTORS, FACTION, findRoute } from '../data/galaxy';
+import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
+import { SHIPS, computeStats, type Up, type ShipId } from '../data/ships';
+import { UPG, MAXLV, upgFor } from '../data/upgrades';
+import { PLANETS } from '../data/planets';
+import { abandon } from '../game/economy';
+import { radioLog, radioHooks } from './radio';
+import { itemIcon } from './icons';
+import { showMap, hideMap, drawMap } from './galaxyMap';
+import { SIL, trackedContract } from './hud';
+import { NET, netHooks, sendChat, isOnline } from '../game/net';
+import { roomName } from './mp';
+
+// =====================================================================================
+// Flottenband: der Armbandrechner, den die Flotte jedem Piloten mitgibt.
+// Apps: Übersicht, Aufträge, Karte, Fuhrpark, Fracht, Funk. Solange es offen ist, steht das Spiel (Modus 'map').
+// =====================================================================================
+export type App = 'start' | 'auftraege' | 'karte' | 'fuhrpark' | 'fracht' | 'funk';
+const APPS: { id: App; n: string; sub: string; ico: string }[] = [
+  { id: 'start', n: 'Übersicht', sub: 'Pilot, Standort und Schiff', ico: '<path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/>' },
+  { id: 'auftraege', n: 'Aufträge', sub: 'Angenommene Lieferaufträge', ico: '<path d="M5 3h10l4 4v14H5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11h8M8 15h8M8 7h5" stroke="currentColor" stroke-width="2"/>' },
+  { id: 'karte', n: 'Karte', sub: 'Galaxiekarte und Routenplanung', ico: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="1.5"/><circle cx="15" cy="9" r="2"/>' },
+  { id: 'fuhrpark', n: 'Fuhrpark', sub: 'Deine Schiffe und ihre Ausstattung', ico: '<path d="M12 2 15 10l7 4-7 1-3 7-3-7-7-1 7-4z"/>' },
+  { id: 'fracht', n: 'Fracht', sub: 'Frachtraum, Rover und Stationslager', ico: '<path d="M3 8 12 3l9 5v9l-9 5-9-5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 8l9 5 9-5M12 13v9" stroke="currentColor" stroke-width="2"/>' },
+  { id: 'funk', n: 'Funk', sub: 'Verlauf der Funkmeldungen', ico: '<path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2"/>' },
+];
+let app: App = 'start', prevMode: Mode = 'play', fleetSel = 0, hudWasOn = false;
+export const bandHooks = { closed: (_m: Mode) => {}, openTab: (_t: string) => {} };
+export const bandOpen = () => G.mode === 'map';
+export const bandApp = () => app;
+
+// App-Leiste einmal aufbauen
+$('bandApps').innerHTML = APPS.map(a => `<button data-app="${a.id}"><svg viewBox="0 0 24 24" fill="currentColor">${a.ico}</svg>${a.n}</button>`).join('');
+$('bandApps').addEventListener('click', e => { const b = (e.target as HTMLElement).closest('button'); if (b?.dataset.app) setApp(b.dataset.app as App); });
+$('bandX').onclick = () => closeBand();
+
+export function openBand(a?: App) {
+  if (G.mode === 'map') { if (a && a !== app) setApp(a); return; }
+  prevMode = G.mode;
+  G.mode = 'map';
+  if (document.pointerLockElement) document.exitPointerLock();
+  releaseAll();
+  hudWasOn = !$('hud').classList.contains('hidden');
+  $('hud').classList.add('hidden');
+  $('band').classList.remove('hidden');
+  document.body.classList.remove('playing');
+  snd(980, 0.06, 'sine', 0.03, 300);
+  fleetSel = 0;
+  setApp(a || app);
+}
+export function closeBand() {
+  if (G.mode !== 'map') return;
+  hideMap();
+  $('band').classList.add('hidden');
+  if (hudWasOn) $('hud').classList.remove('hidden');
+  G.mode = prevMode;
+  snd(620, 0.06, 'sine', 0.03, -200);
+  bandHooks.closed(prevMode);
+}
+export function setApp(a: App) {
+  app = a;
+  for (const b of $('bandApps').querySelectorAll('button')) b.classList.toggle('on', (b as HTMLElement).dataset.app === a);
+  const def = APPS.find(x => x.id === a)!;
+  $('bandTitle').textContent = def.n;
+  $('bandSub').textContent = def.sub;
+  $('bandCr').textContent = `${fmtN(P.credits)} Cr`;
+  $('bandName').textContent = P.name;
+  $('bandNote').innerHTML = `${esc(where())}<br>${esc(SECTOR[P.sector].name)} · ${esc(FACTION[SECTOR[P.sector].faction].n)}`;
+  if (a === 'karte') { $('bandBody').innerHTML = ''; showMap(); }
+  else { hideMap(); render(); }
+}
+// pro Bild (nur Karte und Fuhrpark zeichnen laufend)
+export function drawBand() {
+  if (app === 'karte') drawMap();
+  else if (app === 'fuhrpark') drawBlueprint();
+}
+
+// ---------- Hilfen ----------
+function where() {
+  if (G.dockedAt) return `Angedockt an ${G.dockedAt.name}`;
+  if (world.surface) return `Auf ${world.def?.name || 'einem Planeten'}`;
+  return 'Im Flug';
+}
+function stationName(id: string) {
+  for (const s of SECTORS) { const st = s.stations.find(x => x.id === id); if (st) return { name: st.name, sector: s.id }; }
+  for (const [sec, pl] of Object.entries(PLANETS)) if (`${sec}_base` === id && pl.base) return { name: `${pl.base} (${pl.name})`, sector: sec };
+  return { name: id, sector: '' };
+}
+const meter = (v: number, max: number, col?: string) => `<div class="meter"><i style="width:${Math.max(0, Math.min(100, v / Math.max(1, max) * 100))}%${col ? `;background:${col}` : ''}"></i></div>`;
+const hms = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h ? `${h} h ${m} min` : `${m} min`; };
+
+function render() {
+  const b = $('bandBody');
+  b.innerHTML = app === 'start' ? startApp() : app === 'auftraege' ? jobsApp() : app === 'fuhrpark' ? fleetApp() : app === 'fracht' ? cargoApp() : funkApp();
+  b.querySelectorAll<HTMLElement>('[data-a]').forEach(el => el.onclick = () => act(el.dataset.a!, el.dataset.k || ''));
+  const ci = document.getElementById('bandChat') as HTMLInputElement | null;
+  if (ci) {
+    const go = () => { sendChat(ci.value); ci.value = ''; };
+    ci.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') go(); });
+    document.getElementById('bandChatGo')!.onclick = go;
+  }
+}
+// Online-Liste oder neue Funkmeldung: Übersicht und Funk neu zeichnen (ohne eine angefangene Nachricht zu verlieren)
+const prevNet = netHooks.changed;
+netHooks.changed = () => { prevNet(); if (bandOpen() && app === 'start') render(); };
+export function bandRadioChanged() {
+  if (!bandOpen() || app !== 'funk') return;
+  const ci = document.getElementById('bandChat') as HTMLInputElement | null, txt = ci?.value || '', focus = document.activeElement === ci;
+  render();
+  const n = document.getElementById('bandChat') as HTMLInputElement | null;
+  if (n) { n.value = txt; if (focus) n.focus(); }
+}
+function act(a: string, k: string) {
+  if (a === 'track') { P.track = k; snd(800, 0.06, 'sine', 0.03, 200); }
+  if (a === 'route') { P.route = k === P.sector ? null : k; snd(700, 0.08, 'sine', 0.04, 200); }
+  if (a === 'drop') { const c = P.contracts.find(x => x.id === k); if (c && confirmDrop(c.id)) { abandon(c); if (P.track === c.id) P.track = undefined; } }
+  if (a === 'ship') fleetSel = +k;
+  if (a === 'app') { setApp(k as App); return; }
+  saveGame();
+  render();
+}
+let dropArm = '';
+function confirmDrop(id: string) { if (dropArm === id) { dropArm = ''; return true; } dropArm = id; setTimeout(() => { if (dropArm === id) { dropArm = ''; if (app === 'auftraege') render(); } }, 3000); return false; }
+
+// ---------- Übersicht ----------
+function startApp() {
+  const S = stats(), sec = SECTOR[P.sector], fac = FACTION[sec.faction], c = trackedContract();
+  const home = stationName(P.home.station).name;
+  return `<div class="bgrid">
+    <div class="bcard"><h4>Pilot</h4><div class="bbig">${esc(P.name.toUpperCase())}</div><div class="bsub">Pilot der Letzten Flotte</div>
+      <div class="row" style="margin-top:12px"><span>Credits</span><b class="amb">${fmtN(P.credits)} Cr</b></div>
+      <div class="row"><span>Verdient gesamt</span><b>${fmtN(P.earned)} Cr</b></div>
+      <div class="row"><span>Flugzeit</span><b>${hms(P.playtime)}</b></div>
+      <div class="row"><span>Erkundet</span><b>${P.visited.length}/${SECTORS.length} Sektoren</b></div></div>
+    <div class="bcard"><h4>Standort</h4><div class="bbig">${esc(sec.name.toUpperCase())}</div><div class="bsub" style="color:${fac.c}">${esc(fac.n)} · Gefahr ${sec.danger}/5</div>
+      <div class="row" style="margin-top:12px"><span>Lage</span><b>${esc(where())}</b></div>
+      <div class="row"><span>Heimathafen</span><b>${esc(home)}</b></div>
+      <div class="row"><span>Route</span><b>${P.route && SECTOR[P.route] ? esc(SECTOR[P.route].name) + ` · ${(findRoute(P.sector, P.route)?.length || 1) - 1} Sprünge` : '—'}</b></div>
+      <div class="btnRow" style="justify-content:flex-start"><button data-a="app" data-k="karte">Karte öffnen</button></div></div>
+    <div class="bcard"><h4>Aktives Schiff</h4><div class="bbig">${esc(P.shipName.toUpperCase())}</div><div class="bsub">${esc(SHIPS[P.cls].role)}</div>
+      <div class="row" style="margin-top:10px"><span>Hülle</span><b>${Math.ceil(P.hull)}/${S.maxHull}</b></div>${meter(P.hull, S.maxHull, P.hull < S.maxHull * 0.35 ? 'var(--bad)' : undefined)}
+      <div class="row"><span>Schild</span><b>${Math.ceil(P.shield)}/${S.maxShield}</b></div>${meter(P.shield, S.maxShield)}
+      <div class="row"><span>Fracht</span><b>${cargoUsed()}/${S.cargo}</b></div>${meter(cargoUsed(), S.cargo, 'linear-gradient(90deg,#c87a20,#ffb347)')}</div>
+    <div class="bcard"><h4>Aktueller Auftrag</h4>${c ? `<div style="font-size:18px;font-weight:700">${itemIcon(c.item, 22)}${c.amount}× ${ITEMS[c.item].n}</div>
+      <div class="row" style="margin-top:8px"><span>Ziel</span><b>${esc(c.stName)}</b></div><div class="row"><span>Sektor</span><b>${esc(SECTOR[c.sector]?.name || '')}</b></div>
+      <div class="row"><span>An Bord</span><b>${Math.min(P.cargo[c.item], c.amount)}/${c.amount}</b></div>${meter(P.cargo[c.item], c.amount, 'var(--grn)')}
+      <div class="row"><span>Belohnung</span><b class="amb">${fmtN(c.reward)} Cr</b></div>` : '<p>Kein Auftrag angenommen. Aufträge gibt es im Stationsmenü.</p>'}
+      <div class="btnRow" style="justify-content:flex-start"><button data-a="app" data-k="auftraege">Alle Aufträge</button></div></div>
+    <div class="bcard"><h4>Piloten online</h4>${NET.status === 'online' ? NET.roster.map(r => `<div class="row"><span style="color:${r.id === NET.id ? 'var(--amb)' : 'var(--grn)'}">${esc(r.name)}${r.id === NET.id ? ' (du)' : ''}</span><b>${esc(roomName(r.room))}</b></div>`).join('') : '<p class="hint">Nicht mit einem Mehrspieler-Server verbunden. Verbinden: Pausenmenü → Mehrspieler.</p>'}</div>
+    <div class="bcard"><h4>Bilanz</h4>
+      <div class="row"><span>Erz abgebaut</span><b>${fmtN(P.mined)} E</b></div>
+      <div class="row"><span>Ferrox zerstört</span><b>${P.kills}</b></div>
+      <div class="row"><span>Aufträge offen</span><b>${P.contracts.length}</b></div>
+      <div class="row"><span>Schiffe</span><b>${1 + P.fleet.length}</b></div></div>
+  </div>`;
+}
+
+// ---------- Aufträge ----------
+function jobsApp() {
+  if (!P.contracts.length) return `<div class="bcard" style="max-width:560px"><h4>Keine Aufträge</h4><p>Lieferaufträge nimmst du an Stationen an: Stationsmenü → Aufträge. Angenommene Aufträge erscheinen hier und rechts oben im HUD.</p></div>`;
+  const tr = trackedContract();
+  return `<div class="blist">${P.contracts.map(c => {
+    const have = Math.min(P.cargo[c.item], c.amount), r = findRoute(P.sector, c.sector), j = r ? r.length - 1 : 0, on = tr === c;
+    const st = c.sector === P.sector ? world.stations.find(s => s.id === c.station) : null;
+    return `<div class="bitem${on ? ' on' : ''}" style="cursor:default;align-items:flex-start">
+      <div style="padding-top:2px">${itemIcon(c.item, 30)}</div>
+      <div style="flex:1;min-width:0"><div class="nm">${c.amount}× ${ITEMS[c.item].n} → ${esc(c.stName)}</div>
+        <div class="sm">${esc(SECTOR[c.sector]?.name || '')} · ${c.sector === P.sector ? (st ? fmtD(d3(st.x, st.y, st.z, P.x, P.y, P.z)) : 'hier') : `${j} ${j === 1 ? 'Sprung' : 'Sprünge'}`} · an Bord ${have}/${c.amount}</div>
+        ${meter(have, c.amount, have >= c.amount ? 'var(--grn)' : undefined)}
+        <div class="btnRow" style="justify-content:flex-start;margin-top:6px">
+          <button data-a="track" data-k="${c.id}" ${on ? 'disabled' : ''}>${on ? 'Wird verfolgt' : 'Im HUD verfolgen'}</button>
+          ${c.sector !== P.sector ? `<button data-a="route" data-k="${c.sector}" class="${P.route === c.sector ? '' : 'pri'}">${P.route === c.sector ? 'Route steht' : 'Route setzen'}</button>` : ''}
+          <button data-a="drop" data-k="${c.id}">${dropArm === c.id ? 'Wirklich aufgeben?' : 'Aufgeben'}</button></div></div>
+      <div style="text-align:right"><div class="amb" style="font-family:var(--mono);font-size:20px">${fmtN(c.reward)} Cr</div><div class="sm">Belohnung</div></div></div>`;
+  }).join('')}</div>`;
+}
+
+// ---------- Fuhrpark ----------
+interface FleetEntry { cls: ShipId; name: string; up: Record<string, number>; hull: number; cargo: Record<ItemId, number>; loc: string; sector: string; active: boolean }
+function fleetList(): FleetEntry[] {
+  const here = G.dockedAt ? G.dockedAt.name : where();
+  return [{ cls: P.cls, name: P.shipName, up: P.up, hull: P.hull, cargo: P.cargo, loc: here, sector: P.sector, active: true },
+    ...P.fleet.map((r: ShipRec) => { const s = stationName(r.loc.station); return { cls: r.cls, name: r.name, up: r.up, hull: r.hull, cargo: r.cargo, loc: s.name, sector: r.loc.sector, active: false }; })];
+}
+function fleetApp() {
+  const L = fleetList(); if (fleetSel >= L.length) fleetSel = 0;
+  const e = L[fleetSel], S = computeStats(e.cls, e.up as Up), used = ITEM_IDS.reduce((a, k) => a + (e.cargo[k] || 0), 0), ups = upgFor(e.cls);
+  return `<div class="split">
+    <div class="blist">${L.map((x, i) => `<div class="bitem${i === fleetSel ? ' on' : ''}" data-a="ship" data-k="${i}"><div><div class="nm">${esc(x.name)}</div><div class="sm">${esc(SHIPS[x.cls].role)} · ${esc(x.loc)}</div></div>${x.active ? '<span class="lock">● AKTIV</span>' : ''}</div>`).join('')}
+      <p class="hint" style="margin-top:6px">Schiffe kaufst und wechselst du in der Werft und im Hangar einer Station.</p></div>
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+      <div class="blueprint"><canvas id="bpC"></canvas></div>
+      <div class="bgrid">
+        <div class="bcard"><h4>${esc(e.name)}</h4>
+          <div class="row"><span>Klasse</span><b>${esc(SHIPS[e.cls].role)}</b></div>
+          <div class="row"><span>Standort</span><b>${esc(e.loc)}</b></div>
+          <div class="row"><span>Hülle</span><b>${Math.ceil(e.hull)}/${S.maxHull}</b></div>${meter(e.hull, S.maxHull)}
+          <div class="row"><span>Fracht</span><b>${used}/${S.cargo}</b></div>${meter(used, S.cargo, 'linear-gradient(90deg,#c87a20,#ffb347)')}
+          ${!e.active && e.sector !== P.sector ? `<div class="btnRow" style="justify-content:flex-start"><button class="pri" data-a="route" data-k="${e.sector}">Route zum Standort</button></div>` : ''}</div>
+        <div class="bcard"><h4>Werte</h4>
+          <div class="row"><span>Tempo</span><b>${S.max} m/s</b></div><div class="row"><span>Schild</span><b>${S.maxShield}</b></div>
+          <div class="row"><span>Kanonen</span><b>${S.dmg} Schaden</b></div>
+          <div class="row"><span>Bergbaulaser</span><b>${S.laser ? `${(S.laserRate * S.beams).toFixed(1).replace('.', ',')} E/s` : '—'}</b></div>
+          <div class="row"><span>Sprengladungen</span><b>${S.maxCharges || '—'}</b></div><div class="row"><span>Drohnen</span><b>${S.drones || '—'}</b></div></div>
+        <div class="bcard"><h4>Ausbau</h4>${ups.map(k => `<div class="row"><span>${esc(UPG[k].n)}</span><span class="lv">${Array.from({ length: MAXLV }, (_, i) => `<i class="${i < (e.up[k] || 0) ? 'f' : ''}"></i>`).join('')}</span></div>`).join('')}</div>
+      </div></div></div>`;
+}
+let bpT = 0;
+function drawBlueprint() {
+  const cv = document.getElementById('bpC') as HTMLCanvasElement | null;
+  if (!cv) return;
+  const r = cv.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
+  if (cv.width !== Math.round(r.width * d)) { cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d); }
+  const g = cv.getContext('2d')!, W = r.width, H = r.height, e = fleetList()[fleetSel];
+  if (!e) return;
+  bpT += 0.016;
+  g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, W, H);
+  const sil = SIL[e.cls] || SIL.falke;
+  let mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
+  for (const poly of sil.body) for (const [x, y] of poly) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mny = Math.min(mny, y); mxy = Math.max(mxy, y); }
+  const k = Math.min((W - 80) / (mxx - mnx), (H - 60) / (mxy - mny)), cx = W / 2, cy = H / 2 - (mny + mxy) / 2 * k;
+  // Seitlich liegend (Bug nach rechts) wie eine Konstruktionszeichnung
+  g.save(); g.translate(cx, cy + (mny + mxy) / 2 * k); g.rotate(Math.PI / 2); g.translate(0, -(mny + mxy) / 2 * k);
+  const kk = Math.min((H - 50) / (mxx - mnx), (W - 120) / (mxy - mny));
+  g.scale(kk / k, kk / k);
+  g.shadowColor = '#5fd0ff'; g.shadowBlur = 10;
+  for (const poly of [...sil.body, ...(sil.lite || [])]) {
+    g.beginPath(); poly.forEach(([x, y], i) => (i ? g.lineTo(x * k, y * k) : g.moveTo(x * k, y * k))); g.closePath();
+    g.fillStyle = 'rgba(95,208,255,.08)'; g.fill();
+    g.strokeStyle = 'rgba(140,225,255,.9)'; g.lineWidth = 1.4 * k / kk; g.stroke();
+  }
+  g.shadowBlur = 0;
+  for (const [x, y] of sil.eng) { g.fillStyle = `rgba(255,160,60,${0.5 + Math.sin(bpT * 5) * 0.2})`; g.beginPath(); g.arc(x * k, y * k, 2.2 * k, 0, 6.283); g.fill(); }
+  for (const [x, y] of sil.guns) { g.fillStyle = '#ffb347'; g.fillRect(x * k - 1.2 * k, y * k - 2 * k, 2.4 * k, 4 * k); }
+  g.restore();
+  // Abtastlinie
+  const sy = (bpT * 60) % H;
+  g.fillStyle = 'rgba(95,208,255,.08)'; g.fillRect(0, sy, W, 2);
+  g.fillStyle = '#5fd0ff'; g.font = '12px "Share Tech Mono",Consolas,monospace'; g.textAlign = 'left';
+  g.fillText(`${e.name.toUpperCase()} · ${SHIPS[e.cls].role.toUpperCase()}`, 14, 22);
+  g.fillStyle = '#8aa0b0'; g.fillText(`Länge ${SHIPS[e.cls].len || '—'} m`, 14, 40);
+}
+
+// ---------- Fracht ----------
+function cargoTable(c: Partial<Record<ItemId, number>>) {
+  const ks = ITEM_IDS.filter(k => c[k]);
+  if (!ks.length) return '<p class="hint">leer</p>';
+  return `<table><tbody>${ks.map(k => `<tr><td>${itemIcon(k, 20)}${ITEMS[k].n}</td><td class="num">${c[k]}</td></tr>`).join('')}</tbody></table>`;
+}
+function cargoApp() {
+  const S = stats(), rover = P.rover && ITEM_IDS.some(k => P.rover![k]) ? P.rover : null;
+  const stores = Object.entries(P.storage || {}).filter(([, v]) => ITEM_IDS.some(k => (v as any)[k]));
+  return `<div class="bgrid">
+    <div class="bcard"><h4>Frachtraum · ${esc(P.shipName)}</h4><div class="row"><span>Belegt</span><b>${cargoUsed()}/${S.cargo}</b></div>${meter(cargoUsed(), S.cargo, 'linear-gradient(90deg,#c87a20,#ffb347)')}${cargoTable(P.cargo)}</div>
+    ${rover ? `<div class="bcard"><h4>Rover</h4>${cargoTable(rover)}</div>` : ''}
+    ${P.fleet.filter(r => ITEM_IDS.some(k => r.cargo[k])).map(r => `<div class="bcard"><h4>${esc(r.name)} (geparkt)</h4><div class="hint" style="margin-bottom:6px">${esc(stationName(r.loc.station).name)}</div>${cargoTable(r.cargo)}</div>`).join('')}
+    ${stores.map(([id, v]) => { const s = stationName(id); return `<div class="bcard"><h4>Lager · ${esc(s.name)}</h4><div class="hint" style="margin-bottom:6px">${esc(SECTOR[s.sector]?.name || '')}</div>${cargoTable(v as any)}</div>`; }).join('')}
+    ${!stores.length ? '<div class="bcard"><h4>Stationslager</h4><p class="hint">Noch nichts eingelagert. Lagern kannst du im Stationsmenü unter „Lager“.</p></div>' : ''}
+  </div>`;
+}
+
+// ---------- Funk ----------
+function funkApp() {
+  const now = G.time;
+  const chat = isOnline() ? `<div style="display:flex;gap:8px;margin-bottom:12px;max-width:820px"><input id="bandChat" maxlength="200" placeholder="Nachricht an alle Piloten" style="flex:1" autocomplete="off"><button class="pri" id="bandChatGo">Senden</button></div>` : '<p class="hint">Chat gibt es, sobald du mit einem Mehrspieler-Server verbunden bist (Pausenmenü → Mehrspieler). Im Flug öffnet <kbd>Enter</kbd> die Chat-Zeile.</p>';
+  if (!radioLog.length) return chat + '<p class="hint">Noch keine Funkmeldungen.</p>';
+  return chat + `<div style="max-width:820px">${[...radioLog].reverse().map(m => { const ago = Math.max(0, Math.round(now - m.t)); return `<div class="msg" style="border-color:${m.col}"><span class="tm">vor ${ago < 60 ? ago + ' s' : Math.round(ago / 60) + ' min'}</span><b style="color:${m.col}">${esc(m.who)}</b>${esc(m.text)}</div>`; }).join('')}</div>`;
+}
+
+radioHooks.added = () => bandRadioChanged();

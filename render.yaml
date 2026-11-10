@@ -1,0 +1,13 @@
+# Render-Blueprint: ein kostenloser Web-Dienst, der das Spiel baut und den Mehrspieler-Server startet.
+# Das Spiel ist danach unter der Render-Adresse erreichbar; der WebSocket läuft unter /ws auf derselben Adresse.
+services:
+  - type: web
+    name: letzte-flotte
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 20
