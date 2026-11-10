@@ -4,7 +4,8 @@ import { rand, d3 } from '../core/util';
 import { snd, laserSound } from '../core/audio';
 import { ITEMS, type ItemId } from '../data/items';
 import { P, G, stats, cargoUsed } from './state';
-import { world, pickOre, removeAst, makeAst, dropPick, type Asteroid } from './world';
+import { world, pickOre, removeAst, makeAst, dropPick, astHooks, type Asteroid } from './world';
+import { SHARED } from './shared';
 import { burst, puff } from './fx';
 import { SHIP, hurtPlayer } from './player';
 import { killEnemy } from './combat';
@@ -25,6 +26,7 @@ function extractOne(a: Asteroid, to: THREE.Vector3, from: THREE.Vector3) {
   P.cargo[k]++;
   P.mined++;
   a.yld--;
+  if (SHARED.client) astHooks.yld(a);
   snd(1000 + Math.random() * 200, 0.05, 'sine', 0.02, 300);
   const dir = new THREE.Vector3().subVectors(to, from), len = dir.length();
   dir.normalize().multiplyScalar(len / 0.45);
@@ -35,9 +37,10 @@ function extractOne(a: Asteroid, to: THREE.Vector3, from: THREE.Vector3) {
   if (a.yld <= 0) crumble(a);
   return true;
 }
-function crumble(a: Asteroid) {
+export function crumble(a: Asteroid, remote = false) {
   const i = world.asteroids.indexOf(a);
   if (i < 0) return;
+  if (SHARED.client && !remote) astHooks.gone(a, 'mined');
   burst(a.x, a.y, a.z, ITEMS[a.comp[0].k].c, 40, a.r0 * 1.4, 1.1);
   burst(a.x, a.y, a.z, '#8a8f9a', 24, a.r0, 1.4);
   snd(120, 0.4, 'triangle', 0.05, -60);
@@ -163,11 +166,21 @@ function explode(c: Charge) {
   for (let j = world.enemies.length - 1; j >= 0; j--) { const e = world.enemies[j]; if (d3(e.x, e.y, e.z, c.x, c.y, c.z) < 80) { e.hp -= 140; if (e.hp <= 0) killEnemy(e, j, true); } }
   const a = c.target;
   if (!a || !world.asteroids.includes(a)) return;
+  blastAst(a, true);
+}
+// Gesprengter Asteroid: große zerfallen in drei Bruchstücke, kleine in Erzbrocken; local = Beute für diesen Piloten
+export function blastAst(a: Asteroid, local: boolean) {
   const i = world.asteroids.indexOf(a);
+  if (i < 0) return;
   removeAst(i);
   if (MINE.target === a) MINE.target = null;
   const zone = world.def?.faction || 'core';
-  if (a.r0 >= 26 && a.yld >= 4) {
+  const big = a.r0 >= 26 && a.yld >= 4;
+  if (SHARED.client && local) {
+    // Mitspieler: Bruchstücke kommen vom Gastgeber, Erzbrocken und Kern bleiben hier
+    astHooks.gone(a, 'blast');
+    if (!big) for (let k = 0; k < Math.max(1, Math.round(a.yld * 0.9)); k++) dropPick(a.x, a.y, a.z, pickOre(a), 1, 45);
+  } else if (big) {
     const nr = a.r0 >= 40 ? 30 : 16, each = Math.max(2, Math.round(a.yld * 0.42));
     for (let k = 0; k < 3; k++) {
       const ang = k / 3 * Math.PI * 2 + rand(-0.4, 0.4), ox = Math.cos(ang), oz = Math.sin(ang);
@@ -176,12 +189,12 @@ function explode(c: Charge) {
       fr.vx = a.vx + ox * rand(14, 26); fr.vz = a.vz + oz * rand(14, 26); fr.vy = rand(-6, 6);
       fr.scanT = 75;
     }
-  } else {
+  } else if (local) {
     const n = Math.max(1, Math.round(a.yld * 0.9));
     for (let k = 0; k < n; k++) dropPick(a.x, a.y, a.z, pickOre(a), 1, 45);
   }
   // Seltener Kern
-  if (Math.random() < 0.3) {
+  if (local && Math.random() < 0.3) {
     const rare: ItemId = zone === 'core' ? 'titan' : 'iridium', n = zone === 'core' ? 2 : 1;
     for (let k = 0; k < n; k++) dropPick(a.x, a.y, a.z, rare, 1, 30);
     radio('SYSTEM', `Seltener Kern freigelegt: ${ITEMS[rare].n}!`);

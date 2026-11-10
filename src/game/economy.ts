@@ -2,6 +2,7 @@ import { rng, hashStr } from '../core/util';
 import { ITEMS, ITEM_IDS, REFINE, type ItemId, type Zone } from '../data/items';
 import { SECTOR, type StationDef } from '../data/galaxy';
 import { P, stats, cargoUsed, type Contract } from './state';
+import { SHARED } from './shared';
 
 // =============== Preise ===============
 // Grundpreis × Stationsfaktor × Herkunft (weit weg = teurer) × Sättigung (viel verkauft = billiger, erholt sich)
@@ -11,13 +12,19 @@ export const originFactor = (k: ItemId, zone: Zone) => 1 + 0.15 * Math.abs(ZI[zo
 const SAT_TAU = 600;      // Sekunden, bis sich der Markt zu ~63 % erholt hat
 const SAT_STEP = 0.006;   // Preisrückgang pro verkaufter Einheit
 
+// Online gilt der gemeinsame Markt des Servers (Serverzeit), sonst der eigene im Spielstand (Spielzeit)
 function satNow(stId: string, k: ItemId) {
-  const m = P.market[stId]?.[k];
+  const m = SHARED.online ? SHARED.market[stId]?.[k] : P.market[stId]?.[k];
   if (!m) return 0;
-  return m.s * Math.exp(-(P.playtime - m.t) / SAT_TAU);
+  return m.s * Math.exp(-((SHARED.online ? SHARED.now() : P.playtime) - m.t) / SAT_TAU);
 }
 function addSat(stId: string, k: ItemId, n: number) {
   const s = satNow(stId, k);
+  if (SHARED.online) {
+    (SHARED.market[stId] = SHARED.market[stId] || {})[k] = { s: Math.max(-80, s + n), t: SHARED.now() };   // sofort, der Server bestätigt
+    SHARED.sendMarket(stId, k, n);
+    return;
+  }
   (P.market[stId] = P.market[stId] || {})[k] = { s: Math.max(-80, s + n), t: P.playtime };
 }
 const satFactor = (s: number) => Math.min(1, Math.max(0.45, 1 - SAT_STEP * s));

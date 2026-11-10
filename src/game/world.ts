@@ -13,6 +13,7 @@ import { burst, clearParticles } from './fx';
 import { snd } from '../core/audio';
 import { planetLook } from '../data/planets';
 import { buildModelStation } from '../models/stationModels';
+import { SHARED } from './shared';
 
 // ---------------- Typen der Sektor-Objekte ----------------
 export interface Station {
@@ -33,6 +34,7 @@ export interface Ore { k: ItemId; p: number }
 export interface Asteroid {
   x: number; y: number; z: number; r: number; r0: number; kind: RockKind; hp: number;
   vx: number; vy: number; vz: number; wx: number; wy: number; mesh: THREE.Mesh; field: Field | null;
+  id?: number;       // Kennung in der gemeinsamen Welt (vom Gastgeber vergeben)
   comp: Ore[];       // Zusammensetzung, absteigend nach Anteil
   yld: number;       // verbleibender Ertrag in Einheiten
   max: number;
@@ -106,6 +108,8 @@ export function pickOre(a: Asteroid): ItemId {
   for (const o of a.comp) { r -= o.p; if (r <= 0) return o.k; }
   return a.comp[0].k;
 }
+// Gemeinsame Welt: Meldungen an den Netzcode, wenn dieser Client nicht Gastgeber ist
+export const astHooks = { gone: (_a: Asteroid, _how: 'mined' | 'break' | 'blast') => {}, yld: (_a: Asteroid) => {} };
 const ORE_GEO = new THREE.OctahedronGeometry(1);
 const SHARD_M = new THREE.MeshStandardMaterial({ color: 0xb070ff, emissive: 0x7030ff, emissiveIntensity: 1.1, metalness: 0.2, roughness: 0.15, flatShading: true });
 
@@ -155,7 +159,7 @@ export function removeAst(i: number) {
   a.mesh.geometry.dispose();
   world.asteroids.splice(i, 1);
 }
-export function breakAst(i: number) {
+export function breakAst(i: number, drops = true) {
   const a = world.asteroids[i];
   const col = a.kind === 'ice' ? '#d8f0ff' : a.kind === 'crystal' ? '#c070ff' : '#d9822b';
   burst(a.x, a.y, a.z, col, 20 + a.r, a.r * 1.6, 1);
@@ -163,13 +167,15 @@ export function breakAst(i: number) {
   snd(160, 0.18, 'triangle', 0.05, -100);
   removeAst(i);
   const nr = a.r0 > 36 ? 30 : a.r0 > 20 ? 16 : 0, frac = a.yld / a.max;
+  // Mitspieler (nicht Gastgeber): Bruchstücke erzeugt der Gastgeber, die Beute bleibt hier
+  if (SHARED.client) { astHooks.gone(a, 'break'); if (!nr) for (let j = 0; j < Math.max(1, Math.round(a.yld * 0.3)); j++) dropPick(a.x, a.y, a.z, pickOre(a), 1); return; }
   if (nr && frac > 0.3) for (let j = 0; j < 2; j++) {
     const c = makeAst(a.x + rand(-8, 8), a.y + rand(-8, 8), a.z + rand(-8, 8), nr, a.kind, a.field, a.comp, frac);
     c.vx = a.vx + rand(-30, 30); c.vy = a.vy + rand(-18, 18); c.vz = a.vz + rand(-30, 30);
     c.scanT = a.scanT;
   }
   const n = nr ? 1 : Math.max(1, Math.round(a.yld * 0.3));
-  for (let j = 0; j < n; j++) dropPick(a.x, a.y, a.z, pickOre(a), 1);
+  if (drops) for (let j = 0; j < n; j++) dropPick(a.x, a.y, a.z, pickOre(a), 1);
 }
 
 function fieldRock(f: Field, edge = false) {
@@ -200,7 +206,7 @@ export function updateAsteroids(dt: number) {
     a.mesh.rotation.x += a.wx * dt; a.mesh.rotation.y += a.wy * dt;
   }
   world.regrowT -= dt;
-  if (world.regrowT <= 0) {
+  if (world.regrowT <= 0 && !SHARED.client) {   // nachwachsen lässt nur der Gastgeber
     world.regrowT = 12;
     for (const f of world.fields) {
       const cnt = world.asteroids.filter(a => a.field === f).length;

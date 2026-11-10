@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import { scene } from '../core/engine';
 import { P, G, settings } from './state';
-import { world } from './world';
+import { world, makeAst, removeAst, breakAst, astHooks, type Asteroid } from './world';
+import { crumble, blastAst, MINE } from './mining';
+import { burst } from './fx';
+import { SHARED } from './shared';
+import type { ItemId, RockKind } from '../data/items';
 import { SHIP } from './player';
 import { ROVER, buildRover } from './surface';
 import { IN } from './interior';
@@ -48,7 +52,7 @@ export function connect(url = settings.server || defaultUrl()) {
     if (NET.ws !== ws) return;
     const was = NET.status === 'online';
     NET.ws = null; NET.status = wantOnline ? 'fehler' : 'aus'; NET.roster = [];
-    clearRemotes();
+    clearRemotes(); leaveShared();
     if (was) radio('SYSTEM', 'Verbindung zum Mehrspieler-Server verloren.');
     netHooks.changed();
     // automatisch neu verbinden, wenn die Verbindung schon einmal stand
@@ -60,7 +64,7 @@ export function disconnect(silent = false) {
   const ws = NET.ws; NET.ws = null;
   if (ws) try { ws.close(); } catch { /* egal */ }
   NET.status = 'aus'; NET.roster = []; NET.id = 0;
-  clearRemotes();
+  clearRemotes(); leaveShared();
   if (!silent) netHooks.changed();
 }
 const sendMsg = (m: object) => { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(m)); };
@@ -69,6 +73,10 @@ export function sendChat(text: string) { const t = text.trim().slice(0, 200); if
 function onMsg(m: any) {
   if (m.t === 'welcome') {
     NET.id = m.id; NET.status = 'online';
+    const off = (m.now || 0) - performance.now() / 1000;
+    SHARED.now = () => performance.now() / 1000 + off;
+    SHARED.market = m.market || {};
+    SHARED.online = true;
     radio('SYSTEM', `Mit dem Mehrspieler-Server verbunden. ${m.online > 1 ? `${m.online - 1} weitere Piloten online.` : 'Du bist der erste Pilot online.'}`);
     netHooks.changed();
   } else if (m.t === 'roster') {
@@ -96,6 +104,14 @@ function onMsg(m: any) {
     r.seen = performance.now();
   } else if (m.t === 'leave') {
     removeRemote(m.id);
+  } else if (m.t === 'host') {
+    hostId = m.id; updateRole();
+  } else if (m.t === 'w') {
+    applyWorld(m.l || []);
+  } else if (m.t === 'a') {
+    applyAction(m);
+  } else if (m.t === 'mkt') {
+    (SHARED.market[m.st] = SHARED.market[m.st] || {})[m.k] = { s: m.s, t: m.at };
   } else if (m.t === 'chat') {
     radio(m.name, m.text, m.id === NET.id ? '#ffb347' : '#7fe0a0');
   }
@@ -118,7 +134,8 @@ function sendState() {
   if (!world.def || G.mode === 'menu') { if (room) { room = ''; clearRemotes(); sendMsg({ t: 'room', room: '' }); } return; }
   // Raum: Sektor oder Planetenoberfläche
   const key = world.def.id + (world.surface ? ':planet' : '');
-  if (key !== room) { room = key; clearRemotes(); sendMsg({ t: 'room', room }); }
+  if (key !== room) { room = key; clearRemotes(); hostId = 0; synced = false; updateRole(); sendMsg({ t: 'room', room }); }
+  flushYld();
   const s = myState(), p = s.o.position, q = s.o.quaternion;
   sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m });
 }
@@ -146,3 +163,84 @@ export function remoteMarkers() {
   }
   return out;
 }
+
+// =====================================================================================
+// Gemeinsame Welt: Asteroiden
+// Der Gastgeber (erster Pilot im Raum) schickt jede Sekunde alle Asteroiden; Mitspieler übernehmen den Stand
+// und melden ihren Abbau. Die Beute bleibt immer bei dem, der abgebaut hat.
+// =====================================================================================
+let hostId = 0, synced = false, nextAstId = 1;
+const KINDS: RockKind[] = ['metal', 'ice', 'crystal'];
+const goneAt = new Map<number, number>(), pendYld = new Map<number, number>();
+function leaveShared() { SHARED.online = false; SHARED.client = false; hostId = 0; synced = false; }
+function updateRole() {
+  const was = SHARED.client;
+  SHARED.client = NET.status === 'online' && !!room && hostId !== 0 && hostId !== NET.id;
+  if (was && !SHARED.client) {
+    // Gastgeber geworden: Kennungen fortsetzen, Felder wachsen ab jetzt hier nach
+    for (const a of world.asteroids) nextAstId = Math.max(nextAstId, (a.id || 0) + 1);
+    radio('SYSTEM', 'Du bist jetzt Gastgeber dieses Sektors: Asteroiden und Nachwuchs laufen über dein Spiel.');
+  }
+  if (!was && SHARED.client) synced = false;
+}
+const scaleAst = (a: Asteroid) => { const f = Math.max(0, a.yld / a.max), sc = 0.45 + 0.55 * Math.cbrt(f); a.mesh.scale.setScalar(sc); a.r = a.r0 * sc; };
+const r1 = (v: number) => Math.round(v * 10) / 10;
+function compCode(a: Asteroid) { const o = a as any; return o._cc || (o._cc = a.comp.map(c => c.k + ':' + c.p.toFixed(3)).join('|')); }
+function othersHere() { return NET.roster.some(r => r.room === room && r.id !== NET.id); }
+// Gastgeber: Stand senden
+setInterval(() => {
+  if (NET.status !== 'online' || SHARED.client || !room || !world.def || !othersHere()) return;
+  const l = world.asteroids.map(a => {
+    if (!a.id) a.id = nextAstId++;
+    return [a.id, a.field ? world.fields.indexOf(a.field) : -1, KINDS.indexOf(a.kind), a.r0, r1(a.x), r1(a.y), r1(a.z), r1(a.vx), r1(a.vy), r1(a.vz), a.yld, a.max, compCode(a)];
+  });
+  sendMsg({ t: 'w', l });
+}, 1000);
+// Mitspieler: Stand übernehmen
+function dropAst(i: number, fx: boolean) {
+  const a = world.asteroids[i];
+  if (fx) burst(a.x, a.y, a.z, '#8a8f9a', 16, a.r0, 1);
+  a.yld = 0;
+  if (MINE.target === a) MINE.target = null;
+  removeAst(i);
+}
+function applyWorld(l: any[]) {
+  if (!SHARED.client || !world.def) return;
+  if (!synced) { for (let i = world.asteroids.length - 1; i >= 0; i--) dropAst(i, false); synced = true; }
+  const byId = new Map<number, Asteroid>(), seen = new Set<number>(), now = performance.now();
+  for (const a of world.asteroids) if (a.id) byId.set(a.id, a);
+  for (const e of l) {
+    const [id, fi, ki, r0, x, y, z, vx, vy, vz, yld, max, cc] = e;
+    seen.add(id);
+    let a = byId.get(id);
+    if (!a) {
+      if ((goneAt.get(id) || 0) > now - 4000) continue;   // gerade selbst abgebaut, Gastgeber weiß es noch nicht
+      const comp = String(cc).split('|').map(t => { const [k, pp] = t.split(':'); return { k: k as ItemId, p: +pp }; });
+      a = makeAst(x, y, z, r0, KINDS[ki] || 'metal', world.fields[fi] || null, comp, 1);
+      a.id = id; a.max = max; a.yld = Math.min(yld, max);
+      a.vx = vx; a.vy = vy; a.vz = vz;
+      scaleAst(a);
+    } else {
+      a.x += (x - a.x) * 0.5; a.y += (y - a.y) * 0.5; a.z += (z - a.z) * 0.5;
+      a.vx = vx; a.vy = vy; a.vz = vz;
+      if (yld < a.yld) { a.yld = yld; scaleAst(a); }
+    }
+  }
+  for (let i = world.asteroids.length - 1; i >= 0; i--) { const a = world.asteroids[i]; if (!a.id || !seen.has(a.id)) dropAst(i, true); }
+}
+// Mitspieler: eigenen Abbau melden
+astHooks.gone = (a, how) => { if (!a.id) return; goneAt.set(a.id, performance.now()); pendYld.delete(a.id); sendMsg({ t: 'a', op: how, id: a.id }); };
+astHooks.yld = a => { if (a.id) pendYld.set(a.id, a.yld); };
+function flushYld() { for (const [id, v] of pendYld) sendMsg({ t: 'a', op: 'yld', id, v }); pendYld.clear(); }
+// Gastgeber: Meldungen der Mitspieler anwenden (ohne Beute für den Gastgeber)
+function applyAction(m: any) {
+  if (SHARED.client) return;
+  const i = world.asteroids.findIndex(a => a.id === m.id);
+  if (i < 0) return;
+  const a = world.asteroids[i];
+  if (m.op === 'yld') { if (m.v < a.yld) { a.yld = Math.max(0, m.v); scaleAst(a); if (a.yld <= 0) crumble(a, true); } }
+  else if (m.op === 'mined') crumble(a, true);
+  else if (m.op === 'break') breakAst(i, false);
+  else if (m.op === 'blast') blastAst(a, false);
+}
+SHARED.sendMarket = (st, k, n) => sendMsg({ t: 'mkt', st, k, n });
