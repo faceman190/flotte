@@ -75,7 +75,7 @@ const GREET: Record<string, string> = {
 const NAMES = ['Mira', 'Jonte', 'Ansgar', 'Leta', 'Corvin', 'Ilka', 'Tamo', 'Brann', 'Sefa', 'Okko', 'Runa', 'Henrik', 'Yara', 'Falk', 'Edda', 'Marek', 'Tilda', 'Bosse', 'Nele', 'Arvid', 'Kaja', 'Lorenz'];
 
 // ---------- Laufzeitdaten des aktuellen Innenraums ----------
-let group: THREE.Group | null = null;
+let group: THREE.Group | null = null, stationGroup: THREE.Group | null = null;
 let rects: Rect[] = [], obstacles: Rect[] = [], shipObs: Rect[] = [];
 let inters: Inter[] = [], shipInters: Inter[] = [];
 let labels: Label[] = [], shipLabels: Label[] = [];
@@ -405,6 +405,7 @@ export function enterInterior(st: Station) {
   if (IN.active) leaveInterior();
   IN.active = true; IN.station = st;
   group = build(st);
+  stationGroup = group;
   const Y = st.launch.yaw, fx = -Math.sin(Y), fz = -Math.cos(Y);
   group.position.set(st.launch.x - fx * HZ1, st.launch.y - DH / 2, st.launch.z - fz * HZ1);
   group.rotation.y = Y + Math.PI;
@@ -430,6 +431,8 @@ export function leaveInterior() {
   if (!IN.active) return;
   if (document.pointerLockElement === gl) document.exitPointerLock();
   disposeParked();
+  clearOthers();
+  stationGroup = null;
   if (group) {
     scene.remove(group);
     group.traverse((c: any) => { if (c.geometry && !c.userData.shared) c.geometry.dispose(); });
@@ -653,6 +656,7 @@ export function updateWalk(dt: number) {
     q.p.armL.rotation.x = Math.sin(t * 0.8 + q.z) * 0.06; q.p.armR.rotation.x = -q.p.armL.rotation.x;
     if (q.p.mixer) q.p.mixer.update(dt); else q.p.g.position.y = Math.sin(t * 1.3 + q.x) * 0.008;
   }
+  updateOthers(dt);
   for (const w of walkers) {
     const n = w.path[(w.i + 1) % w.path.length], dx = n[0] - w.x, dzz = n[1] - w.z, d = Math.hypot(dx, dzz);
     if (d < 0.3) { w.i = (w.i + 1) % w.path.length; continue; }
@@ -698,7 +702,7 @@ export function drawWalkHUD() {
   ux.save();
   // Namen über Figuren und Schiffen
   ux.textAlign = 'center'; ux.font = '12px "Share Tech Mono",Consolas,monospace';
-  for (const l of [...labels, ...shipLabels]) {
+  for (const l of [...labels, ...shipLabels, ...otherLabels()]) {
     const d = Math.hypot(l.p.x - IN.x, l.p.z - IN.z);
     if (d > 26) continue;
     group.localToWorld(_p.copy(l.p)).project(camera);
@@ -776,3 +780,67 @@ document.addEventListener('pointerlockchange', () => {
   if (IN.locked && !now && IN.active && G.mode === 'walk') interiorHooks.pause();
   IN.locked = now;
 });
+
+// =====================================================================================
+// Andere Piloten (Mehrspieler) zu Fuß in derselben Station
+// Sie stehen im Stationsraum (auch wenn man selbst gerade im eigenen Schiff ist: dann sieht man sie durch die Kanzel).
+// Positionen kommen vom Netzcode in Raum-Koordinaten (x, z, Blickrichtung) und werden weich nachgeführt.
+// =====================================================================================
+interface Other { p: Person; x: number; z: number; ry: number; tx: number; tz: number; tyaw: number; name: string; speed: number }
+const others = new Map<number, Other>();
+export function syncOtherPilots(list: { id: number; name: string; st: string; x: number; z: number; yaw: number }[]) {
+  if (!IN.active || !IN.station || !stationGroup) { if (others.size) clearOthers(); return; }
+  const here = IN.station.id, seen = new Set<number>();
+  for (const o of list) {
+    if (o.st !== here) continue;
+    seen.add(o.id);
+    let r = others.get(o.id);
+    if (!r) {
+      const p = buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, PAL[kind].accent, 'walk');
+      p.g.position.set(o.x, 0, o.z); p.g.rotation.y = o.yaw + Math.PI;
+      stationGroup.add(p.g);
+      r = { p, x: o.x, z: o.z, ry: o.yaw + Math.PI, tx: o.x, tz: o.z, tyaw: o.yaw, name: o.name, speed: 0 };
+      others.set(o.id, r);
+    }
+    r.tx = o.x; r.tz = o.z; r.tyaw = o.yaw; r.name = o.name;
+  }
+  for (const id of [...others.keys()]) if (!seen.has(id)) removeOther(id);
+}
+function removeOther(id: number) {
+  const r = others.get(id); if (!r) return;
+  r.p.g.parent?.remove(r.p.g);
+  r.p.g.traverse((c: any) => { if (c.isMesh && !c.userData.shared) c.geometry?.dispose(); });
+  others.delete(id);
+}
+function clearOthers() { for (const id of [...others.keys()]) removeOther(id); }
+function updateOthers(dt: number) {
+  const k = Math.min(1, dt * 10);
+  for (const r of others.values()) {
+    const ox = r.x, oz = r.z;
+    r.x += (r.tx - r.x) * k; r.z += (r.tz - r.z) * k;
+    const v = Math.hypot(r.x - ox, r.z - oz) / Math.max(dt, 1e-3);
+    r.speed += (v - r.speed) * Math.min(1, dt * 6);
+    r.p.g.position.set(r.x, 0, r.z);
+    // Figur schaut in Blickrichtung des Piloten (+Z des Modells → Blickrichtung)
+    const want = r.tyaw + Math.PI, da = Math.atan2(Math.sin(want - r.ry), Math.cos(want - r.ry));
+    r.ry += da * Math.min(1, dt * 8); r.p.g.rotation.y = r.ry;
+    const mv = r.speed > 0.4;
+    if (r.p.mixer) {
+      if (mv !== r.p.moving && r.p.walk && r.p.idle) {
+        const from = mv ? r.p.idle : r.p.walk, to = mv ? r.p.walk : r.p.idle;
+        to.reset().play(); from.crossFadeTo(to, 0.3, false);
+        r.p.moving = mv;
+      }
+      if (r.p.walk) r.p.walk.timeScale = clamp(r.speed / 1.4, 0.6, 3);   // Rennen = schnellere Schritte
+      r.p.mixer.update(dt);
+    } else {
+      const sw = mv ? Math.sin(G.time * 9) * 0.55 : 0;
+      r.p.legL.rotation.x = sw; r.p.legR.rotation.x = -sw; r.p.armL.rotation.x = -sw * 0.7; r.p.armR.rotation.x = sw * 0.7;
+    }
+  }
+}
+// Namensschilder (nur im Stationsraum; im Schiff passen die Koordinaten nicht)
+function otherLabels(): Label[] {
+  if (room || !others.size) return [];
+  return [...others.values()].map(r => ({ p: new THREE.Vector3(r.x, 2.15, r.z), text: r.name, col: '#7fe0a0' }));
+}
