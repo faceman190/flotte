@@ -1,11 +1,11 @@
 # Abhängigkeiten und Build (Render baut selbst)
-node_modules/
-dist/
+/node_modules/
+/dist/
 
 # Rohdaten: werden nur von den Skripten in scripts/ gebraucht, das Spiel nutzt die fertigen Daten in public/
-assets/
-models/
-sounds/
+/assets/
+/models/
+/sounds/
 
 # Sonstiges
 *.log
