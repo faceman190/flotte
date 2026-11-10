@@ -24,7 +24,7 @@ export interface Remote {
   ship: ShipModel | null; rover: THREE.Group | null; tp: THREE.Vector3; tq: THREE.Quaternion; seen: number;
 }
 export const remotes = new Map<number, Remote>();
-let room = '', sendT = 0, retry = 0, wantOnline = false, sentName = '';
+let room = '', retry = 0, wantOnline = false, sentName = '';
 
 // Standard-Adresse: läuft das Spiel vom Mehrspieler-Server, ist es dieselbe Adresse; sonst der lokale Testserver
 export function defaultUrl() {
@@ -110,19 +110,21 @@ function myState() {
   if (ROVER.active && ROVER.model) return { o: ROVER.model.g, m: 'rover' };
   return { o: SHIP.g, m: 'schiff' };
 }
-export function netUpdate(dt: number) {
+// Eigenen Stand senden: eigener Takt (10× pro Sekunde), unabhängig vom Bildaufbau.
+// So bleibt ein Pilot sichtbar, auch wenn sein Browser-Tab im Hintergrund liegt (dort bremst der Browser nur auf etwa 1× pro Sekunde).
+function sendState() {
   if (NET.status !== 'online') return;
   if (P.name && P.name !== sentName) { sentName = P.name; sendMsg({ t: 'hello', name: sentName }); }
   if (!world.def || G.mode === 'menu') { if (room) { room = ''; clearRemotes(); sendMsg({ t: 'room', room: '' }); } return; }
   // Raum: Sektor oder Planetenoberfläche
   const key = world.def.id + (world.surface ? ':planet' : '');
   if (key !== room) { room = key; clearRemotes(); sendMsg({ t: 'room', room }); }
-  sendT -= dt;
-  if (sendT <= 0) {
-    sendT = 0.1;
-    const s = myState(), p = s.o.position, q = s.o.quaternion;
-    sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m });
-  }
+  const s = myState(), p = s.o.position, q = s.o.quaternion;
+  sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m });
+}
+setInterval(sendState, 100);
+export function netUpdate(dt: number) {
+  if (NET.status !== 'online') return;
   // andere Piloten weich nachführen
   const k = Math.min(1, dt * 8), now = performance.now();
   for (const r of [...remotes.values()]) {
