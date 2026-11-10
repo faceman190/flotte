@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { scene } from '../core/engine';
-import { P, G, settings } from './state';
+import { P, G, settings, saveGame, saveHooks, setSaveSlot, rawSave, writeRawSave, localSave } from './state';
 import { world, makeAst, removeAst, breakAst, astHooks, type Asteroid } from './world';
 import { crumble, blastAst, MINE } from './mining';
 import { burst } from './fx';
@@ -22,6 +22,7 @@ import { radio } from '../ui/radio';
 export const NET = {
   ws: null as WebSocket | null, status: 'aus' as 'aus' | 'verbinde' | 'online' | 'fehler', id: 0, url: '', err: '',
   roster: [] as { id: number; name: string; room: string }[],
+  account: null as string | null, authErr: '', savedAt: 0, tempStore: false,
 };
 export const netHooks = { changed: () => {} };   // Status oder Online-Liste geändert (Menüs neu zeichnen)
 export interface Remote {
@@ -52,7 +53,7 @@ export function connect(url = settings.server || defaultUrl()) {
   ws.onclose = () => {
     if (NET.ws !== ws) return;
     const was = NET.status === 'online';
-    NET.ws = null; NET.status = wantOnline ? 'fehler' : 'aus'; NET.roster = [];
+    NET.ws = null; NET.status = wantOnline ? 'fehler' : 'aus'; NET.roster = []; NET.account = null;
     clearRemotes(); leaveShared();
     if (was) radio('SYSTEM', 'Verbindung zum Mehrspieler-Server verloren.');
     netHooks.changed();
@@ -64,7 +65,7 @@ export function disconnect(silent = false) {
   wantOnline = false;
   const ws = NET.ws; NET.ws = null;
   if (ws) try { ws.close(); } catch { /* egal */ }
-  NET.status = 'aus'; NET.roster = []; NET.id = 0;
+  NET.status = 'aus'; NET.roster = []; NET.id = 0; NET.account = null;
   clearRemotes(); leaveShared();
   if (!silent) netHooks.changed();
 }
@@ -73,11 +74,13 @@ export function sendChat(text: string) { const t = text.trim().slice(0, 200); if
 
 function onMsg(m: any) {
   if (m.t === 'welcome') {
-    NET.id = m.id; NET.status = 'online';
+    NET.id = m.id; NET.status = 'online'; NET.tempStore = !!m.temp;
     const off = (m.now || 0) - performance.now() / 1000;
     SHARED.now = () => performance.now() / 1000 + off;
     SHARED.market = m.market || {};
     SHARED.online = true;
+    // angemeldet bleiben: mit gespeichertem Token automatisch anmelden
+    const tok = getToken(); if (tok) sendMsg({ t: 'login', token: tok });
     radio('SYSTEM', `Mit dem Mehrspieler-Server verbunden. ${m.online > 1 ? `${m.online - 1} weitere Piloten online.` : 'Du bist der erste Pilot online.'}`);
     netHooks.changed();
   } else if (m.t === 'roster') {
@@ -111,6 +114,10 @@ function onMsg(m: any) {
     applyWorld(m.l || []);
   } else if (m.t === 'a') {
     applyAction(m);
+  } else if (m.t === 'auth') {
+    onAuth(m);
+  } else if (m.t === 'saved') {
+    NET.savedAt = m.at || Date.now(); netHooks.changed();
   } else if (m.t === 'f') {
     applyFoes(m);
   } else if (m.t === 'fk') {
@@ -319,3 +326,59 @@ function foeHitByOther(m: any) {
   if (m.op === 'fhitp') sendMsg({ t: 'fk', id: e.nid, by: m.from, type: e.type, p: [r1(e.x), r1(e.y), r1(e.z)] });
   killEnemy(e, j, false, false);
 }
+
+// =====================================================================================
+// Pilotenkonten: Spielstand auf dem Server
+// Nach der Anmeldung gilt ein eigener Speicherplatz je Konto; jedes Speichern geht zusätzlich (gebremst) an den Server.
+// Beim Anmelden gewinnt der neuere Stand (Server oder dieses Gerät), damit Offline-Fortschritt nicht verloren geht.
+// =====================================================================================
+const TOKEN_KEY = 'lf_token';
+const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };
+const setToken = (t: string) => { try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch { /* egal */ } };
+export const authHooks = { changed: () => {} };
+export function register(name: string, pass: string, takeLocal: boolean) {
+  NET.authErr = '';
+  const d = takeLocal ? localSave() : null;
+  sendMsg({ t: 'register', name, pass, data: d && d.v === 2 ? d : null });
+}
+export function login(name: string, pass: string) { NET.authErr = ''; sendMsg({ t: 'login', name, pass }); }
+export function logout() {
+  if (NET.account) saveGame();
+  sendMsg({ t: 'logout', token: getToken() });
+  setToken(''); NET.account = null; setSaveSlot(null);
+  authHooks.changed(); netHooks.changed();
+}
+function onAuth(m: any) {
+  if (!m.ok) {
+    if (m.out) { NET.account = null; if (G.mode === 'menu') setSaveSlot(null); }
+    if (m.err) { NET.authErr = m.err; if (/abgelaufen/.test(m.err)) setToken(''); if (m.out) radio('SYSTEM', m.err); }
+    authHooks.changed(); netHooks.changed();
+    return;
+  }
+  NET.account = m.name; NET.authErr = '';
+  if (m.token) setToken(m.token);
+  setSaveSlot(m.name);
+  const local = rawSave(), server = m.data;
+  if (G.mode !== 'menu' && P.name) {
+    // mitten im Spiel neu verbunden: aktuellen Stand hochladen
+    pushSave(true);
+  } else if (server && (!local || (server.savedAt || 0) >= (local.savedAt || 0))) {
+    writeRawSave(server);
+  } else if (local) {
+    pushRaw(local);   // dieses Gerät ist neuer
+  }
+  radio('SYSTEM', `Angemeldet als ${m.name}. Dein Spielstand wird auf dem Server gesichert.`);
+  authHooks.changed(); netHooks.changed();
+}
+let pushT = 0, pushTimer = 0;
+function pushRaw(d: any) { if (NET.account && d) sendMsg({ t: 'save', data: d }); }
+function pushSave(now = false) {
+  if (!NET.account || !P.name) return;
+  const wait = now ? 0 : Math.max(0, 5000 - (Date.now() - pushT));
+  clearTimeout(pushTimer);
+  pushTimer = window.setTimeout(() => { pushT = Date.now(); pushRaw(JSON.parse(JSON.stringify(P))); }, wait);
+}
+saveHooks.saved = () => pushSave();
+// alle 30 s im Spiel sichern, damit auch lange Flüge auf dem Server landen
+setInterval(() => { if (NET.account && G.mode !== 'menu' && P.name) saveGame(); }, 30000);
+addEventListener('beforeunload', () => { if (NET.account && G.mode !== 'menu' && P.name) { P.savedAt = Date.now(); pushRaw(P); } });

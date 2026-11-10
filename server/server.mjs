@@ -2,7 +2,7 @@
 // Letzte Flotte – Mehrspieler-Server
 // Liefert das gebaute Spiel (dist/) aus und verbindet die Piloten über WebSocket (/ws).
 // Jeder Sektor ist ein Raum (Planetenoberflächen eigene Räume); Positionen gehen nur an Piloten im selben Raum,
-// Chat und die Online-Liste an alle. Spielstände bleiben vorerst im Browser der Spieler.
+// Chat und die Online-Liste an alle. Pilotenkonten mit Kennwort speichern den Spielstand auf dem Server (store.mjs).
 // Gemeinsame Welt: Der erste Pilot in einem Raum ist Gastgeber und rechnet die Asteroiden; er schickt den Stand ('w')
 // an die anderen, deren Abbau-Meldungen ('a') gehen an ihn. Den Markt (Preissättigung je Station) führt der Server.
 // Start: node server/server.mjs   (Port über PORT, Standard 2567)
@@ -11,7 +11,9 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 import { WebSocketServer } from 'ws';
+import { openStore } from './store.mjs';
 
 const PORT = +(process.env.PORT || 2567);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
@@ -29,6 +31,27 @@ const server = http.createServer((req, res) => {
     res.end(data);
   });
 });
+
+// ---------- Konten ----------
+const store = await openStore();
+console.log('Spielstände: ' + store.kind);
+const NAME_RE = /^[A-Za-zÄÖÜäöüß0-9 _-]{3,16}$/;
+const keyOf = name => name.trim().toLowerCase();
+const sha = s => crypto.createHash('sha256').update(s).digest('hex');
+const hashPass = (pass, salt) => new Promise((ok, no) => crypto.scrypt(pass, salt, 32, (e, k) => (e ? no(e) : ok(k.toString('hex')))));
+const sameHex = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
+const MAX_SAVE = 400 * 1024;
+async function newToken(rec, key) {
+  const raw = crypto.randomBytes(24).toString('hex');
+  rec.tokens = [sha(raw), ...(rec.tokens || [])].slice(0, 5);   // höchstens fünf angemeldete Geräte
+  return key + ':' + raw;
+}
+// Spielstand prüfen: ein Objekt, nicht zu groß, Name gleich dem Kontonamen
+function cleanSave(data, name) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  if (JSON.stringify(data).length > MAX_SAVE) return null;
+  return { ...data, name };
+}
 
 // ---------- Piloten und Räume ----------
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 256 * 1024 });
@@ -49,13 +72,19 @@ const toAll = m => { const s = JSON.stringify(m); for (const ws of clients.keys(
 const roster = () => toAll({ t: 'roster', list: [...clients.values()].filter(c => c.name).map(c => ({ id: c.id, name: c.name, room: c.room })) });
 
 wss.on('connection', ws => {
-  const c = { id: nextId++, name: '', room: '', st: null, chatT: 0 };
+  const c = { id: nextId++, name: '', room: '', st: null, chatT: 0, account: null, tries: [], saveT: 0 };
   clients.set(ws, c);
-  send(ws, { t: 'welcome', id: c.id, online: clients.size, now: now(), market });
-  ws.on('message', raw => {
+  // temp: auf Render ohne Datenbank verschwinden Spielstände beim Neustart (kostenloser Plan ohne dauerhaften Speicher)
+  send(ws, { t: 'welcome', id: c.id, online: clients.size, now: now(), market, temp: !!process.env.RENDER && store.kind.startsWith('Datei') });
+  ws.on('message', async raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m.t !== 'string') return;
+    if (m.t === 'register' || m.t === 'login' || m.t === 'save' || m.t === 'logout') {
+      try { await account(ws, c, m); } catch (e) { console.error('Konto-Fehler:', e.message); send(ws, { t: 'auth', ok: false, err: 'Serverfehler beim Speichern. Bitte später erneut versuchen.' }); }
+      return;
+    }
     if (m.t === 'hello') {
+      if (c.account) return;   // angemeldete Piloten behalten ihren Kontonamen
       c.name = clean(m.name, 16) || `Pilot ${c.id}`;
       console.log(`+ ${c.name} (#${c.id})`);
       roster();
@@ -113,5 +142,61 @@ setInterval(() => {
   }
 }, 25000);
 wss.on('connection', ws => { ws.alive = true; ws.on('pong', () => { ws.alive = true; }); });
+
+// ---------- Anmelden, Registrieren, Speichern ----------
+async function account(ws, c, m) {
+  const fail = err => send(ws, { t: 'auth', ok: false, err });
+  if (m.t === 'save') {
+    if (!c.account) return;
+    const nowMs = Date.now();
+    if (nowMs - c.saveT < 2000) return;   // höchstens alle zwei Sekunden
+    c.saveT = nowMs;
+    const rec = await store.get(c.account), data = rec && cleanSave(m.data, rec.name);
+    if (!rec || !data) return;
+    rec.data = data; rec.updated = nowMs;
+    await store.put(c.account, rec);
+    send(ws, { t: 'saved', at: nowMs });
+    return;
+  }
+  if (m.t === 'logout') {
+    if (c.account && typeof m.token === 'string') { const rec = await store.get(c.account); if (rec) { rec.tokens = (rec.tokens || []).filter(h => h !== sha(m.token.split(':')[1] || '')); await store.put(c.account, rec); } }
+    c.account = null;
+    send(ws, { t: 'auth', ok: false, out: true });
+    return;
+  }
+  // Bremse gegen Durchprobieren: höchstens 8 Versuche pro Minute und Verbindung
+  const nowMs = Date.now();
+  c.tries = c.tries.filter(t => nowMs - t < 60000);
+  if (c.tries.length >= 8) return fail('Zu viele Versuche. Bitte eine Minute warten.');
+  c.tries.push(nowMs);
+  let key, rec, token;
+  if (m.t === 'register') {
+    const name = clean(m.name, 16), pass = String(m.pass || '');
+    if (!NAME_RE.test(name)) return fail('Name: 3–16 Zeichen, Buchstaben, Ziffern, Leerzeichen, - und _.');
+    if (pass.length < 6 || pass.length > 128) return fail('Kennwort: mindestens 6 Zeichen.');
+    key = keyOf(name);
+    if (await store.get(key)) return fail('Dieser Pilotenname ist schon vergeben.');
+    const salt = crypto.randomBytes(16).toString('hex');
+    rec = { name, salt, hash: await hashPass(pass, salt), tokens: [], data: cleanSave(m.data, name), created: nowMs, updated: nowMs };
+    token = await newToken(rec, key);
+    await store.put(key, rec);
+    console.log('Neues Konto: ' + name);
+  } else if (typeof m.token === 'string' && m.token.includes(':')) {
+    const [k, raw] = m.token.split(':');
+    key = k; rec = await store.get(key);
+    if (!rec || !(rec.tokens || []).includes(sha(raw || ''))) return fail('Anmeldung abgelaufen. Bitte mit Kennwort anmelden.');
+    token = m.token;
+  } else {
+    key = keyOf(clean(m.name, 16)); rec = key && await store.get(key);
+    if (!rec || !sameHex(await hashPass(String(m.pass || ''), rec.salt), rec.hash)) return fail('Name oder Kennwort stimmt nicht.');
+    token = await newToken(rec, key);
+    await store.put(key, rec);
+  }
+  // Ein Konto darf nur einmal gleichzeitig spielen: alte Verbindung abmelden
+  for (const [ows, o] of clients) if (o !== c && o.account === key) { o.account = null; send(ows, { t: 'auth', ok: false, out: true, err: 'Dein Konto wurde an einem anderen Gerät angemeldet.' }); }
+  c.account = key; c.name = rec.name;
+  send(ws, { t: 'auth', ok: true, name: rec.name, data: rec.data || null, token });
+  roster();
+}
 
 server.listen(PORT, () => console.log(`Letzte Flotte läuft auf http://localhost:${PORT}  (WebSocket /ws, Spiel aus ${ROOT})`));

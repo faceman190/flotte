@@ -40,6 +40,7 @@ export interface Player {
   storage: Record<string, Partial<Record<ItemId, number>>>; // Stationslager
   nextUid: number;
   track?: string;                  // im HUD verfolgter Auftrag
+  savedAt?: number;                // Zeitpunkt des letzten Speicherns (ms), entscheidet bei Konto-Ständen, welcher neuer ist
   surface?: boolean;               // gespeichert auf der Planetenoberfläche
   rover?: Partial<Record<ItemId, number>>; // Ladung des Rovers
 }
@@ -72,12 +73,26 @@ export function stats() { return computeStats(P.cls, P.up as Up); }
 export const cargoUsed = () => ITEM_IDS.reduce((a, k) => a + P.cargo[k], 0);
 
 // ---------------- Speichern ----------------
+// Ohne Konto ein lokaler Speicherplatz; mit Pilotenkonto ein eigener Platz je Konto, der zusätzlich auf den Server geht
 const SAVE_KEY = 'lf_save_v2';
-export function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
-export function saveGame() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(P)); } catch (e) { /* ignorieren */ } }
+let saveKey = SAVE_KEY;
+export const saveHooks = { saved: (_p: Player) => {} };
+export function setSaveSlot(account: string | null) { saveKey = account ? SAVE_KEY + '@' + account.toLowerCase() : SAVE_KEY; }
+export const onAccountSlot = () => saveKey !== SAVE_KEY;
+export function hasSave() { try { return !!localStorage.getItem(saveKey); } catch (e) { return false; } }
+export function saveGame() {
+  if (!P.name) return;
+  P.savedAt = Date.now();
+  try { localStorage.setItem(saveKey, JSON.stringify(P)); } catch (e) { /* ignorieren */ }
+  saveHooks.saved(P);
+}
+export function rawSave(): any { try { return JSON.parse(localStorage.getItem(saveKey) || 'null'); } catch (e) { return null; } }
+export function writeRawSave(d: any) { try { localStorage.setItem(saveKey, JSON.stringify(d)); } catch (e) { /* ignorieren */ } }
+// Spielstand des lokalen Platzes (für „von diesem Gerät übernehmen“)
+export function localSave(): any { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return null; } }
 export function loadGame(): Player | null {
   try {
-    const d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+    const d = JSON.parse(localStorage.getItem(saveKey) || 'null');
     if (!d || d.v !== 2) return null;
     const base = newPlayer(d.name || 'Falke');
     const p: Player = { ...base, ...d, cargo: { ...base.cargo, ...d.cargo }, up: { ...base.up, ...d.up } };

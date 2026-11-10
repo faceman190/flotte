@@ -29,6 +29,8 @@ export function showMainMenu() {
   ['newGame', 'pause', 'settings', 'controls', 'about', 'dock', 'band', 'hud', 'ctrlP', 'mp', 'chatIn'].forEach(hide);
 }
 export function hideMainMenu() { hide('menu'); }
+// nach An- oder Abmelden: Weiterspielen hängt vom Speicherplatz ab
+export function refreshContinue() { ($('mContinue') as HTMLButtonElement).disabled = !hasSave(); }
 
 function openSub(id: string, from: string) { click(); returnTo = from; hide(from); show(id); }
 function closeSub(id: string) { click(); hide(id); if (returnTo) show(returnTo); returnTo = null; }

@@ -51,7 +51,8 @@
       <button class="mbtn" id="mControls">Steuerung</button>
       <button class="mbtn" id="mAbout">Über das Spiel</button>
     </div>
-    <div class="ver">Alpha 0.15 · Gemeinsame Ferrox</div>
+    <div class="hint" id="mAcc" style="margin-top:14px"></div>
+    <div class="ver">Alpha 0.16 · Pilotenkonten</div>
   </div>
 </div>
 
@@ -83,6 +84,18 @@
   <p>Verbinde dich mit einem Server der Letzten Flotte. Piloten im selben Sektor siehst du mit Schiff und Namen, der Funk-Chat geht an alle. Dein Spielstand bleibt auf diesem Gerät.</p>
   <label class="fld">Server-Adresse<input id="mpUrl" autocomplete="off" spellcheck="false"></label>
   <div class="hint" id="mpStatus" style="margin-top:8px"></div>
+  <div id="mpAcc" class="hidden">
+    <h3>PILOTENKONTO</h3>
+    <div id="mpAccIn">
+      <p class="hint" style="margin:0 0 4px">Mit einem Konto liegt dein Spielstand auf dem Server und folgt dir auf jedes Gerät.</p>
+      <label class="fld">Pilotenname<input id="mpName" maxlength="16" autocomplete="username" spellcheck="false"></label>
+      <label class="fld">Kennwort<input id="mpPass" type="password" maxlength="128" autocomplete="current-password"></label>
+      <label class="fld" style="flex-direction:row;align-items:center;gap:8px;font-weight:500"><input type="checkbox" id="mpTake" checked> Beim Registrieren den Spielstand von diesem Gerät übernehmen</label>
+      <div class="btnRow" style="justify-content:flex-start"><button class="pri" id="mpLogin">Anmelden</button><button id="mpReg">Neu registrieren</button></div>
+    </div>
+    <div id="mpAccOut" class="hidden"><p id="mpAccTxt" style="margin:0 0 8px"></p><button id="mpLogout">Abmelden</button></div>
+    <div class="hint bad" id="mpErr" style="margin-top:6px"></div>
+  </div>
   <div id="mpList" style="margin-top:10px"></div>
   <div class="btnRow"><button id="mpBack">Zurück</button><button id="mpOff">Trennen</button><button class="pri" id="mpGo">Verbinden</button></div>
 </div></div>
@@ -134,7 +147,7 @@
   <h2>ÜBER DAS SPIEL</h2>
   <p>Nach Jahren der Flucht hat die Flotte um die <b class="amb">Bastion</b> eine Zuflucht gefunden. Aus ihr ist der Menschenraum entstanden: ein Netz von Sektoren, verbunden durch Sprungtore.</p>
   <p>Im Osten herrschen die <b style="color:var(--vio)">Ferrox</b>, eine Maschinenintelligenz. In ihren Sektoren liegen die wertvollsten Rohstoffe, aber auch ihre Bienenstöcke.</p>
-  <p class="hint">Alpha 0.15: gemeinsame Welt im Mehrspieler (Asteroiden, Abbau, Marktpreise und Ferrox für alle gleich, Kopfgeld für den Schützen), andere Piloten sehen, Funk-Chat, Online-Liste; Flottenband (Armbandrechner mit Übersicht, Aufträgen, Karte, Fuhrpark, Fracht und Funk), neues HUD mit Aufgaben und Steuerungsleiste; begehbare eigene Schiffe mit Cockpit, Frachtraum (sichtbare Ladung), Logbuch, Werkbank, Drohnenbucht und Quartier; animierte Figuren in den Stationen (Händler und Stationsarbeiter), neue 3D-Modelle für Stationen, Außenposten und Planetenbasen, eigene Planetenoberflächen mit Wolken, Stadtlichtern und Ringen, Bodentexturen auf den Planeten, überarbeitete Grafik (Filmkurve, Schatten, Kantenglättung) und neue Oberfläche, feste Galaxie mit 18 Sektoren, 10 landbare Planeten mit Bergbau-Rover, begehbare Stationen mit Hangar und Promenade, Handel mit Stationshändlern, fünf Schiffsklassen, Bergbau mit Scanner, Laser, Sprengladungen und Drohnen, sechs Erzarten nach Region, Raffinerie, Stationslager, Marktpreise mit Angebot und Nachfrage, Lieferaufträge. Geplant: gemeinsamer Bergbau und Handel zwischen Piloten.</p>
+  <p class="hint">Alpha 0.16: Pilotenkonten mit Spielstand auf dem Server; gemeinsame Welt im Mehrspieler (Asteroiden, Abbau, Marktpreise und Ferrox für alle gleich, Kopfgeld für den Schützen), andere Piloten sehen, Funk-Chat, Online-Liste; Flottenband (Armbandrechner mit Übersicht, Aufträgen, Karte, Fuhrpark, Fracht und Funk), neues HUD mit Aufgaben und Steuerungsleiste; begehbare eigene Schiffe mit Cockpit, Frachtraum (sichtbare Ladung), Logbuch, Werkbank, Drohnenbucht und Quartier; animierte Figuren in den Stationen (Händler und Stationsarbeiter), neue 3D-Modelle für Stationen, Außenposten und Planetenbasen, eigene Planetenoberflächen mit Wolken, Stadtlichtern und Ringen, Bodentexturen auf den Planeten, überarbeitete Grafik (Filmkurve, Schatten, Kantenglättung) und neue Oberfläche, feste Galaxie mit 18 Sektoren, 10 landbare Planeten mit Bergbau-Rover, begehbare Stationen mit Hangar und Promenade, Handel mit Stationshändlern, fünf Schiffsklassen, Bergbau mit Scanner, Laser, Sprengladungen und Drohnen, sechs Erzarten nach Region, Raffinerie, Stationslager, Marktpreise mit Angebot und Nachfrage, Lieferaufträge. Geplant: gemeinsamer Bergbau und Handel zwischen Piloten.</p>
   <p class="hint">Raumschiffmodelle: „Ultimate Spaceships“ von Quaternius (CC0). Musik und Soundeffekte (Bergbaulaser, Bordkanone, Antrieb): vom Projektinhaber bereitgestellt. Texturen, Nebel-Panoramen, Planetenkarten, Stations- und Figurenmodelle: KI-generiert (Higgsfield, Tripo, Meshy-Rigging).</p>
   <div class="btnRow"><button class="pri" id="aBack">Zurück</button></div>
 </div></div>

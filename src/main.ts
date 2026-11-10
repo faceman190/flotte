@@ -24,7 +24,7 @@ import { PLANETS, PTYPE } from './data/planets';
 import { d3 } from './core/util';
 import { openBand, closeBand, drawBand, bandHooks } from './ui/band';
 import { updateControls } from './ui/controls';
-import { netUpdate } from './game/net';
+import { netUpdate, NET } from './game/net';
 import { openChat } from './ui/mp';
 // Die Galaxiekarte ist eine App im Flottenband
 const openMap = () => openBand('karte'), closeMap = closeBand;
@@ -141,7 +141,7 @@ let pausedFrom: Mode = 'play';
 function pause() { if (G.mode !== 'play' && G.mode !== 'walk' && G.mode !== 'rover') return; pausedFrom = G.mode; G.mode = 'pause'; releaseAll(); showPause(); duckMusic(0.5); document.body.classList.remove('playing'); }
 function resume() { hidePause(); G.mode = pausedFrom; duckMusic(1); document.body.classList.add('playing'); centerMouse(); }
 
-menuHooks.newGame = name => startGame(newPlayer(name), true);
+menuHooks.newGame = name => startGame(newPlayer(NET.account || name), true);   // mit Konto heißt der Pilot wie das Konto
 menuHooks.continueGame = () => { const p = loadGame(); if (p) startGame(p, false); };
 menuHooks.resume = resume;
 menuHooks.quit = () => { saveGame(); toMenu(); };
