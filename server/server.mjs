@@ -17,7 +17,7 @@ import { openStore } from './store.mjs';
 
 const PORT = +(process.env.PORT || 2567);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.ico': 'image/x-icon' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.ico': 'image/x-icon', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };
 
 // ---------- Spiel ausliefern ----------
 const server = http.createServer((req, res) => {

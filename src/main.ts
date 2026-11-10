@@ -4,7 +4,7 @@ import { updateSky, sunDir, sky } from './core/sky';
 import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience';
 import { ux } from './core/engine';
 import { onKey, centerMouse, releaseAll } from './core/input';
-import { snd, laserSound, boosterSound, duckMusic, audioDebug } from './core/audio';
+import { snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode } from './core/audio';
 import { rand, clamp, $ } from './core/util';
 import { P, G, settings, loadSettings, newPlayer, setPlayer, loadGame, saveGame, stats, type Player, type Tool } from './game/state';
 import { world, buildSector, stationById, gateTo, updateAsteroids } from './game/world';
@@ -99,6 +99,7 @@ function enterSurface(sector: string, at?: { x: number; y: number; z: number; ya
 
 // =============== Spiel starten / beenden ===============
 function startGame(p: Player, fresh: boolean) {
+  setMusicMode('game');
   setPlayer(p);
   setShipModel(P.cls, (P.paint || 'Orange') as Paint, true);
   hideMainMenu();
@@ -125,6 +126,7 @@ function startGame(p: Player, fresh: boolean) {
   snd(300, 0.6, 'sawtooth', 0.05, 500);
 }
 function toMenu() {
+  setMusicMode('menu');
   if (IN.active) leaveInterior();
   hideRover();
   G.dockedAt = null;

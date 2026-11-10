@@ -1,6 +1,6 @@
 // Ton: Synthesizer-Effekte, Hintergrundmusik und Bergbaulaser (Sounds aus public/sounds.js)
 declare global {
-  interface Window { SOUNDDATA?: { music?: string; laser?: string; booster?: string; gun?: string } }
+  interface Window { SOUNDDATA?: { laser?: string; booster?: string; gun?: string } }
 }
 let AC: AudioContext | null = null;
 export const audio = { volume: 0.7, music: 0.5 };
@@ -22,16 +22,43 @@ export function snd(f: number, d: number, type: OscillatorType = 'square', v = 0
 }
 
 // ---------------- Hintergrundmusik ----------------
-// Audio-Element statt Web Audio: streamt, braucht kaum Speicher. Startet erst nach der ersten Eingabe (Browser-Regel).
-let music: HTMLAudioElement | null = null, musicDuck = 1;
+// Eigene Dateien in music/ (werden gestreamt, nicht vorab geladen). Im Hauptmenü läuft das Menüstück in Schleife,
+// im Spiel wechseln sich die beiden Ambient-Stücke ab. Beim Wechsel wird weich übergeblendet.
+// Startet erst nach der ersten Eingabe (Browser-Regel).
+const TRACKS = { menu: ['music/menu.mp3'], game: ['music/ambient01.ogg', 'music/ambient02.mp3'] };
+type MusicMode = keyof typeof TRACKS;
+let music: HTMLAudioElement | null = null, musicDuck = 1, musicMode: MusicMode = 'menu', gameIdx = 0, fade = 1, fadeTimer = 0;
 const MUSIC_GAIN = 0.55;
-function applyMusicVolume() { if (music) music.volume = Math.max(0, Math.min(1, audio.music * MUSIC_GAIN * musicDuck)); }
-export function setMusicVolume(v: number) { audio.music = v; applyMusicVolume(); if (music && v > 0 && music.paused) music.play().catch(() => {}); }
+function applyMusicVolume() { if (music) music.volume = Math.max(0, Math.min(1, audio.music * MUSIC_GAIN * musicDuck * fade)); }
+export function setMusicVolume(v: number) { audio.music = v; applyMusicVolume(); if (v > 0) startMusic(); else music?.pause(); }
 export function duckMusic(f: number) { musicDuck = f; applyMusicVolume(); }
+function playTrack(src: string, loop: boolean) {
+  if (music) { music.pause(); music.src = ''; }
+  const a = new Audio(src);
+  a.loop = loop;
+  a.preload = 'auto';
+  // Stück zu Ende: nächstes Ambient-Stück; Datei nicht abspielbar (z. B. Format): gleich zum nächsten
+  a.addEventListener('ended', () => { if (musicMode === 'game') nextGameTrack(); });
+  a.addEventListener('error', () => { if (musicMode === 'game' && a === music) setTimeout(nextGameTrack, 500); });
+  music = a;
+  fade = 0; applyMusicVolume();
+  clearInterval(fadeTimer);
+  fadeTimer = window.setInterval(() => { fade = Math.min(1, fade + 0.05); applyMusicVolume(); if (fade >= 1) clearInterval(fadeTimer); }, 80);   // ca. 1,6 s einblenden
+  if (unlocked && audio.music > 0) a.play().catch(() => {});
+}
+function nextGameTrack() { gameIdx = (gameIdx + 1) % TRACKS.game.length; playTrack(TRACKS.game[gameIdx], false); }
+// Hauptmenü oder Spiel: wechselt das Stück (mit Ausblenden des alten)
+export function setMusicMode(m: MusicMode) {
+  if (m === musicMode && music) return;
+  musicMode = m;
+  const start = () => (m === 'menu' ? playTrack(TRACKS.menu[0], true) : playTrack(TRACKS.game[gameIdx], false));
+  if (!music || music.paused) { start(); return; }
+  clearInterval(fadeTimer);
+  fadeTimer = window.setInterval(() => { fade = Math.max(0, fade - 0.08); applyMusicVolume(); if (fade <= 0) { clearInterval(fadeTimer); start(); } }, 60);   // ca. 0,8 s ausblenden
+}
 function startMusic() {
-  const src = window.SOUNDDATA?.music;
-  if (!src || audio.music <= 0) return;
-  if (!music) { music = new Audio(src); music.loop = true; applyMusicVolume(); }
+  if (audio.music <= 0) return;
+  if (!music) { setMusicMode(musicMode); return; }
   if (music.paused) music.play().catch(() => {});
 }
 
@@ -121,7 +148,7 @@ export function gunSound(vol = 1) {
   return true;
 }
 export const hasLaserSound = () => !!BUF.laser;
-export const audioDebug = () => ({ musicPlaying: !!music && !music.paused, musicTime: music?.currentTime || 0, musicDur: music?.duration || 0, loaded: Object.keys(BUF), trim: TRIM, ctx: AC?.state });
+export const audioDebug = () => ({ musicEl: music, musicMode, musicSrc: music?.src || '', musicPlaying: !!music && !music.paused, musicTime: music?.currentTime || 0, musicDur: music?.duration || 0, loaded: Object.keys(BUF), trim: TRIM, ctx: AC?.state });
 
 // ---------------- Freischalten nach der ersten Eingabe ----------------
 let unlocked = false;

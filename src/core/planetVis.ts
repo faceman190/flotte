@@ -75,7 +75,11 @@ void main(){
   // Stadtlichter: Punkte in Haufen, nur nachts und nicht auf Wasser (dunkle, blaue Flächen)
   if (cities > 0.0) {
     float land = smoothstep(0.02, 0.08, alb.r + alb.g - alb.b * 1.2);
-    float cl = smoothstep(0.55, 0.75, fbm(vObj * 9.0)) * smoothstep(0.78, 0.9, n3(vObj * 210.0));
+    // Lichterpunkte geglättet nach Bildschirmgröße (fwidth): werden sie kleiner als ein Pixel, gehen sie in
+    // ein weiches Leuchten über, statt bei jeder Kamerabewegung zu flimmern
+    float cn = n3(vObj * 120.0), aa = fwidth(cn);
+    float dots = smoothstep(0.8 - aa, 0.87 + aa, cn) * (1.0 - smoothstep(0.12, 0.35, aa));
+    float cl = smoothstep(0.55, 0.75, fbm(vObj * 9.0)) * (dots * 0.8 + 0.12);
     col += vec3(1.0, 0.72, 0.38) * cl * land * cities * (1.0 - day) * 1.6;
   }
   // Wolken (langsam drehend), mit Licht der Sonne
