@@ -44,12 +44,21 @@ async function pgStore(url) {
 }
 
 // Für die Statusseite: warum keine Datenbank genutzt wird (ohne Zugangsdaten)
-export const storeInfo = { dbUrlSet: false, dbError: '' };
+export const storeInfo = { dbUrlSet: false, dbError: '', dbHost: '' };
 const scrub = s => String(s || '').replace(/postgres(ql)?:\/\/\S+/gi, '[Adresse]').replace(/password=\S+/gi, 'password=[…]').slice(0, 300);
 
+// Häufige Kopierfehler abfangen: „psql '…'“, Anführungszeichen, „DATABASE_URL=…“ – es zählt nur die postgresql://-Adresse darin
+function extractUrl(raw) {
+  const m = String(raw || '').match(/postgres(?:ql)?:\/\/[^\s'"]+/i);
+  return m ? m[0] : '';
+}
+
 export async function openStore() {
-  const url = (process.env.DATABASE_URL || '').trim();
-  storeInfo.dbUrlSet = !!url;
+  const raw = (process.env.DATABASE_URL || '').trim();
+  storeInfo.dbUrlSet = !!raw;
+  const url = extractUrl(raw);
+  if (raw && !url) storeInfo.dbError = 'DATABASE_URL enthält keine Adresse, die mit postgresql:// beginnt.';
+  if (url) { try { storeInfo.dbHost = new URL(url).hostname; } catch { storeInfo.dbHost = '(nicht lesbar)'; } }
   if (url) {
     try { return await pgStore(url); }
     catch (e) { storeInfo.dbError = scrub((e.code ? e.code + ': ' : '') + e.message); console.error('Datenbank nicht erreichbar, nutze vorerst die Datei:', storeInfo.dbError); }

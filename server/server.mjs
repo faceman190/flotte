@@ -25,7 +25,7 @@ const server = http.createServer((req, res) => {
   // Statusseite: Speicherart und ggf. Datenbankfehler (ohne Zugangsdaten), Anzahl Piloten online
   if (p === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
-    res.end(JSON.stringify({ store: store.kind.startsWith('Datei') ? 'Datei' : store.kind, databaseUrlGesetzt: storeInfo.dbUrlSet, datenbankFehler: storeInfo.dbError || null, online: clients.size, laeuftSeitSekunden: Math.round(now()) }));
+    res.end(JSON.stringify({ store: store.kind.startsWith('Datei') ? 'Datei' : store.kind, databaseUrlGesetzt: storeInfo.dbUrlSet, datenbankFehler: storeInfo.dbError || null, datenbankRechner: storeInfo.dbHost || null, online: clients.size, laeuftSeitSekunden: Math.round(now()) }));
     return;
   }
   if (p === '/') p = '/index.html';
