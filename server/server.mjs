@@ -13,7 +13,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import { WebSocketServer } from 'ws';
-import { openStore } from './store.mjs';
+import { openStore, storeInfo } from './store.mjs';
 
 const PORT = +(process.env.PORT || 2567);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
@@ -22,6 +22,12 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 // ---------- Spiel ausliefern ----------
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent((req.url || '/').split('?')[0]);
+  // Statusseite: Speicherart und ggf. Datenbankfehler (ohne Zugangsdaten), Anzahl Piloten online
+  if (p === '/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
+    res.end(JSON.stringify({ store: store.kind.startsWith('Datei') ? 'Datei' : store.kind, databaseUrlGesetzt: storeInfo.dbUrlSet, datenbankFehler: storeInfo.dbError || null, online: clients.size, laeuftSeitSekunden: Math.round(now()) }));
+    return;
+  }
   if (p === '/') p = '/index.html';
   const file = path.normalize(path.join(ROOT, p));
   if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }

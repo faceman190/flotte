@@ -43,11 +43,16 @@ async function pgStore(url) {
   };
 }
 
+// Für die Statusseite: warum keine Datenbank genutzt wird (ohne Zugangsdaten)
+export const storeInfo = { dbUrlSet: false, dbError: '' };
+const scrub = s => String(s || '').replace(/postgres(ql)?:\/\/\S+/gi, '[Adresse]').replace(/password=\S+/gi, 'password=[…]').slice(0, 300);
+
 export async function openStore() {
-  const url = process.env.DATABASE_URL;
+  const url = (process.env.DATABASE_URL || '').trim();
+  storeInfo.dbUrlSet = !!url;
   if (url) {
     try { return await pgStore(url); }
-    catch (e) { console.error('Datenbank nicht erreichbar, nutze vorerst die Datei:', e.message); }
+    catch (e) { storeInfo.dbError = scrub((e.code ? e.code + ': ' : '') + e.message); console.error('Datenbank nicht erreichbar, nutze vorerst die Datei:', storeInfo.dbError); }
   }
   return fileStore();
 }
