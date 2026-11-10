@@ -10,6 +10,7 @@ import { P, G, stats } from './state';
 import { hurtPlayer, playerTargetable } from './player';
 import { damageTraffic, damageAlly } from './npc';
 import { radio } from '../ui/radio';
+import { SHARED } from './shared';
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
 
@@ -26,6 +27,8 @@ export function fireBullet(list: any[], x: number, y: number, z: number, dx: num
   scene.add(m);
   const b = { x, y, z, px: x, py: y, pz: z, vx: dx * speed, vy: dy * speed, vz: dz * speed, life, dmg, kind, mesh: m };
   if (extra) Object.assign(b, extra);
+  // Gastgeber: Feindschüsse für die Mitspieler mitschreiben
+  if (list === world.ebullets && SHARED.online && !SHARED.client && !(extra && extra.remote)) SHARED.shots.push([Math.round(x), Math.round(y), Math.round(z), Math.round(b.vx), Math.round(b.vy), Math.round(b.vz), life, (b as any).dmgP || 0, 0]);
   list.push(b);
   return b;
 }
@@ -103,6 +106,7 @@ export function initFerrox() {
 
 // Laufend neue Ferrox, je nach Gefahrenstufe
 export function updateSpawning(dt: number) {
+  if (SHARED.client) return;   // Nachschub schickt nur der Gastgeber
   const d = world.def!.danger;
   if (d <= 0) return;
   for (let i = 0; i < world.hiveT.length; i++) {
@@ -128,21 +132,39 @@ function pickTarget(e: any) {
   const cand: { t: any; w: number }[] = [], R = 1700;
   if (playerTargetable() && d3(P.x, P.y, P.z, e.x, e.y, e.z) < R) cand.push({ t: { player: true }, w: e.type === 'bomber' ? 0.5 : 3 });
   for (const a of world.allies) if (a.alive && d3(a.x, a.y, a.z, e.x, e.y, e.z) < R) cand.push({ t: { ally: a }, w: e.type === 'bomber' ? 0.3 : 2 });
+  for (const p of SHARED.pilots) if (d3(p.x, p.y, p.z, e.x, e.y, e.z) < R) cand.push({ t: { pilot: p.id }, w: e.type === 'bomber' ? 0.5 : 3 });
   for (const s of world.traffic) if (s.alive && d3(s.x, s.y, s.z, e.x, e.y, e.z) < R + 300) cand.push({ t: { ship: s }, w: e.type === 'bomber' ? 5 : 1.5 });
   if (!cand.length) return null;
   let sum = cand.reduce((a, c) => a + c.w, 0), r = Math.random() * sum;
   for (const c of cand) { r -= c.w; if (r <= 0) return c.t; }
   return cand[0].t;
 }
-const tpos = (t: any) => (t.player ? P : t.ally ? t.ally : t.ship);
+const pilotOf = (id: number) => SHARED.pilots.find(p => p.id === id);
+const tpos = (t: any) => (t.player ? P : t.pilot ? pilotOf(t.pilot)! : t.ally ? t.ally : t.ship);
 function tValid(t: any) {
   if (!t) return false;
   if (t.player) return playerTargetable();
+  if (t.pilot) return !!pilotOf(t.pilot);
   if (t.ally) return t.ally.alive;
   return t.ship.alive;
 }
 
-export function killEnemy(e: any, i: number, byPlayer = false) {
+// Schaden an einem Ferrox. Als Mitspieler (nicht Gastgeber) entscheidet der Gastgeber: hier nur Treffer anzeigen und melden.
+export function hitEnemy(e: any, j: number, dmg: number, byPlayer: boolean) {
+  if (SHARED.client && e.nid) { e.hp = Math.max(1, e.hp - dmg); SHARED.foeHit(e, dmg, byPlayer); return; }
+  e.hp -= dmg;
+  if (e.hp <= 0) killEnemy(e, j, byPlayer);
+}
+// Kopfgeld und Beute für einen Abschuss, den der Gastgeber gemeldet hat
+export function rewardKill(type: string, x: number, y: number, z: number) {
+  const bounty = BOUNTY[type as keyof typeof BOUNTY] || 0;
+  P.kills++; P.credits += bounty; P.earned += bounty;
+  if (type === 'mother') { for (let k = 0; k < 10; k++) dropPick(x, y, z, 'schrott', 2, 80); for (let k = 0; k < 6; k++) dropPick(x, y, z, 'ferrit', 1, 80); radio('SYSTEM', 'Bienenstock zerstört! Kopfgeld: +' + bounty + ' Credits.'); }
+  else if (type === 'bomber') { dropPick(x, y, z, 'schrott', 1); dropPick(x, y, z, 'schrott', 1); }
+  else if (Math.random() < 0.7) dropPick(x, y, z, 'schrott', 1);
+}
+// drops = false: Beute gehört einem anderen Piloten (oder niemandem)
+export function killEnemy(e: any, i: number, byPlayer = false, drops = true) {
   scene.remove(e.mesh);
   world.enemies.splice(i, 1);
   if (G.lockT === e) G.lockT = null;
@@ -154,8 +176,8 @@ export function killEnemy(e: any, i: number, byPlayer = false) {
       snd(50 + k * 10, 0.9, 'sawtooth', 0.08, -25);
       G.shake = Math.min(3, G.shake + 1);
     }, k * 200);
-    for (let k = 0; k < 10; k++) dropPick(e.x, e.y, e.z, 'schrott', 2, 80);
-    for (let k = 0; k < 6; k++) dropPick(e.x, e.y, e.z, 'ferrit', 1, 80);
+    if (drops) for (let k = 0; k < 10; k++) dropPick(e.x, e.y, e.z, 'schrott', 2, 80);
+    if (drops) for (let k = 0; k < 6; k++) dropPick(e.x, e.y, e.z, 'ferrit', 1, 80);
     if (e.hive >= 0) world.hiveT[e.hive] = 420;
     radio('SYSTEM', byPlayer ? `Bienenstock zerstört! Kopfgeld: +${bounty} Credits.` : 'Bienenstock zerstört!');
     return;
@@ -164,6 +186,7 @@ export function killEnemy(e: any, i: number, byPlayer = false) {
   burst(e.x, e.y, e.z, '#ffd27a', 40, 50, 0.9);
   snd(110, 0.5, 'sawtooth', 0.07, -70);
   if (d3(e.x, e.y, e.z, P.x, P.y, P.z) < 600) G.shake = Math.min(2, G.shake + 0.5);
+  if (!drops) return;
   if (e.type === 'bomber') { dropPick(e.x, e.y, e.z, 'schrott', 1); dropPick(e.x, e.y, e.z, 'schrott', 1); }
   else if (Math.random() < 0.7) dropPick(e.x, e.y, e.z, 'schrott', 1);
 }
@@ -175,9 +198,11 @@ function fireTorp(e: any, ship: any) {
   scene.add(m);
   _v2.set(ship.x - e.x, ship.y - e.y, ship.z - e.z).normalize().multiplyScalar(90);
   world.ebullets.push({ x: e.x, y: e.y, z: e.z, px: e.x, py: e.y, pz: e.z, vx: _v2.x, vy: _v2.y, vz: _v2.z, life: 14, dmgS: e.es.dmgS, dmgP: e.es.dmgP * 2, torp: true, ship, mesh: m });
+  if (SHARED.online && !SHARED.client) SHARED.shots.push([Math.round(e.x), Math.round(e.y), Math.round(e.z), Math.round(_v2.x), Math.round(_v2.y), Math.round(_v2.z), 14, e.es.dmgP * 2, 1]);
 }
 
 export function updateEnemies(dt: number) {
+  if (SHARED.client) return;   // Mitspieler: Ferrox kommen vom Gastgeber (siehe net.ts)
   const list = world.enemies;
   for (let i = list.length - 1; i >= 0; i--) {
     const e = list[i];
@@ -191,9 +216,11 @@ export function updateEnemies(dt: number) {
         for (let k = 0; k < 2; k++) spawnEnemy('drone', e.x + rand(-90, 90), e.y + rand(-40, 40), e.z + rand(-90, 90), { x: e.x, y: e.y, z: e.z });
       }
       e.cool -= dt;
-      if (playerTargetable() && dp < 750 && e.cool <= 0) {
+      let aim: any = playerTargetable() && dp < 750 ? P : null;
+      for (const p of SHARED.pilots) if (d3(p.x, p.y, p.z, e.x, e.y, e.z) < (aim ? d3(aim.x, aim.y, aim.z, e.x, e.y, e.z) : 750)) aim = p;
+      if (aim && e.cool <= 0) {
         e.cool = 0.6;
-        _v.set(P.x - e.x, P.y - e.y, P.z - e.z).normalize();
+        _v.set(aim.x - e.x, aim.y - e.y, aim.z - e.z).normalize();
         fireBullet(world.ebullets, e.x + _v.x * 70, e.y + _v.y * 70, e.z + _v.z * 70, _v.x + rand(-0.03, 0.03), _v.y + rand(-0.03, 0.03), _v.z + rand(-0.03, 0.03), 600, 1.6, 0, 'e', { dmgP: e.es.dmgP, dmgS: e.es.dmgS });
       }
       continue;
@@ -211,7 +238,7 @@ export function updateEnemies(dt: number) {
       const keep = isShip ? (e.type === 'bomber' ? 380 : e.target.ship.R + 120) : 300, close = isShip ? keep - 120 : 150;
       if (d > keep) { ax += nx; ay += ny; az += nz; } else if (d < close) { ax -= nx; ay -= ny; az -= nz; }
       ax += -nz * e.strafe * 0.5; az += nx * e.strafe * 0.5; ay += Math.sin(e.bob * 1.3) * 0.3;
-      const tv = e.target.player ? P : e.target.ally || e.target.ship, lead = d / 750;
+      const tv = e.target.player ? P : e.target.pilot ? T : e.target.ally || e.target.ship, lead = d / 750;
       tx = T.x + (tv.vx || 0) * lead; ty = T.y + (tv.vy || 0) * lead; tz = T.z + (tv.vz || 0) * lead;
     } else {
       // Patrouille um den Heimatpunkt
@@ -261,9 +288,9 @@ export function updateProjectiles(dt: number) {
     for (let j = enemies.length - 1; j >= 0; j--) {
       const e = enemies[j], r = e.type === 'mother' ? 80 : e.type === 'bomber' ? 13 : 8;
       if (segHit(b, e.x, e.y, e.z, r)) {
-        e.hp -= b.dmg; burst(b.px, b.py, b.pz, '#d0a0ff', 6, 35, 0.35); hit = true;
+        burst(b.px, b.py, b.pz, '#d0a0ff', 6, 35, 0.35); hit = true;
         if (b.kind === 'p') G.hitMark = 0.12;
-        if (e.hp <= 0) killEnemy(e, j, b.kind === 'p');
+        hitEnemy(e, j, b.dmg, b.kind === 'p');
         break;
       }
     }
@@ -296,14 +323,14 @@ export function updateProjectiles(dt: number) {
     let boom = r.life <= 0;
     for (let j = enemies.length - 1; j >= 0 && !boom; j--) {
       const e = enemies[j], rr = e.type === 'mother' ? 85 : e.type === 'bomber' ? 15 : 10;
-      if (d3(r.x, r.y, r.z, e.x, e.y, e.z) < rr) { boom = true; e.hp -= 150 + 20 * P.up.guns; if (e.hp <= 0) killEnemy(e, j, true); }
+      if (d3(r.x, r.y, r.z, e.x, e.y, e.z) < rr) { boom = true; hitEnemy(e, j, 150 + 20 * P.up.guns, true); }
     }
     if (boom) { burst(r.x, r.y, r.z, '#ffd27a', 60, 60, 0.9); snd(120, 0.4, 'sawtooth', 0.06, -60); scene.remove(r.mesh); rockets.splice(i, 1); }
   }
   for (let i = ebullets.length - 1; i >= 0; i--) {
     const b = ebullets[i];
     if (b.torp && b.life > 0) {
-      if (b.ship.alive) {
+      if (b.ship && b.ship.alive) {
         const k = Math.min(1, dt * 0.8);
         _v.set(b.ship.x - b.x, b.ship.y - b.y, b.ship.z - b.z).normalize().multiplyScalar(150);
         b.vx += (_v.x - b.vx) * k; b.vy += (_v.y - b.vy) * k; b.vz += (_v.z - b.vz) * k;
@@ -348,7 +375,7 @@ export function updateStationDefense(dt: number) {
     const t = pick(cand), fx = t.x + rand(-40, 40), fy = t.y + rand(-40, 40), fz = t.z + rand(-40, 40);
     burst(fx, fy, fz, '#ffb050', 10, 30, 0.4);
     burst(fx, fy, fz, '#8a8a8a', 12, 22, 1.2);
-    for (let j = world.enemies.length - 1; j >= 0; j--) { const e = world.enemies[j]; if (d3(e.x, e.y, e.z, fx, fy, fz) < 38) { e.hp -= 14; if (e.hp <= 0) killEnemy(e, j); } }
+    for (let j = world.enemies.length - 1; j >= 0; j--) { const e = world.enemies[j]; if (d3(e.x, e.y, e.z, fx, fy, fz) < 38) hitEnemy(e, j, 14, false); }
     for (const tb of world.ebullets) if (tb.torp && d3(tb.x, tb.y, tb.z, fx, fy, fz) < 38) tb.life = 0;
     if (flakSnd <= 0 && d3(s.x, s.y, s.z, P.x, P.y, P.z) < 1500) { snd(90, 0.12, 'triangle', 0.025, -40); flakSnd = 0.25; }
     if (s.model.turrets) for (const tr of s.model.turrets) tr.rotation.y = Math.atan2(-(t.x - s.x - tr.position.x), -(t.z - s.z - tr.position.z));

@@ -75,8 +75,8 @@ wss.on('connection', ws => {
       const n = v => (typeof v === 'number' && isFinite(v) ? Math.round(v * 100) / 100 : 0);
       c.st = { p: (m.p || []).slice(0, 3).map(n), q: (m.q || []).slice(0, 4).map(n), s: n(m.s), cls: clean(m.cls, 12), paint: clean(m.paint, 10), m: clean(m.m, 8) };
       toRoom(c.room, { t: 'st', id: c.id, name: c.name, ...c.st }, ws);
-    } else if (m.t === 'w') {
-      // Weltstand vom Gastgeber an die anderen im Raum
+    } else if (m.t === 'w' || m.t === 'f' || m.t === 'fk') {
+      // Weltstand (Asteroiden 'w', Ferrox 'f', Abschuss 'fk') vom Gastgeber an die anderen im Raum
       if (c.room && hostOf(c.room) === c) toRoom(c.room, m, ws);
     } else if (m.t === 'a') {
       // Abbau-Meldung eines Mitspielers an den Gastgeber

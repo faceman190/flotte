@@ -9,4 +9,8 @@ export const SHARED = {
   market: {} as Record<string, Record<string, { s: number; t: number }>>,
   now: () => 0,                                                      // Serverzeit in Sekunden
   sendMarket: (_st: string, _k: string, _n: number) => {},
+  // Ferrox: andere Piloten als mögliche Ziele (beim Gastgeber), Schüsse für die Mitspieler, Treffer an den Gastgeber
+  pilots: [] as { id: number; x: number; y: number; z: number; vx: number; vy: number; vz: number }[],
+  shots: [] as number[][],
+  foeHit: (_e: any, _dmg: number, _byPlayer: boolean) => {},
 };

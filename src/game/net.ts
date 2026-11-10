@@ -4,6 +4,7 @@ import { P, G, settings } from './state';
 import { world, makeAst, removeAst, breakAst, astHooks, type Asteroid } from './world';
 import { crumble, blastAst, MINE } from './mining';
 import { burst } from './fx';
+import { spawnEnemy, killEnemy, rewardKill, fireBullet } from './combat';
 import { SHARED } from './shared';
 import type { ItemId, RockKind } from '../data/items';
 import { SHIP } from './player';
@@ -110,6 +111,10 @@ function onMsg(m: any) {
     applyWorld(m.l || []);
   } else if (m.t === 'a') {
     applyAction(m);
+  } else if (m.t === 'f') {
+    applyFoes(m);
+  } else if (m.t === 'fk') {
+    if (m.by === NET.id && m.p?.length === 3) rewardKill(m.type, m.p[0], m.p[1], m.p[2]);
   } else if (m.t === 'mkt') {
     (SHARED.market[m.st] = SHARED.market[m.st] || {})[m.k] = { s: m.s, t: m.at };
   } else if (m.t === 'chat') {
@@ -134,14 +139,17 @@ function sendState() {
   if (!world.def || G.mode === 'menu') { if (room) { room = ''; clearRemotes(); sendMsg({ t: 'room', room: '' }); } return; }
   // Raum: Sektor oder Planetenoberfläche
   const key = world.def.id + (world.surface ? ':planet' : '');
-  if (key !== room) { room = key; clearRemotes(); hostId = 0; synced = false; updateRole(); sendMsg({ t: 'room', room }); }
+  if (key !== room) { room = key; clearRemotes(); hostId = 0; synced = false; foesSynced = false; updateRole(); sendMsg({ t: 'room', room }); }
   flushYld();
-  const s = myState(), p = s.o.position, q = s.o.quaternion;
+  // im Flug die Flugposition (das Modell wird nur beim Zeichnen nachgeführt), sonst die Lage des Modells
+  const s = myState(), p = s.m === 'schiff' ? P : s.o.position, q = s.o.quaternion;
   sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m });
 }
 setInterval(sendState, 100);
 export function netUpdate(dt: number) {
   if (NET.status !== 'online') return;
+  SHARED.pilots = [...remotes.values()].filter(r => r.m === 'schiff' && r.ship).map(r => ({ id: r.id, x: r.ship!.g.position.x, y: r.ship!.g.position.y, z: r.ship!.g.position.z, vx: 0, vy: 0, vz: 0 }));
+  if (SHARED.client) moveFoes(dt);
   // andere Piloten weich nachführen
   const k = Math.min(1, dt * 8), now = performance.now();
   for (const r of [...remotes.values()]) {
@@ -172,16 +180,17 @@ export function remoteMarkers() {
 let hostId = 0, synced = false, nextAstId = 1;
 const KINDS: RockKind[] = ['metal', 'ice', 'crystal'];
 const goneAt = new Map<number, number>(), pendYld = new Map<number, number>();
-function leaveShared() { SHARED.online = false; SHARED.client = false; hostId = 0; synced = false; }
+function leaveShared() { SHARED.online = false; SHARED.client = false; SHARED.pilots = []; SHARED.shots.length = 0; hostId = 0; synced = false; foesSynced = false; }
 function updateRole() {
   const was = SHARED.client;
   SHARED.client = NET.status === 'online' && !!room && hostId !== 0 && hostId !== NET.id;
   if (was && !SHARED.client) {
     // Gastgeber geworden: Kennungen fortsetzen, Felder wachsen ab jetzt hier nach
     for (const a of world.asteroids) nextAstId = Math.max(nextAstId, (a.id || 0) + 1);
+    for (const e of world.enemies) nextFoeId = Math.max(nextFoeId, (e.nid || 0) + 1);
     radio('SYSTEM', 'Du bist jetzt Gastgeber dieses Sektors: Asteroiden und Nachwuchs laufen über dein Spiel.');
   }
-  if (!was && SHARED.client) synced = false;
+  if (!was && SHARED.client) { synced = false; foesSynced = false; }
 }
 const scaleAst = (a: Asteroid) => { const f = Math.max(0, a.yld / a.max), sc = 0.45 + 0.55 * Math.cbrt(f); a.mesh.scale.setScalar(sc); a.r = a.r0 * sc; };
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -235,6 +244,7 @@ function flushYld() { for (const [id, v] of pendYld) sendMsg({ t: 'a', op: 'yld'
 // Gastgeber: Meldungen der Mitspieler anwenden (ohne Beute für den Gastgeber)
 function applyAction(m: any) {
   if (SHARED.client) return;
+  if (m.op === 'fhit' || m.op === 'fhitp') { foeHitByOther(m); return; }
   const i = world.asteroids.findIndex(a => a.id === m.id);
   if (i < 0) return;
   const a = world.asteroids[i];
@@ -244,3 +254,68 @@ function applyAction(m: any) {
   else if (m.op === 'blast') blastAst(a, false);
 }
 SHARED.sendMarket = (st, k, n) => sendMsg({ t: 'mkt', st, k, n });
+
+// =====================================================================================
+// Gemeinsame Welt: Ferrox
+// Der Gastgeber steuert alle Ferrox (auch gegen andere Piloten) und schickt 10× pro Sekunde ihren Stand und
+// ihre Schüsse. Mitspieler zeigen sie an, prüfen Treffer auf das eigene Schiff selbst und melden ihre Treffer.
+// Kopfgeld und Beute bekommt, wer den letzten Treffer gesetzt hat.
+// =====================================================================================
+const FTYPES = ['drone', 'bomber', 'mother'] as const;
+let foesSynced = false, nextFoeId = 1;
+setInterval(() => {
+  if (NET.status !== 'online' || SHARED.client || !room || !world.def) { SHARED.shots.length = 0; return; }
+  if (!othersHere()) { SHARED.shots.length = 0; return; }
+  const l = world.enemies.map((e: any) => {
+    if (!e.nid) e.nid = nextFoeId++;
+    return [e.nid, FTYPES.indexOf(e.type), r1(e.x), r1(e.y), r1(e.z), r1(e.vx), r1(e.vy), r1(e.vz), Math.ceil(e.hp), e.maxhp];
+  });
+  sendMsg({ t: 'f', l, s: SHARED.shots.splice(0) });
+}, 100);
+function applyFoes(m: any) {
+  if (!SHARED.client || !world.def) return;
+  if (!foesSynced) {
+    // eigene Startbelegung durch die des Gastgebers ersetzen
+    for (const e of world.enemies) scene.remove(e.mesh);
+    world.enemies.length = 0; G.lockT = null; foesSynced = true;
+  }
+  const byId = new Map<number, any>(), seen = new Set<number>(), now = performance.now();
+  for (const e of world.enemies as any[]) if (e.nid) byId.set(e.nid, e);
+  for (const [id, ti, x, y, z, vx, vy, vz, hp, maxhp] of m.l || []) {
+    seen.add(id);
+    let e = byId.get(id);
+    if (!e) { e = spawnEnemy(FTYPES[ti] || 'drone', x, y, z); e.nid = id; e.maxhp = maxhp; e.hp = hp; }
+    else e.hp = Math.min(e.hp, hp);
+    e._t = { x, y, z, vx, vy, vz, at: now };
+  }
+  for (let i = world.enemies.length - 1; i >= 0; i--) { const e: any = world.enemies[i]; if (!e.nid || !seen.has(e.nid)) killEnemy(e, i, false, false); }
+  // Schüsse des Gastgebers nachbilden (Torpedos zielen nur auf NPC-Schiffe des Gastgebers und entfallen hier)
+  for (const [x, y, z, vx, vy, vz, life, dmgP, torp] of m.s || []) {
+    if (torp) continue;
+    const sp = Math.hypot(vx, vy, vz) || 1;
+    fireBullet(world.ebullets, x, y, z, vx / sp, vy / sp, vz / sp, sp, life, 0, 'e', { dmgP, dmgS: 0, remote: true });
+  }
+}
+function moveFoes(dt: number) {
+  const now = performance.now(), k = Math.min(1, dt * 10);
+  for (const e of world.enemies as any[]) {
+    const t = e._t; if (!t) continue;
+    const ahead = (now - t.at) / 1000;
+    e.x += (t.x + t.vx * ahead - e.x) * k; e.y += (t.y + t.vy * ahead - e.y) * k; e.z += (t.z + t.vz * ahead - e.z) * k;
+    e.vx = t.vx; e.vy = t.vy; e.vz = t.vz;
+    e.mesh.position.set(e.x, e.y, e.z);
+    if (e.type === 'mother') { e.mesh.rotation.y += dt * 0.1; if (e.mesh.userData.ring) e.mesh.userData.ring.rotation.z += dt * 0.4; }
+    else if (Math.hypot(e.vx, e.vy, e.vz) > 1) e.mesh.lookAt(e.x + e.vx, e.y + e.vy, e.z + e.vz);
+  }
+}
+SHARED.foeHit = (e, dmg, byPlayer) => { if (e.nid) sendMsg({ t: 'a', op: byPlayer ? 'fhitp' : 'fhit', id: e.nid, v: Math.round(dmg) }); };
+// Gastgeber: Treffer eines Mitspielers anwenden; bei Abschuss bekommt der Schütze Kopfgeld und Beute
+function foeHitByOther(m: any) {
+  const j = world.enemies.findIndex((e: any) => e.nid === m.id);
+  if (j < 0) return;
+  const e: any = world.enemies[j];
+  e.hp -= m.v;
+  if (e.hp > 0) return;
+  if (m.op === 'fhitp') sendMsg({ t: 'fk', id: e.nid, by: m.from, type: e.type, p: [r1(e.x), r1(e.y), r1(e.z)] });
+  killEnemy(e, j, false, false);
+}

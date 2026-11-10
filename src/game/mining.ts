@@ -8,7 +8,7 @@ import { world, pickOre, removeAst, makeAst, dropPick, astHooks, type Asteroid }
 import { SHARED } from './shared';
 import { burst, puff } from './fx';
 import { SHIP, hurtPlayer } from './player';
-import { killEnemy } from './combat';
+import { hitEnemy } from './combat';
 import { buildDrone } from '../models/playerShips';
 import { radio } from '../ui/radio';
 
@@ -163,7 +163,7 @@ function explode(c: Charge) {
   const dp = d3(c.x, c.y, c.z, P.x, P.y, P.z);
   if (dp < 400) G.shake = Math.min(2.5, G.shake + (400 - dp) / 160);
   if (dp < 45 + stats().radius) hurtPlayer(30);
-  for (let j = world.enemies.length - 1; j >= 0; j--) { const e = world.enemies[j]; if (d3(e.x, e.y, e.z, c.x, c.y, c.z) < 80) { e.hp -= 140; if (e.hp <= 0) killEnemy(e, j, true); } }
+  for (let j = world.enemies.length - 1; j >= 0; j--) { const e = world.enemies[j]; if (d3(e.x, e.y, e.z, c.x, c.y, c.z) < 80) hitEnemy(e, j, 140, true); }
   const a = c.target;
   if (!a || !world.asteroids.includes(a)) return;
   blastAst(a, true);
