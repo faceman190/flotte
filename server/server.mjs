@@ -77,4 +77,14 @@ wss.on('connection', ws => {
   });
 });
 
+// Regelmäßig anpingen: hält die Verbindung über Proxys (z. B. bei Render) offen und räumt tote Verbindungen ab
+setInterval(() => {
+  for (const ws of clients.keys()) {
+    if (ws.alive === false) { ws.terminate(); continue; }
+    ws.alive = false;
+    try { ws.ping(); } catch { /* egal */ }
+  }
+}, 25000);
+wss.on('connection', ws => { ws.alive = true; ws.on('pong', () => { ws.alive = true; }); });
+
 server.listen(PORT, () => console.log(`Letzte Flotte läuft auf http://localhost:${PORT}  (WebSocket /ws, Spiel aus ${ROOT})`));
