@@ -18,31 +18,41 @@ interface WalkData {
   lamps: number[][]; areas: { name: string; z1: number }[];
 }
 interface Loaded { scene: THREE.Group; walk: WalkData }
-const cache: Record<string, Promise<Loaded | null>> = {}, ready: Record<string, Loaded | null> = {};
+const cache: Record<string, Promise<Loaded | null>> = {}, ready: Record<string, Loaded | null> = {}, failed: Record<string, boolean> = {};
 const modelOf = (cls: string) => SHIPS[cls as ShipId]?.model || '';
-export const hasMeshRoom = (cls: string) => { const m = modelOf(cls); return !!(m && window.SHIPINT?.[m] && window.WALKMAP?.[m]); };
+// Scheitert das Laden beim Einsteigen (zwei Versuche), gilt das Modell für diese Sitzung als nicht vorhanden: das Schiff bekommt den Standardraum
+export const hasMeshRoom = (cls: string) => { const m = modelOf(cls); return !!(m && window.SHIPINT?.[m] && window.WALKMAP?.[m] && !failed[m]); };
 
-export function loadMeshRoom(cls: string): Promise<Loaded | null> {
+async function loadOnce(m: string): Promise<Loaded> {
+  const [g, wj] = await Promise.all([
+    new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(window.SHIPINT![m]),
+    fetch(window.WALKMAP![m]).then(r => { if (!r.ok) throw new Error('Laufkarte: ' + r.status); return r.json(); }),
+  ]);
+  g.scene.traverse((o: any) => { if (o.isMesh) { o.userData.shared = true; o.material.envMapIntensity = 0.25; } });
+  // Laufkarte entpacken: je Zelle die Bodenhöhen (Meter)
+  const b64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0)).buffer;
+  const cells = new Int32Array(b64(wj.cells)), ys = new Int16Array(b64(wj.ys)), floors = new Map<number, number[]>();
+  for (let i = 0; i < cells.length; i++) { const l = floors.get(cells[i]) || []; l.push(ys[i] / 100); floors.set(cells[i], l); }
+  return { scene: g.scene, walk: { ...wj, floors } };
+}
+export function loadMeshRoom(cls: string, preload = false): Promise<Loaded | null> {
   const m = modelOf(cls);
   if (!hasMeshRoom(cls)) return Promise.resolve(null);
+  if (ready[m]) return Promise.resolve(ready[m]);
   return (cache[m] = cache[m] || (async (): Promise<Loaded | null> => {
-    try {
-      const [g, wj] = await Promise.all([
-        new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(window.SHIPINT![m]),
-        fetch(window.WALKMAP![m]).then(r => r.json()),
-      ]);
-      g.scene.traverse((o: any) => { if (o.isMesh) { o.userData.shared = true; o.material.envMapIntensity = 0.25; } });
-      // Laufkarte entpacken: je Zelle die Bodenhöhen (Meter)
-      const b64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0)).buffer;
-      const cells = new Int32Array(b64(wj.cells)), ys = new Int16Array(b64(wj.ys)), floors = new Map<number, number[]>();
-      for (let i = 0; i < cells.length; i++) { const l = floors.get(cells[i]) || []; l.push(ys[i] / 100); floors.set(cells[i], l); }
-      return { scene: g.scene, walk: { ...wj, floors } };
-    } catch (e) { console.warn('Innenraum nicht geladen:', m, e); return null; }
-  })().then(r => (ready[m] = r)));
+    // zwei Versuche mit kurzer Pause; ein Fehlschlag wird nicht behalten, der nächste Aufruf versucht es neu
+    for (let i = 0; i < 2; i++) {
+      try { return (ready[m] = await loadOnce(m)); }
+      catch (e) { console.warn('Innenraum nicht geladen:', m, e); if (!i) await new Promise(r => setTimeout(r, 1200)); }
+    }
+    if (!preload) failed[m] = true;   // Vorladen im Hintergrund darf scheitern, ohne dass der Innenraum verloren geht
+    delete cache[m];
+    return null;
+  })());
 }
 // sofort verfügbar? (für den synchronen Einstieg)
 export function meshRoomReady(cls: string) { const m = modelOf(cls); return ready[m] || null; }
-export function preloadMeshRooms() { for (const cls of Object.keys(SHIPS)) if (hasMeshRoom(cls)) loadMeshRoom(cls); }
+export function preloadMeshRooms() { for (const cls of Object.keys(SHIPS)) if (hasMeshRoom(cls)) loadMeshRoom(cls, true); }
 
 // Raum bauen: Gruppe in Schiffskoordinaten (wie das Schiffsmodell), Punkte, Lichter, Laufkarten-Abfrage
 export function buildMeshRoom(cls: string) {

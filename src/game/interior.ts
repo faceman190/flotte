@@ -89,7 +89,7 @@ let shipPad = { y: 0, z: 4 };
 let dims = PROM.station, kind: 'station' | 'carrier' | 'outpost' = 'station';
 const disposables: (THREE.Material | THREE.Texture)[] = [];
 let room: ShipRoom | null = null, roomModel: THREE.Object3D | null = null;
-let mesh: ReturnType<typeof buildMeshRoom> = null;   // Innenraum aus einem Modell (Laufkarte statt Rechtecke)
+let mesh: ReturnType<typeof buildMeshRoom> = null, boarding = false;   // Innenraum aus einem Modell (Laufkarte statt Rechtecke)
 let saved: null | { group: THREE.Group | null; rects: Rect[]; obstacles: Rect[]; shipObs: Rect[]; inters: Inter[]; shipInters: Inter[]; labels: Label[]; shipLabels: Label[]; x: number; z: number; yaw: number; lamps: [THREE.Vector3, number, number][] } = null;
 
 // Drei feste Lichter (immer in der Szene, außerhalb mit Stärke 0 – so müssen keine Shader neu gebaut werden)
@@ -464,7 +464,21 @@ export function enterShip(info: ShipInfo, m: ShipModel) {
   const cargo = active ? P.cargo : rec ? rec.cargo : {};
   const cap = active ? stats().cargo : rec ? computeStats(rec.cls, rec.up as Up).cargo : 0;
   // Innenraum aus dem Modell: noch nicht geladen → laden und Bescheid geben (meist längst im Hintergrund geladen)
-  if (hasMeshRoom(info.cls) && !meshRoomReady(info.cls)) { say('SYSTEM', 'Der Innenraum wird noch geladen …'); loadMeshRoom(info.cls); return; }
+  // Danach geht es von selbst an Bord (wenn man noch am Schiff steht); scheitert das Laden, gibt es den Standardraum.
+  if (hasMeshRoom(info.cls) && !meshRoomReady(info.cls)) {
+    if (boarding) return;
+    boarding = true; say('SYSTEM', 'Der Innenraum wird geladen …');
+    const x0 = IN.x, z0 = IN.z, mode = G.mode;
+    loadMeshRoom(info.cls).then(L => {
+      boarding = false;
+      if (G.mode !== mode || room || Math.hypot(IN.x - x0, IN.z - z0) > 6) return;
+      // läuft gerade noch das Vorladen und scheitert, zählt das nicht: dann sofort ein eigener Versuch
+      if (!L && hasMeshRoom(info.cls)) { enterShip(info, m); return; }
+      if (!L) say('SYSTEM', 'Der Innenraum des Modells konnte nicht geladen werden. Du betrittst den Standardraum.');
+      enterShip(info, m);
+    });
+    return;
+  }
   if (room) leaveShip();
   if (!planet) {
     saved = { group, rects, obstacles, shipObs, inters, shipInters, labels, shipLabels, x: IN.x, z: IN.z, yaw: IN.yaw, lamps: lamps.map(l => [l.position.clone(), l.distance, l.intensity] as [THREE.Vector3, number, number]) };

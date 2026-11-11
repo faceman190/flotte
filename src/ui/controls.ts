@@ -1,3 +1,4 @@
+import { look } from '../core/input';
 import { $, esc } from '../core/util';
 import { P, G, stats } from '../game/state';
 import { world } from '../game/world';
@@ -47,8 +48,9 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     r.push(['W / S', 'Schub / Bremsen'], ['Maus', 'Lenken'], ['A / D', 'Ausweichen']);
     r.push(['1–4', st.laser ? 'Werkzeug wählen' : 'Waffen']);
     if (st.laser) r.push(['R', 'Asteroiden scannen']);
+    r.push(['C / V', look.free ? 'Freie Kamera aktiv' : 'Freie Kamera halten / fest', look.free], ['Mausrad', 'Zoom']);
     r.push(['B', 'Flottenband'], ['M', 'Karte']);
-    return { title: world.surface ? `Flug · ${world.def?.name || ''}` : `Flug · ${P.tool === 'laser' ? 'Bergbau' : P.tool === 'charge' ? 'Sprengen' : 'Kampf'}`, rows: r.slice(0, 9) };
+    return { title: world.surface ? `Flug · ${world.def?.name || ''}` : `Flug · ${P.tool === 'laser' ? 'Bergbau' : P.tool === 'charge' ? 'Sprengen' : 'Kampf'}`, rows: r.slice(0, 11) };
   }
   return null;
 }

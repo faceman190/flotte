@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { scene, view } from '../core/engine';
-import { keys, mouse, actions } from '../core/input';
+import { keys, mouse, actions, look } from '../core/input';
 import { rand, clamp, d3 } from '../core/util';
 import { snd, gunSound } from '../core/audio';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
@@ -90,6 +90,7 @@ export function updatePlayer(dt: number) {
   let mx = view.W > 2 ? (mouse.x - hw) / hw : 0, my = view.H > 2 ? (mouse.y - hh) / hh : 0;
   const dz = 0.05, sh = (v: number) => Math.sign(v) * Math.max(0, Math.abs(v) - dz) / (1 - dz);
   mx = sh(clamp(mx, -1, 1)); my = sh(clamp(my, -1, 1));
+  if (look.free) { mx = 0; my = 0; }   // freie Kamera: Maus dreht die Kamera, das Schiff hält Kurs (Pfeiltasten lenken weiter)
   if (keys.ArrowLeft) mx = -1; if (keys.ArrowRight) mx = 1; if (keys.ArrowUp) my = -1; if (keys.ArrowDown) my = 1;
   if (settings.invertY) my = -my;
   const sens = settings.sens;

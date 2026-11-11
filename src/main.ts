@@ -1,13 +1,13 @@
 import './core/boot';   // zuerst: Spieldaten laden (Ladebalken), alles Weitere wartet darauf
 import * as THREE from 'three';
-import { camera, render, scene, aimShadows, markShadows } from './core/engine';
+import { camera, render, scene, aimShadows, markShadows, gl } from './core/engine';
 import { updateSky, sunDir, sky } from './core/sky';
 import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience';
 import { ux } from './core/engine';
-import { onKey, centerMouse, releaseAll } from './core/input';
+import { onKey, centerMouse, releaseAll, keys, look } from './core/input';
 import { snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode } from './core/audio';
 import { rand, clamp, $ } from './core/util';
-import { P, G, settings, loadSettings, newPlayer, setPlayer, loadGame, saveGame, stats, type Player, type Tool } from './game/state';
+import { P, G, settings, loadSettings, saveSettings, newPlayer, setPlayer, loadGame, saveGame, stats, type Player, type Tool } from './game/state';
 import { world, buildSector, stationById, gateTo, updateAsteroids } from './game/world';
 import { initFerrox, updateSpawning, updateEnemies, updateProjectiles, updateStationDefense } from './game/combat';
 import { initTraffic, updateTraffic, initAllies, updateAllies } from './game/npc';
@@ -229,6 +229,7 @@ onKey(code => {
     return;
   }
   if (code === 'KeyR' && G.mode === 'play') { scan(); noteScan(); return; }
+  if (code === 'KeyV' && G.mode === 'play') { CAM.lock = !CAM.lock; radio('SYSTEM', CAM.lock ? 'Freie Kamera: Maus schaut um das Schiff, Pfeiltasten lenken. V beendet sie.' : 'Kamera wieder hinter dem Schiff.'); return; }
   if (G.mode === 'walk' && code === 'Tab') { showMenu(); return; }
   if (code === 'KeyE') {
     if (G.mode === 'walk') interact();
@@ -336,7 +337,38 @@ const camPos = new THREE.Vector3(), _e = new THREE.Euler(0, 0, 0, 'YXZ'), _o = n
 let orbit = 0.6, menuT = 0;
 const MENU_ORBIT = 0.6;   // Blickwinkel im Hauptmenü: dahinter liegt der Heimstatt-Nebel (galaxy.ts, sky.rot)
 function setFov(f: number) { if (Math.abs(camera.fov - f) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } }
+// Freie Kamera im Flug: C oder mittlere Maustaste halten (V = fest), die Maus dreht die Kamera um das Schiff; Mausrad = Abstand.
+// Beim Loslassen schwenkt sie zurück hinter das Schiff. Der Zeiger wird solange eingefangen, damit er danach wieder dort steht, wo er war.
+const CAM = { yaw: 0, pitch: 0, w: 0, zoom: 1, lock: false };
+function freeCamera(dt: number) {
+  const flying = G.mode === 'play' && !G.dead;
+  if (!flying) CAM.lock = false;
+  const want = flying && (!!keys.KeyC || look.mid || CAM.lock);
+  if (want !== look.free) {
+    look.free = want; look.dx = look.dy = 0;
+    try {
+      if (want) { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); }
+      else if (document.pointerLockElement === gl && !IN.active) document.exitPointerLock();
+    } catch (e) { /* ohne Einfangen geht es auch */ }
+  }
+  if (look.free) {
+    const k = 0.0032 * settings.sens;
+    CAM.yaw -= look.dx * k;
+    CAM.pitch = clamp(CAM.pitch - look.dy * k * (settings.invertY ? -1 : 1), -1.45 - P.pitch, 1.45 - P.pitch);
+  } else {
+    const back = Math.exp(-dt * 5);   // zurück hinter das Schiff, auf dem kürzeren Weg
+    CAM.yaw = Math.atan2(Math.sin(CAM.yaw), Math.cos(CAM.yaw)) * back; CAM.pitch *= back;
+  }
+  look.dx = look.dy = 0;
+  CAM.w += ((look.free ? 1 : 0) - CAM.w) * Math.min(1, dt * 6);
+  if (look.wheel && (flying || G.mode === 'entry')) { settings.camZoom = clamp((settings.camZoom || 1) * Math.pow(1.13, look.wheel), 0.4, 3.5); saveSettings(); }
+  look.wheel = 0;
+  CAM.zoom += ((settings.camZoom || 1) - CAM.zoom) * Math.min(1, dt * 9);
+}
+// Esc gibt den Zeiger frei: dann auch die feste freie Kamera beenden
+document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== gl && CAM.lock) CAM.lock = false; });
 function updateCamera(dt: number) {
+  freeCamera(dt);
   if (G.mode === 'intro') { camera.position.copy(INTRO.pos); camera.lookAt(INTRO.look); setFov(50); return; }
   if (IN.active) { applyWalkCamera(); return; }
   if (G.mode === 'rover' || (G.mode === 'pause' && ROVER.active) || (G.mode === 'map' && ROVER.active)) { roverCamera(dt); return; }
@@ -352,16 +384,18 @@ function updateCamera(dt: number) {
     setFov(55);
     return;
   }
-  _e.set(P.pitch, P.yaw, 0);
+  _e.set(clamp(P.pitch + CAM.pitch, -1.5, 1.5), P.yaw + CAM.yaw, 0);
   const cs = stats(), cm = cs.camBack / 24;
-  _o.set(0, cs.camUp, cs.camBack).applyEuler(_e);
+  _o.set(0, cs.camUp * CAM.zoom, cs.camBack * CAM.zoom).applyEuler(_e);
   _t.set(P.x, P.y, P.z).add(_o);
   if (!G.camInit) { camPos.copy(_t); G.camInit = true; }
   camPos.lerp(_t, 1 - Math.exp(-dt * 7));
   camera.position.copy(camPos);
   if (G.shake > 0) camera.position.add(new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(G.shake));
   const f = fwd();
-  camera.lookAt(P.x + f.x * 40 * cm, P.y + f.y * 40 * cm + cs.camUp * 0.3, P.z + f.z * 40 * cm);
+  // normal: Blick voraus; freie Kamera: Blick auf das Schiff
+  const a = 40 * cm * (1 - CAM.w);
+  camera.lookAt(P.x + f.x * a, P.y + f.y * a + cs.camUp * 0.3 * (1 - CAM.w * 0.6), P.z + f.z * a);
   const sp = Math.hypot(P.vx, P.vy, P.vz);
   setFov(settings.fov + clamp(sp / stats().max, 0, 1) * 10 + (G.mode === 'jump' ? (1.3 - G.jumpT) * 40 : 0) + (G.mode === 'entry' ? 14 : 0));
 }

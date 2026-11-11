@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { camera, ux, view } from '../core/engine';
-import { mouse, keys } from '../core/input';
+import { mouse, keys, look } from '../core/input';
 import { clamp, d3, fmtD, fmtN, $ } from '../core/util';
 import { P, G, stats, cargoUsed, settings } from '../game/state';
 import { world } from '../game/world';
@@ -173,8 +173,10 @@ export function drawHUD() {
     }
     ux.strokeStyle = 'rgba(255,255,255,.12)'; ux.lineWidth = 1;
     ux.beginPath(); ux.arc(W / 2, H / 2, W / 2 * 0.05, 0, TAU); ux.stroke();
-    ux.beginPath(); ux.moveTo(W / 2, H / 2); ux.lineTo(mouse.x, mouse.y); ux.stroke();
-    ux.fillStyle = 'rgba(255,255,255,.85)'; ux.save(); ux.translate(mouse.x, mouse.y); ux.rotate(Math.PI / 4); ux.fillRect(-3.5, -3.5, 7, 7); ux.restore();
+    if (!look.free) {   // freie Kamera: kein Lenkzeiger
+      ux.beginPath(); ux.moveTo(W / 2, H / 2); ux.lineTo(mouse.x, mouse.y); ux.stroke();
+      ux.fillStyle = 'rgba(255,255,255,.85)'; ux.save(); ux.translate(mouse.x, mouse.y); ux.rotate(Math.PI / 4); ux.fillRect(-3.5, -3.5, 7, 7); ux.restore();
+    }
   }
   drawCompass();
   drawRadar();
