@@ -4,7 +4,7 @@ import { SHIPS, computeStats, type ShipId, type Up } from '../data/ships';
 
 // ---------------- Einstellungen ----------------
 const SETTINGS_KEY = 'lf_settings_v1';
-export const settings = { quality: 'high' as 'high' | 'low', fov: 66, sens: 1, invertY: false, volume: 0.7, music: 0.5, hud: 1, walk: true, server: '', camZoom: 1 };
+export const settings = { quality: 'high' as 'high' | 'low', fov: 66, sens: 1, invertY: false, volume: 0.7, music: 0.5, hud: 1, walk: true, server: '', camZoom: 1, voice: 1 };
 export function loadSettings() {
   try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) { /* ignorieren */ }
 }

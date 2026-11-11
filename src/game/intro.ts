@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { $ } from '../core/util';
-import { snd } from '../core/audio';
+import { voice, stopVoice, snd } from '../core/audio';
 import { G } from './state';
 import { world } from './world';
 import { burst } from './fx';
@@ -52,6 +52,7 @@ function nextShot() {
   c.classList.remove('show'); void (c as HTMLElement).offsetWidth;
   c.textContent = s.text; c.classList.toggle('last', !s.path);
   setTimeout(() => c.classList.add('show'), 600);
+  voice('intro_0' + (shot + 1));   // Erzähler (falls die Aufnahme vorhanden ist)
 }
 function flash() {
   const f = $('introFlash') as HTMLElement;
@@ -74,6 +75,7 @@ export function updateIntro(dt: number) {
 export function skipIntro() { if (G.mode === 'intro') finish(); }
 function finish() {
   shot = SHOTS.length;
+  stopVoice();
   $('intro').classList.add('hidden');
   $('introCard').classList.remove('show');
   onDone();

@@ -1,5 +1,6 @@
 import { $, d3, esc } from '../core/util';
-import { snd } from '../core/audio';
+import { voice, stopVoice, snd } from '../core/audio';
+import { voiceIdFor, RADIO_VOICES } from '../data/voice';
 import { releaseAll, centerMouse } from '../core/input';
 import { P, G, saveGame, type Mode } from './state';
 import { world } from './world';
@@ -26,11 +27,17 @@ export const storyHooks = { banner: (_t: string, _s: string, _c?: string) => {} 
 // ---------- Dialog (unten in der Mitte, läuft im Spiel weiter) ----------
 type Line = [string, string];
 const queue: Line[] = [];
-let lineT = 0;
+let lineT = 0, lineTok = 0;
+// passende Aufnahme zu einer Zeile (über das Textstück in data/voice.ts); über Funk klingt sie verfremdet
+function speak(who: string | undefined, text: string) {
+  const id = voiceIdFor(text);
+  if (!id) { stopVoice(); return Promise.resolve(0); }
+  return voice(id, !!who && (RADIO_VOICES.has(who) || G.mode === 'play'));
+}
 export function talk(...lines: Line[]) { queue.push(...lines); if (lineT <= 0) nextLine(); }
 function nextLine() {
   const l = queue.shift();
-  if (!l) { $('dlg').classList.add('hidden'); lineT = 0; return; }
+  if (!l) { $('dlg').classList.add('hidden'); lineT = 0; lineTok++; return; }
   const [who, text] = l;
   $('dlgWho').textContent = NAMES[who] || who;
   ($('dlgWho') as HTMLElement).style.color = SPK[who] || '#5fd0ff';
@@ -39,6 +46,9 @@ function nextLine() {
   $('dlg').classList.remove('pop'); void ($('dlg') as HTMLElement).offsetWidth; $('dlg').classList.add('pop');
   lineT = 2.6 + text.length * 0.05;
   snd(1200, 0.03, 'sine', 0.02, -300);
+  // Vertonung: Aufnahme abspielen, die Zeile bleibt mindestens so lange stehen
+  const tok = ++lineTok;
+  speak(who, text).then(d => { if (d && tok === lineTok && lineT > 0) lineT = Math.max(lineT, d + 0.6); });
 }
 $('dlg').addEventListener('click', () => { lineT = 0.01; });
 function updateDialog(dt: number) { if (lineT > 0) { lineT -= dt; if (lineT <= 0) nextLine(); } }
@@ -63,6 +73,7 @@ export function sceneNext() {
   const l = scene.lines[scene.i];
   if (!l) {
     const s = scene; scene = null;
+    stopVoice();
     $('scene').classList.add('hidden');
     G.mode = s.prev;
     if (s.prev === 'walk' || s.prev === 'play') { document.body.classList.add('playing'); centerMouse(); }
@@ -70,6 +81,7 @@ export function sceneNext() {
     return;
   }
   scene.t = l.t || 3 + l.text.length * 0.055;
+  { const sc = scene, i = scene.i; speak(l.who, l.text).then(d => { if (d && scene === sc && sc.i === i) sc.t = Math.max(sc.t, d + 0.7); }); }
   const who = $('sceneWho') as HTMLElement, txt = $('sceneTxt') as HTMLElement;
   who.textContent = l.who ? NAMES[l.who] || l.who : '';
   who.style.color = (l.who && SPK[l.who]) || '#5fd0ff';

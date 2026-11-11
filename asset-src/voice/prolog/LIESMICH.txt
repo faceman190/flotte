@@ -1,0 +1,2 @@
+Hier die Aufnahmen aus ElevenLabs ablegen, eine Datei pro Zeile, benannt nach der Kennung in docs/voice/prolog.md
+(z. B. intro_01.mp3, p01_brummer.mp3). Erlaubt: .mp3 und .ogg. Danach: npm run assets

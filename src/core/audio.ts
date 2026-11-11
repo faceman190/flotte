@@ -1,6 +1,6 @@
 // Ton: Synthesizer-Effekte, Hintergrundmusik und Bergbaulaser (Sounds aus public/sounds.js)
 let AC: AudioContext | null = null;
-export const audio = { volume: 0.7, music: 0.5 };
+export const audio = { volume: 0.7, music: 0.5, voice: 1 };
 const ctx = () => (AC = AC || new (window.AudioContext || (window as any).webkitAudioContext)());
 
 export function snd(f: number, d: number, type: OscillatorType = 'square', v = 0.04, slide = 0) {
@@ -82,7 +82,7 @@ async function loadBuf(key: string) {
 const pending: Record<string, boolean> = {};
 function want(key: string) { if (!BUF[key] && !pending[key]) { pending[key] = true; loadBuf(key); } return BUF[key]; }
 // alle einzelnen Aufnahmen vorab laden (alles außer den drei Schleifen für Laser, Triebwerk, Kanone)
-export function preloadSfx() { for (const k of Object.keys(window.SOUNDDATA || {})) if (!['laser', 'booster', 'gun'].includes(k)) want(k); }
+export function preloadSfx() { for (const k of Object.keys(window.SOUNDDATA || {})) if (!['laser', 'booster', 'gun'].includes(k) && !k.startsWith('v_')) want(k); }   // Stimmen (v_…) erst bei Bedarf
 export function sfx(key: string, vol = 1, rate = 1, fallback?: () => void) {
   const b = want(key);
   if (!b || !AC) { fallback?.(); return false; }
@@ -93,6 +93,42 @@ export function sfx(key: string, vol = 1, rate = 1, fallback?: () => void) {
 }
 // Explosion: eine von drei Aufnahmen, Tonhöhe leicht gestreut (rate < 1 = größer, tiefer)
 export function boom(vol = 0.8, rate = 1, fallback?: () => void) { return sfx('explosion' + Math.floor(Math.random() * 3), vol, rate * (0.92 + Math.random() * 0.16), fallback); }
+// ---------- Stimmen ----------
+// Eine Stimme zur Zeit; die Musik wird solange leiser. radioFx legt den Funkklang darüber (die Aufnahmen selbst sind trocken).
+// Liefert die Länge in Sekunden, 0 wenn es für die Kennung keine Aufnahme gibt.
+let vo: { src: AudioBufferSourceNode; g: GainNode } | null = null, voSeq = 0;
+export const hasVoice = (id: string) => !!window.SOUNDDATA?.['v_' + id];
+export function stopVoice() {
+  voSeq++;
+  if (vo && AC) { const v = vo; v.g.gain.setTargetAtTime(0, AC.currentTime, 0.04); setTimeout(() => { try { v.src.stop(); } catch (e) { /* schon aus */ } }, 250); duckMusic(1); }
+  vo = null;
+}
+export async function voice(id: string, radioFx = false): Promise<number> {
+  const key = 'v_' + id;
+  if (!window.SOUNDDATA?.[key]) return 0;
+  stopVoice();
+  const seq = voSeq;
+  if (!BUF[key]) await loadBuf(key);
+  const b = BUF[key];
+  if (!b || !AC || seq !== voSeq) return 0;
+  const s = AC.createBufferSource(), g = AC.createGain();
+  s.buffer = b; g.gain.value = audio.voice * Math.min(1, audio.volume * 1.4) * (radioFx ? 1.3 : 1);
+  let node: AudioNode = s;
+  if (radioFx) {   // schmales Band und leichte Verzerrung wie über Bordfunk
+    const hp = AC.createBiquadFilter(), lp = AC.createBiquadFilter(), sh = AC.createWaveShaper(), curve = new Float32Array(257);
+    hp.type = 'highpass'; hp.frequency.value = 450; lp.type = 'lowpass'; lp.frequency.value = 3100;
+    for (let i = 0; i < 257; i++) { const x = i / 128 - 1; curve[i] = Math.tanh(x * 2.2) / Math.tanh(2.2); }
+    sh.curve = curve; s.connect(hp); hp.connect(lp); lp.connect(sh); node = sh;
+  }
+  node.connect(g); g.connect(AC.destination);
+  const t0 = TRIM[key]?.[0] || 0;
+  s.start(0, t0);
+  duckMusic(0.4);
+  s.onended = () => { if (vo && vo.src === s) { vo = null; duckMusic(1); } };
+  vo = { src: s, g };
+  return b.duration - t0;
+}
+
 // Grundgeräusch (Schleife) mit weichem Wechsel; key null = aus
 let amb: { key: string; vol: number; src: AudioBufferSourceNode; g: GainNode } | null = null;
 export function ambience(key: string | null, vol = 0.1) {

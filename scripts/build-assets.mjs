@@ -100,6 +100,10 @@ for (const [k, v] of Object.entries(SOUNDDATA)) { const d = dataUri(v); if (d) p
 const SND = path.join(ROOT, 'asset-src', 'sound');
 if (fs.existsSync(SND)) for (const n of fs.readdirSync(SND).filter(x => /.(ogg|mp3)$/i.test(x))) { const b = fs.readFileSync(path.join(SND, n)); put('sound/' + path.basename(n, path.extname(n)), path.extname(n).slice(1).toLowerCase(), b, 'core', b.length); }
 
+// ---- Stimmen (asset-src/voice/<Ordner>/<Kennung>.mp3|ogg): im Hintergrund-Paket, im Spiel als Klang v_<Kennung> ----
+const VOX = path.join(ROOT, 'asset-src', 'voice');
+if (fs.existsSync(VOX)) for (const dir of fs.readdirSync(VOX)) { const d = path.join(VOX, dir); if (!fs.statSync(d).isDirectory()) continue; for (const n of fs.readdirSync(d).filter(x => /\.(ogg|mp3)$/i.test(x))) { const b = fs.readFileSync(path.join(d, n)); put('sound/v_' + path.basename(n, path.extname(n)), path.extname(n).slice(1).toLowerCase(), b, 'world', b.length); } }
+
 // ---- Paketliste ----
 const packs = {};
 for (const f of Object.values(files)) { const p = (packs[f.pack] = packs[f.pack] || { files: 0, size: 0 }); p.files++; p.size += f.size; }

@@ -21,6 +21,7 @@ export function applySettings() {
   setQuality(settings.quality === 'high');
   audio.volume = settings.volume;
   setMusicVolume(settings.music);
+  audio.voice = settings.voice ?? 1;
 }
 
 // ---------- Hauptmenü ----------
@@ -78,6 +79,7 @@ function syncSettingsUI() {
   ($('sWalk') as HTMLInputElement).checked = settings.walk;
   ($('sVol') as HTMLInputElement).value = String(settings.volume);
   ($('sMusic') as HTMLInputElement).value = String(settings.music);
+  ($('sVoice') as HTMLInputElement).value = String(settings.voice ?? 1);
   ($('sHud') as HTMLInputElement).value = String(settings.hud);
   labels();
 }
@@ -86,6 +88,7 @@ function labels() {
   $('sSensV').textContent = settings.sens.toFixed(2).replace('.', ',') + '×';
   $('sVolV').textContent = Math.round(settings.volume * 100) + ' %';
   $('sMusicV').textContent = Math.round(settings.music * 100) + ' %';
+  $('sVoiceV').textContent = Math.round((settings.voice ?? 1) * 100) + ' %';
   $('sHudV').textContent = Math.round(settings.hud * 100) + ' %';
 }
 $('sQuality').onchange = e => { settings.quality = (e.target as HTMLSelectElement).value as any; applySettings(); };
@@ -95,6 +98,7 @@ $('sInvert').onchange = e => { settings.invertY = (e.target as HTMLInputElement)
 $('sWalk').onchange = e => { settings.walk = (e.target as HTMLInputElement).checked; };
 $('sVol').oninput = e => { settings.volume = +(e.target as HTMLInputElement).value; audio.volume = settings.volume; labels(); };
 $('sVol').onchange = () => snd(660, 0.1, 'sine', 0.05);
+$('sVoice').oninput = e => { settings.voice = +(e.target as HTMLInputElement).value; audio.voice = settings.voice; labels(); };
 $('sMusic').oninput = e => { settings.music = +(e.target as HTMLInputElement).value; setMusicVolume(settings.music); labels(); };
 $('sHud').oninput = e => { settings.hud = +(e.target as HTMLInputElement).value; labels(); };
 
