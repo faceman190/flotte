@@ -131,7 +131,7 @@ const STEPS: Step[] = [
     title: 'Prolog · Letzter Ausbildungstag',
     enter: () => {
       S.talked = false;
-      storyNpc('Achterberg', 'Ausbilderin', 'Bei Hauptfrau Achterberg melden', () => { S.talked = true; }, '#ffb347', undefined, { model: 'merchant', tint: [0.82, 0.86, 0.95] });
+      storyNpc('Achterberg', 'Ausbilderin', 'Bei Hauptfrau Achterberg melden', () => { S.talked = true; }, '#ffb347', undefined, { model: 'achterberg' });
       talk(['BRUMMER', 'Guten Morgen, Bastion. Jahr 38 nach dem Riss, Tag 112. Schichtwechsel auf allen Decks.'],
         ['ACHTERBERG', `Kadett ${P.name}! Hier drüben, bei deiner ${P.shipName}. Beweg dich.`]);
     },
@@ -214,7 +214,7 @@ const STEPS: Step[] = [
       if (IN.active && !IN.ship) {
         const hx = IN.x - 1.2, hz = IN.z - 5.5;
         storyNpc('Hollweg', 'Flottenrat', 'Ratsherr Hollweg', () => {}, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
-        storyNpc('Achterberg', 'Ausbilderin', 'Hauptfrau Achterberg', () => {}, '#ffb347', { x: hx + 2.4, z: hz + 0.8 }, { model: 'merchant', tint: [0.82, 0.86, 0.95] });
+        storyNpc('Achterberg', 'Ausbilderin', 'Hauptfrau Achterberg', () => {}, '#ffb347', { x: hx + 2.4, z: hz + 0.8 }, { model: 'achterberg' });
         IN.yaw = Math.atan2(-(hx + 1.2 - IN.x), -(hz - IN.z)); IN.pitch = 0;
       }
       const go = () => playScene([

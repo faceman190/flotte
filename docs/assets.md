@@ -128,3 +128,15 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   Punkte sind dort in Blender-Koordinaten notiert (`B(x, y, z)`): Andockpunkt über der Plattform an Steuerbord, Startpunkt in der Mitte der
   Hangaröffnung (dort schließt der begehbare Hangar an), Kollisionskugeln, Lauflichter, Triebwerksglühen.
 - Materialnamen `bastion_*` steuern im Spiel Leuchtstärke und Durchsicht (Hangarfeld). Fehlt die Datei, erscheint die alte Bastion aus Grundformen.
+
+## Figuren aus Bildern, gebaut in Blender (Alpha 0.59)
+- Quelle: `asset-src/neu/figuren/Figuren.blend`. Je Figur drei Bilder im selben Ordner: `<name>_vorn.png`, `<name>_hinten.png`, `<name>_seite.png`
+  (Higgsfield, Modell gpt_image_2_6, 0,25 Credits je Bild; Rück- und Seitenansicht mit der Frontansicht als Vorlage erzeugt).
+- Die Skripte liegen als Textblöcke in der Blender-Datei: `figur_lib` (Bilder laden, Umriss erkennen), `figur_build` mit
+  `build_figure(Name, Größe)` (Körper aus den Umrissen: je Bildzeile ein elliptischer Querschnitt, Tiefe aus der Seitenansicht;
+  Voxel-Verschmelzung, Glättung, 9.000 Dreiecke; Textur aus allen drei Ansichten weich überblendet und in ein Bild gebacken)
+  und `rig_figure(P)` (Händler-Skelett einpassen, automatische Gewichte, Körper in die T-Haltung des Skeletts bringen).
+- Export: Skelett `Armature` und Netz auswählen → `asset-src/glb/char/<name>.glb` (ohne Animation), dann `npm run assets`.
+- Im Spiel: Größe in `HEIGHT` und Skelett-Vorbild in `RIG_OF` (src/models/charModels.ts). Weil das Skelett mit dem des Händlers
+  übereinstimmt, laufen alle Händler-Bewegungen ohne Umrechnung. Story-Figuren wählen das Modell über `NpcLook.model` (src/game/interior.ts).
+- Grenzen der Methode: einfache Körperform (keine Nase, Fäustlinge statt Finger), an Kopfseite und Körperflanken leicht verwischte Textur.

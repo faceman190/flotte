@@ -991,7 +991,7 @@ export function nearestOther(max = 3.2): { id: number; name: string } | null {
 // Story: eine benannte Figur in den Stationsraum stellen (z. B. die Ausbilderin im Prolog).
 // Steht neben dem Spieler, schaut ihn an und lässt sich mit E ansprechen.
 // model: 'merchant' ist die Frauenfigur (Mantel), 'worker' die Männerfigur (Arbeitsanzug): passend zur Rolle wählen
-export interface NpcLook { model?: 'worker' | 'merchant'; tint?: [number, number, number] }
+export interface NpcLook { model?: 'worker' | 'merchant' | 'achterberg'; tint?: [number, number, number] }
 export function storyNpc(name: string, title: string, label: string, act: () => void, col = '#ffb347', at?: { x: number; z: number }, look: NpcLook = {}) {
   if (!IN.active || !stationGroup || IN.ship) return false;
   const x = at ? at.x : IN.x - 2.5, z = at ? at.z : IN.z - 7, face = Math.atan2(IN.x - x, IN.z - z);   // vor dem Spieler (Blick zum Korridor)
@@ -1005,9 +1005,10 @@ export function storyNpc(name: string, title: string, label: string, act: () => 
 }
 // Figur für die Geschichte: gewähltes Modell (Arbeiter oder Händler) mit eigenem Farbton, steht und atmet
 function storyPerson(look: NpcLook): Person {
-  const cn = look.model || 'merchant';
+  let cn: string = look.model || 'merchant', tint = look.tint || 1;
+  if (cn === 'achterberg' && !hasChar(cn)) { cn = 'merchant'; tint = [0.82, 0.86, 0.95]; }   // eigene Figur fehlt: Frauenfigur mit Farbton
   if (!hasChar(cn)) return buildPerson(0x2c3440, 0xc89474, 0x3a2a1c, 0xffb347);
-  const c = charInstance(cn, look.tint || 1);
+  const c = charInstance(cn, tint);
   c.g.traverse((o: any) => { if (o.isMesh) { o.userData.shared = true; if (o.material !== undefined) disposables.push(o.material); } });
   const d = () => new THREE.Group();
   animInit(c.anim, false);

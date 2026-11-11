@@ -8,7 +8,11 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 interface Tpl { scene: THREE.Group; clips: THREE.AnimationClip[]; scale: number; footY: number }
 const TPL: Record<string, Tpl> = {};
-const HEIGHT: Record<string, number> = { worker: 1.8, merchant: 1.7 };
+const HEIGHT: Record<string, number> = { worker: 1.8, merchant: 1.7, achterberg: 1.72 };
+// Figuren aus Blender (asset-src/neu/figuren/Figuren.blend) tragen das Skelett des Händlers in derselben Grundhaltung:
+// Sie nutzen dessen Bewegungen (Stehen, Gehen, Anlaufen, Abbremsen, Sprechen), solange es keine eigenen gibt.
+const RIG_OF: Record<string, string> = { achterberg: 'merchant' };
+const clipKey = (name: string, kind: string) => (EXTRA[name + '_' + kind] || !RIG_OF[name] ? name : RIG_OF[name]) + '_' + kind;
 // Zusätzliche Bewegungen aus FBX-Dateien (scripts/fbx-anim.mjs → asset-src/data/anim_<figur>_<art>.json), z. B. merchant_idle.
 // Sie sind auf das Skelett genau dieser Figur umgerechnet und ersetzen deren eingebaute Bewegung.
 const EXTRA: Record<string, THREE.AnimationClip> = {};
@@ -53,7 +57,7 @@ export async function loadCharModels() {
 export const hasChar = (name: string) => !!TPL[name];
 
 const clipOf = (kind: 'walk' | 'idle', name: string) => {
-  if (EXTRA[name + '_' + kind]) return EXTRA[name + '_' + kind];   // eigene Bewegung dieser Figur
+  if (EXTRA[clipKey(name, kind)]) return EXTRA[clipKey(name, kind)];   // eigene Bewegung dieser Figur (oder die ihres Skelett-Vorbilds)
   const own = kind === 'walk' ? TPL.worker : TPL.merchant;
   return own?.clips[0] || null;
 };
@@ -70,11 +74,11 @@ export function charInstance(name: string, tint: number | [number, number, numbe
   const w = clipOf('walk', name), i = clipOf('idle', name);
   const walk = w ? mixer.clipAction(w) : null, idle = i ? mixer.clipAction(i) : null;
   // Ablaufsteuerung (animStep): eigene Clips dieser Figur für Anlaufen, Abbremsen und Sprechen, falls vorhanden
-  const act = (k: string) => (EXTRA[name + '_' + k] ? mixer.clipAction(EXTRA[name + '_' + k]) : null);
+  const act = (k: string) => (EXTRA[clipKey(name, k)] ? mixer.clipAction(EXTRA[clipKey(name, k)]) : null);
   const anim: CharAnim = {
     mixer, idle, walk, start: act('start'), stop: act('stop'), talk: [act('talk1'), act('talk2')].filter(Boolean) as THREE.AnimationAction[],
     mode: 'idle', cur: null, talkT: 0, talkI: 0,
-    pace: META[name + '_walk']?.pace || 1.4, mStart: META[name + '_start'] || null, mStop: META[name + '_stop'] || null,
+    pace: META[clipKey(name, 'walk')]?.pace || 1.4, mStart: META[clipKey(name, 'start')] || null, mStop: META[clipKey(name, 'stop')] || null,
   };
   return { g, mixer, walk, idle, anim, mats: [] as THREE.Material[] };
 }
