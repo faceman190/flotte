@@ -66,7 +66,9 @@ claude.ai stellt keine `.glb`-Dateien bereit. Für das Artifact gibt es deshalb 
 1. Volles Modell (innen + außen) mit `scripts/split-visible.mjs` in sichtbare Hülle und Innenteile trennen.
 2. Innenteile mit `scripts/simplify-hard.mjs` vereinfachen → `asset-src/glb/interior/<Modell>.glb` (gleiche Koordinaten wie die Hülle).
 3. Laufkarte: `node --max-old-space-size=12000 scripts/build-walkmap.mjs <innen.glb> <aussen.glb> asset-src/walk/<Modell>.json`
-   (20-cm-Zellen, mehrere Decks, Treppen bis 45 cm, Türen gelten als offen; Einstieg, Sitz, Koje usw. und sechs Lampen werden automatisch gesetzt).
+   (20-cm-Zellen, mehrere Decks, Treppen bis 45 cm, Türen gelten als offen, Gitterroste werden geschlossen; Einstieg, Sitz, Koje usw. und acht Lampen werden automatisch gesetzt).
+   Pfeil: `--start=1.7,-4.3,10 --minY=-6.4` (Hauptdeck an dieser Stelle; der Zwischenraum unter dem Deck zählt nicht).
+   Längsschnitt zur Kontrolle der Decks: `node scripts/slice-image.mjs <innen.glb> <aussen.glb> bild.png <x> [walk.json]`
    Kontrollbild: `node scripts/walkmap-image.mjs asset-src/walk/<Modell>.json bild.png 2`
 4. `npm run assets` – Innenmodell und Laufkarte landen im Hintergrund-Paket (world).
 Im Spiel (src/game/meshRoom.ts) bleibt die Außenhülle beim Betreten sichtbar; sie bildet Wände und Decke.

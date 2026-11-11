@@ -22,7 +22,7 @@ import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
 import { drawHUD, updatePanels, showBanner } from './ui/hud';
 import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
-import { IN, enterInterior, leaveInterior, updateWalk, applyWalkCamera, drawWalkHUD, interact, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
+import { IN, enterInterior, leaveInterior, updateWalk, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
 import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, ROVER, SURF } from './game/surface';
@@ -231,6 +231,7 @@ onKey(code => {
   if (code === 'KeyR' && G.mode === 'play') { scan(); noteScan(); return; }
   if (code === 'KeyV' && G.mode === 'play') { CAM.lock = !CAM.lock; radio('SYSTEM', CAM.lock ? 'Freie Kamera: Maus schaut um das Schiff, Pfeiltasten lenken. V beendet sie.' : 'Kamera wieder hinter dem Schiff.'); return; }
   if (G.mode === 'walk' && code === 'Tab') { showMenu(); return; }
+  if (G.mode === 'walk' && code === 'Space') { jump(); return; }
   if (code === 'KeyE') {
     if (G.mode === 'walk') interact();
     else if (G.mode === 'dock' && !G.inside) undock();

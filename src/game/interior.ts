@@ -46,6 +46,7 @@ export const IN = {
   active: false, station: null as Station | null, locked: false,
   x: 0, z: 0, yaw: 0, pitch: 0, bob: 0, dist: 0, area: 'Hangardeck',
   fy: 0,   // Bodenhöhe (nur in Innenräumen aus Modellen mit mehreren Decks ≠ 0)
+  jy: 0, jv: 0,   // Sprung: Höhe über dem Boden und Geschwindigkeit nach oben
   target: null as Inter | null,
   say: { who: '', text: '', t: 0 },
   ship: null as null | { cls: string; uid: number; name: string; ctx: 'hangar' | 'planet' },
@@ -502,7 +503,7 @@ export function enterShip(info: ShipInfo, m: ShipModel) {
   rects = room.rects; obstacles = room.obstacles; shipObs = []; shipLabels = []; labels = []; shipInters = [];
   inters = room.spots.map(sp => Object.assign(shipInter(sp, info), { y: (sp as any).y }));
   IN.ship = info; IN.panel = null; IN.target = null;
-  IN.x = room.spawn.x; IN.z = room.spawn.z; IN.yaw = room.spawn.yaw; IN.pitch = 0; IN.bob = 0; IN.fy = mesh ? mesh.spawn.y : 0;
+  IN.x = room.spawn.x; IN.z = room.spawn.z; IN.yaw = room.spawn.yaw; IN.pitch = 0; IN.bob = 0; IN.fy = mesh ? mesh.spawn.y : 0; IN.jy = IN.jv = 0;
   lamps.forEach((l, i) => { const q = room!.lamps[i]; room!.g.localToWorld(l.position.set(q[0], q[1], q[2])); l.distance = 22; l.intensity = mesh ? 0 : q[3] * Math.PI; });   // Modell-Räume bringen eigene Lampen mit
   setExposure(planet ? 0.5 : 0.2);
   G.mode = 'walk';
@@ -514,7 +515,7 @@ export function leaveShip() {
   if (!room) return;
   scene.remove(room.g);
   room.g.traverse((c: any) => { if (c.geometry && !c.userData.shared) c.geometry.dispose(); });   // Modell-Räume teilen die Geometrie mit der Vorlage
-  mesh = null; IN.fy = 0;
+  mesh = null; IN.fy = 0; IN.jy = IN.jv = 0;
   for (const d of room.disposables) d.dispose();
   if (roomModel) roomModel.visible = true;
   room = null; roomModel = null; IN.ship = null; IN.panel = null; IN.target = null;
@@ -616,7 +617,7 @@ export function interact() {
 
 // ---------- Laufen ----------
 function free(x: number, z: number) {
-  if (mesh) return mesh.floorAt(x, z, IN.fy) !== null;   // Modell-Raum: Laufkarte
+  if (mesh) return mesh.floorAt(x, z, IN.fy + IN.jy, IN.jy > 0.05) !== null;   // Modell-Raum: Laufkarte (im Sprung: Boden unter den Füßen)
   const R = 0.45;
   let ok = false;
   for (const r of rects) if (x > r[0] + R && x < r[1] - R && z > r[2] + R && z < r[3] - R) { ok = true; break; }
@@ -634,6 +635,8 @@ function free(x: number, z: number) {
   return true;
 }
 let stepT = 0;
+// Springen (Leertaste): nur vom Boden aus
+export function jump() { if (!IN.active || IN.jy > 0 || IN.jv !== 0) return; IN.jv = 4.6; snd(95, 0.05, 'triangle', 0.02, 40); }
 export function updateWalk(dt: number) {
   if (!IN.active || !group) return;
   IN.say.t = Math.max(0, IN.say.t - dt);
@@ -657,14 +660,27 @@ export function updateWalk(dt: number) {
     if (free(IN.x + dx, IN.z + dzz)) { IN.x += dx; IN.z += dzz; }
     else if (free(IN.x + dx, IN.z)) IN.x += dx;
     else if (free(IN.x, IN.z + dzz)) IN.z += dzz;
-    // Modell-Raum: Bodenhöhe folgen (Treppen, Rampen, Decks)
-    if (mesh) { const fy = mesh.floorAt(IN.x, IN.z, IN.fy); if (fy !== null) IN.fy += (fy - IN.fy) * Math.min(1, dt * 14); }
     const moved = Math.hypot(IN.x - ox, IN.z - oz);
     IN.dist += moved;
     stepT -= moved;
     if (stepT <= 0 && moved > 0) { stepT = 1.9; snd(70 + Math.random() * 20, 0.06, 'triangle', 0.018, -20); }
     IN.bob = Math.sin(IN.dist * 3.3) * 0.045;
   } else IN.bob *= Math.pow(0.001, dt);
+  // Modell-Raum: Bodenhöhe folgen (Treppen, Rampen, Decks); im Sprung bleibt die Höhe über alles erhalten, der Boden darunter wechselt
+  if (mesh) {
+    const air = IN.jy > 0.05, fy = mesh.floorAt(IN.x, IN.z, IN.fy + IN.jy, air);
+    if (fy !== null) {
+      if (air) { const a = IN.fy + IN.jy; IN.fy = fy; IN.jy = Math.max(0, a - fy); }
+      else IN.fy += (fy - IN.fy) * Math.min(1, dt * 14);
+    }
+  }
+  // Sprung: Schwerkraft, Kopf stößt nicht durch die Decke
+  if (IN.jv !== 0 || IN.jy > 0) {
+    IN.jy += IN.jv * dt; IN.jv -= 15 * dt;
+    const top = mesh ? Math.max(0, mesh.head() - 1.9) : 0.9;
+    if (IN.jy > top) { IN.jy = top; IN.jv = Math.min(IN.jv, 0); }
+    if (IN.jy <= 0) { IN.jy = 0; IN.jv = 0; snd(60, 0.07, 'triangle', 0.03, -25); }
+  }
   IN.area = room ? room.area(IN.x, IN.z) : IN.z > HZ0 ? 'Hangardeck' : IN.z > PZ1 ? 'Korridor' : PAL[kind].hall;
   if (IN.panel && Math.hypot(IN.x - IN.panel.x, IN.z - IN.panel.z) > 2.5) IN.panel = null;
   // Was liegt vor mir?
@@ -722,7 +738,7 @@ export function updateWalk(dt: number) {
 const _c = new THREE.Vector3();
 export function applyWalkCamera() {
   if (!group) return;
-  group.localToWorld(_c.set(IN.x, 1.7 + IN.bob + IN.fy, IN.z));
+  group.localToWorld(_c.set(IN.x, 1.7 + IN.bob + IN.fy + IN.jy, IN.z));
   camera.position.copy(_c);
   camera.rotation.order = 'YXZ';
   camera.rotation.set(IN.pitch, group.rotation.y + IN.yaw, 0);

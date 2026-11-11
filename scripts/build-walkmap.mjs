@@ -22,13 +22,15 @@ const cx = (ob.min[0] + ob.max[0]) / 2, cy = (ob.min[1] + ob.max[1]) / 2, cz = (
 const toShip = (x, y, z) => [-(x - cx), y - cy, -(z - cz)];   // Mitte abziehen, um 180° drehen
 if (opt.debug) console.log(`Mitte (Modellkoordinaten) ${cx.toFixed(2)} / ${cy.toFixed(2)} / ${cz.toFixed(2)} · Modell = (−x + ${cx.toFixed(2)}, y + ${cy.toFixed(2)}, −z + ${cz.toFixed(2)})`);
 
-// Innenmodell einlesen (Dreiecke in Schiffskoordinaten), Holz-Bereich merken (für die Koje)
+// Innen- und Außenmodell einlesen (Dreiecke in Schiffskoordinaten), Holz-Bereich merken (für die Koje).
+// Beide zusammen: Teile der Decks sind von außen sichtbar und stecken deshalb im Außenmodell; im Spiel stehen beide ineinander.
 const doc = await io.read(inInner);
+const allNodes = [...doc.getRoot().listNodes(), ...outer.getRoot().listNodes()];
 let nv = 0, nt = 0;
-for (const n of doc.getRoot().listNodes()) { const m = n.getMesh(); if (!m) continue; for (const p of m.listPrimitives()) { nv += p.getAttribute('POSITION').getCount(); const i = p.getIndices(); nt += i ? i.getCount() / 3 : p.getAttribute('POSITION').getCount() / 3; } }
+for (const n of allNodes) { const m = n.getMesh(); if (!m) continue; for (const p of m.listPrimitives()) { nv += p.getAttribute('POSITION').getCount(); const i = p.getIndices(); nt += i ? i.getCount() / 3 : p.getAttribute('POSITION').getCount() / 3; } }
 const pos = new Float32Array(nv * 3), idx = new Uint32Array(nt * 3);
 const wood = new THREE.Box3(); let vo = 0, to = 0;
-for (const n of doc.getRoot().listNodes()) {
+for (const n of allNodes) {
   const m = n.getMesh(); if (!m) continue;
   for (const p of m.listPrimitives()) {
     const a = p.getAttribute('POSITION'), arr = a.getArray(), c = a.getCount(), ind = p.getIndices(), ia = ind ? ind.getArray() : null, tc = ind ? ind.getCount() / 3 : c / 3;
@@ -56,10 +58,36 @@ for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) {
   for (let k = 0; k < hits.length; k++) {
     const h = hits[k]; if (faceNy(h.faceIndex) < 0.7) continue;
     const above = k > 0 ? hits[k - 1].point.y - h.point.y : Infinity;
-    if (above >= HEAD) list.push({ y: h.point.y, ceil: above });
+    if (above >= HEAD && above < 60) list.push({ y: h.point.y, ceil: above });   // ohne Decke darüber = Außenhaut, kein Deck
   }
   if (list.length) floors[ix * NZ + iz] = list.slice(0, 4);
 }
+// 1b. Gitterroste und Fugen: Zellen ohne Boden bekommen einen, wenn auf gegenüberliegenden Seiten (bis 0,6 m) Boden gleicher Höhe liegt
+//     und darüber genug Kopfhöhe ist. Echte Öffnungen (Treppenschächte, Luken) sind breiter und bleiben offen.
+{
+  const R = 3, up = new THREE.Vector3(0, 1, 0), add = [];
+  const DIRS = [[1, 0], [0, 1], [1, 1], [1, -1]];
+  const find = (ix, iz, y) => { if (ix < 0 || iz < 0 || ix >= NX || iz >= NZ) return null; return (floors[ix * NZ + iz] || []).find(f => Math.abs(f.y - y) <= 0.15) || null; };
+  for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) {
+    const done = [];
+    for (const [dx, dz] of DIRS) for (let a = 1; a <= R; a++) {
+      const fa = (floors[(ix + dx * a) * NZ + iz + dz * a] || []); if (ix + dx * a >= NX || iz + dz * a < 0 || iz + dz * a >= NZ) break;
+      for (const f of fa) {
+        if (done.some(y => Math.abs(y - f.y) < 0.3) || (floors[ix * NZ + iz] || []).some(g => Math.abs(g.y - f.y) < 0.3)) continue;
+        let other = null; for (let b = 1; b <= R + 1 - a && !other; b++) other = find(ix - dx * b, iz - dz * b, f.y);
+        if (!other) continue;
+        const y = (f.y + other.y) / 2;
+        ray.origin.set(x0 + (ix + 0.5) * CELL, y + 0.08, z0 + (iz + 0.5) * CELL); ray.direction.copy(up);
+        const h = bvh.raycastFirst(ray, THREE.DoubleSide), ceil = h ? h.distance + 0.08 : 60;
+        if (ceil >= HEAD && ceil < 60) { add.push([ix * NZ + iz, { y, ceil, filled: true }]); done.push(y); }
+      }
+    }
+  }
+  for (const [ci, f] of add) { const l = floors[ci] || (floors[ci] = []); if (l.length < 4) { l.push(f); l.sort((a, b) => b.y - a.y); } }
+  console.log(`Lücken geschlossen: ${add.length} Zellen`);
+}
+// optional: alles unterhalb einer Höhe weglassen (Zwischenräume unter dem Deck, Tanks)
+if (opt.minY) for (let i = 0; i < floors.length; i++) if (floors[i]) { floors[i] = floors[i].filter(f => f.y >= +opt.minY); if (!floors[i].length) floors[i] = undefined; }
 // 2./3. Verbindungen zwischen Nachbarn (Wände per waagerechter Strahlen)
 const node = (ix, iz, li) => floors[ix * NZ + iz]?.[li];
 const blocked = (ax, az, bx, bz, y) => {
@@ -94,6 +122,14 @@ for (const k of walk) {
   comps.push({ comp, covered });
 }
 comps.sort((a, b) => b.covered - a.covered);
+// --start=x,y,z: der Bereich an dieser Stelle ist das Hauptdeck (sonst der größte)
+if (opt.start) {
+  const [sx, sy, sz] = opt.start.split(',').map(Number), six = Math.floor((sx - x0) / CELL), siz = Math.floor((sz - z0) / CELL);
+  let bi = -1, bd = 1e9;
+  comps.forEach((c, i) => { for (const k of c.comp) { const ci = Math.floor(k / 4), ix = Math.floor(ci / NZ), iz = ci % NZ, d = Math.hypot(ix - six, iz - siz) * CELL + Math.abs(floors[ci][k % 4].y - sy) * 3; if (d < bd) { bd = d; bi = i; } } });
+  if (bi > 0) comps.unshift(comps.splice(bi, 1)[0]);
+  console.log(`Hauptdeck nach --start: ${comps[0].comp.length} Zellen (Abstand ${bd.toFixed(1)} m)`);
+}
 if (opt.debug) for (const c of comps.slice(0, 12)) {
   const ps = c.comp.map(k => { const ci = Math.floor(k / 4), ix = Math.floor(ci / NZ), iz = ci % NZ; return [x0 + ix * CELL, floors[ci][k % 4].y, z0 + iz * CELL]; });
   const r = i => `${Math.min(...ps.map(p => p[i])).toFixed(1)}…${Math.max(...ps.map(p => p[i])).toFixed(1)}`;
@@ -178,7 +214,9 @@ console.log(`Böden: ${floors.filter(Boolean).length} Spalten · begehbar ${walk
 // 6. Punkte
 const zs = pts.map(p => p.z), zMin = Math.min(...zs), zMax = Math.max(...zs), xMid = pts.reduce((a, p) => a + p.x, 0) / pts.length;
 const near = (x, y, z, filt = () => true) => pts.filter(filt).reduce((b, p) => { const d = Math.hypot(p.x - x, (p.y - y) * 2, p.z - z); return !b || d < b.d ? { ...p, d } : b; }, null);
-const seat = pts.reduce((b, p) => (!b || p.z < b.z ? p : b), null);   // ganz vorn
+// Pilotensitz: im vordersten Zehntel die oberste Ebene (Kanzel), dort ganz vorn und nahe der Mitte
+const bow = pts.filter(p => p.z < zMin + (zMax - zMin) * 0.12), bowTop = Math.max(...bow.map(p => p.y));
+const seat = bow.filter(p => p.y > bowTop - 0.5).reduce((b, p) => { const s = p.z + Math.abs(p.x - xMid) * 0.6; return !b || s < b.s ? { ...p, s } : b; }, null);
 // Einstieg: auf dem Hauptdeck (größter Bereich), im hinteren Teil, mit viel Kopfhöhe und Platz rundherum
 const main = comps[0].comp.map(info), mz0 = Math.min(...main.map(p => p.z)), mz1 = Math.max(...main.map(p => p.z));
 const mainSet = new Set(comps[0].comp.map(c => Math.floor(c / 4)));
@@ -191,11 +229,11 @@ const log = near(seat.x + 1.6, seat.y, seat.z + 1.5, p => Math.hypot(p.x - seat.
 const locker = near(spawn.x - 3, spawn.y, spawn.z - 2, p => Math.hypot(p.x - spawn.x, p.z - spawn.z) > 2);
 const scanner = near(xMid, seat.y, zMin + (zMax - zMin) * 0.35);
 const third = (zMax - zMin) / 3;
-// Lichter: sechs Punkte, möglichst weit voneinander über die begehbare Fläche verteilt, unter der Decke
+// Lichter: acht Punkte, möglichst weit voneinander über die begehbare Fläche verteilt, unter der Decke
 const lamps = [];
 {
   const cand = pts.filter((_, i) => i % 7 === 0), pick = [cand.reduce((b, p) => (!b || p.z < b.z ? p : b), null)];
-  while (pick.length < 6) pick.push(cand.reduce((b, p) => { const d = Math.min(...pick.map(q => Math.hypot(p.x - q.x, (p.y - q.y) * 3, p.z - q.z))); return !b || d > b.d ? { ...p, d } : b; }, null));
+  while (pick.length < 8) pick.push(cand.reduce((b, p) => { const d = Math.min(...pick.map(q => Math.hypot(p.x - q.x, (p.y - q.y) * 3, p.z - q.z))); return !b || d > b.d ? { ...p, d } : b; }, null));
   // ein paar Runden k-Means: Lampen von den Rändern in die Mitte ihrer Bereiche ziehen, dann auf die nächste Bodenzelle setzen
   const dist = (p, q) => Math.hypot(p.x - q.x, (p.y - q.y) * 3, p.z - q.z);
   for (let it = 0; it < 8; it++) {
@@ -208,13 +246,13 @@ const lamps = [];
 const r2 = v => Math.round(v * 100) / 100;
 const spot = (kind, p, r = 1.4) => ({ kind, x: r2(p.x), y: r2(p.y), z: r2(p.z), r });
 // Laufkarte kompakt: je begehbarer Zelle Index und Bodenhöhe (cm)
-const all = inside.map(c => [Math.floor(c / 4), floors[Math.floor(c / 4)][c % 4].y]);
-for (const [ci, y] of extra) all.push([ci, y]);   // Türen
-const cells = new Int32Array(all.length), ys = new Int16Array(all.length);
-all.forEach(([ci, y], i) => { cells[i] = ci; ys[i] = Math.round(y * 100); });
+const all = inside.map(c => [Math.floor(c / 4), floors[Math.floor(c / 4)][c % 4].y, floors[Math.floor(c / 4)][c % 4].ceil]);
+for (const [ci, y] of extra) all.push([ci, y, 2.1]);   // Türen
+const cells = new Int32Array(all.length), ys = new Int16Array(all.length), hs = new Uint8Array(all.length);   // hs: Kopfhöhe in Dezimetern (für Sprünge)
+all.forEach(([ci, y, h], i) => { cells[i] = ci; ys[i] = Math.round(y * 100); hs[i] = Math.min(255, Math.floor(h * 10)); });
 const res = {
   cell: CELL, x0: r2(x0), z0: r2(z0), nx: NX, nz: NZ, step: STEP,
-  cells: Buffer.from(cells.buffer).toString('base64'), ys: Buffer.from(ys.buffer).toString('base64'),
+  cells: Buffer.from(cells.buffer).toString('base64'), ys: Buffer.from(ys.buffer).toString('base64'), hs: Buffer.from(hs.buffer).toString('base64'),
   spawn: { x: r2(spawn.x), y: r2(spawn.y), z: r2(spawn.z), yaw: 0 },
   spots: [spot('seat', seat, 1.6), spot('log', log), spot('hatch', spawn, 1.8), spot('bed', bed, 1.8), spot('locker', locker), spot('scanner', scanner, 1.6)],
   lamps: lamps.map(l => l.map(r2)),
