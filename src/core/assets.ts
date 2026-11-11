@@ -10,7 +10,7 @@
 // =====================================================================================
 export interface AssetFile { url: string; size: number; pack: string }
 // embed: nur in der Artifact-Fassung (claude.ai stellt keine .glb-Dateien bereit): Modelle gebündelt in einer JSON-Datei
-export interface Manifest { v: string; packs: Record<string, { files: number; size: number }>; files: Record<string, AssetFile>; embed?: { url: string; size: number } }
+export interface Manifest { v: string; packs: Record<string, { files: number; size: number }>; files: Record<string, AssetFile>; embed?: { url?: string; urls?: string[]; size: number } }
 declare global {
   interface Window {
     TEXDATA?: Record<string, string>; NEBDATA?: Record<string, string>;
@@ -98,8 +98,10 @@ export async function loadAssets() {
   // Artifact-Fassung: gebündelte Modelle laden und als Dateien im Speicher bereitstellen
   if (m.embed) {
     try {
-      const r = await fetch(m.embed.url), txt = await r.text(); got += m.embed.size; show();
-      for (const [k, b64] of Object.entries(JSON.parse(txt) as Record<string, string>)) {
+      // mehrere Teile (claude.ai erlaubt höchstens 16 MB je Datei)
+      const parts = await Promise.all((m.embed.urls || [m.embed.url!]).map(u => fetch(u).then(r => r.json() as Promise<Record<string, string>>)));
+      got += m.embed.size; show();
+      for (const [k, b64] of parts.flatMap(p => Object.entries(p))) {
         const bin = atob(b64), u = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         if (m.files[k]) m.files[k].url = URL.createObjectURL(new Blob([u], { type: 'model/gltf-binary' }));

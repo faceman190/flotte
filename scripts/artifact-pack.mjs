@@ -1,5 +1,5 @@
 // Fassung für das claude.ai-Artifact: claude.ai stellt keine .glb-Dateien bereit. Dieses Skript kopiert dist/ nach
-// dist-artifact/, bündelt alle Modelle in assets/models.json (Base64) und vermerkt das in der Paketliste („embed“).
+// dist-artifact/, bündelt alle Modelle in assets/models*.json (Base64, in Teilen) und vermerkt das in der Paketliste („embed“).
 // Der Lader (src/core/assets.ts) macht daraus beim Start wieder Modelldateien im Speicher.
 // Aufruf nach „npm run build“: node scripts/artifact-pack.mjs
 import fs from 'fs';
@@ -15,8 +15,14 @@ for (const [k, f] of Object.entries(man.files)) {
   models[k] = fs.readFileSync(path.join(SRC, f.url)).toString('base64');
   f.url = 'embed:' + k;
 }
-const json = JSON.stringify(models);
-fs.writeFileSync(path.join(OUT, 'assets', 'models.json'), json);
-man.embed = { url: 'assets/models.json', size: json.length };
+// in Teile bis etwa 12 MB aufteilen (claude.ai erlaubt höchstens 16 MB je Datei)
+const parts = [{}], sizes = [0];
+for (const [k, b64] of Object.entries(models)) {
+  if (sizes[sizes.length - 1] && sizes[sizes.length - 1] + b64.length > 12e6) { parts.push({}); sizes.push(0); }
+  parts[parts.length - 1][k] = b64; sizes[sizes.length - 1] += b64.length;
+}
+const urls = parts.map((part, i) => { const u = `assets/models${i ? '-' + i : ''}.json`; fs.writeFileSync(path.join(OUT, u), JSON.stringify(part)); return u; });
+const json = { length: sizes.reduce((a, b) => a + b, 0) };
+man.embed = { urls, size: json.length };
 fs.writeFileSync(path.join(OUT, 'assets', 'manifest.json'), JSON.stringify(man));
-console.log(`Artifact-Fassung: ${Object.keys(models).length} Modelle gebündelt (${(json.length / 1048576).toFixed(1)} MB)`);
+console.log(`Artifact-Fassung: ${Object.keys(models).length} Modelle gebündelt (${(json.length / 1048576).toFixed(1)} MB in ${urls.length} Teilen)`);
