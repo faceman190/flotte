@@ -10,7 +10,7 @@ import { P, G, stats } from './state';
 import { hurtPlayer, playerTargetable } from './player';
 import { damageTraffic, damageAlly } from './npc';
 import { radio } from '../ui/radio';
-import { SHARED } from './shared';
+import { SHARED, hostEvent } from './shared';
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
 
@@ -27,8 +27,9 @@ export function fireBullet(list: any[], x: number, y: number, z: number, dx: num
   scene.add(m);
   const b = { x, y, z, px: x, py: y, pz: z, vx: dx * speed, vy: dy * speed, vz: dz * speed, life, dmg, kind, mesh: m };
   if (extra) Object.assign(b, extra);
-  // Gastgeber: Feindschüsse für die Mitspieler mitschreiben
+  // Gastgeber: Feindschüsse und Schüsse der Patrouillen für die Mitspieler mitschreiben
   if (list === world.ebullets && SHARED.online && !SHARED.client && !(extra && extra.remote)) SHARED.shots.push([Math.round(x), Math.round(y), Math.round(z), Math.round(b.vx), Math.round(b.vy), Math.round(b.vz), life, (b as any).dmgP || 0, 0]);
+  if (list === world.bullets && kind === 'w' && SHARED.online && !SHARED.client && !(extra && extra.remote)) SHARED.ashots.push([Math.round(x), Math.round(y), Math.round(z), Math.round(b.vx), Math.round(b.vy), Math.round(b.vz), life]);
   list.push(b);
   return b;
 }
@@ -122,7 +123,8 @@ export function updateSpawning(dt: number) {
   if (world.def!.faction !== 'ferrox') {
     const st = world.stations[0], who = st ? st.name.toUpperCase() : 'SYSTEM';
     const near = world.gates.reduce((b: any, g) => (!b || d3(g.x, g.y, g.z, c.x, c.y, c.z) < d3(b.x, b.y, b.z, c.x, c.y, c.z) ? g : b), null);
-    radio(who, `Ferrox-Kontakt${near ? ` beim Tor nach ${near.name}` : ''}: ${nd} Jäger${nb ? ` und ${nb} Bomber` : ''}. Alle Piloten wachsam!`);
+    const txt = `Ferrox-Kontakt${near ? ` beim Tor nach ${near.name}` : ''}: ${nd} Jäger${nb ? ` und ${nb} Bomber` : ''}. Alle Piloten wachsam!`;
+    radio(who, txt); hostEvent(['r', who, txt, '', 'alarm']);
     snd(440, 0.25, 'square', 0.04); setTimeout(() => snd(440, 0.25, 'square', 0.04), 350);
   }
 }
@@ -198,7 +200,15 @@ function fireTorp(e: any, ship: any) {
   scene.add(m);
   _v2.set(ship.x - e.x, ship.y - e.y, ship.z - e.z).normalize().multiplyScalar(90);
   world.ebullets.push({ x: e.x, y: e.y, z: e.z, px: e.x, py: e.y, pz: e.z, vx: _v2.x, vy: _v2.y, vz: _v2.z, life: 14, dmgS: e.es.dmgS, dmgP: e.es.dmgP * 2, torp: true, ship, mesh: m });
-  if (SHARED.online && !SHARED.client) SHARED.shots.push([Math.round(e.x), Math.round(e.y), Math.round(e.z), Math.round(_v2.x), Math.round(_v2.y), Math.round(_v2.z), 14, e.es.dmgP * 2, 1]);
+  if (SHARED.online && !SHARED.client) SHARED.shots.push([Math.round(e.x), Math.round(e.y), Math.round(e.z), Math.round(_v2.x), Math.round(_v2.y), Math.round(_v2.z), 14, e.es.dmgP * 2, 1, ship.nid || 0]);
+}
+// Mitspieler: Torpedo des Gastgebers nachbilden (verfolgt denselben Frachter; Schaden am Frachter rechnet der Gastgeber)
+export function remoteTorp(x: number, y: number, z: number, vx: number, vy: number, vz: number, dmgP: number, ship: any) {
+  const m = new THREE.Mesh(TORP_GEO, TORP_M), g = new THREE.Sprite(glowMat(0xb050ff, 0.9));
+  g.scale.setScalar(10); m.add(g);
+  m.position.set(x, y, z);
+  scene.add(m);
+  world.ebullets.push({ x, y, z, px: x, py: y, pz: z, vx, vy, vz, life: 14, dmgS: 0, dmgP, torp: true, ship, mesh: m, remote: true });
 }
 
 export function updateEnemies(dt: number) {
@@ -290,7 +300,7 @@ export function updateProjectiles(dt: number) {
       if (segHit(b, e.x, e.y, e.z, r)) {
         burst(b.px, b.py, b.pz, '#d0a0ff', 6, 35, 0.35); hit = true;
         if (b.kind === 'p') G.hitMark = 0.12;
-        hitEnemy(e, j, b.dmg, b.kind === 'p');
+        if (!b.remote) hitEnemy(e, j, b.dmg, b.kind === 'p');
         break;
       }
     }
@@ -375,7 +385,7 @@ export function updateStationDefense(dt: number) {
     const t = pick(cand), fx = t.x + rand(-40, 40), fy = t.y + rand(-40, 40), fz = t.z + rand(-40, 40);
     burst(fx, fy, fz, '#ffb050', 10, 30, 0.4);
     burst(fx, fy, fz, '#8a8a8a', 12, 22, 1.2);
-    for (let j = world.enemies.length - 1; j >= 0; j--) { const e = world.enemies[j]; if (d3(e.x, e.y, e.z, fx, fy, fz) < 38) hitEnemy(e, j, 14, false); }
+    if (!SHARED.client) for (let j = world.enemies.length - 1; j >= 0; j--) { const e = world.enemies[j]; if (d3(e.x, e.y, e.z, fx, fy, fz) < 38) hitEnemy(e, j, 14, false); }
     for (const tb of world.ebullets) if (tb.torp && d3(tb.x, tb.y, tb.z, fx, fy, fz) < 38) tb.life = 0;
     if (flakSnd <= 0 && d3(s.x, s.y, s.z, P.x, P.y, P.z) < 1500) { snd(90, 0.12, 'triangle', 0.025, -40); flakSnd = 0.25; }
     if (s.model.turrets) for (const tr of s.model.turrets) tr.rotation.y = Math.atan2(-(t.x - s.x - tr.position.x), -(t.z - s.z - tr.position.z));

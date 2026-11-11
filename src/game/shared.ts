@@ -13,4 +13,10 @@ export const SHARED = {
   pilots: [] as { id: number; x: number; y: number; z: number; vx: number; vy: number; vz: number }[],
   shots: [] as number[][],
   foeHit: (_e: any, _dmg: number, _byPlayer: boolean) => {},
+  // NPC-Verkehr und Patrouillen: Ereignisse (Funk, Explosionen, Sprünge) und Patrouillenschüsse des Gastgebers
+  ev: [] as any[][],
+  ashots: [] as number[][],
 };
+// Gastgeber: Ereignis für die Mitspieler im Sektor mitschreiben
+export function hostEvent(e: any[]) { if (SHARED.online && !SHARED.client) SHARED.ev.push(e); }
+export const isHost = () => SHARED.online && !SHARED.client;

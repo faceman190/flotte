@@ -115,7 +115,7 @@ wss.on('connection', ws => {
       if (c.trade && c.st.d !== c.trade.station) endTrade(c.trade, `${c.name} hat die Station verlassen.`);
       toRoom(c.room, { t: 'st', id: c.id, name: c.name, ...c.st }, ws);
     } else if (m.t === 'w' || m.t === 'f' || m.t === 'fk') {
-      // Weltstand (Asteroiden 'w', Ferrox 'f', Abschuss 'fk') vom Gastgeber an die anderen im Raum
+      // Weltstand (Asteroiden 'w', Ferrox mit NPC-Verkehr und Patrouillen 'f', Abschuss 'fk') vom Gastgeber an die anderen im Raum
       if (c.room && hostOf(c.room) === c) toRoom(c.room, m, ws);
     } else if (m.t === 'a') {
       // Abbau-Meldung eines Mitspielers an den Gastgeber

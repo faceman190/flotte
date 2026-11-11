@@ -9,6 +9,7 @@ import { burst } from './fx';
 import { fireBullet } from './combat';
 import { radio } from '../ui/radio';
 import { P } from './state';
+import { SHARED, hostEvent } from './shared';
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
 
@@ -61,21 +62,28 @@ function removeTraffic(i: number) {
   world.traffic.splice(i, 1);
 }
 
+// Funkspruch, den im Mehrspieler auch die Mitspieler im Sektor hören
+function npcRadio(who: string, text: string, col?: string) { radio(who, text, col); hostEvent(['r', who, text, col || '']); }
+function trafficBoom(x: number, y: number, z: number) {
+  for (let i = 0; i < 6; i++) setTimeout(() => { burst(x + rand(-50, 50), y + rand(-15, 15), z + rand(-50, 50), i % 2 ? '#ffd27a' : '#ff7040', 140, 90, 1.8); snd(60 + i * 15, 0.8, 'sawtooth', 0.05, -30); }, i * 180);
+}
 export function damageTraffic(t: any, d: number) {
   if (!t.alive) return;
-  t.hp -= d;
   t.hitT = 0.3;
-  if (t.alertT <= 0) { t.alertT = 15; radio('VERKEHR', `${t.def.n} „${t.name}“ wird angegriffen! Wir brauchen Hilfe!`); }
+  if (SHARED.client && t.nid) return;   // Schaden rechnet der Gastgeber
+  t.hp -= d;
+  if (t.alertT <= 0) { t.alertT = 15; npcRadio('VERKEHR', `${t.def.n} „${t.name}“ wird angegriffen! Wir brauchen Hilfe!`); }
   if (t.hp <= 0) {
     t.hp = 0;
-    const { x, y, z } = t;
-    for (let i = 0; i < 6; i++) setTimeout(() => { burst(x + rand(-50, 50), y + rand(-15, 15), z + rand(-50, 50), i % 2 ? '#ffd27a' : '#ff7040', 140, 90, 1.8); snd(60 + i * 15, 0.8, 'sawtooth', 0.05, -30); }, i * 180);
-    radio('LEITSTELLE', `Wir haben die „${t.name}“ verloren.`);
+    trafficBoom(t.x, t.y, t.z);
+    if (t.nid) hostEvent(['x', 't', t.nid]);
+    npcRadio('LEITSTELLE', `Wir haben die „${t.name}“ verloren.`);
     removeTraffic(world.traffic.indexOf(t));
   }
 }
 
 export function updateTraffic(dt: number) {
+  if (SHARED.client) { mirrorTraffic(dt); return; }   // Mitspieler: Verkehr kommt vom Gastgeber
   const cap = trafficCap();
   world.trafficT -= dt;
   if (world.trafficT <= 0) { world.trafficT = rand(25, 45); if (world.traffic.length < cap) spawnTraffic(false); }
@@ -100,6 +108,7 @@ export function updateTraffic(dt: number) {
       t.vx += (_v.x - t.vx) * k; t.vy += (_v.y - t.vy) * k; t.vz += (_v.z - t.vz) * k;
       if (g.station && d < 40) t.wait = rand(20, 45);
       if (g.gate && d < 75) {
+        if (t.nid) hostEvent(['g', t.nid]);
         burst(t.x, t.y, t.z, '#ffffff', 50, 70, 0.8);
         snd(200, 0.5, 'sine', 0.02, 400);
         removeTraffic(i);
@@ -107,6 +116,11 @@ export function updateTraffic(dt: number) {
       }
     }
     t.x += t.vx * dt; t.y += t.vy * dt; t.z += t.vz * dt;
+    orientTraffic(t, dt);
+  }
+}
+// Lage und Triebwerke eines Frachters aus Position und Tempo
+function orientTraffic(t: any, dt: number) {
     t.mesh.position.set(t.x, t.y, t.z);
     const sp = Math.hypot(t.vx, t.vy, t.vz);
     if (sp > 3) {
@@ -118,7 +132,6 @@ export function updateTraffic(dt: number) {
       t.mesh.quaternion.copy(q0).slerp(q1, Math.min(1, dt * 1.5));
     }
     for (const gl of t.parts.glows) gl.scale.setScalar(clamp(sp / 8, 3, 12) * (1 + Math.random() * 0.1) * (gl.userData.base || 1));
-  }
 }
 
 // =============== Patrouillen (befreundete Jäger) ===============
@@ -143,16 +156,19 @@ export function initAllies() {
 }
 export function damageAlly(a: any, d: number) {
   if (!a.alive) return;
+  if (SHARED.client && a.nid) return;   // Schaden rechnet der Gastgeber
   a.hp -= d;
   if (a.hp <= 0) {
     a.alive = false;
     scene.remove(a.mesh);
-    burst(a.x, a.y, a.z, '#ffb347', 90, 70, 1.2);
-    snd(100, 0.6, 'sawtooth', 0.05, -60);
-    radio(a.name, 'Ich bin getroffen! Steige aus!', a.col);
+    allyBoom(a);
+    if (a.nid) hostEvent(['x', 'a', a.nid]);
+    npcRadio(a.name, 'Ich bin getroffen! Steige aus!', a.col);
   }
 }
+function allyBoom(a: any) { burst(a.x, a.y, a.z, '#ffb347', 90, 70, 1.2); snd(100, 0.6, 'sawtooth', 0.05, -60); }
 export function updateAllies(dt: number) {
+  if (SHARED.client) { mirrorAllies(dt); return; }   // Mitspieler: Patrouillen kommen vom Gastgeber
   // Verluste nach einer Weile von der Station ersetzen
   world.allyT -= dt;
   if (world.allyT <= 0) {
@@ -189,10 +205,7 @@ export function updateAllies(dt: number) {
     for (const s of world.stations) { const sd = d3(w.x, w.y, w.z, s.x, s.y, s.z); if (sd < s.R + 30) { w.vx += (w.x - s.x) / sd * 400 * dt; w.vy += (w.y - s.y) / sd * 400 * dt; w.vz += (w.z - s.z) / sd * 400 * dt; } }
     for (const s of world.traffic) { const sd = d3(w.x, w.y, w.z, s.x, s.y, s.z); if (sd < s.R * 0.75) { w.vx += (w.x - s.x) * dt * 3; w.vy += (w.y - s.y) * dt * 3; w.vz += (w.z - s.z) * dt * 3; } }
     w.x += w.vx * dt; w.y += w.vy * dt; w.z += w.vz * dt;
-    w.mesh.position.set(w.x, w.y, w.z);
-    const sp = Math.hypot(w.vx, w.vy, w.vz);
-    if (sp > 20) w.mesh.lookAt(w.x - w.vx, w.y - w.vy, w.z - w.vz);
-    w.f.glows.forEach((g: THREE.Sprite) => g.scale.setScalar(2.5 + sp / 90));
+    orientAlly(w);
     w.cool -= dt;
     if (w.target && w.cool <= 0) {
       const e = w.target;
@@ -210,4 +223,98 @@ export function updateAllies(dt: number) {
       }
     }
   }
+}
+function orientAlly(w: any) {
+  w.mesh.position.set(w.x, w.y, w.z);
+  const sp = Math.hypot(w.vx, w.vy, w.vz);
+  if (sp > 20) w.mesh.lookAt(w.x - w.vx, w.y - w.vy, w.z - w.vz);
+  w.f.glows.forEach((g: THREE.Sprite) => g.scale.setScalar(2.5 + sp / 90));
+}
+
+// =====================================================================================
+// Mehrspieler: Verkehr und Patrouillen gemeinsam
+// Der Gastgeber des Sektors steuert Frachter und Patrouillenjäger und schickt ihren Stand mit dem Ferrox-Stand
+// (10× pro Sekunde). Mitspieler zeigen sie nur an und führen sie weich nach; Schaden, Verluste und Funk
+// kommen vom Gastgeber (Ereignisse: Funk 'r', Explosion 'x', Sprung durchs Tor 'g').
+// =====================================================================================
+const CIV = Object.keys(SHIPDEF) as CivType[];
+let nextNpcId = 1;
+const r1 = (v: number) => Math.round(v * 10) / 10;
+// Gastgeber: Stand für die Mitspieler
+export function npcSnapshot() {
+  const t = world.traffic.map(o => { if (!o.nid) o.nid = nextNpcId++; return [o.nid, CIV.indexOf(o.type), o.name, r1(o.x), r1(o.y), r1(o.z), r1(o.vx), r1(o.vy), r1(o.vz), Math.ceil(o.hp), o.maxhp, o.hitT > 0 ? 1 : 0]; });
+  const a = world.allies.filter(o => o.alive).map(o => { if (!o.nid) o.nid = nextNpcId++; return [o.nid, CALLSIGNS.findIndex(c => c[0] === o.name), r1(o.x), r1(o.y), r1(o.z), r1(o.vx), r1(o.vy), r1(o.vz), Math.ceil(o.hp)]; });
+  return { t, a };
+}
+// Gastgeber geworden: Kennungen fortsetzen, eigene Steuerung übernimmt
+export function npcBecameHost() {
+  for (const o of [...world.traffic, ...world.allies]) { nextNpcId = Math.max(nextNpcId, (o.nid || 0) + 1); delete o._t; }
+  for (const w of world.allies) { if (!w.home) w.home = pick(world.stations); w.rt = 0; }
+  // übernommene Frachter: neues Ziel (Tor), sonst blieben sie am letzten Punkt stehen
+  for (const t of world.traffic) if (!t.goal.gate && !t.goal.station && world.gates.length) t.goal = gateGoal(pick(world.gates));
+}
+let npcSynced = false;
+export function npcResync() { npcSynced = false; }
+// Mitspieler: Stand des Gastgebers übernehmen
+export function applyNpc(n: any, ev: any[]) {
+  if (!SHARED.client || !world.def) return;
+  if (!npcSynced) {
+    // eigene Startbelegung durch die des Gastgebers ersetzen
+    for (let i = world.traffic.length - 1; i >= 0; i--) removeTraffic(i);
+    for (const a of world.allies) scene.remove(a.mesh);
+    world.allies.length = 0;
+    npcSynced = true;
+  }
+  const now = performance.now();
+  // Ereignisse zuerst (Explosion und Sprung brauchen noch die Lage)
+  for (const e of ev || []) {
+    if (e[0] === 'r') { radio(e[1], e[2], e[3] || undefined); if (e[4] === 'alarm') { snd(440, 0.25, 'square', 0.04); setTimeout(() => snd(440, 0.25, 'square', 0.04), 350); } }
+    else if (e[0] === 'x' && e[1] === 't') { const t = world.traffic.find(o => o.nid === e[2]); if (t) { trafficBoom(t.x, t.y, t.z); removeTraffic(world.traffic.indexOf(t)); } }
+    else if (e[0] === 'x' && e[1] === 'a') { const a = world.allies.find(o => o.nid === e[2]); if (a && a.alive) { a.alive = false; scene.remove(a.mesh); allyBoom(a); } }
+    else if (e[0] === 'g') { const t = world.traffic.find(o => o.nid === e[1]); if (t) { burst(t.x, t.y, t.z, '#ffffff', 50, 70, 0.8); snd(200, 0.5, 'sine', 0.02, 400); removeTraffic(world.traffic.indexOf(t)); } }
+  }
+  if (!n) return;
+  const seenT = new Set<number>();
+  for (const [id, ti, name, x, y, z, vx, vy, vz, hp, maxhp, hit] of n.t || []) {
+    seenT.add(id);
+    let t = world.traffic.find(o => o.nid === id);
+    if (!t) {
+      const type = CIV[ti] || CIV[0], def = SHIPDEF[type], b = buildCivilian(type);
+      for (const gl of b.glows) gl.userData.base = gl.scale.x / 10;
+      b.g.position.set(x, y, z); scene.add(b.g);
+      b.g.lookAt(x - vx, y - vy, z - vz);
+      t = { type, def, name: String(name), x, y, z, vx, vy, vz, hp, maxhp, sph: def.sph, R: def.R, mesh: b.g, parts: b, goal: { x, y, z }, wait: 0, hitT: 0, alertT: 0, alive: true, spd: def.spd, nid: id };
+      world.traffic.push(t);
+    }
+    t.hp = hp; t.maxhp = maxhp; if (hit) t.hitT = 0.3;
+    t._t = { x, y, z, vx, vy, vz, at: now };
+  }
+  for (let i = world.traffic.length - 1; i >= 0; i--) { const t = world.traffic[i]; if (!t.nid || !seenT.has(t.nid)) removeTraffic(i); }
+  const seenA = new Set<number>();
+  for (const [id, ci, x, y, z, vx, vy, vz, hp] of n.a || []) {
+    seenA.add(id);
+    let a = world.allies.find(o => o.nid === id);
+    if (!a) {
+      const k = Math.max(0, ci), cs = CALLSIGNS[k] || CALLSIGNS[0], f = buildAllyModel(k, cs[1]);
+      f.g.position.set(x, y, z); scene.add(f.g);
+      a = { name: cs[0], col: cs[2], x, y, z, vx, vy, vz, hp, maxhp: 140, cool: 0, mesh: f.g, f, alive: true, target: null, rt: 0, home: null, orbit: 0, side: 1, nid: id };
+      world.allies.push(a);
+    }
+    a.hp = hp;
+    a._t = { x, y, z, vx, vy, vz, at: now };
+  }
+  for (let i = world.allies.length - 1; i >= 0; i--) { const a = world.allies[i]; if (!a.nid || !seenA.has(a.nid)) { if (a.alive) scene.remove(a.mesh); world.allies.splice(i, 1); } }
+}
+// weich nachführen: letzter Stand plus Flugweg seitdem
+function follow(o: any, dt: number, rate: number) {
+  const t = o._t; if (!t) return;
+  const ahead = (performance.now() - t.at) / 1000, k = Math.min(1, dt * rate);
+  o.x += (t.x + t.vx * ahead - o.x) * k; o.y += (t.y + t.vy * ahead - o.y) * k; o.z += (t.z + t.vz * ahead - o.z) * k;
+  o.vx = t.vx; o.vy = t.vy; o.vz = t.vz;
+}
+function mirrorTraffic(dt: number) {
+  for (const t of world.traffic) { t.hitT = Math.max(0, t.hitT - dt); follow(t, dt, 4); orientTraffic(t, dt); }
+}
+function mirrorAllies(dt: number) {
+  for (const w of world.allies) if (w.alive) { follow(w, dt, 10); orientAlly(w); }
 }
