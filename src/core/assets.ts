@@ -9,7 +9,8 @@
 // Dateiadressen statt eingebetteter Daten.
 // =====================================================================================
 export interface AssetFile { url: string; size: number; pack: string }
-export interface Manifest { v: string; packs: Record<string, { files: number; size: number }>; files: Record<string, AssetFile> }
+// embed: nur in der Artifact-Fassung (claude.ai stellt keine .glb-Dateien bereit): Modelle gebündelt in einer JSON-Datei
+export interface Manifest { v: string; packs: Record<string, { files: number; size: number }>; files: Record<string, AssetFile>; embed?: { url: string; size: number } }
 declare global {
   interface Window {
     TEXDATA?: Record<string, string>; NEBDATA?: Record<string, string>;
@@ -82,11 +83,10 @@ export async function loadAssets() {
   const t0 = performance.now();
   ASSET_STATE.sw = await registerSW();
   const m = (MANIFEST = await loadManifest());
-  setGlobals(m);
   const have = ASSET_STATE.sw ? await storedUrls() : new Set<string>();
-  const all = Object.values(m.files), core = all.filter(f => f.pack === 'core');
+  const all = Object.values(m.files), core = all.filter(f => f.pack === 'core' && !f.url.startsWith('embed:'));
   const missing = core.filter(f => !have.has(abs(f.url)));
-  const total = missing.reduce((a, f) => a + f.size, 0);
+  const total = missing.reduce((a, f) => a + f.size, 0) + (m.embed ? m.embed.size : 0);
   let got = 0;
   const show = () => {
     $('bootBar').style.width = `${total ? Math.min(100, (got / total) * 100) : 100}%`;
@@ -94,6 +94,18 @@ export async function loadAssets() {
   };
   $('bootSub').textContent = total > 2e6 ? 'Beim ersten Start einmalig. Danach startet das Spiel aus dem Speicher dieses Geräts.' : '';
   show();
+  // Artifact-Fassung: gebündelte Modelle laden und als Dateien im Speicher bereitstellen
+  if (m.embed) {
+    try {
+      const r = await fetch(m.embed.url), txt = await r.text(); got += m.embed.size; show();
+      for (const [k, b64] of Object.entries(JSON.parse(txt) as Record<string, string>)) {
+        const bin = atob(b64), u = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        if (m.files[k]) m.files[k].url = URL.createObjectURL(new Blob([u], { type: 'model/gltf-binary' }));
+      }
+    } catch { console.warn('Gebündelte Modelle nicht geladen; das Spiel nutzt Ersatzmodelle.'); }
+  }
+  setGlobals(m);
   let failed = 0;
   await pool(missing, 4, async f => { try { await fetchFile(f, n => { got += n; show(); }); } catch { failed++; } });
   if (failed) console.warn(`${failed} Spieldateien konnten nicht geladen werden; das Spiel nutzt dafür Ersatzmodelle.`);
@@ -106,7 +118,7 @@ export async function loadAssets() {
   addEventListener('pointerdown', askPersist, { once: true });
 }
 async function prefetchWorld(m: Manifest, have: Set<string>) {
-  const rest = Object.values(m.files).filter(f => f.pack !== 'core' && !have.has(abs(f.url)));
+  const rest = Object.values(m.files).filter(f => f.pack !== 'core' && !f.url.startsWith('blob:') && !have.has(abs(f.url)));
   await pool(rest, 2, async f => { try { await fetchFile(f, () => {}); } catch { /* später erneut */ } });
   ASSET_STATE.worldDone = true;
   storageInfo();

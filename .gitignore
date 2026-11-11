@@ -17,3 +17,4 @@ Thumbs.db
 
 # Lokale Spielstände des Servers
 /data/
+/dist-artifact/

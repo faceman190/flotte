@@ -30,3 +30,9 @@ Ein neues Paket für eine Region (z. B. nur beim ersten Besuch laden) lässt sic
 ## App-Symbol
 
 `node scripts/build-icon.mjs` erzeugt `public/icon-192.png` und `public/icon-512.png` (für „App installieren“).
+
+## Artifact auf claude.ai
+
+claude.ai stellt keine `.glb`-Dateien bereit. Für das Artifact gibt es deshalb eine eigene Fassung:
+`npm run build`, dann `node scripts/artifact-pack.mjs`. Das legt `dist-artifact/` an, bündelt die Modelle in
+`assets/models.json` und vermerkt das in der Paketliste („embed“). Veröffentlicht wird `dist-artifact/`.
