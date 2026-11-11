@@ -148,7 +148,7 @@ function gltfShip(cls: ShipId, paint: Paint): ShipModel {
   const { w, h, l } = m, rear = l * 0.5, front = -l * 0.5;
   const ex = cls === 'maulwurf' || cls === 'kaerrner' ? w * 0.2 : w * 0.1;
   // Pfeil: vier Triebwerke nebeneinander am Heck
-  const enginePts = cls === 'pfeil' ? [-0.36, -0.12, 0.12, 0.36].map(f => [w * f, -h * 0.02, rear * 0.97]) : [[-ex, 0, rear * 0.96], [ex, 0, rear * 0.96]];
+  const enginePts = cls === 'pfeil' ? [-0.164, -0.055, 0.055, 0.164].map(f => [l * f, -h * 0.02, rear * 0.97])   /* an der Länge bemessen: die Seitenflügel machen das Modell breiter als das Heck */ : [[-ex, 0, rear * 0.96], [ex, 0, rear * 0.96]];
   for (const e of enginePts) {
     const sp = new THREE.Sprite(glowMat(0xffb070, 0.9));
     sp.position.set(e[0], e[1], e[2] + 0.5);
@@ -158,7 +158,8 @@ function gltfShip(cls: ShipId, paint: Paint): ShipModel {
     g.add(sp); glows.push(sp);
   }
   for (const s of [-1, 1]) nav(g, navs, s * w * 0.47, h * 0.05, l * 0.15, Math.max(0.9, l / 22));
-  if (c.drones) for (const s of [-1, 1]) { const d = buildDrone(); d.position.set(s * (w * 0.5 + 1.8), 0, 0); g.add(d); drones.push(d); }
+  // Bergbaudrohnen hängen außen am Rumpf; die Pfeil trägt ihre im Rumpf (sonst schweben sie neben dem breiten Schiff), sie starten dann aus der Schiffsmitte
+  if (c.drones && cls !== 'pfeil') for (const s of [-1, 1]) { const d = buildDrone(); d.position.set(s * (w * 0.5 + 1.8), 0, 0); g.add(d); drones.push(d); }
   const shield = shieldFor(Math.max(l, w) * 0.62); g.add(shield);
   g.rotation.order = 'YXZ';
   const laserPts = c.beams > 1 ? [[-w * 0.22, -h * 0.15, front], [w * 0.22, -h * 0.15, front]] : c.laser ? [[0, -h * 0.15, front]] : [];
