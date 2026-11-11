@@ -11,6 +11,7 @@ import { hurtPlayer, playerTargetable } from './player';
 import { damageTraffic, damageAlly } from './npc';
 import { radio } from '../ui/radio';
 import { SHARED, hostEvent } from './shared';
+import { addRep, killFaction, bountyFactor } from './reputation';
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
 
@@ -47,6 +48,12 @@ export function sphSeg(b: any, o: { x: number; y: number; z: number; sph: number
 
 // ---------------- Ferrox ----------------
 const BOUNTY = { drone: 15, bomber: 45, mother: 600 };
+const KILL_REP = { drone: 2, bomber: 5, mother: 40 };
+// Kopfgeld (Grenzwacht-Rang erhöht es) und Ruf für einen eigenen Abschuss
+function bountyFor(type: string) {
+  addRep(killFaction(world.def?.id || ''), KILL_REP[type as keyof typeof KILL_REP] || 0);
+  return Math.round((BOUNTY[type as keyof typeof BOUNTY] || 0) * bountyFactor());
+}
 function enemyStats(type: string, d: number) {
   if (type === 'drone') return { hp: 40 + 15 * d, spd: Math.min(255, 170 + 12 * d), dmgP: 4 + 1.3 * d, dmgS: 10 + 3 * d };
   if (type === 'bomber') return { hp: 180 + 55 * d, spd: 95 + 5 * d, dmgP: 6 + d, dmgS: 110 + 20 * d };
@@ -159,7 +166,7 @@ export function hitEnemy(e: any, j: number, dmg: number, byPlayer: boolean) {
 }
 // Kopfgeld und Beute für einen Abschuss, den der Gastgeber gemeldet hat
 export function rewardKill(type: string, x: number, y: number, z: number) {
-  const bounty = BOUNTY[type as keyof typeof BOUNTY] || 0;
+  const bounty = bountyFor(type);
   P.kills++; P.credits += bounty; P.earned += bounty;
   if (type === 'mother') { for (let k = 0; k < 10; k++) dropPick(x, y, z, 'schrott', 2, 80); for (let k = 0; k < 6; k++) dropPick(x, y, z, 'ferrit', 1, 80); radio('SYSTEM', 'Bienenstock zerstört! Kopfgeld: +' + bounty + ' Credits.'); }
   else if (type === 'bomber') { dropPick(x, y, z, 'schrott', 1); dropPick(x, y, z, 'schrott', 1); }
@@ -170,7 +177,7 @@ export function killEnemy(e: any, i: number, byPlayer = false, drops = true) {
   scene.remove(e.mesh);
   world.enemies.splice(i, 1);
   if (G.lockT === e) G.lockT = null;
-  const bounty = byPlayer ? BOUNTY[e.type as keyof typeof BOUNTY] : 0;
+  const bounty = byPlayer ? bountyFor(e.type) : 0;
   if (byPlayer) { P.kills++; P.credits += bounty; P.earned += bounty; }
   if (e.type === 'mother') {
     for (let k = 0; k < 6; k++) setTimeout(() => {

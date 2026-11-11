@@ -3,6 +3,7 @@ import { ITEMS, ITEM_IDS, REFINE, type ItemId, type Zone } from '../data/items';
 import { SECTOR, type StationDef } from '../data/galaxy';
 import { P, stats, cargoUsed, type Contract } from './state';
 import { SHARED } from './shared';
+import { addRep, stationFaction, sellFactor, refineFeeFactor, contractFactor, trustSlot } from './reputation';
 
 // =============== Preise ===============
 // Grundpreis × Stationsfaktor × Herkunft (weit weg = teurer) × Sättigung (viel verkauft = billiger, erholt sich)
@@ -31,7 +32,8 @@ const satFactor = (s: number) => Math.min(1, Math.max(0.45, 1 - SAT_STEP * s));
 
 export function unitPrice(sd: StationDef, sectorId: string, k: ItemId, extra = 0) {
   const z = stationZone(sectorId);
-  return Math.max(1, Math.round(ITEMS[k].base * (sd.prices?.[k] ?? 1) * originFactor(k, z) * satFactor(satNow(sd.id, k) + extra)));
+  const guild = ITEMS[k].cat === 'salvage' ? 1 : sellFactor();   // Bergbaugilde: bessere Preise für Erz und Barren
+  return Math.max(1, Math.round(ITEMS[k].base * (sd.prices?.[k] ?? 1) * originFactor(k, z) * satFactor(satNow(sd.id, k) + extra) * guild));
 }
 export function basePriceHere(sd: StationDef, sectorId: string, k: ItemId) {
   return Math.round(ITEMS[k].base * (sd.prices?.[k] ?? 1) * originFactor(k, stationZone(sectorId)));
@@ -50,6 +52,8 @@ export function sell(sd: StationDef, sectorId: string, k: ItemId, n: number) {
   P.credits += cr;
   P.earned += cr;
   addSat(sd.id, k, n);
+  // Ruf: Erz und Barren für die Gilde, Ferrox-Schrott für die Grenzwacht
+  if (ITEMS[k].cat === 'salvage') addRep('wacht', cr / 150); else addRep('gilde', cr / 200);
   return cr;
 }
 
@@ -85,8 +89,8 @@ export function buy(sd: StationDef, sectorId: string, k: ItemId, n: number) {
 export function refineInfo(k: ItemId) {
   const r = REFINE[k];
   if (!r) return null;
-  const bars = Math.floor(P.cargo[k] / r.ratio);
-  return { ...r, bars, cost: bars * r.fee };
+  const bars = Math.floor(P.cargo[k] / r.ratio), fee = Math.max(1, Math.round(r.fee * refineFeeFactor()));
+  return { ...r, fee, bars, cost: bars * fee };
 }
 export function refine(k: ItemId) {
   const r = refineInfo(k);
@@ -96,6 +100,7 @@ export function refine(k: ItemId) {
   P.cargo[k] -= bars * r.ratio;
   P.cargo[r.to] += bars;
   P.credits -= bars * r.fee;
+  addRep('gilde', bars * 0.25);
   return bars;
 }
 
@@ -109,12 +114,16 @@ const WANTS: Record<Zone, ItemId[]> = {
 export const MAX_CONTRACTS = 3;
 export function offers(sd: StationDef, sectorId: string): (Contract & { slot: number })[] {
   const z = stationZone(sectorId), out: (Contract & { slot: number })[] = [];
-  for (let slot = 0; slot < 3; slot++) {
+  // ab Rang „Vertraut“ gibt es einen vierten Platz: Vertrauensauftrag (größer, deutlich besser bezahlt)
+  const slots = trustSlot(sd.id, sectorId) ? 4 : 3, cf = contractFactor(sd.id, sectorId);
+  for (let slot = 0; slot < slots; slot++) {
     const key = `${sd.id}:${slot}`, n = P.cctr[key] || 0, R = rng(hashStr(`${key}:${n}`));
     const item = R.pick(WANTS[z]), base = ITEMS[item].base;
-    const amount = base < 20 ? Math.round(R.range(20, 40)) : base < 60 ? Math.round(R.range(10, 24)) : base < 120 ? Math.round(R.range(6, 14)) : Math.round(R.range(3, 6));
-    const reward = Math.round(amount * base * originFactor(item, z) * 1.6 / 10) * 10;
-    out.push({ id: `${key}:${n}`, station: sd.id, sector: sectorId, stName: sd.name, item, amount, reward, slot });
+    const trust = slot === 3;
+    let amount = base < 20 ? Math.round(R.range(20, 40)) : base < 60 ? Math.round(R.range(10, 24)) : base < 120 ? Math.round(R.range(6, 14)) : Math.round(R.range(3, 6));
+    if (trust) amount = Math.round(amount * 1.25);
+    const reward = Math.round(amount * base * originFactor(item, z) * 1.6 * cf * (trust ? 1.4 : 1) / 10) * 10;
+    out.push({ id: `${key}:${n}`, station: sd.id, sector: sectorId, stName: sd.name, item, amount, reward, slot, ...(trust ? { trust: true } : {}) });
   }
   return out;
 }
@@ -132,7 +141,9 @@ export function deliver(c: Contract) {
   P.credits += c.reward;
   P.earned += c.reward;
   P.contracts = P.contracts.filter(x => x !== c);
+  addRep(stationFaction(c.station, c.sector), Math.max(3, Math.round(c.reward / 50)) * (c.trust ? 1.5 : 1));
   return true;
 }
-export function abandon(c: Contract) { P.contracts = P.contracts.filter(x => x !== c); }
+// Abbrechen kostet Ruf bei der Fraktion, die den Auftrag vergeben hat
+export function abandon(c: Contract) { P.contracts = P.contracts.filter(x => x !== c); addRep(stationFaction(c.station, c.sector), c.trust ? -25 : -10); }
 export const allItems = ITEM_IDS;

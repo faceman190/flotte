@@ -168,7 +168,8 @@ td .hint{font-size:12px;margin-top:1px}
 .bandApps button.on{color:#eafaff;border-color:var(--acc);background:linear-gradient(180deg,rgba(40,140,190,.5),rgba(16,60,90,.5));box-shadow:0 0 12px rgba(95,208,255,.3)}
 .bandApps button.on::after{content:'';display:block;width:60%;height:2px;background:var(--amb);margin-top:2px;border-radius:2px}
 .bandBrand{font-family:var(--mono);color:var(--dim);letter-spacing:3px;font-size:12px;padding:0 10px;border-left:1px solid var(--line)}
-@media (max-width:900px){.bandBrand,.bandNote{display:none}.bandApps button{min-width:58px;font-size:10px}}
+@media (max-width:1100px){.bandBrand{display:none}.bandApps button{min-width:66px;padding:7px 6px 5px}}
+@media (max-width:900px){.bandNote{display:none}.bandId{min-width:0}.bandApps{gap:4px}.bandApps button{min-width:0;flex:1 1 0;max-width:84px;font-size:10px;letter-spacing:.5px;padding:6px 3px 4px}}
 /* Inhalte der Apps */
 .bgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
 .bcard{background:rgba(95,208,255,.035);border:1px solid rgba(95,208,255,.14);border-radius:8px;padding:14px 16px;position:relative}
@@ -210,3 +211,9 @@ button.mini{padding:3px 8px;font-size:12px;letter-spacing:.5px}
 .trQ button{margin-left:3px}
 .trQ b{display:inline-block;min-width:38px;text-align:center;font-family:var(--mono);font-weight:400;font-size:16px}
 .bgrid.trade{grid-template-columns:repeat(auto-fit,minmax(380px,1fr));max-width:1100px}
+/* Ruf */
+.bgrid.rep{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));max-width:1150px}
+.repC{border-top:2px solid var(--rc)}
+.repC .lv i.f{background:var(--rc);box-shadow:0 0 6px var(--rc)}
+.repL{margin:4px 0 10px;padding-left:18px;font-size:14px;line-height:1.5}
+.repL.dim{color:var(--mut)}

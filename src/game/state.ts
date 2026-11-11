@@ -43,9 +43,10 @@ export interface Player {
   savedAt?: number;                // Zeitpunkt des letzten Speicherns (ms), entscheidet bei Konto-Ständen, welcher neuer ist
   surface?: boolean;               // gespeichert auf der Planetenoberfläche
   rover?: Partial<Record<ItemId, number>>; // Ladung des Rovers
+  rep?: Record<string, number>;    // Ruf bei den Fraktionen (siehe reputation.ts)
 }
 export type Tool = 'guns' | 'laser' | 'charge';
-export interface Contract { id: string; station: string; sector: string; stName: string; item: ItemId; amount: number; reward: number }
+export interface Contract { id: string; station: string; sector: string; stName: string; item: ItemId; amount: number; reward: number; trust?: boolean }
 export interface ShipRec {
   uid: number; cls: ShipId; name: string; up: Record<UpgId, number>; cargo: Record<ItemId, number>;
   hull: number; ammo: number; rockets: number; charges: number; loc: { sector: string; station: string }; paint?: string;
@@ -61,7 +62,7 @@ export function newPlayer(name: string): Player {
     sector: 'heimstatt', x: 0, y: 0, z: 0, yaw: 0, pitch: 0, vx: 0, vy: 0, vz: 0,
     home: { sector: 'heimstatt', station: 'bastion' }, visited: ['heimstatt'], route: null, kills: 0, earned: 0, playtime: 0,
     tool: 'guns', mined: 0, market: {}, contracts: [], cctr: {},
-    cls: 'falke', shipName: 'Falke', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2,
+    cls: 'falke', shipName: 'Falke', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2, rep: {},
   };
 }
 export function setPlayer(p: Player) {

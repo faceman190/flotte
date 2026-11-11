@@ -3,6 +3,7 @@ import { ITEM_IDS, type ItemId } from '../data/items';
 import { P, stats, cargoUsed, emptyCargo, emptyUp, type ShipRec } from './state';
 import { setShipModel } from './player';
 import type { Paint } from '../models/gltfShips';
+import { shipFactor } from './reputation';
 
 // Eigene Schiffe: das aktive Schiff steckt direkt im Spielerzustand, alle anderen parken an Stationen.
 type Loc = { sector: string; station: string };
@@ -38,10 +39,12 @@ function nextName(cls: ShipId) {
   for (const r of roman) if (!used.has(SHIPS[cls].n + r)) return SHIPS[cls].n + r;
   return SHIPS[cls].n + ' ' + P.nextUid;
 }
+// Neupreis (Flottenrat-Rang gibt Rabatt)
+export const shipPrice = (cls: ShipId) => Math.round(SHIPS[cls].price * shipFactor());
 export function buyShip(cls: ShipId, loc: Loc) {
-  const c = SHIPS[cls];
-  if (P.credits < c.price) return null;
-  P.credits -= c.price;
+  const c = SHIPS[cls], price = shipPrice(cls);
+  if (P.credits < price) return null;
+  P.credits -= price;
   const up = emptyUp();
   const r: ShipRec = { uid: P.nextUid++, cls, name: nextName(cls), up, cargo: emptyCargo(), hull: c.hull, ammo: c.ammo, rockets: c.rockets, charges: c.charges, loc };
   P.fleet.push(r);

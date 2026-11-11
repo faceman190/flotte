@@ -13,7 +13,8 @@ import { sectorOres } from '../data/ores';
 import { PLANETS, planetBaseId } from '../data/planets';
 import { unitPrice, basePriceHere, sellValue, sell, refineInfo, refine, offers, accept, deliver, abandon, MAX_CONTRACTS, sellsHere, buyPrice, buy } from '../game/economy';
 import { itemIcon } from './icons';
-import { shipsAt, board, buyShip, sellShip, sellPrice, stored, storedTotal, storeFromCargo, takeToCargo } from '../game/fleet';
+import { shipsAt, board, buyShip, sellShip, sellPrice, stored, storedTotal, storeFromCargo, takeToCargo, shipPrice } from '../game/fleet';
+import { REP, stationFaction, rankName, serviceFactor, repOf } from '../game/reputation';
 
 type Tab = 'markt' | 'raffinerie' | 'auftraege' | 'lager' | 'hangar' | 'werft' | 'werkstatt' | 'service' | 'info';
 let tab: Tab = 'markt';
@@ -21,10 +22,12 @@ let note = '';
 export const dockHooks = { openMap: () => {}, shipChanged: () => {}, enter: (_s: Station) => {}, leave: () => {} };
 
 const CHARGE_COST = 40, PAINT_COST = 250;
-const repairCost = () => Math.ceil(Math.max(0, stats().maxHull - P.hull) * 2);
-const ammoCost = () => Math.ceil(Math.max(0, stats().maxAmmo - P.ammo) / 4);
-const rocketCost = () => Math.max(0, stats().maxRockets - P.rockets) * 25;
-const chargeCost = () => Math.max(0, stats().maxCharges - P.charges) * CHARGE_COST;
+// Servicepreise (Flottenrat-Rang gibt Rabatt, Misstrauen kostet Aufschlag)
+const hpPrice = () => 2 * serviceFactor(), rocketPrice = () => Math.round(25 * serviceFactor()), chargePrice = () => Math.round(CHARGE_COST * serviceFactor());
+const repairCost = () => Math.ceil(Math.max(0, stats().maxHull - P.hull) * hpPrice());
+const ammoCost = () => Math.ceil(Math.max(0, stats().maxAmmo - P.ammo) / 4 * serviceFactor());
+const rocketCost = () => Math.max(0, stats().maxRockets - P.rockets) * rocketPrice();
+const chargeCost = () => Math.max(0, stats().maxCharges - P.charges) * chargePrice();
 const st = () => G.dockedAt as Station;
 const secId = () => world.def!.id;
 const loc = () => ({ sector: secId(), station: st().id });
@@ -104,12 +107,12 @@ function upgrade(k: UpgId) {
   note = `${UPG[k].n} der ${P.shipName} auf Stufe ${P.up[k]} ausgebaut.`;
   snd(500, 0.25, 'triangle', 0.06, 500);
 }
-function repair() { const c = Math.min(repairCost(), P.credits); if (c <= 0) return; P.credits -= c; P.hull = Math.min(stats().maxHull, P.hull + c / 2); note = 'Hülle repariert.'; snd(400, 0.2, 'sine', 0.05, 200); }
+function repair() { const c = Math.min(repairCost(), P.credits); if (c <= 0) return; P.credits -= c; P.hull = Math.min(stats().maxHull, P.hull + c / hpPrice()); note = 'Hülle repariert.'; snd(400, 0.2, 'sine', 0.05, 200); }
 function rearm() {
   const s = stats();
-  const a = Math.min(ammoCost(), P.credits); P.credits -= a; P.ammo = Math.min(s.maxAmmo, P.ammo + a * 4);
-  const rn = Math.min(s.maxRockets - P.rockets, Math.floor(P.credits / 25)); P.credits -= rn * 25; P.rockets += rn;
-  const cn = Math.min(s.maxCharges - P.charges, Math.floor(P.credits / CHARGE_COST)); P.credits -= cn * CHARGE_COST; P.charges += cn;
+  const a = Math.min(ammoCost(), P.credits); P.credits -= a; P.ammo = Math.min(s.maxAmmo, P.ammo + Math.floor(a * 4 / serviceFactor()));
+  const rp = rocketPrice(), rn = Math.min(s.maxRockets - P.rockets, Math.floor(P.credits / rp)); P.credits -= rn * rp; P.rockets += rn;
+  const cp = chargePrice(), cn = Math.min(s.maxCharges - P.charges, Math.floor(P.credits / cp)); P.credits -= cn * cp; P.charges += cn;
   note = 'Munition nachgeladen.'; snd(400, 0.2, 'sine', 0.05, 200);
 }
 
@@ -128,11 +131,11 @@ function shipSummary(cls: ShipId) {
 }
 
 function render() {
-  const s = st(), def = world.def!, S = stats(), fac = FACTION[def.faction];
+  const s = st(), def = world.def!, S = stats(), fac = FACTION[def.faction], rf = stationFaction(s.id, def.id);
   if (!tabs().includes(tab)) tab = 'markt';
   const dueHere = P.contracts.filter(c => c.station === s.id).length, parked = shipsAt(s.id).length, inStore = storedTotal(s.id);
   let h = `<div class="top"><div><h2>${esc(s.name.toUpperCase())}</h2>
-    <div class="hint">Sektor ${esc(def.name)} · <span style="color:${fac.c}">${fac.n}</span>${s.def.refinery ? ' · Raffinerie' : ''}${hasYard() ? ' · Werft' : ''}</div></div>
+    <div class="hint">Sektor ${esc(def.name)} · <span style="color:${fac.c}">${fac.n}</span>${rf ? ` · <span style="color:${REP[rf].c}">${REP[rf].n}: ${rankName(rf)}</span>` : ''}${s.def.refinery ? ' · Raffinerie' : ''}${hasYard() ? ' · Werft' : ''}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">${G.inside ? '<button class="pri" data-a="close">Zurück [Esc]</button>' : '<button data-a="walk">Station betreten</button>'}<button data-a="map">Galaxiekarte [M]</button><button class="${G.inside ? '' : 'pri'}" data-a="launch">Ablegen${G.inside ? '' : ' [E]'}</button></div></div>
     <div class="sum">${esc(note)}</div>
     <div class="stats"><span>Credits: <b class="amb">${fmtN(P.credits)}</b></span><span>Schiff: <b>${esc(P.shipName)}</b> <span class="hint">(${SHIPS[P.cls].role})</span></span><span>Fracht: <b>${cargoUsed()}/${S.cargo}</b> ${bar(cargoUsed(), S.cargo, cargoUsed() >= S.cargo ? 'var(--bad)' : 'var(--amb)')}</span><span>Hülle: <b>${Math.ceil(P.hull)}/${S.maxHull}</b> ${bar(P.hull, S.maxHull, P.hull < S.maxHull * 0.35 ? 'var(--bad)' : 'var(--grn)')}</span></div>
@@ -188,10 +191,10 @@ function render() {
     const full = mine.length >= MAX_CONTRACTS;
     for (const o of offers(s.def, def.id)) {
       const it = ITEMS[o.item], src = it.cat === 'refined' ? 'Raffinerie' : it.cat === 'salvage' ? 'Ferrox-Wracks' : it.origin === 'core' ? 'Menschenraum' : it.origin === 'border' ? 'Grenzgebiet' : 'Ferrox-Gebiet';
-      h += `<tr><td>${dot(o.item)}${o.amount}× ${it.n}</td><td class="hint">${src}</td><td class="num amb">${fmtN(o.reward)} Cr</td>
+      h += `<tr${o.trust ? ` style="background:linear-gradient(90deg,rgba(255,179,71,.12),transparent)"` : ''}><td>${dot(o.item)}${o.amount}× ${it.n}${o.trust && rf ? `<div class="hint" style="color:${REP[rf].c}">Vertrauensauftrag · ${REP[rf].n}</div>` : ''}</td><td class="hint">${src}</td><td class="num amb">${fmtN(o.reward)} Cr</td>
         <td class="num"><button data-a="accept" data-k="${o.slot}" ${full ? 'disabled' : ''}>Annehmen</button></td></tr>`;
     }
-    h += `</table><p class="hint">Aufträge zahlen deutlich mehr als der Markt. Abliefern kannst du nur bei der Station, die den Auftrag vergeben hat; Waren aus dem Lager dieser Station zählen mit.</p>`;
+    h += `</table><p class="hint">Aufträge zahlen deutlich mehr als der Markt. Abliefern kannst du nur bei der Station, die den Auftrag vergeben hat; Waren aus dem Lager dieser Station zählen mit.${rf ? ` Erfüllte Aufträge steigern deinen Ruf ${rf === 'rat' ? 'beim' : 'bei der'} ${REP[rf].n}, abgebrochene kosten Ruf. Ab Rang „Vertraut“ gibt es hier einen Vertrauensauftrag.` : ''}</p>`;
   } else if (tab === 'lager') {
     const any = ITEM_IDS.some(k => P.cargo[k] || stored(s.id, k));
     h += `<p style="margin-top:0">Jede Station hat ein eigenes Lager ohne Größenbeschränkung. Lagere Erz hier ein und hole es später mit einem Frachter ab, oder sammle für große Aufträge.</p>`;
@@ -235,7 +238,7 @@ function render() {
       const c = SHIPS[id];
       if (!c.price) continue;
       h += `<tr><td style="width:62%"><b class="amb">${c.n}</b> <span class="hint">· ${c.role}</span><div class="hint" style="margin:3px 0">${c.desc}</div><div style="font-size:12px">${shipSummary(id)}</div></td>
-        <td class="num amb">${fmtN(c.price)} Cr</td><td class="num"><button class="pri" data-a="buy" data-k="${id}" ${P.credits >= c.price ? '' : 'disabled'}>Kaufen</button></td></tr>`;
+        <td class="num amb">${shipPrice(id) < c.price ? `<s class="hint">${fmtN(c.price)}</s> ` : ''}${fmtN(shipPrice(id))} Cr</td><td class="num"><button class="pri" data-a="buy" data-k="${id}" ${P.credits >= shipPrice(id) ? '' : 'disabled'}>Kaufen</button></td></tr>`;
     }
     h += `</table><p class="hint">Ausbauten gelten pro Schiff. Verkaufte Schiffe bringen 60 % des Neupreises.</p>`;
   } else if (tab === 'werkstatt') {
@@ -252,12 +255,13 @@ function render() {
   } else if (tab === 'service') {
     const rc = repairCost(), ac = ammoCost(), kc = rocketCost(), cc = chargeCost();
     h += `<table>
-      <tr><td>Hülle reparieren</td><td class="hint">${Math.ceil(P.hull)}/${S.maxHull} HP · 2 Cr pro HP</td><td class="num amb">${rc ? fmtN(rc) + ' Cr' : '—'}</td><td class="num"><button data-a="repair" ${rc && P.credits > 0 ? '' : 'disabled'}>Reparieren</button></td></tr>
-      <tr><td>Munition</td><td class="hint">${P.ammo}/${S.maxAmmo} Schuss · 1 Cr für 4 Schuss</td><td class="num amb">${ac ? fmtN(ac) + ' Cr' : '—'}</td><td></td></tr>
-      ${S.maxRockets ? `<tr><td>Raketen</td><td class="hint">${P.rockets}/${S.maxRockets} · 25 Cr pro Stück</td><td class="num amb">${kc ? fmtN(kc) + ' Cr' : '—'}</td><td></td></tr>` : ''}
-      ${S.maxCharges ? `<tr><td>Sprengladungen</td><td class="hint">${P.charges}/${S.maxCharges} · ${CHARGE_COST} Cr pro Stück</td><td class="num amb">${cc ? fmtN(cc) + ' Cr' : '—'}</td><td></td></tr>` : ''}
+      <tr><td>Hülle reparieren</td><td class="hint">${Math.ceil(P.hull)}/${S.maxHull} HP · ${hpPrice().toFixed(2).replace('.', ',').replace(',00', '')} Cr pro HP</td><td class="num amb">${rc ? fmtN(rc) + ' Cr' : '—'}</td><td class="num"><button data-a="repair" ${rc && P.credits > 0 ? '' : 'disabled'}>Reparieren</button></td></tr>
+      <tr><td>Munition</td><td class="hint">${P.ammo}/${S.maxAmmo} Schuss · 1 Cr für ${(4 / serviceFactor()).toFixed(1).replace('.', ',').replace(',0', '')} Schuss</td><td class="num amb">${ac ? fmtN(ac) + ' Cr' : '—'}</td><td></td></tr>
+      ${S.maxRockets ? `<tr><td>Raketen</td><td class="hint">${P.rockets}/${S.maxRockets} · ${rocketPrice()} Cr pro Stück</td><td class="num amb">${kc ? fmtN(kc) + ' Cr' : '—'}</td><td></td></tr>` : ''}
+      ${S.maxCharges ? `<tr><td>Sprengladungen</td><td class="hint">${P.charges}/${S.maxCharges} · ${chargePrice()} Cr pro Stück</td><td class="num amb">${cc ? fmtN(cc) + ' Cr' : '—'}</td><td></td></tr>` : ''}
       <tr><td></td><td></td><td></td><td class="num"><button data-a="rearm" ${(ac || kc || cc) && P.credits > 0 ? '' : 'disabled'}>Nachladen</button></td></tr>
     </table>
+    ${serviceFactor() !== 1 ? `<p class="hint" style="color:${REP.rat.c}">${serviceFactor() < 1 ? `Flottenrat-Rabatt: −${Math.round((1 - serviceFactor()) * 100)} % auf alle Servicepreise.` : 'Der Flottenrat misstraut dir: 15 % Aufschlag auf alle Servicepreise.'}</p>` : ''}
     <div class="btnRow"><button class="pri" data-a="all" ${(rc || ac || kc || cc) && P.credits > 0 ? '' : 'disabled'}>Alles auffüllen (${fmtN(rc + ac + kc + cc)} Cr)</button></div>`;
   } else {
     const ores = sectorOres(def);
@@ -304,10 +308,11 @@ $('dockCard').addEventListener('click', e => {
       // fehlende Menge aus dem Lager dieser Station nehmen
       const miss = c.amount - P.cargo[c.item], sid = st().id;
       if (miss > 0 && stored(sid, c.item) >= miss) { P.storage[sid][c.item] = stored(sid, c.item) - miss; P.cargo[c.item] += miss; }
-      if (deliver(c)) { note = `Auftrag erfüllt! +${fmtN(c.reward)} Credits.`; snd(800, 0.4, 'triangle', 0.06, 600); }
+      const rf = stationFaction(c.station, c.sector), r0 = rf ? repOf(rf) : 0;
+      if (deliver(c)) { note = `Auftrag erfüllt! +${fmtN(c.reward)} Credits.${rf ? ` Ruf ${rf === 'rat' ? 'beim' : 'bei der'} ${REP[rf].n} +${Math.round(repOf(rf) - r0)}.` : ''}`; snd(800, 0.4, 'triangle', 0.06, 600); }
     }
   }
-  if (a === 'abandon') { const c = P.contracts[n]; if (c) { abandon(c); note = 'Auftrag abgebrochen.'; } }
+  if (a === 'abandon') { const c = P.contracts[n]; if (c) { const rf = stationFaction(c.station, c.sector), r0 = rf ? repOf(rf) : 0; abandon(c); note = `Auftrag abgebrochen.${rf ? ` Ruf ${rf === 'rat' ? 'beim' : 'bei der'} ${REP[rf].n} ${Math.round(repOf(rf) - r0)}.` : ''}`; } }
   if (a === 'store') { const m = storeFromCargo(st().id, k); if (m) note = `${m}× ${ITEMS[k as ItemId].n} eingelagert.`; }
   if (a === 'take') { const m = takeToCargo(st().id, k); note = m ? `${m}× ${ITEMS[k as ItemId].n} geladen.` : 'Kein Platz im Frachtraum.'; }
   if (a === 'storeall') { let m = 0; for (const it of ITEM_IDS) m += storeFromCargo(st().id, it); if (m) note = `${m} Einheiten eingelagert.`; }

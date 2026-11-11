@@ -16,18 +16,20 @@ import { SIL, trackedContract } from './hud';
 import { NET, netHooks, sendChat, isOnline, pilotsHere, myStation } from '../game/net';
 import { TRADE, tradeHooks, requestTrade, acceptTrade, declineTrade, withdrawTrade, cancelTrade, setOffer, setReady, tradeValue, offerCount, cargoSpaceAfter, offerCovered, type Offer } from '../game/trade';
 import { roomName } from './mp';
+import { REP, REP_IDS, RANKS, TRUST_LV, level, nextRank, rankName, repOf, repHooks, type RepId } from '../game/reputation';
 
 // =====================================================================================
 // Flottenband: der Armbandrechner, den die Flotte jedem Piloten mitgibt.
-// Apps: Übersicht, Aufträge, Karte, Fuhrpark, Fracht, Handel, Funk. Solange es offen ist, steht das Spiel (Modus 'map').
+// Apps: Übersicht, Aufträge, Karte, Fuhrpark, Fracht, Ruf, Handel, Funk. Solange es offen ist, steht das Spiel (Modus 'map').
 // =====================================================================================
-export type App = 'start' | 'auftraege' | 'karte' | 'fuhrpark' | 'fracht' | 'handel' | 'funk';
+export type App = 'start' | 'auftraege' | 'karte' | 'fuhrpark' | 'fracht' | 'ruf' | 'handel' | 'funk';
 const APPS: { id: App; n: string; sub: string; ico: string }[] = [
   { id: 'start', n: 'Übersicht', sub: 'Pilot, Standort und Schiff', ico: '<path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/>' },
   { id: 'auftraege', n: 'Aufträge', sub: 'Angenommene Lieferaufträge', ico: '<path d="M5 3h10l4 4v14H5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11h8M8 15h8M8 7h5" stroke="currentColor" stroke-width="2"/>' },
   { id: 'karte', n: 'Karte', sub: 'Galaxiekarte und Routenplanung', ico: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="1.5"/><circle cx="15" cy="9" r="2"/>' },
   { id: 'fuhrpark', n: 'Fuhrpark', sub: 'Deine Schiffe und ihre Ausstattung', ico: '<path d="M12 2 15 10l7 4-7 1-3 7-3-7-7-1 7-4z"/>' },
   { id: 'fracht', n: 'Fracht', sub: 'Frachtraum, Rover und Stationslager', ico: '<path d="M3 8 12 3l9 5v9l-9 5-9-5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 8l9 5 9-5M12 13v9" stroke="currentColor" stroke-width="2"/>' },
+  { id: 'ruf', n: 'Ruf', sub: 'Ansehen bei Flottenrat, Grenzwacht und Bergbaugilde', ico: '<path d="M12 2l2.9 6.2 6.6.8-4.9 4.6 1.3 6.6L12 17l-5.9 3.2 1.3-6.6L2.5 9l6.6-.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>' },
   { id: 'handel', n: 'Handel', sub: 'Waren und Credits mit anderen Piloten tauschen', ico: '<path d="M4 8h13l-3-3M20 16H7l3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' },
   { id: 'funk', n: 'Funk', sub: 'Verlauf der Funkmeldungen', ico: '<path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2"/>' },
 ];
@@ -100,7 +102,7 @@ const hms = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor(s / 
 
 function render() {
   const b = $('bandBody');
-  b.innerHTML = app === 'start' ? startApp() : app === 'auftraege' ? jobsApp() : app === 'fuhrpark' ? fleetApp() : app === 'fracht' ? cargoApp() : app === 'handel' ? tradeApp() : funkApp();
+  b.innerHTML = app === 'start' ? startApp() : app === 'auftraege' ? jobsApp() : app === 'fuhrpark' ? fleetApp() : app === 'fracht' ? cargoApp() : app === 'handel' ? tradeApp() : app === 'ruf' ? repApp() : funkApp();
   b.querySelectorAll<HTMLElement>('[data-a]').forEach(el => el.onclick = () => act(el.dataset.a!, el.dataset.k || ''));
   const ci = document.getElementById('bandChat') as HTMLInputElement | null;
   if (ci) {
@@ -172,6 +174,8 @@ function startApp() {
       <div class="row"><span>Belohnung</span><b class="amb">${fmtN(c.reward)} Cr</b></div>` : '<p>Kein Auftrag angenommen. Aufträge gibt es im Stationsmenü.</p>'}
       <div class="btnRow" style="justify-content:flex-start"><button data-a="app" data-k="auftraege">Alle Aufträge</button></div></div>
     <div class="bcard"><h4>Piloten online</h4>${NET.status === 'online' ? NET.roster.map(r => `<div class="row" style="align-items:center"><span style="color:${r.id === NET.id ? 'var(--amb)' : 'var(--grn)'}">${esc(r.name)}${r.id === NET.id ? ' (du)' : ''}</span><b>${here.has(r.id) ? `<button class="mini" data-a="trAsk" data-k="${r.id}">Handeln</button>` : esc(roomName(r.room))}</b></div>`).join('') : '<p class="hint">Nicht mit einem Mehrspieler-Server verbunden. Verbinden: Pausenmenü → Mehrspieler.</p>'}</div>
+    <div class="bcard"><h4>Ruf</h4>${REP_IDS.map(id => { const nx = nextRank(id); return `<div class="row"><span style="color:${REP[id].c}">${REP[id].n}</span><b>${esc(rankName(id))}</b></div>${meter(nx ? Math.max(0, nx.frac) * 100 : 100, 100, REP[id].c)}`; }).join('')}
+      <div class="btnRow" style="justify-content:flex-start"><button data-a="app" data-k="ruf">Ruf ansehen</button></div></div>
     <div class="bcard"><h4>Bilanz</h4>
       <div class="row"><span>Erz abgebaut</span><b>${fmtN(P.mined)} E</b></div>
       <div class="row"><span>Ferrox zerstört</span><b>${P.kills}</b></div>
@@ -340,6 +344,37 @@ function tradeApp() {
     <div class="bcard"><h4>So geht's</h4><p>1. Handel anbieten (hier oder zu Fuß mit <kbd>T</kbd> bei einem Piloten).<br>2. Beide legen Waren aus dem Frachtraum und Credits aufs Angebot.<br>3. Beide bestätigen. Erst dann wird getauscht.</p><p class="hint">Was nicht in den Frachtraum passt, kommt ins Lager der Station.</p></div></div>`;
 }
 
+// ---------- Ruf ----------
+const EMBLEM: Record<RepId, string> = {
+  rat: '<path d="M12 2 21 6v6c0 5-4 9-9 10C7 21 3 17 3 12V6z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v10M7.5 11h9" stroke="currentColor" stroke-width="1.8"/>',
+  wacht: '<path d="M12 2 20 5v7c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V5z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 12l3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  gilde: '<path d="M4 20 14 10M14 10l-2-2 4-5 5 5-5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="6" cy="18" r="1.6"/>',
+};
+function repApp() {
+  const cards = REP_IDS.map(id => {
+    const f = REP[id], l = level(id), nx = nextRank(id), v = repOf(id);
+    const pips = RANKS.map((r, i) => `<i class="${l >= i && l >= 0 ? 'f' : ''}" title="${r.n} ab ${r.at}"></i>`).join('');
+    const now = l > 0 ? f.perk(l) : [];
+    const next = nx && l >= 0 ? f.perk(l + 1) : [];
+    return `<div class="bcard repC" style="--rc:${f.c}">
+      <div style="display:flex;gap:12px;align-items:center"><svg viewBox="0 0 24 24" width="38" height="38" fill="currentColor" style="color:${f.c};flex:none">${EMBLEM[id]}</svg>
+        <div><h4 style="color:${f.c};margin:0">${esc(f.n)}</h4><div class="bbig" style="font-size:22px">${esc(rankName(id).toUpperCase())}</div></div></div>
+      <div class="hint" style="margin:8px 0">${esc(f.desc)}</div>
+      <div class="row"><span>Ruf</span><b>${fmtN(Math.floor(v))}${nx ? ` / ${fmtN(nx.at)}` : ''}</b></div>
+      ${meter(nx ? Math.max(0, nx.frac) * 100 : 100, 100, f.c)}
+      <div class="lv" style="margin:6px 0 10px">${pips}</div>
+      ${l < 0 ? `<p class="bad">Misstrauisch: Aufträge dieser Fraktion zahlen 15 % weniger${id === 'rat' ? ', Service kostet 15 % mehr' : ''}. Noch ${Math.ceil(-v)} Punkte bis „Neutral“.</p>` : ''}
+      <div class="sm" style="color:var(--mut);letter-spacing:2px;font-size:11px">VORTEILE JETZT</div>
+      ${now.length ? `<ul class="repL">${now.map(p => `<li>${esc(p)}</li>`).join('')}${l >= TRUST_LV ? '<li>Vertrauensaufträge an ihren Stationen</li>' : ''}</ul>` : '<p class="hint" style="margin:4px 0 8px">Noch keine. Ab „Bekannt“ geht es los.</p>'}
+      ${nx ? `<div class="sm" style="color:var(--mut);letter-spacing:2px;font-size:11px">NÄCHSTER RANG: ${esc(nx.n.toUpperCase())} · NOCH ${fmtN(nx.need)}</div>
+        ${next.length ? `<ul class="repL dim">${next.map(p => `<li>${esc(p)}</li>`).join('')}${l + 1 === TRUST_LV ? '<li>Vertrauensaufträge an ihren Stationen</li>' : ''}</ul>` : ''}` : '<p class="good" style="margin:4px 0 8px">Höchster Rang erreicht.</p>'}
+      <div class="sm" style="color:var(--mut);letter-spacing:2px;font-size:11px">SO STEIGT DEIN RUF</div>
+      <ul class="repL dim">${f.how.map(p => `<li>${esc(p)}</li>`).join('')}</ul>
+    </div>`;
+  }).join('');
+  return `<div class="bgrid rep">${cards}</div><p class="hint" style="margin-top:12px;max-width:900px">Ränge: ${RANKS.map(r => `${r.n} (${r.at})`).join(' · ')}. Abgebrochene Aufträge kosten Ruf bei der Fraktion, die sie vergeben hat.</p>`;
+}
+
 // ---------- Funk ----------
 function funkApp() {
   const now = G.time;
@@ -349,3 +384,5 @@ function funkApp() {
 }
 
 radioHooks.added = () => bandRadioChanged();
+
+repHooks.changed = () => { if (bandOpen() && (app === 'ruf' || app === 'start')) render(); };
