@@ -23,6 +23,9 @@ body.playing #gl{cursor:none}
 .amb{color:var(--amb)}.good{color:var(--grn)}.bad{color:var(--bad)}.vio{color:var(--vio)}.acc{color:var(--acc)}
 p{color:var(--mut);line-height:1.5}
 .hint{font-size:13px;color:var(--mut)}
+/* Widmung unter „Über das Spiel“ */
+.dedi{text-align:center;margin:18px 0;padding:14px 0;border-top:1px solid rgba(255,255,255,.12);border-bottom:1px solid rgba(255,255,255,.12);letter-spacing:.08em;text-transform:uppercase;font-size:13px}
+.dedi span{display:block;margin-top:6px;letter-spacing:.02em;text-transform:none;font-size:15px;font-style:italic}
 kbd{display:inline-block;min-width:22px;text-align:center;background:rgba(95,208,255,.1);border:1px solid var(--line2);border-radius:3px;padding:0 6px;font-size:12px;line-height:19px;color:var(--acc);font-family:var(--mono);box-shadow:0 0 8px rgba(95,208,255,.15) inset}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(95,208,255,.25);border-radius:4px}::-webkit-scrollbar-thumb:hover{background:rgba(95,208,255,.45)}
 
