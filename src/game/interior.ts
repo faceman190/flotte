@@ -54,7 +54,8 @@ export const IN = {
 };
 
 // ---------- Maße (lokal: +Z zeigt aus dem Hangartor in den Raum, Boden bei y = 0) ----------
-const HW = 48, HZ0 = -50, HZ1 = 56, HH = 28, DW = 34, DH = 22;   // Hangar, Tor
+const HW = 92, HZ0 = -50, HZ1 = 112, HH = 42, DW = 62, DH = 32;  // Hangar (184 × 162 × 42 m, Platz für drei große Schiffe), Tor
+const PADX = 60, PADZ = 28;                                      // Stellplätze: Mitte und ±PADX, Schiffsmitte bei PADZ
 const CW = 3, CL = 12, CH = 4.6;                                 // Korridor
 const PZ1 = HZ0 - CL;                                            // Promenade beginnt hier
 const PROM = { station: { w: 15, d: 48, h: 8 }, carrier: { w: 13, d: 44, h: 6.5 }, outpost: { w: 11, d: 40, h: 5.6 } };
@@ -194,10 +195,10 @@ function build(st: Station) {
   field.position.set(0, DH / 2, HZ1);
   deco.add(field);
   // Deckenlichter und Bodenmarkierungen
-  for (const x of [-30, -10, 10, 30]) box(deco, mLight, 1.4, 0.15, HL - 16, x, HH - 0.1, HC);
+  for (const x of [-75, -45, -15, 15, 45, 75]) box(deco, mLight, 1.6, 0.15, HL - 16, x, HH - 0.1, HC);
   for (let z = HZ0 + 10; z < HZ1; z += 20) box(S, mDark, HW * 2, 1.2, 1.2, 0, HH - 0.6, z);
-  for (const px of [-32, 0, 32]) {
-    const hw = px ? 13 : 16, z0 = -34, z1 = 44;
+  for (const px of [-PADX, 0, PADX]) {
+    const hw = px ? 26 : 30, z0 = PADZ - 52, z1 = PADZ + 52;
     for (const s of [-1, 1]) box(deco, mYellow, 0.25, 0.02, z1 - z0, px + s * hw, 0.011, (z0 + z1) / 2);
     box(deco, mYellow, hw * 2, 0.02, 0.25, px, 0.011, z0);
     box(deco, mYellow, hw * 2, 0.02, 0.25, px, 0.011, z1);
@@ -205,7 +206,7 @@ function build(st: Station) {
   box(deco, mAccent, 0.5, 0.02, 12, 0, 0.012, HZ0 + 7);
   // Kisten und Tanks an den Wänden
   const crateCols = [0xc0604a, 0x4a80c0, 0xe0b850, 0x5fa06a, 0xb0b4ba];
-  for (const s of [-1, 1]) for (let i = 0; i < 4; i++) {
+  for (const s of [-1, 1]) for (let i = 0; i < 6; i++) {
     const z = HZ0 + 6 + i * 26 + R.range(-3, 3), x = s * (HW - 3.2), n = 1 + Math.floor(R.next() * 3);
     const cm = mat(texMat(R.pick(crateCols), 'hull_light', { roughness: 0.75 }));
     for (let k = 0; k < n; k++) box(S, cm, 2.2, 2.2, 2.2, x - s * (k === 2 ? 2.4 : 0), 1.1 + (k === 1 ? 2.2 : 0), z);
@@ -330,8 +331,8 @@ function build(st: Station) {
     walkers.push({ p, path, i: start % path.length, x: path[start % path.length][0], z: path[start % path.length][1], ph: R.range(0, 6) });
   };
   for (let i = 0; i < (kind === 'outpost' ? 2 : 4); i++) mkWalker(i % 2 ? [...loop].reverse() : loop, i);
-  mkWalker([[-30, HZ0 + 8], [30, HZ0 + 8], [38, 30], [-38, 30]], 0);
-  mkWalker([[40, 40], [40, -30], [-40, -30], [-40, 40]], 1);
+  mkWalker([[-30, HZ0 + 8], [30, HZ0 + 8], [32, -30], [-32, -30]], 0);
+  mkWalker([[86, 90], [86, -40], [-86, -40], [-86, 90]], 1);
 
   boxUV(S, 1 / 6);
   standGroup = new THREE.Group();
@@ -345,7 +346,16 @@ function measure(m: ShipModel) {
   par?.remove(sh);
   const pos = m.g.position.clone(), rot = m.g.rotation.clone();
   m.g.position.set(0, 0, 0); m.g.rotation.set(0, 0, 0); m.g.updateMatrixWorld(true);
-  const b = new THREE.Box3().setFromObject(m.g);
+  // nur der Rumpf: Triebwerksglühen und andere Leuchteffekte zählen nicht (sonst schwebt das Schiff)
+  const skip = new Set<THREE.Object3D>(m.glows), b = new THREE.Box3(), bb = new THREE.Box3();
+  m.g.traverse((o: any) => {
+    if (!o.isMesh || o.isSprite) return;
+    for (let q: THREE.Object3D | null = o; q; q = q.parent) if (skip.has(q)) return;
+    if (o.material?.blending === THREE.AdditiveBlending) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    b.union(bb.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld));
+  });
+  if (b.isEmpty()) b.setFromObject(m.g);
   par?.add(sh);
   m.g.position.copy(pos); m.g.rotation.copy(rot);
   return b;
@@ -356,15 +366,12 @@ function disposeParked() {
 }
 // Setzt ein Schiffsmodell auf einen Stellplatz (lokale Koordinaten), Bug zum Tor
 function park(m: ShipModel, px: number, pz: number, name: string, cls: string, onUse: Inter) {
-  const b = measure(m), y = -b.min.y + 1.3, w = b.max.x - b.min.x, l = b.max.z - b.min.z;
+  const b = measure(m), y = -b.min.y + 0.02, w = b.max.x - b.min.x, l = b.max.z - b.min.z;   // steht auf dem Hangarboden (Fahrwerk oder Rumpf)
   const wp = group!.localToWorld(new THREE.Vector3(px, y, pz));
   m.g.position.copy(wp);
   m.g.rotation.set(0, group!.rotation.y + Math.PI, 0);
   m.g.visible = true;
   for (const gl2 of m.glows) gl2.visible = false;
-  // Stützen
-  const sm = mat(std(0x3a3e46, { roughness: 0.7, metalness: 0.6 }));
-  for (const dz of [-l * 0.25, l * 0.25]) box(standGroup!, sm, Math.min(1.2, w * 0.12), 1.3, 0.8, px, 0.65, pz + dz);
   // Sperrzone unter dem Rumpf: kleine Schiffe nur der schmale Mittelteil (unter den Flügeln kann man durch), große Schiffe breiter
   const hw = Math.max(1.2, w * (w > 30 ? 0.3 : 0.16)), hl = l * 0.44;
   shipObs.push([px - hw, px + hw, pz - hl, pz + hl]);
@@ -380,14 +387,14 @@ export function refreshHangarShips() {
   shipObs = []; shipLabels = []; shipInters = [];
   while (standGroup!.children.length) { const c = standGroup!.children[0] as THREE.Mesh; standGroup!.remove(c); c.geometry.dispose(); }
   const st = IN.station!;
-  shipPad.z = 4;
+  shipPad.z = PADZ;
   shipPad.y = park(SHIP, 0, shipPad.z, P.shipName, SHIPS[P.cls].role, { x: 0, z: 0, r: 0, label: () => `An Bord der ${P.shipName} gehen`, act: () => enterShip({ cls: P.cls, uid: P.uid, name: P.shipName, ctx: 'hangar' }, SHIP) });
   const others = shipsAt(st.id).slice(0, 2);
   others.forEach((r, i) => {
     const m = buildShipModel(r.cls, (r.paint || 'Orange') as Paint);
     scene.add(m.g);
     parked.push({ m, uid: r.uid });
-    park(m, i ? 32 : -32, 4, r.name, SHIPS[r.cls].role, {
+    park(m, i ? PADX : -PADX, PADZ, r.name, SHIPS[r.cls].role, {
       x: 0, z: 0, r: 0, label: () => `An Bord der ${r.name} gehen`,
       act: () => enterShip({ cls: r.cls, uid: r.uid, name: r.name, ctx: 'hangar' }, m),
     });
@@ -419,7 +426,7 @@ export function enterInterior(st: Station) {
   scene.add(group);
   st.mesh.visible = false;
   const PZ0 = PZ1 - dims.d, L = Math.PI;
-  const lp: [number, number, number, number, number][] = [[0, HH - 4, 3, 150, 0.42], [0, dims.h - 1, (PZ0 + PZ1) / 2, 75, 0.5], [0, CH - 0.5, HZ0 - CL / 2, 22, 0.36]];
+  const lp: [number, number, number, number, number][] = [[0, HH - 4, PADZ, 280, 0.5], [0, dims.h - 1, (PZ0 + PZ1) / 2, 75, 0.5], [0, CH - 0.5, HZ0 - CL / 2, 22, 0.36]];
   setExposure(0.2);
   lamps.forEach((l, i) => { group!.localToWorld(l.position.set(lp[i][0], lp[i][1], lp[i][2])); l.distance = lp[i][3]; l.intensity = lp[i][4] * L; });
   refreshHangarShips();
