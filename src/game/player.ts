@@ -265,9 +265,9 @@ export function syncShip() {
   SHIP.g.rotation.set(P.pitch, P.yaw, G.roll);
   SHIP.extraGuns.visible = P.up.guns >= 2;
   // Triebwerke: kleiner Glühpunkt mit kurzem Düsenstrahl, der mit dem Schub wächst (früher groß und blendend in der Verfolgeransicht)
-  // bei vollem Schub war der Strahl zu lang und zu hell: jetzt ein Fünftel davon (0,34 statt 1,7), im Leerlauf noch etwas kleiner
-  const gs = (0.24 + G.thrust * 0.1 + (G.cruise ? 0.05 : 0)) * (1 + P.up.engine * 0.05) * (1 + Math.random() * 0.06);
-  SHIP.glows.forEach(g => { g.scale.setScalar(gs * (g.userData.base || 1)); (g.material as THREE.SpriteMaterial).opacity = 0.2 + G.thrust * 0.1; });
+  // Größe des blauen Strahls: Leerlauf 0,8, voller Schub 1,7, Reiseflug etwas mehr (vom Nutzer so bestätigt)
+  const gs = (0.8 + G.thrust * 0.9 + (G.cruise ? 0.35 : 0)) * (1 + P.up.engine * 0.05) * (1 + Math.random() * 0.1);
+  SHIP.glows.forEach(g => { g.scale.setScalar(gs * (g.userData.base || 1)); (g.material as THREE.SpriteMaterial).opacity = 0.32 + G.thrust * 0.28; });
   const sm = SHIP.shield.material as THREE.MeshBasicMaterial;
   sm.opacity = Math.max(0, sm.opacity - 0.016 * 1.5);
 }

@@ -29,8 +29,8 @@ function shieldFor(r: number) {
 const cone = (r: number, len: number) => { const c = new THREE.ConeGeometry(r, len, 14, 1, true); c.rotateX(Math.PI / 2); c.translate(0, 0, len / 2); return c; };
 const JET_OUTER = cone(0.36, 1.25), JET_CORE = cone(0.17, 0.8);
 function addJet(sp: THREE.Sprite) {
-  const mo = basicAdd(0x8fc8ff); mo.opacity = 0.18; mo.side = THREE.DoubleSide;
-  const mc = basicAdd(0xeaf6ff); mc.opacity = 0.32; mc.side = THREE.DoubleSide;
+  const mo = basicAdd(0x8fc8ff); mo.opacity = 0.26; mo.side = THREE.DoubleSide;
+  const mc = basicAdd(0xeaf6ff); mc.opacity = 0.5; mc.side = THREE.DoubleSide;
   for (const [g, m] of [[JET_OUTER, mo], [JET_CORE, mc]] as const) { const j = new THREE.Mesh(g, m); j.userData.shared = true; sp.add(j); }
 }
 function engine(g: THREE.Group, glows: THREE.Sprite[], x: number, y: number, z: number, r: number, len: number) {
