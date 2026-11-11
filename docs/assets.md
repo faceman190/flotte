@@ -140,3 +140,12 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
 - Im Spiel: Größe in `HEIGHT` und Skelett-Vorbild in `RIG_OF` (src/models/charModels.ts). Weil das Skelett mit dem des Händlers
   übereinstimmt, laufen alle Händler-Bewegungen ohne Umrechnung. Story-Figuren wählen das Modell über `NpcLook.model` (src/game/interior.ts).
 - Grenzen der Methode: einfache Körperform (keine Nase, Fäustlinge statt Finger), an Kopfseite und Körperflanken leicht verwischte Textur.
+
+## Figuren von Meshy (Alpha 0.60)
+- Erzeugt über Higgsfield (`multi_image_to_3d`, Vorder- und Rückansicht, Textur und Skelett, 35 Credits je Figur).
+  Rohdatei: `asset-src/neu/figuren/<name>_meshy.glb` (15.000 Dreiecke, Textur 2048 px, Skelett mit denselben Knochennamen wie Händler und Arbeiter).
+- Das Skelett von Meshy hat je Figur eine andere Grundhaltung. Damit die Händler-Bewegungen passen, wird die Figur in Blender
+  (`Figuren.blend`) umgestellt: jeden Knochen so drehen, dass er wie der Händler-Knochen in Ruhe zeigt, das Netz in dieser Haltung
+  einfrieren und die Haltung als neue Ruhelage übernehmen. Gewichte und Knochenlagen von Meshy bleiben erhalten.
+- Export wie bei den Blender-Figuren nach `asset-src/glb/char/<name>.glb`; im Spiel `HEIGHT` und `RIG_OF` in src/models/charModels.ts.
+- Achterberg nutzt seit Alpha 0.60 die Meshy-Fassung; die aus Bildern gebaute Fassung liegt ausgeblendet in der Blender-Datei.
