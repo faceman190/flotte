@@ -5,7 +5,7 @@ import { releaseAll, centerMouse } from '../core/input';
 import { P, G, saveGame, type Mode } from './state';
 import { world } from './world';
 import { spawnEnemy } from './combat';
-import { IN, storyNpc } from './interior';
+import { IN, storyNpc, npcSpeak } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
 import { radio } from '../ui/radio';
@@ -32,8 +32,10 @@ let lineT = 0, lineTok = 0;
 function speak(who: string | undefined, text: string) {
   if (text.includes('Willkommen in der Crew, Pilot')) sfx('oath', 0.5);   // feierlicher Ton zur Aufnahme in die Crew
   const id = voiceIdFor(text);
+  // steht die Figur im Raum, gebärdet sie zur Zeile: geschätzte Dauer aus der Textlänge, mit Aufnahme deren echte Dauer
+  if (who) npcSpeak(who, Math.min(12, 1.2 + text.length * 0.055));
   if (!id) { stopVoice(); return Promise.resolve(0); }
-  return voice(id, !!who && (RADIO_VOICES.has(who) || G.mode === 'play'));
+  return voice(id, !!who && (RADIO_VOICES.has(who) || G.mode === 'play')).then(d => { if (who && d) npcSpeak(who, d); return d; });
 }
 export function talk(...lines: Line[]) { queue.push(...lines); if (lineT <= 0) nextLine(); }
 function nextLine() {

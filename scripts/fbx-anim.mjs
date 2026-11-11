@@ -1,7 +1,12 @@
 // Bewegung aus einer FBX-Datei (z. B. von Mixamo) auf das Skelett unserer Figuren übertragen und als Animationsclip ablegen
 // (asset-src/data/anim_<name>.json, im Spiel über window.DATAFILES und THREE.AnimationClip.parse).
 //   node scripts/fbx-anim.mjs <datei.fbx>                       nur ansehen: Knochen, Clips, Zuordnung
-//   node scripts/fbx-anim.mjs <datei.fbx> <name> [figur] [fps] [align]  schreiben; figur (Vorgabe merchant) liefert das Zielskelett
+//   node scripts/fbx-anim.mjs <datei.fbx> <name> [Schalter]     schreiben
+// Schalter: --figure=merchant|worker (Zielskelett, Vorgabe merchant) · --fps=20 · --in=s --out=s (Ausschnitt in Sekunden)
+//   --inplace  Vorwärtsbewegung der Hüfte entfernen (die Figur bewegt das Spiel); das Tempo je Bild steht dann als meta.speed dabei
+//   --alt=s    zweiter Einstiegspunkt (Sekunden nach dem Zuschnitt), z. B. beim Abbremsen für den anderen Fuß
+//   --align    siehe unten
+// Alle Clips einer Figur neu erzeugen: scripts/anims.sh
 // align: nur angeben, wenn die FBX auf einem FREMDEN Körper beruht (z. B. der Mixamo-Standardfigur in T-Haltung). Wurde
 // unsere eigene Figur bei Mixamo hochgeladen, steht die Hülle in beiden Skeletten gleich da: dann darf Schritt 1 nicht laufen,
 // sonst würden Füße und Arme um den Unterschied der Gelenklagen verdreht.
@@ -17,9 +22,9 @@ const THREE = await import('three');
 const { FBXLoader } = await import('three/examples/jsm/loaders/FBXLoader.js');
 const { io } = await import('./glb-lib.mjs');
 
-const [, , inp, name, figure = 'merchant', fpsArg = '20', alignArg = ''] = process.argv;
-const ALIGN = alignArg === 'align';
-const FPS = +fpsArg;
+const args = process.argv.slice(2), flag = Object.fromEntries(args.filter(a => a.startsWith('--')).map(a => { const [k, v = '1'] = a.slice(2).split('='); return [k, v]; }));
+const [inp, name] = args.filter(a => !a.startsWith('--'));
+const figure = flag.figure || 'merchant', ALIGN = !!flag.align, FPS = +(flag.fps || 20), INPLACE = !!flag.inplace;
 // Zielknochen → Quellknochen (ohne Vorsilbe "mixamorig") und der Kindknochen, der die Richtung angibt
 const MAP = {
   Hips: ['Hips', 'Spine02'], Spine02: ['Spine', 'Spine01'], Spine01: ['Spine1', 'Spine'], Spine: ['Spine2', 'neck'], neck: ['Neck', 'Head'], Head: ['Head', 'head_end'],
@@ -98,14 +103,26 @@ if (!name) process.exit(0);
 const clip = fbx.animations.slice().sort((a, b) => b.duration - a.duration)[0];
 if (!clip) throw new Error('keine Animation in der Datei');
 const mixer = new THREE.AnimationMixer(fbx); mixer.clipAction(clip).play();
-const frames = Math.max(2, Math.round(clip.duration * FPS) + 1), times = [];
-const rot = {}, hipPos = [], toeY = [];
-const lift = tRestP.LeftToeBase.y - 0 * ratio;   // Zehenhöhe der Figur über dem Boden (bei der Quelle liegen die Zehen in der Bewegung auf Bodenhöhe)
+const T0 = +(flag.in || 0), T1 = Math.min(clip.duration, +(flag.out || clip.duration)), DUR = T1 - T0;
+const frames = Math.max(2, Math.round(DUR * FPS) + 1), times = [];
+const rot = {}, hipPos = [], toeY = [], fwd = [];
+// Hüfte: Das Hüftgelenk der Figur sitzt an anderer Stelle im Körper als das der Quelle. Es wird deshalb als Punkt behandelt,
+// der fest am Hüftknochen der Quelle hängt: So landet der Körper genau dort, wo ihn die Quelle hinstellt (Füße auf dem Boden).
+if (!skinned) throw new Error('Die FBX enthält keine Hülle: bitte "mit Skin" herunterladen.');
+skinned.geometry.computeBoundingBox();
+const sBox = skinned.geometry.boundingBox, tBox = new THREE.Box3();
+for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) { const a = p.getAttribute('POSITION'); tBox.expandByPoint(new THREE.Vector3(...a.getMin([]))).expandByPoint(new THREE.Vector3(...a.getMax([]))); }
+const K = (tBox.max.y - tBox.min.y) / (sBox.max.y - sBox.min.y);   // Maßstab: Körpergröße Figur / Körpergröße Quelle
+const foot = b => new THREE.Vector3((b.min.x + b.max.x) / 2, b.min.y, (b.min.z + b.max.z) / 2);
+const hipBindInv = skinned.skeleton.boneInverses[skinned.skeleton.bones.findIndex(b => clean(b.name) === 'Hips')];
+const qS = tRestP.Hips.clone().sub(foot(tBox)).divideScalar(K).add(foot(sBox));   // Hüftgelenk der Figur im Körper der Quelle (Bindung)
+const offZ = qS.z - sRestP.Hips.z;
+console.log(`Körpergröße: Quelle ${(sBox.max.y - sBox.min.y).toFixed(4)} → Figur ${(tBox.max.y - tBox.min.y).toFixed(3)} (Faktor ${K.toFixed(2)})`);
 for (const n of Object.keys(A)) rot[n] = [];
 const cur = {}, inv = new THREE.Quaternion(), d = new THREE.Quaternion(), w = new THREE.Quaternion(), loc = new THREE.Quaternion(), prev = {};
 for (let f = 0; f < frames; f++) {
-  const t = Math.min(clip.duration, f / FPS); times.push(+t.toFixed(4));
-  mixer.setTime(t); fbx.updateMatrixWorld(true);
+  const t = Math.min(DUR, f / FPS); times.push(+t.toFixed(4));
+  mixer.setTime(Math.min(T0 + t, clip.duration - 1e-4)); fbx.updateMatrixWorld(true);
   for (const o of order) {
     const n = o.name, pq = cur[o.parent.name] || tRestQ[o.parent.name] || new THREE.Quaternion();
     if (!A[n]) { cur[n] = pq.clone().multiply(o.quaternion); continue; }   // ohne Gegenstück: Ruhelage relativ zum Elternknochen
@@ -118,7 +135,10 @@ for (let f = 0; f < frames; f++) {
     rot[n].push(+loc.x.toFixed(5), +loc.y.toFixed(5), +loc.z.toFixed(5), +loc.w.toFixed(5));
   }
   // Hüfte: Bewegung gegenüber der Grundhaltung, auf die Größe der Figur umgerechnet, im Raum des Elternknotens
-  const sp = wp(S.Hips), tp = new THREE.Vector3((sp.x - sRestP.Hips.x) * ratio + tRestP.Hips.x, sp.y * ratio + lift, (sp.z - sRestP.Hips.z) * ratio + tRestP.Hips.z);
+  const sp = wp(S.Hips), pt = qS.clone().applyMatrix4(hipBindInv).applyMatrix4(S.Hips.matrixWorld);
+  const tp = new THREE.Vector3(pt.x * K, pt.y * K + tBox.min.y, pt.z * K);
+  fwd.push(sp.z * K);
+  if (INPLACE) tp.z = tRestP.Hips.z + K * (pt.z - sp.z - offZ);   // auf der Stelle: Die Figur bewegt das Spiel
   T.Hips.parent.worldToLocal(tp);
   hipPos.push(tp.x, tp.y, tp.z);
   // Zielskelett in diese Haltung stellen und messen, wie hoch die Zehen stehen
@@ -127,14 +147,18 @@ for (let f = 0; f < frames; f++) {
   troot.updateMatrixWorld(true);
   toeY.push(Math.min(wp(T.LeftToeBase).y, wp(T.RightToeBase).y));
 }
-// Stand auf dem Boden: Die Zehen sollen im Mittel so hoch stehen wie in der Ruhelage der Figur
-const off = toeY.reduce((a, b) => a + b, 0) / toeY.length - Math.min(tRestP.LeftToeBase.y, tRestP.RightToeBase.y), offL = off / T.Hips.parent.getWorldScale(new THREE.Vector3()).y;
-for (let i = 0; i < hipPos.length; i += 3) { hipPos[i] = +hipPos[i].toFixed(3); hipPos[i + 1] = +(hipPos[i + 1] - offL).toFixed(3); hipPos[i + 2] = +hipPos[i + 2].toFixed(3); }
-console.log(`Bodenkorrektur: ${(-off * 100).toFixed(1)} cm · Zehenhöhe schwankt um ${((Math.max(...toeY) - Math.min(...toeY)) * 100).toFixed(1)} cm`);
+const off = toeY.slice().sort((a, b) => a - b)[toeY.length >> 1] - Math.min(tRestP.LeftToeBase.y, tRestP.RightToeBase.y);
+for (let i = 0; i < hipPos.length; i++) hipPos[i] = +hipPos[i].toFixed(3);
+console.log(`Zehengelenk des tieferen Fußes: im Median ${(off * 100).toFixed(1)} cm gegenüber der Ruhelage (nur zur Kontrolle, nichts korrigiert)`);
 const tracks = Object.entries(rot).map(([n, values]) => ({ name: `${n}.quaternion`, type: 'quaternion', times, values }));
 tracks.push({ name: 'Hips.position', type: 'vector', times, values: hipPos });
 const file = `asset-src/data/anim_${name}.json`;
 fs.mkdirSync('asset-src/data', { recursive: true });
-fs.writeFileSync(file, JSON.stringify({ name, duration: +clip.duration.toFixed(4), tracks }));
+// Tempo je Bild (m/s, leicht geglättet) und mittleres Tempo: Damit läuft die Figur im Spiel so schnell, wie die Füße greifen
+const raw = fwd.map((z, i) => { const a = Math.max(0, i - 1), b = Math.min(fwd.length - 1, i + 1); return (fwd[b] - fwd[a]) / Math.max(1e-6, times[b] - times[a]); });
+const speed = raw.map((_, i) => { let s = 0, n = 0; for (let j = Math.max(0, i - 2); j <= Math.min(raw.length - 1, i + 2); j++) { s += raw[j]; n++; } return +Math.max(0, s / n).toFixed(3); });
+const meta = { fps: FPS, pace: +((fwd[fwd.length - 1] - fwd[0]) / DUR).toFixed(3), inplace: INPLACE, ...(INPLACE ? { speed } : {}), ...(flag.alt ? { alt: +flag.alt } : {}) };
+fs.writeFileSync(file, JSON.stringify({ name, duration: +DUR.toFixed(4), meta, tracks }));
+console.log(`Tempo im Mittel ${meta.pace} m/s${INPLACE ? ', auf der Stelle' : ''}${flag.alt ? ', zweiter Einstieg bei ' + flag.alt + ' s' : ''}`);
 const ys = hipPos.filter((_, i) => i % 3 === 1);
-console.log(`${tracks.length} Spuren, ${frames} Bilder (${FPS}/s), ${clip.duration.toFixed(2)} s, Hüfthöhe ${Math.min(...ys).toFixed(1)}–${Math.max(...ys).toFixed(1)} → ${file} (${(fs.statSync(file).size / 1024).toFixed(0)} KB)`);
+console.log(`${tracks.length} Spuren, ${frames} Bilder (${FPS}/s), ${DUR.toFixed(2)} s, Hüfthöhe ${Math.min(...ys).toFixed(1)}–${Math.max(...ys).toFixed(1)} → ${file} (${(fs.statSync(file).size / 1024).toFixed(0)} KB)`);

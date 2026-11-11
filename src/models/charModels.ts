@@ -12,10 +12,17 @@ const HEIGHT: Record<string, number> = { worker: 1.8, merchant: 1.7 };
 // Zusätzliche Bewegungen aus FBX-Dateien (scripts/fbx-anim.mjs → asset-src/data/anim_<figur>_<art>.json), z. B. merchant_idle.
 // Sie sind auf das Skelett genau dieser Figur umgerechnet und ersetzen deren eingebaute Bewegung.
 const EXTRA: Record<string, THREE.AnimationClip> = {};
+// Zusatzangaben je Clip: mittleres Tempo (m/s), Tempo je Bild bei Clips auf der Stelle, zweiter Einstiegspunkt
+interface ClipMeta { fps: number; pace: number; inplace?: boolean; speed?: number[]; alt?: number }
+const META: Record<string, ClipMeta> = {};
 async function loadExtraClips() {
   const files = ((window as any).DATAFILES || {}) as Record<string, string>;
   await Promise.all(Object.entries(files).filter(([k]) => k.startsWith('anim_')).map(async ([k, url]) => {
-    try { EXTRA[k.slice(5)] = THREE.AnimationClip.parse(await (await fetch(url)).json()); }
+    try {
+      const j = await (await fetch(url)).json(), clip = THREE.AnimationClip.parse(j);
+      clip.uuid = THREE.MathUtils.generateUUID();   // die Datei trägt keine Kennung; ohne eigene hält der Mischer alle Clips für denselben
+      EXTRA[k.slice(5)] = clip; if (j.meta) META[k.slice(5)] = j.meta;
+    }
     catch (e) { console.warn('Bewegung nicht geladen:', k, e); }
   }));
 }
@@ -62,5 +69,90 @@ export function charInstance(name: string, tint: number | [number, number, numbe
   const mixer = new THREE.AnimationMixer(obj);
   const w = clipOf('walk', name), i = clipOf('idle', name);
   const walk = w ? mixer.clipAction(w) : null, idle = i ? mixer.clipAction(i) : null;
-  return { g, mixer, walk, idle, mats: [] as THREE.Material[] };
+  // Ablaufsteuerung (animStep): eigene Clips dieser Figur für Anlaufen, Abbremsen und Sprechen, falls vorhanden
+  const act = (k: string) => (EXTRA[name + '_' + k] ? mixer.clipAction(EXTRA[name + '_' + k]) : null);
+  const anim: CharAnim = {
+    mixer, idle, walk, start: act('start'), stop: act('stop'), talk: [act('talk1'), act('talk2')].filter(Boolean) as THREE.AnimationAction[],
+    mode: 'idle', cur: null, talkT: 0, talkI: 0,
+    pace: META[name + '_walk']?.pace || 1.4, mStart: META[name + '_start'] || null, mStop: META[name + '_stop'] || null,
+  };
+  return { g, mixer, walk, idle, anim, mats: [] as THREE.Material[] };
+}
+
+// ---------- Ablauf: Stehen → Anlaufen → Gehen → Abbremsen → Stehen, dazwischen Sprechen ----------
+export interface CharAnim {
+  mixer: THREE.AnimationMixer; idle: THREE.AnimationAction | null; walk: THREE.AnimationAction | null;
+  start: THREE.AnimationAction | null; stop: THREE.AnimationAction | null; talk: THREE.AnimationAction[];
+  mode: 'idle' | 'start' | 'walk' | 'stop' | 'talk'; cur: THREE.AnimationAction | null;
+  talkT: number; talkI: number;   // verbleibende Sprechzeit (s), nächster Sprech-Clip
+  pace: number;                   // Tempo der Gehschleife in m/s bei normaler Abspielgeschwindigkeit
+  mStart: ClipMeta | null; mStop: ClipMeta | null;
+}
+function fade(a: CharAnim, to: THREE.AnimationAction | null, dur: number, at = 0, once = false) {
+  if (!to || a.cur === to) return;
+  to.reset(); to.time = at; to.timeScale = 1;
+  to.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); to.clampWhenFinished = once;
+  to.play();
+  if (a.cur) a.cur.crossFadeTo(to, dur, false);
+  a.cur = to;
+}
+const profile = (m: ClipMeta | null, t: number, fallback: number) => {
+  if (!m || !m.speed) return fallback;
+  return m.speed[Math.min(m.speed.length - 1, Math.max(0, Math.round(t * m.fps)))];
+};
+// Erste Haltung setzen (zufälliger Zeitpunkt, damit nicht alle Figuren im Gleichschritt atmen oder gehen)
+export function animInit(a: CharAnim, moving: boolean) {
+  const to = moving ? a.walk || a.idle : a.idle || a.walk;
+  if (!to) return;
+  to.reset(); to.time = Math.random() * to.getClip().duration; to.play();
+  a.cur = to; a.mode = moving && a.walk ? 'walk' : 'idle';
+}
+export function animTalk(a: CharAnim, seconds: number) { if (a.talk.length) a.talkT = Math.max(a.talkT, seconds); }
+// Pro Bild: move = die Figur soll gehen, speed = ihr Gehtempo in m/s. Rückgabe: das Tempo, mit dem sie sich in diesem Bild
+// tatsächlich bewegen soll (beim Anlaufen und Abbremsen folgt es dem Clip, damit die Füße nicht rutschen).
+// follow = false: Die Figur wird von außen bewegt (andere Piloten); dann wird nur weich zwischen Stehen und Gehen überblendet.
+export function animStep(a: CharAnim, dt: number, move: boolean, speed = 1.4, follow = true): number {
+  let v = 0;
+  if (a.talkT > 0) a.talkT -= dt;
+  const t = a.cur ? a.cur.time : 0, len = a.cur ? a.cur.getClip().duration : 0;
+  switch (a.mode) {
+    case 'idle':
+      if (move && a.walk) {
+        if (follow && a.start) { fade(a, a.start, 0.25, 0, true); a.mode = 'start'; }
+        else { fade(a, a.walk, 0.3); a.mode = 'walk'; }
+      } else if (a.talkT > 0.6 && a.talk.length) { fade(a, a.talk[a.talkI++ % a.talk.length], 0.4, 0, true); a.mode = 'talk'; }
+      break;
+    case 'talk':
+      if (move && a.walk) { a.talkT = 0; fade(a, a.idle, 0.3); a.mode = 'idle'; }
+      else if (a.talkT <= 0 || t >= len - 0.45) {
+        // Gebärde zu Ende: die nächste, solange noch gesprochen wird; sonst zurück ins ruhige Stehen
+        if (a.talkT > 1.2 && a.talk.length > 1) fade(a, a.talk[a.talkI++ % a.talk.length], 0.45, 0, true);
+        else if (a.talkT > 1.2) { a.cur = null; fade(a, a.talk[0], 0.45, 0, true); }
+        else { fade(a, a.idle, 0.5); a.mode = 'idle'; }
+      }
+      break;
+    case 'start':
+      v = profile(a.mStart, t, speed * 0.5);
+      if (!move) { fade(a, a.idle, 0.4); a.mode = 'idle'; }
+      else if (t >= len - 0.22) { fade(a, a.walk, 0.22); a.mode = 'walk'; }
+      break;
+    case 'walk':
+      v = speed;
+      if (a.walk) a.walk.timeScale = Math.min(3, Math.max(0.5, speed / a.pace));
+      if (!move) {
+        if (follow && a.stop && a.walk) {
+          // Einstieg passend zum Fuß, der gerade in der Luft ist (Gehschleife: erst links, ab etwa einem Fünftel rechts)
+          const ph = a.walk.time / a.walk.getClip().duration, alt = a.mStop?.alt || 0;
+          fade(a, a.stop, 0.25, ph > 0.2 && ph < 0.7 ? alt : 0, true); a.mode = 'stop';
+        } else { fade(a, a.idle, 0.3); a.mode = 'idle'; }
+      }
+      break;
+    case 'stop':
+      v = profile(a.mStop, t, 0);
+      if (move && t < len * 0.4) { fade(a, a.walk, 0.3); a.mode = 'walk'; }
+      else if (t >= len - 0.4) { fade(a, a.idle, 0.4); a.mode = 'idle'; }
+      break;
+  }
+  a.mixer.update(dt);
+  return v;
 }

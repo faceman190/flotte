@@ -106,11 +106,17 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   Tore bei `GATE_DIST` 6000 m, Grenze `SECTOR_RADIUS` 8000 m.
 - Vorspann: `clearRocks` räumt den Raum um das Halden-Tor und den Keil dahinter frei (`src/game/intro.ts`, `placeGate`).
 
-## Bewegungen der Figuren aus FBX-Dateien (Alpha 0.55)
-- Ablage der Rohdatei: `asset-src/neu/` (nicht im Git). Umrechnen: `node scripts/fbx-anim.mjs <datei.fbx> <figur>_<art> [figur] [fps] [align]`,
-  z. B. `node scripts/fbx-anim.mjs asset-src/neu/standing_idle_merchant.fbx merchant_idle`. Ohne Namen zeigt das Skript nur, was in der Datei steckt.
-- Ergebnis: `asset-src/data/anim_<figur>_<art>.json` (Art `idle` oder `walk`), nach `npm run assets` im Spiel als `DATAFILES.anim_…`.
-  `src/models/charModels.ts` lädt diese Clips und nimmt sie für genau diese Figur statt der eingebauten Bewegung.
-- Mixamo: am besten die eigene Figur dort hochladen und die Bewegung „mit Skin“ laden. Dann steht die Hülle in beiden Skeletten gleich,
-  und das Skript überträgt die Drehungen ohne Angleichen. `align` nur bei Bewegungen auf einem fremden Körper (Mixamo-Standardfigur).
+## Bewegungen der Figuren aus FBX-Dateien (Alpha 0.55/0.56)
+- Rohdateien in asset-src/neu/ (nicht im Git). Alle Clips neu erzeugen: `sh scripts/anims.sh`, danach `npm run assets`.
+  Einzeln: `node scripts/fbx-anim.mjs <datei.fbx> <figur>_<art> --figure=merchant|worker [--inplace] [--in=s --out=s] [--alt=s] [--fps=20]`;
+  ohne Namen zeigt das Skript nur, was in der Datei steckt.
+- Arten je Figur: `idle`, `walk` (Schleife, auf der Stelle), `start` (Anlaufen), `stop` (Abbremsen), `talk1`, `talk2`.
+  Ergebnis: asset-src/data/anim_<figur>_<art>.json mit `meta` (Tempo in m/s, Tempo je Bild, zweiter Einstieg).
+- Im Spiel: src/models/charModels.ts lädt die Clips (`DATAFILES.anim_…`) und führt jede Figur über `animStep`
+  (Stehen → Anlaufen → Gehen → Abbremsen → Stehen, dazwischen Sprechen über `animTalk`). Beim Anlaufen und Abbremsen
+  gibt der Clip das Tempo vor, damit die Füße nicht rutschen. `npcSpeak(name, sekunden)` in src/game/interior.ts lässt eine Figur gebärden;
+  die Geschichte ruft es für jede gesprochene Zeile auf (src/game/story.ts, speak).
+- Mixamo: die eigene Figur dort hochladen und die Bewegung „mit Skin“ laden. Dann steht die Hülle in beiden Skeletten gleich,
+  und das Skript überträgt die Drehungen ohne Angleichen. `--align` nur bei Bewegungen auf einem fremden Körper (Mixamo-Standardfigur).
+  Die jetzigen Dateien beruhen auf dem Händler-Körper; auf den Arbeiter passen sie über die gleiche Grundhaltung.
 - Finger hat unser Skelett (24 Knochen) nicht; Fingerbewegungen entfallen.

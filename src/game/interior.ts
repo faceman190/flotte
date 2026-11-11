@@ -12,7 +12,7 @@ import { shipsAt, board } from './fleet';
 import { SHIPS, hasInterior } from '../data/ships';
 import { SECTORS, FACTION } from '../data/galaxy';
 import type { Paint } from '../models/gltfShips';
-import { hasChar, charInstance } from '../models/charModels';
+import { hasChar, charInstance, animInit, animStep, animTalk, type CharAnim } from '../models/charModels';
 import { buildShipRoom, type ShipRoom, type ShipSpot } from './shipInterior';
 import { computeStats, type ShipId, type Up } from '../data/ships';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
@@ -30,8 +30,8 @@ import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom, interiorEnv } 
 type Rect = [number, number, number, number]; // x0, x1, z0, z1
 interface Inter { x: number; z: number; r: number; label: () => string; act: () => void }
 interface Label { p: THREE.Vector3; text: string; col: string }
-interface Person { g: THREE.Group; legL: THREE.Group; legR: THREE.Group; armL: THREE.Group; armR: THREE.Group; head: THREE.Object3D; mixer?: THREE.AnimationMixer; walk?: THREE.AnimationAction | null; idle?: THREE.AnimationAction | null; moving?: boolean }
-interface Walker { p: Person; path: number[][]; i: number; x: number; z: number; ph: number }
+interface Person { g: THREE.Group; legL: THREE.Group; legR: THREE.Group; armL: THREE.Group; armR: THREE.Group; head: THREE.Object3D; mixer?: THREE.AnimationMixer; walk?: THREE.AnimationAction | null; idle?: THREE.AnimationAction | null; moving?: boolean; anim?: CharAnim }
+interface Walker { p: Person; path: number[][]; i: number; x: number; z: number; ph: number; wait: number; rest: boolean }
 
 export const interiorHooks = {
   openTab: (_tab: string, _note: string) => {},
@@ -84,7 +84,7 @@ let group: THREE.Group | null = null, stationGroup: THREE.Group | null = null;
 let rects: Rect[] = [], obstacles: Rect[] = [], shipObs: Rect[] = [];
 let inters: Inter[] = [], shipInters: Inter[] = [];
 let labels: Label[] = [], shipLabels: Label[] = [];
-let persons: { p: Person; x: number; z: number; face: number }[] = [], walkers: Walker[] = [];
+let persons: { p: Person; x: number; z: number; face: number; name?: string }[] = [], walkers: Walker[] = [];
 let parked: { m: ShipModel; uid: number }[] = [];
 let field: THREE.Mesh | null = null, holo: THREE.Object3D | null = null, standGroup: THREE.Group | null = null;
 let shipPad = { y: 0, z: 4 };
@@ -118,6 +118,7 @@ function signTex(text: string, bg: string, fg = '#0c0d10') {
 }
 function mat<T extends THREE.Material>(m: T) { disposables.push(m); if ((m as any).isMeshStandardMaterial) (m as any).envMapIntensity = 0.3; return m; }
 
+const WALK_V = 1.5;   // Gehtempo der Leute in den Stationen (m/s)
 // KI-Figur mit Skelett, falls geladen (Händler stehen, Arbeiter laufen); sonst die einfache Figur aus Grundformen
 function buildPerson(suit: number, skin: number, hair: number, badge: number, role: 'idle' | 'walk' = 'idle'): Person {
   const cn = role === 'walk' ? 'worker' : 'merchant';
@@ -125,9 +126,8 @@ function buildPerson(suit: number, skin: number, hair: number, badge: number, ro
     const c = charInstance(cn, 0.85 + Math.random() * 0.2);
     c.g.traverse((o: any) => { if (o.isMesh) { o.userData.shared = true; if (o.material !== undefined) disposables.push(o.material); } });
     const d = () => new THREE.Group();
-    const a = role === 'walk' ? c.walk || c.idle : c.idle || c.walk;
-    if (a) { a.time = Math.random() * a.getClip().duration; a.play(); }
-    return { g: c.g, legL: d(), legR: d(), armL: d(), armR: d(), head: d(), mixer: c.mixer, walk: c.walk, idle: c.idle, moving: role === 'walk' };
+    animInit(c.anim, role === 'walk');
+    return { g: c.g, legL: d(), legR: d(), armL: d(), armR: d(), head: d(), mixer: c.mixer, walk: c.walk, idle: c.idle, moving: role === 'walk', anim: c.anim };
   }
   const g = new THREE.Group();
   const ms = mat(std(suit, { flatShading: false, roughness: 0.85, metalness: 0.05 }));
@@ -226,8 +226,8 @@ function build(st: Station) {
     block(tx - 1.6, tx + 1.6, HZ0, tz + 0.6);
     const p = buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, pal.accent);
     p.g.position.set(tx + 3, 0, tz + 0.4); deco.add(p.g);
-    persons.push({ p, x: tx + 3, z: tz + 0.4, face: 0 });
     const name = nm.pop()!;
+    persons.push({ p, x: tx + 3, z: tz + 0.4, face: 0, name });
     labels.push({ p: new THREE.Vector3(tx + 3, 2.0, tz + 0.4), text: `${name} · Hangar`, col: pal.css });
     inters.push({ x: tx + 1.5, z: tz + 2, r: 3.4, label: () => `${name} ansprechen · Hangar`, act: () => talk(name, 'hangar') });
   }
@@ -285,7 +285,7 @@ function build(st: Station) {
       block(wx - s * 3.6, wx, z - 2.5, z + 2.5);
       const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent);
       p.g.position.set(wx - s * 1.6, 0, z); p.g.rotation.y = -s * Math.PI / 2; deco.add(p.g);
-      persons.push({ p, x: wx - s * 1.6, z, face: -s * Math.PI / 2 });
+      persons.push({ p, x: wx - s * 1.6, z, face: -s * Math.PI / 2, name });
       labels.push({ p: new THREE.Vector3(wx - s * 1.6, 2.0, z), text: `${name} · ${TAB_N[tab]}`, col: pal.css });
       inters.push({ x: wx - s * 4.4, z, r: 3.2, label: () => `${name} ansprechen · ${TAB_N[tab]}`, act: () => talk(name, tab) });
     });
@@ -328,7 +328,7 @@ function build(st: Station) {
   const mkWalker = (path: number[][], start: number) => {
     const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent, 'walk');
     deco.add(p.g);
-    walkers.push({ p, path, i: start % path.length, x: path[start % path.length][0], z: path[start % path.length][1], ph: R.range(0, 6) });
+    walkers.push({ p, path, i: start % path.length, x: path[start % path.length][0], z: path[start % path.length][1], ph: R.range(0, 6), wait: 0, rest: false });
   };
   for (let i = 0; i < (kind === 'outpost' ? 2 : 4); i++) mkWalker(i % 2 ? [...loop].reverse() : loop, i);
   mkWalker([[-30, HZ0 + 8], [30, HZ0 + 8], [32, -30], [-32, -30]], 0);
@@ -678,7 +678,14 @@ function shipInter(sp: ShipSpot, info: ShipInfo): Inter {
 
 // ---------- Sprechen, Benutzen ----------
 function say(who: string, text: string) { IN.say = { who, text, t: 5 }; }
+// Eine Figur im Raum spricht (Gebärden für die angegebene Dauer). who: ihr Name oder das Kürzel der Geschichte (z. B. ACHTERBERG).
+export function npcSpeak(who: string, seconds: number) {
+  if (!IN.active || !who) return;
+  const k = who.toUpperCase();
+  for (const q of persons) if (q.name && q.p.anim && q.name.toUpperCase().includes(k)) animTalk(q.p.anim, seconds);
+}
 function talk(name: string, tab: string) {
+  npcSpeak(name, 3.2);
   say(name, GREET[tab] || '');
   snd(660, 0.08, 'sine', 0.04, 120);
   interiorHooks.openTab(tab, `${name}: „${GREET[tab] || ''}“`);
@@ -788,15 +795,21 @@ export function updateWalk(dt: number) {
     const want = d < 9 ? clamp(Math.atan2(Math.sin(a), Math.cos(a)), -1.1, 1.1) : Math.sin(t * 0.4 + q.x) * 0.3;
     q.p.head.rotation.y += (want - q.p.head.rotation.y) * Math.min(1, dt * 4);
     q.p.armL.rotation.x = Math.sin(t * 0.8 + q.z) * 0.06; q.p.armR.rotation.x = -q.p.armL.rotation.x;
-    if (q.p.mixer) q.p.mixer.update(dt); else q.p.g.position.y = Math.sin(t * 1.3 + q.x) * 0.008;
+    if (q.p.anim) animStep(q.p.anim, dt, false); else if (q.p.mixer) q.p.mixer.update(dt); else q.p.g.position.y = Math.sin(t * 1.3 + q.x) * 0.008;
   }
   updateOthers(dt);
   for (const w of walkers) {
     const n = w.path[(w.i + 1) % w.path.length], dx = n[0] - w.x, dzz = n[1] - w.z, d = Math.hypot(dx, dzz);
-    if (d < 0.3) { w.i = (w.i + 1) % w.path.length; continue; }
-    // stehen bleiben, wenn der Spieler im Weg ist
+    if (d < 0.3) { w.i = (w.i + 1) % w.path.length; w.rest = Math.random() < 0.4; continue; }
+    // stehen bleiben, wenn der Spieler im Weg ist (früh genug, um auszulaufen) oder für eine Pause kurz vor einer Wegmarke
     const pd = Math.hypot(IN.x - w.x, IN.z - w.z), ahead = ((IN.x - w.x) * dx + (IN.z - w.z) * dzz) / (d * Math.max(0.01, pd));
-    const sp = pd < 1.6 && ahead > 0.3 ? 0 : 1.35;
+    const full = !!w.p.anim?.stop, blocked = pd < (full ? 3.0 : 1.6) && ahead > 0.3;
+    if (w.rest && d < 1.5 && w.wait <= 0) { w.wait = 4 + Math.random() * 6; w.rest = false; }
+    if (w.wait > 0) w.wait -= dt;
+    const go = !blocked && w.wait <= 0;
+    let sp = go ? WALK_V : 0;
+    // mit Skelett: Anlaufen und Abbremsen geben das Tempo vor (die Füße rutschen nicht); ganz nah am Spieler hält die Figur sofort
+    if (w.p.anim) { sp = animStep(w.p.anim, dt, go, WALK_V); if (blocked && pd < 1.2) sp = 0; }
     w.x += dx / d * sp * dt; w.z += dzz / d * sp * dt;
     w.p.g.position.set(w.x, 0, w.z);
     const ta = Math.atan2(dx, dzz), da = Math.atan2(Math.sin(ta - w.p.g.rotation.y), Math.cos(ta - w.p.g.rotation.y));
@@ -804,16 +817,6 @@ export function updateWalk(dt: number) {
     w.ph += dt * sp * 4.6;
     const sw = sp ? Math.sin(w.ph) * 0.55 : 0;
     w.p.legL.rotation.x = sw; w.p.legR.rotation.x = -sw; w.p.armL.rotation.x = -sw * 0.7; w.p.armR.rotation.x = sw * 0.7;
-    if (w.p.mixer) {
-      // Laufen ↔ Stehen weich überblenden, wenn der Spieler im Weg steht
-      const mv = sp > 0;
-      if (mv !== w.p.moving && w.p.walk && w.p.idle) {
-        const from = mv ? w.p.idle : w.p.walk, to = mv ? w.p.walk : w.p.idle;
-        to.reset().play(); from.crossFadeTo(to, 0.35, false);
-        w.p.moving = mv;
-      }
-      w.p.mixer.update(dt);
-    }
   }
 }
 
@@ -965,15 +968,8 @@ function updateOthers(dt: number) {
     const want = r.tyaw + Math.PI, da = Math.atan2(Math.sin(want - r.ry), Math.cos(want - r.ry));
     r.ry += da * Math.min(1, dt * 8); r.p.g.rotation.y = r.ry;
     const mv = r.speed > 0.4;
-    if (r.p.mixer) {
-      if (mv !== r.p.moving && r.p.walk && r.p.idle) {
-        const from = mv ? r.p.idle : r.p.walk, to = mv ? r.p.walk : r.p.idle;
-        to.reset().play(); from.crossFadeTo(to, 0.3, false);
-        r.p.moving = mv;
-      }
-      if (r.p.walk) r.p.walk.timeScale = clamp(r.speed / 1.4, 0.6, 3);   // Rennen = schnellere Schritte
-      r.p.mixer.update(dt);
-    } else {
+    if (r.p.anim) animStep(r.p.anim, dt, mv, Math.max(0.8, r.speed), false);   // Rennen = schnellere Schritte
+    else {
       const sw = mv ? Math.sin(G.time * 9) * 0.55 : 0;
       r.p.legL.rotation.x = sw; r.p.legR.rotation.x = -sw; r.p.armL.rotation.x = -sw * 0.7; r.p.armR.rotation.x = sw * 0.7;
     }
@@ -1001,7 +997,7 @@ export function storyNpc(name: string, title: string, label: string, act: () => 
   const p = storyPerson(look);
   p.g.position.set(x, 0, z); p.g.rotation.y = face;
   stationGroup.add(p.g);
-  persons.push({ p, x, z, face });
+  persons.push({ p, x, z, face, name });
   labels.push({ p: new THREE.Vector3(x, 2.15, z), text: `${name} · ${title}`, col });
   inters.push({ x, z, r: 3.4, label: () => label, act });
   return true;
@@ -1012,7 +1008,7 @@ function storyPerson(look: NpcLook): Person {
   if (!hasChar(cn)) return buildPerson(0x2c3440, 0xc89474, 0x3a2a1c, 0xffb347);
   const c = charInstance(cn, look.tint || 1);
   c.g.traverse((o: any) => { if (o.isMesh) { o.userData.shared = true; if (o.material !== undefined) disposables.push(o.material); } });
-  const d = () => new THREE.Group(), a = c.idle || c.walk;
-  if (a) { a.time = Math.random() * a.getClip().duration; a.play(); }
-  return { g: c.g, legL: d(), legR: d(), armL: d(), armR: d(), head: d(), mixer: c.mixer, walk: c.walk, idle: c.idle, moving: false };
+  const d = () => new THREE.Group();
+  animInit(c.anim, false);
+  return { g: c.g, legL: d(), legR: d(), armL: d(), armR: d(), head: d(), mixer: c.mixer, walk: c.walk, idle: c.idle, moving: false, anim: c.anim };
 }
