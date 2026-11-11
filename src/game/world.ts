@@ -29,7 +29,11 @@ export interface Gate {
   x: number; y: number; z: number; nx: number; nz: number;
   mesh: THREE.Group; model: ReturnType<typeof buildGate>;
 }
-export interface Field { def: FieldDef; x: number; y: number; z: number; r: number; n: number; rng: ReturnType<typeof rng> }
+export interface Core { x: number; y: number; z: number; r: number }
+// cores: dichte Kerne im Feld (dort drängen sich die Brocken)
+export interface Field { def: FieldDef; x: number; y: number; z: number; r: number; n: number; rng: ReturnType<typeof rng>; cores: Core[] }
+// Geröll und Brocken: reine Kulisse der Felder (nicht abbaubar, nicht im Netz geteilt). solid: fester Brocken, sonst zerplatzt er am Rumpf.
+export interface Deco { x: number; y: number; z: number; r: number; im: THREE.InstancedMesh; i: number; solid: boolean; gone: boolean }
 export interface Ore { k: ItemId; p: number }
 export interface Asteroid {
   x: number; y: number; z: number; r: number; r0: number; kind: RockKind; hp: number;
@@ -48,6 +52,7 @@ export const world = {
   gates: [] as Gate[],
   fields: [] as Field[],
   asteroids: [] as Asteroid[],
+  deco: [] as THREE.InstancedMesh[],   // Geröll und Brocken der Felder (siehe buildDeco)
   pickups: [] as Pickup[],
   traffic: [] as any[],
   allies: [] as any[],
@@ -63,7 +68,7 @@ export const world = {
   extras: [] as THREE.Object3D[],       // zusätzliche Szenenobjekte (Gelände, Anflugzone) – werden beim Leeren entfernt
   orbit: null as null | { x: number; y: number; z: number; name: string; mesh: THREE.Object3D },
 };
-export const SECTOR_RADIUS = 6200;
+export const SECTOR_RADIUS = 8000;
 
 // ---------------- Asteroiden ----------------
 const ROCK: Record<RockKind, THREE.MeshStandardMaterial> = {
@@ -78,9 +83,7 @@ function rockMat(kind: RockKind, main: ItemId) {
   if (kind !== 'metal' || !TINT[main]) return ROCK[kind];
   return ROCK_T[main] || (ROCK_T[main] = texMat(TINT[main]!, 'rock', { roughness: 0.85, metalness: 0.2, emissive: 0x1a1612 }));
 }
-const ORE_M: Record<string, THREE.Material> = {};
-const oreMat = (k: ItemId) => ORE_M[k] || (ORE_M[k] = new THREE.MeshBasicMaterial({ color: ITEMS[k].c }));
-export const yieldFor = (r: number) => (r >= 40 ? 26 : r >= 26 ? 13 : 5);
+export const yieldFor = (r: number) => (r >= 80 ? 52 : r >= 56 ? 36 : r >= 40 ? 26 : r >= 26 ? 13 : 5);
 
 // Zusammensetzung aus der Erztabelle der Region
 function makeComp(kind: RockKind, field: Field | null, R: () => number): Ore[] {
@@ -115,23 +118,35 @@ const SHARD_M = new THREE.MeshStandardMaterial({ color: 0xb070ff, emissive: 0x70
 
 // Felsmodell für Asteroiden (asset-src/data/Rock.json aus scripts/rock2 bzw. der OBJ-Datei, Bilder tex/rock_d und tex/rock_n): wird beim Start geladen.
 // Solange es fehlt, entstehen die bisherigen berechneten Brocken.
-let RK_GEO: THREE.BufferGeometry | null = null, RK_TEX: THREE.Texture | null = null, RK_NRM: THREE.Texture | null = null;
+let RK_GEO: THREE.BufferGeometry | null = null, RK_LO: THREE.BufferGeometry | null = null, RK_TEX: THREE.Texture | null = null, RK_NRM: THREE.Texture | null = null;
 export async function loadRockModel() {
   try {
-    const url = (window as any).DATAFILES?.Rock, tex = (window as any).TEXDATA || {};
+    const files = (window as any).DATAFILES || {}, url = files.Rock, tex = (window as any).TEXDATA || {};
     if (!url) return;
     const { mergeVertices } = await import('three/examples/jsm/utils/BufferGeometryUtils.js');
-    const d = await (await fetch(url)).json() as { pos: number[]; uv: number[] };
-    let g2 = new THREE.BufferGeometry();
-    g2.setAttribute('position', new THREE.BufferAttribute(new Float32Array(d.pos), 3));
-    g2.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(d.uv), 2));
-    g2 = mergeVertices(g2, 1e-4); g2.computeVertexNormals(); g2.center(); g2.computeBoundingSphere();
-    const k = 1 / (g2.boundingSphere!.radius || 1); g2.scale(k, k, k);   // auf Radius 1 bringen
+    const load = async (u: string) => {
+      const d = await (await fetch(u)).json() as { pos: number[]; uv: number[] };
+      let g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(d.pos), 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(d.uv), 2));
+      g = mergeVertices(g, 1e-4); g.computeVertexNormals(); g.center(); g.computeBoundingSphere();
+      const k = 1 / (g.boundingSphere!.radius || 1); g.scale(k, k, k);   // auf Radius 1 bringen
+      return g;
+    };
+    const g2 = await load(url);
+    // leichte Fassung (scripts/rock-lo.mjs) für die vielen kleinen Brocken; fehlt sie, dient das volle Modell
+    if (files.RockLo) try { RK_LO = await load(files.RockLo); } catch { RK_LO = null; }
     const tl = new THREE.TextureLoader();
     if (tex.rock_d) { RK_TEX = tl.load(tex.rock_d); RK_TEX.colorSpace = THREE.SRGBColorSpace; RK_TEX.flipY = false; RK_TEX.anisotropy = 4; }
     if (tex.rock_n) { RK_NRM = tl.load(tex.rock_n); RK_NRM.flipY = false; }
     RK_GEO = g2;
   } catch (e) { console.warn('Felsmodell nicht geladen; Asteroiden bleiben berechnet.', e); }
+}
+// Felsmodell: sein eigenes Farb- und Reliefbild auf ein (gemeinsames) Material legen
+function skin<T extends THREE.Material>(mat: T) {
+  const mm = mat as any;
+  if (RK_GEO && RK_TEX && mm.map !== RK_TEX) { mm.map = RK_TEX; mm.normalMap = RK_NRM; mm.needsUpdate = true; }
+  return mat;
 }
 function rockGeo(r: number) {
   if (RK_GEO) { const g0 = RK_GEO.clone(); g0.scale(r * 1.15, r * 0.95, r * 1.1); return g0; }
@@ -148,16 +163,9 @@ function rockGeo(r: number) {
 
 export function makeAst(x: number, y: number, z: number, r: number, kind: RockKind, field: Field | null = null, comp?: Ore[], yieldFrac = 1) {
   comp = comp || makeComp(kind, field, field ? field.rng.next : Math.random);
-  const m = new THREE.Mesh(rockGeo(r), rockMat(kind, comp[0].k));
-  // Felsmodell: sein eigenes Farb- und Reliefbild auf das (gemeinsame) Material legen
-  if (RK_GEO && RK_TEX) { const mm = m.material as THREE.MeshStandardMaterial; if (mm.map !== RK_TEX) { mm.map = RK_TEX; mm.normalMap = RK_NRM; mm.needsUpdate = true; } }
+  const m = new THREE.Mesh(rockGeo(r), skin(rockMat(kind, comp[0].k)));
   boxUV(m, 1 / (r * 1.4));
-  for (let i = 0; i < 5; i++) {
-    const o = new THREE.Mesh(ORE_GEO, oreMat(comp[Math.min(comp.length - 1, i < 3 ? 0 : i - 2)].k));
-    o.position.set(rand(-1, 1), rand(-1, 1) * 0.85, rand(-1, 1)).normalize().multiplyScalar(r * 0.82);
-    o.scale.setScalar(r * (kind === 'crystal' ? 0.14 : 0.1));
-    m.add(o);
-  }
+  // (Die bunten Erzpunkte auf dem Gestein sind entfallen: Man sieht nur den Stein. Was drin steckt, zeigt der Scanner.)
   if (kind === 'crystal') {
     // herausragende Kristallsplitter
     for (let i = 0; i < 4; i++) {
@@ -189,7 +197,7 @@ export function breakAst(i: number, drops = true) {
   burst(a.x, a.y, a.z, '#8a8f9a', 14, a.r, 1.3);
   snd(160, 0.18, 'triangle', 0.05, -100);
   removeAst(i);
-  const nr = a.r0 > 36 ? 30 : a.r0 > 20 ? 16 : 0, frac = a.yld / a.max;
+  const nr = a.r0 > 70 ? 44 : a.r0 > 36 ? 30 : a.r0 > 20 ? 16 : 0, frac = a.yld / a.max;
   // Mitspieler (nicht Gastgeber): Bruchstücke erzeugt der Gastgeber, die Beute bleibt hier
   if (SHARED.client) { astHooks.gone(a, 'break'); if (!nr) for (let j = 0; j < Math.max(1, Math.round(a.yld * 0.3)); j++) dropPick(a.x, a.y, a.z, pickOre(a), 1); return; }
   if (nr && frac > 0.3) for (let j = 0; j < 2; j++) {
@@ -201,19 +209,105 @@ export function breakAst(i: number, drops = true) {
   if (drops) for (let j = 0; j < n; j++) dropPick(a.x, a.y, a.z, pickOre(a), 1);
 }
 
+// Größen der abbaubaren Brocken: vom kleinen Stück bis zum Riesen
+const SIZES = [16, 16, 30, 30, 30, 44, 44, 44, 64, 92];
+const FLAT = 0.4;   // Felder sind flache Scheiben: Höhe im Verhältnis zur Breite
+const blocked = (x: number, y: number, z: number, pad: number) =>
+  world.stations.some(s => d3(x, y, z, s.x, s.y, s.z) < s.R + 160 + pad) || world.gates.some(g => d3(x, y, z, g.x, g.y, g.z) < 260 + pad);
 function fieldRock(f: Field, edge = false) {
   const R = f.rng, d = f.def;
-  for (let t = 0; t < 20; t++) {
+  for (let t = 0; t < 30; t++) {
     const dir = new THREE.Vector3(R.range(-1, 1), R.range(-1, 1), R.range(-1, 1)).normalize();
-    const dist = edge ? f.r * R.range(0.85, 1) : f.r * Math.cbrt(R.next());
-    const x = f.x + dir.x * dist, y = f.y + dir.y * dist * 0.35, z = f.z + dir.z * dist;
-    if (world.stations.some(s => d3(x, y, z, s.x, s.y, s.z) < s.R + 160)) continue;
-    if (world.gates.some(g => d3(x, y, z, g.x, g.y, g.z) < 260)) continue;
+    // die Hälfte drängt sich in den dichten Kernen, der Rest verteilt sich über das ganze Feld
+    const core = !edge && f.cores.length && R.next() < 0.5 ? R.pick(f.cores) : null;
+    const dist = core ? core.r * Math.cbrt(R.next()) : edge ? f.r * R.range(0.85, 1) : f.r * Math.cbrt(R.next());
+    const c = core || f, fl = core ? 0.6 : FLAT;
+    const x = c.x + dir.x * dist, y = c.y + dir.y * dist * fl, z = c.z + dir.z * dist;
+    const r = R.pick(SIZES);
+    if (blocked(x, y, z, r)) continue;
+    if (world.asteroids.some(a => d3(x, y, z, a.x, a.y, a.z) < a.r + r + 8)) continue;
     const roll = R.next(), kinds = rockKinds(d);
     const kind: RockKind = kinds.length === 1 ? kinds[0] : roll < (d.kind === 'mixed' ? 0.6 : 0.7) ? kinds[0] : kinds[1];
-    return makeAst(x, y, z, R.pick([44, 44, 30, 30, 16]), kind, f);
+    return makeAst(x, y, z, r, kind, f);
   }
   return null;
+}
+
+// ---------------- Geröll und Brocken (Kulisse) ----------------
+// Hunderte kleine Steine je Feld als wenige Sammelobjekte (InstancedMesh): Geröll (1–5 m) zerplatzt am Rumpf,
+// Brocken (6–22 m) sind fest. Beides ist nicht abbaubar und entsteht auf jedem Gerät gleich aus dem Feldnamen.
+const DECO_CELL = 160, decoGrid = new Map<number, Deco[]>(), ZERO_M = new THREE.Matrix4().makeScale(0, 0, 0);
+const dcell = (v: number) => Math.floor(v / DECO_CELL) + 512;
+const dkey = (cx: number, cy: number, cz: number) => cx + cy * 1024 + cz * 1048576;
+let DECO_GEO: THREE.BufferGeometry | null = null, DECO_SRC: THREE.BufferGeometry | null = null;
+function decoGeo() {
+  const src = RK_LO || RK_GEO;
+  if (DECO_GEO && DECO_SRC === src) return DECO_GEO;
+  DECO_SRC = src;
+  const g = src ? src.clone() : rockGeo(1);
+  boxUV(new THREE.Mesh(g, skin(ROCK.metal)), 1 / 1.4);
+  return (DECO_GEO = g);
+}
+function buildDeco(f: Field, id: string) {
+  const R = rng(hashStr('deko' + id + f.def.pos.join(',')));
+  const geo = decoGeo(), mat = skin(ROCK[rockKinds(f.def)[0]]);
+  const nSmall = Math.min(1500, Math.round(f.n * 9)), nBig = Math.min(380, Math.round(f.n * 2.4));
+  const own = world.asteroids.filter(a => a.field === f);
+  const lots: { x: number; y: number; z: number; s: number; solid: boolean }[][] = [[], [], [], [], [], []];
+  for (let i = 0; i < nSmall + nBig; i++) {
+    const solid = i >= nSmall, s = solid ? 6 + 16 * Math.pow(R.next(), 2.2) : 1.2 + 4 * Math.pow(R.next(), 2);
+    for (let t = 0; t < 8; t++) {
+      const dir = new THREE.Vector3(R.range(-1, 1), R.range(-1, 1), R.range(-1, 1)).normalize(), mode = R.next();
+      let x: number, y: number, z: number;
+      if (mode < 0.45 && f.cores.length) { const c = R.pick(f.cores), dist = c.r * 1.15 * Math.cbrt(R.next()); x = c.x + dir.x * dist; y = c.y + dir.y * dist * 0.6; z = c.z + dir.z * dist; }
+      else if (mode < 0.7 && own.length && !solid) { const a = R.pick(own), dist = a.r * R.range(1.25, 4); x = a.x + dir.x * dist; y = a.y + dir.y * dist; z = a.z + dir.z * dist; }   // Geröll um die großen Brocken
+      else { const dist = f.r * Math.cbrt(R.next()); x = f.x + dir.x * dist; y = f.y + dir.y * dist * FLAT; z = f.z + dir.z * dist; }
+      if (blocked(x, y, z, s)) continue;
+      if (solid && own.some(a => d3(x, y, z, a.x, a.y, a.z) < a.r + s + 5)) continue;
+      const k = Math.min(5, Math.floor((Math.atan2(z - f.z, x - f.x) + Math.PI) / (Math.PI * 2) * 6));
+      lots[k].push({ x, y, z, s, solid });
+      break;
+    }
+  }
+  // sechs Tortenstücke je Feld: so blendet die Grafikkarte ganze Stücke aus, die nicht im Bild sind
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), S = new THREE.Vector3();
+  for (const lot of lots) {
+    if (!lot.length) continue;
+    const im = new THREE.InstancedMesh(geo, mat, lot.length);
+    lot.forEach((o, i) => {
+      Q.setFromEuler(E.set(R.range(0, 6.28), R.range(0, 6.28), R.range(0, 6.28)));
+      M.compose(V.set(o.x, o.y, o.z), Q, S.set(o.s * R.range(0.8, 1.25), o.s * R.range(0.7, 1.1), o.s * R.range(0.8, 1.25)));
+      im.setMatrixAt(i, M);
+      const d: Deco = { x: o.x, y: o.y, z: o.z, r: o.s * 0.8, im, i, solid: o.solid, gone: false }, key = dkey(dcell(o.x), dcell(o.y), dcell(o.z));
+      const l = decoGrid.get(key); if (l) l.push(d); else decoGrid.set(key, [d]);
+    });
+    im.instanceMatrix.needsUpdate = true;
+    im.computeBoundingSphere();
+    scene.add(im);
+    world.deco.push(im);
+  }
+}
+// Steine der Kulisse in der Nähe eines Punktes (für die Kollision des Spielers)
+const NEAR: Deco[] = [];
+export function decoNear(x: number, y: number, z: number, rad: number) {
+  NEAR.length = 0;
+  if (!world.deco.length) return NEAR;
+  for (let cx = dcell(x - rad); cx <= dcell(x + rad); cx++) for (let cy = dcell(y - rad); cy <= dcell(y + rad); cy++) for (let cz = dcell(z - rad); cz <= dcell(z + rad); cz++) {
+    const l = decoGrid.get(dkey(cx, cy, cz));
+    if (l) for (const d of l) if (!d.gone) NEAR.push(d);
+  }
+  return NEAR;
+}
+function hideDeco(d: Deco) { d.gone = true; d.im.setMatrixAt(d.i, ZERO_M); d.im.instanceMatrix.needsUpdate = true; }
+// Geröll zerplatzt beim Aufprall zu Staub
+export function shatterDeco(d: Deco) {
+  hideDeco(d);
+  burst(d.x, d.y, d.z, '#8a8f9a', 8 + d.r * 2, d.r * 3, 0.8);
+}
+// Einen Raum frei räumen: Asteroiden, Geröll und Brocken im Umkreis verschwinden (z. B. um das Halden-Tor im Vorspann)
+export function clearRocks(hit: (x: number, y: number, z: number, r: number) => boolean) {
+  for (let i = world.asteroids.length - 1; i >= 0; i--) { const a = world.asteroids[i]; if (hit(a.x, a.y, a.z, a.r)) removeAst(i); }
+  for (const l of decoGrid.values()) for (const d of l) if (!d.gone && hit(d.x, d.y, d.z, d.r)) hideDeco(d);
 }
 
 // Treibende Asteroiden bleiben grob in ihrem Feld; abgebaute Felder wachsen langsam nach
@@ -300,6 +394,8 @@ export function clearSector() {
   for (const s of world.stations) { scene.remove(s.mesh); disposeTree(s.mesh); }
   for (const g of world.gates) { scene.remove(g.mesh); disposeTree(g.mesh); }
   for (const a of world.asteroids) { scene.remove(a.mesh); a.mesh.geometry.dispose(); }
+  for (const im of world.deco) { scene.remove(im); im.dispose(); }
+  world.deco = []; decoGrid.clear();
   for (const t of world.traffic) { scene.remove(t.mesh); disposeTree(t.mesh); }
   for (const a of world.allies) scene.remove(a.mesh);
   for (const l of [world.enemies, world.bullets, world.ebullets, world.rockets, world.pickups]) for (const e of l) scene.remove(e.mesh);
@@ -327,9 +423,16 @@ export function buildSector(id: string) {
   for (const sd of def.stations) addStation(sd, R.range(0, Math.PI * 2));
   for (const to of def.links) addGate(to);
   for (const fd of def.fields) {
-    const f: Field = { def: fd, x: fd.pos[0], y: fd.pos[1], z: fd.pos[2], r: fd.r, n: fd.n, rng: rng(hashStr(id + fd.pos.join(','))) };
+    // dichte Kerne: zwei bis drei Stellen je Feld, an denen sich die Brocken drängen
+    const C = rng(hashStr('kern' + id + fd.pos.join(','))), cores: Core[] = [];
+    for (let i = 0, nc = fd.r > 1400 ? 3 : 2; i < nc; i++) {
+      const a = C.range(0, Math.PI * 2), dist = fd.r * C.range(0.15, 0.6);
+      cores.push({ x: fd.pos[0] + Math.cos(a) * dist, y: fd.pos[1] + C.range(-0.1, 0.1) * fd.r, z: fd.pos[2] + Math.sin(a) * dist, r: fd.r * C.range(0.24, 0.34) });
+    }
+    const f: Field = { def: fd, x: fd.pos[0], y: fd.pos[1], z: fd.pos[2], r: fd.r, n: fd.n, rng: rng(hashStr(id + fd.pos.join(','))), cores };
     world.fields.push(f);
     for (let i = 0; i < fd.n; i++) fieldRock(f);
+    buildDeco(f, id);
   }
   world.regrowT = 12;
 }

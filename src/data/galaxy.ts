@@ -172,6 +172,13 @@ export const SECTORS: SectorDef[] = [
   },
 ];
 
+// Alpha 0.54: Die Sektoren sind gestreckt (Stationen, Felder und Tore liegen weiter auseinander) und die Asteroidenfelder
+// deutlich größer und voller. Die Zahlen oben sind die alten Grundwerte; hier werden sie einmal beim Start umgerechnet.
+export const STRETCH = 1.3;
+for (const s of SECTORS) {
+  for (const st of s.stations) st.pos = [Math.round(st.pos[0] * STRETCH), st.pos[1], Math.round(st.pos[2] * STRETCH)];
+  for (const f of s.fields) { f.pos = [Math.round(f.pos[0] * STRETCH), f.pos[1], Math.round(f.pos[2] * STRETCH)]; f.r = Math.round(f.r * 1.4); f.n = Math.round(f.n * 1.6); }
+}
 export const SECTOR: Record<string, SectorDef> = Object.fromEntries(SECTORS.map(s => [s.id, s]));
 
 // Kürzester Weg (Anzahl Sprünge) zwischen zwei Sektoren
@@ -196,7 +203,7 @@ export function findRoute(from: string, to: string): string[] | null {
 }
 
 // Wo im Sektor liegt das Tor zum Nachbarn? Richtung entspricht der Lage auf der Karte.
-export const GATE_DIST = 4600;
+export const GATE_DIST = 6000;
 export function gatePos(from: string, to: string): [number, number, number] {
   const a = SECTOR[from].map, b = SECTOR[to].map, dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
   const yOff = ((from.length * 37 + to.length * 53) % 300) - 150;

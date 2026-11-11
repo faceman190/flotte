@@ -95,3 +95,13 @@ Auslöser im Innenraum: `spots` in <Modell>.look.json, an die Laufkarte übergeb
 Dateien unter asset-src/sound/<name>.ogg kommen mit `npm run assets` ins Startpaket und sind im Spiel über `sfx('<name>')` bzw.
 `ambience('<name>')` (src/core/audio.ts) abspielbar. Herkunft und Lizenz stehen in asset-src/sound/QUELLEN.txt.
 Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Repository): Kenney Sci-Fi, Interface und Impact Sounds, alle CC0.
+
+## Asteroidenfelder (Alpha 0.54)
+- Felsmodell: `asset-src/data/Rock.json` (990 Dreiecke) für abbaubare Asteroiden, `RockLo.json` (rund 300 Dreiecke,
+  erzeugt mit `node scripts/rock-lo.mjs 0.3`) für Geröll und Brocken. Bilder: `asset-src/tex/rock_d.png`, `rock_n.png`.
+- Aufbau in `src/game/world.ts`: `fieldRock` (abbaubar, Größen 16–92 m, die Hälfte in zwei bis drei dichten Kernen je Feld)
+  und `buildDeco` (Kulisse als InstancedMesh, sechs Stücke je Feld: Geröll 1–5 m zerplatzt am Rumpf, Brocken 6–22 m sind fest;
+  nicht abbaubar, nicht im Netz geteilt, auf jedem Gerät gleich aus dem Feldnamen erzeugt).
+- Sektorgröße: Grundwerte in `src/data/galaxy.ts`, einmalig gestreckt mit `STRETCH` (1,3; Feldradius ×1,4; Anzahl ×1,6),
+  Tore bei `GATE_DIST` 6000 m, Grenze `SECTOR_RADIUS` 8000 m.
+- Vorspann: `clearRocks` räumt den Raum um das Halden-Tor und den Keil dahinter frei (`src/game/intro.ts`, `placeGate`).

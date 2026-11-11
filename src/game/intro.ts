@@ -4,7 +4,7 @@ import { voice, stopVoice, snd, sfx } from '../core/audio';
 import { scene } from '../core/engine';
 import { buildGate } from '../models/structures';
 import { G } from './state';
-import { world } from './world';
+import { world, clearRocks } from './world';
 import { burst } from './fx';
 
 // =====================================================================================
@@ -18,11 +18,12 @@ interface Shot { sector: string | null; dur: number; text: string; path?: () => 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const ease = (k: number) => k * k * (3 - 2 * k);
 
+const IR = 900;   // Kameraabstand zum Halden-Tor (unabhängig davon, wie groß das Feld heute ist)
 const SHOTS: Shot[] = [
   { sector: 'sonnenfeld', dur: 10, text: 'Vor 38 Jahren flog die Bastion als Vorhut durch das Halden-Tor. Elf Schiffe sollten folgen.',
-    path: () => { const f = world.fields[0] || { x: 0, y: 0, z: 0, r: 900 }; const c = V(f.x, f.y, f.z), r = f.r; return k => ({ p: V(c.x + r * (1.25 - 0.5 * k), c.y + 160 - 70 * k, c.z - r * 0.5 + r * 0.8 * k), l: c }); } },
+    path: () => { const f = world.fields[0] || { x: 0, y: 0, z: 0, r: 900 }; const c = V(f.x, f.y, f.z), r = IR; return k => ({ p: V(c.x + r * (1.25 - 0.5 * k), c.y + 160 - 70 * k, c.z - r * 0.5 + r * 0.8 * k), l: c }); } },
   { sector: null, dur: 8, text: 'Dann brach das Tor zusammen. Niemand kam nach. Niemand kam uns holen.',
-    path: () => { const f = world.fields[0] || { x: 0, y: 0, z: 0, r: 900 }; const c = V(f.x, f.y, f.z), r = f.r; return k => ({ p: V(c.x + r * 0.75 + r * 0.25 * k, c.y + 90 + 60 * k, c.z + r * 0.3 + r * 0.2 * k), l: c }); },
+    path: () => { const f = world.fields[0] || { x: 0, y: 0, z: 0, r: 900 }; const c = V(f.x, f.y, f.z), r = IR; return k => ({ p: V(c.x + r * 0.75 + r * 0.25 * k, c.y + 90 + 60 * k, c.z + r * 0.3 + r * 0.2 * k), l: c }); },
     at: t => { if (t > 2.5 && !flashed) { flashed = true; flash(); } } },
   { sector: 'heimstatt', dur: 10, text: 'Wir waren die letzte Crew. Also bauten wir uns eine Flotte. Schiff für Schiff.',
     path: () => { const b = world.stations.find(s => s.id === 'bastion') || world.stations[0]; const c = V(b.x, b.y, b.z), R = b.R; return k => { const a = 0.6 + k * 0.7, d = R * (4.2 - 1.4 * k); return { p: V(c.x + Math.cos(a) * d, c.y + R * (0.9 - 0.4 * k), c.z + Math.sin(a) * d), l: c }; }; } },
@@ -50,6 +51,14 @@ function placeGate() {
   gate.position.set(f.x, f.y, f.z);
   gate.lookAt(f.x + f.r, f.y + 120, f.z + f.r * 0.1);   // Öffnung zur Kamera
   scene.add(gate);
+  // Das Tor steht frei im Raum: Das Trümmerfeld entstand erst mit seinem Einsturz. Felsen bleiben nur als ferner Hintergrund.
+  // Auch der Keil hinter dem Tor (aus Sicht der Kamerafahrten beider Einstellungen) bleibt leer, sonst scheinen Felsen durch die Torscheibe.
+  clearRocks((x, y, z, r) => {
+    const dx = x - f.x, dz = z - f.z;
+    if (Math.hypot(dx, y - f.y, dz) < IR * 1.45 + r) return true;
+    const a = (Math.atan2(dz, dx) * 180 / Math.PI + 360) % 360;
+    return a > 110 && a < 250;
+  });
 }
 function breakGate() {
   if (!gate) return;

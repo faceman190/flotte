@@ -8,7 +8,7 @@ import type { ShipId } from '../data/ships';
 import type { Paint } from '../models/gltfShips';
 import { ITEMS, ITEM_IDS } from '../data/items';
 import { flightMax, P, G, stats, cargoUsed, settings } from './state';
-import { world, SECTOR_RADIUS } from './world';
+import { world, SECTOR_RADIUS, decoNear, shatterDeco } from './world';
 import { burst, puff } from './fx';
 import { fireBullet, launchRocket } from './combat';
 import { radio } from '../ui/radio';
@@ -152,6 +152,20 @@ export function updatePlayer(dt: number) {
         a.vx += vn * nx * 0.2; a.vy += vn * ny * 0.2; a.vz += vn * nz * 0.2;
         if (-vn > 120) hurtPlayer(-vn * 0.05);
       }
+    }
+  }
+  // Kulisse der Felder: Geröll zerplatzt am Rumpf (bremst nur leicht), feste Brocken prallen ab wie Asteroiden
+  if (world.deco.length) for (const d of decoNear(P.x, P.y, P.z, st.radius + 24)) {
+    const dd = d3(d.x, d.y, d.z, P.x, P.y, P.z), m = d.r + st.radius * (d.solid ? 1 : 0.7);
+    if (dd >= m || dd <= 0) continue;
+    const nx = (P.x - d.x) / dd, ny = (P.y - d.y) / dd, nz = (P.z - d.z) / dd, vn = P.vx * nx + P.vy * ny + P.vz * nz;
+    if (d.solid) {
+      P.x = d.x + nx * m; P.y = d.y + ny * m; P.z = d.z + nz * m;
+      if (vn < 0) { P.vx -= 1.6 * vn * nx; P.vy -= 1.6 * vn * ny; P.vz -= 1.6 * vn * nz; if (-vn > 120) hurtPlayer(-vn * 0.05); }
+    } else {
+      shatterDeco(d);
+      if (vn < 0) { P.vx -= 0.12 * vn * nx; P.vy -= 0.12 * vn * ny; P.vz -= 0.12 * vn * nz; G.shake = Math.min(1.6, G.shake + 0.12); }
+      snd(150 + Math.random() * 60, 0.09, 'triangle', 0.035, -90);
     }
   }
   // (Die orange Abgasspur aus Rauchwölkchen ist entfallen: Die Triebwerke zeigen nur noch den kurzen blauen Strahl.)
