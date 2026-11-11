@@ -19,7 +19,7 @@ import { preloadMeshRooms } from './game/meshRoom';
 import { SHIP, placePlayer, updatePlayer, updatePickups, syncShip, nearDock, gateHit, hooks, fwd, setShipModel } from './game/player';
 import { updateParticles, syncParticles } from './game/fx';
 import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
-import { drawHUD, updatePanels, showBanner } from './ui/hud';
+import { drawHUD, updatePanels, showBanner, nextHop } from './ui/hud';
 import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
 import { startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, leaveInterior, updateWalk, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
@@ -232,6 +232,7 @@ onKey(code => {
     return;
   }
   if (code === 'KeyR' && G.mode === 'play') { scan(); noteScan(); return; }
+  if (code === 'KeyJ' && G.mode === 'play') { toggleJumpDrive(); return; }
   if ((code === 'ShiftLeft' || code === 'ShiftRight') && G.mode === 'play') { G.cruise = !G.cruise; radio('SYSTEM', G.cruise ? 'Reiseflug: schneller, aber träge in der Lenkung.' : 'Manöverflug.'); return; }
   if (code === 'KeyV' && G.mode === 'play') { CAM.lock = !CAM.lock; radio('SYSTEM', CAM.lock ? 'Freie Kamera: Maus schaut um das Schiff, Pfeiltasten lenken. V beendet sie.' : 'Kamera wieder hinter dem Schiff.'); return; }
   if (G.mode === 'walk' && code === 'Tab') { showMenu(); return; }
@@ -266,6 +267,26 @@ function startJump(g: Gate) {
   releaseAll();
   snd(200, 1.4, 'sine', 0.05, 700);
   snd(80, 1.4, 'sawtooth', 0.03, 300);
+}
+// Sprungantrieb (J): von überall im All in den nächsten Sektor der geplanten Route. Lädt sechs Sekunden, nur im Reiseflug,
+// nicht nahe an Stationen oder über Planeten; ein Treffer beendet den Reiseflug und damit das Laden. Tore springen weiter sofort.
+const JD_TIME = 6;
+function toggleJumpDrive() {
+  if (G.jd) { G.jd = 0; radio('SYSTEM', 'Sprung abgebrochen.'); return; }
+  const to = nextHop();
+  if (!to) radio('SYSTEM', 'Kein Sprungziel. Setze auf der Galaxiekarte (M) eine Route.');
+  else if (world.surface) radio('SYSTEM', 'Der Sprungantrieb arbeitet nur im All. Steig erst in den Orbit auf.');
+  else if (!G.cruise) radio('SYSTEM', 'Der Sprungantrieb lädt nur im Reiseflug (Umschalt).');
+  else if (world.stations.some(s => d3(P.x, P.y, P.z, s.x, s.y, s.z) < s.R + 500)) radio('SYSTEM', 'Zu nah an einer Station für einen Sprung. Flieg ein Stück hinaus.');
+  else { G.jd = JD_TIME; G.jdTo = to; radio('SYSTEM', `Sprungantrieb lädt. Ziel: ${SECTOR[to]?.name || to}. Kurs und Reiseflug halten.`); snd(180, 0.5, 'sine', 0.05, 240); }
+}
+function updateJumpDrive(dt: number) {
+  if (!G.jd) return;
+  if (!G.cruise || G.dead) { G.jd = 0; radio('SYSTEM', 'Sprung abgebrochen: Reiseflug unterbrochen.'); return; }
+  const before = Math.ceil(G.jd);
+  G.jd = Math.max(0, G.jd - dt);
+  if (G.jd > 0 && Math.ceil(G.jd) !== before) snd(240 + (JD_TIME - before) * 70, 0.12, 'sine', 0.04, 90);   // Ladeton je Sekunde, steigend
+  if (G.jd <= 0) { G.cruise = false; startJump({ to: G.jdTo } as Gate); }
 }
 function updateJump(dt: number) {
   G.jumpT -= dt;
@@ -430,8 +451,10 @@ function simulate(dt: number) {
   if (!(live || m === 'menu' || m === 'intro')) return;
   G.time += dt;
   if (live) P.playtime += dt;
+  if (m !== 'play') G.jd = 0;
   if (m === 'play') {
     updatePlayer(dt);
+    updateJumpDrive(dt);
     updatePickups(dt);
     const g = gateHit();
     if (g) startJump(g);
