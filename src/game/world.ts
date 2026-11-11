@@ -113,21 +113,18 @@ export const astHooks = { gone: (_a: Asteroid, _how: 'mined' | 'break' | 'blast'
 const ORE_GEO = new THREE.OctahedronGeometry(1);
 const SHARD_M = new THREE.MeshStandardMaterial({ color: 0xb070ff, emissive: 0x7030ff, emissiveIntensity: 1.1, metalness: 0.2, roughness: 0.15, flatShading: true });
 
-// Felsmodell für Asteroiden (asset-src/glb/deco/Rock.glb, Bilder tex/rock_d und tex/rock_n): wird beim Start geladen.
+// Felsmodell für Asteroiden (asset-src/data/Rock.json aus scripts/rock2 bzw. der OBJ-Datei, Bilder tex/rock_d und tex/rock_n): wird beim Start geladen.
 // Solange es fehlt, entstehen die bisherigen berechneten Brocken.
 let RK_GEO: THREE.BufferGeometry | null = null, RK_TEX: THREE.Texture | null = null, RK_NRM: THREE.Texture | null = null;
 export async function loadRockModel() {
   try {
-    const url = (window as any).DECODATA?.Rock, tex = (window as any).TEXDATA || {};
+    const url = (window as any).DATAFILES?.Rock, tex = (window as any).TEXDATA || {};
     if (!url) return;
-    const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-    const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
     const { mergeVertices } = await import('three/examples/jsm/utils/BufferGeometryUtils.js');
-    const gl = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url);
-    let geo: THREE.BufferGeometry | null = null;
-    gl.scene.traverse((o: any) => { if (o.isMesh && !geo) geo = o.geometry; });
-    if (!geo) return;
-    let g2 = (geo as THREE.BufferGeometry).clone(); g2.deleteAttribute('normal');
+    const d = await (await fetch(url)).json() as { pos: number[]; uv: number[] };
+    let g2 = new THREE.BufferGeometry();
+    g2.setAttribute('position', new THREE.BufferAttribute(new Float32Array(d.pos), 3));
+    g2.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(d.uv), 2));
     g2 = mergeVertices(g2, 1e-4); g2.computeVertexNormals(); g2.center(); g2.computeBoundingSphere();
     const k = 1 / (g2.boundingSphere!.radius || 1); g2.scale(k, k, k);   // auf Radius 1 bringen
     const tl = new THREE.TextureLoader();
