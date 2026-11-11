@@ -1,7 +1,7 @@
 // =====================================================================================
 // Spieldaten-Paket: wandelt die Quellpakete aus asset-src/legacy/*.js (erzeugt von build-ships, build-stations,
-// build-textures, build-sounds) in einzelne, komprimierte Dateien unter public/assets/ um und schreibt die
-// Paketliste public/assets/manifest.json.
+// build-textures, build-sounds) und neue Modelle aus asset-src/glb/<Art>/*.glb (Art: ship, station, char, deco)
+// in einzelne, komprimierte Dateien unter public/assets/ um und schreibt die Paketliste public/assets/manifest.json.
 //  - Modelle (GLB): Geometrie mit Meshopt komprimiert, Texturen als WebP (höchstens 1024 px)
 //  - Bilder: WebP, wenn das kleiner ist als das Original
 //  - Klänge: unverändert als Datei
@@ -41,10 +41,11 @@ fs.rmSync(OUT, { recursive: true, force: true });
 const files = {};
 let before = 0, after = 0;
 function put(key, ext, buf, pack, orig) {
+  if (files[key]) { fs.rmSync(path.join(OUT, files[key].url.slice('assets/'.length)), { force: true }); before -= files[key].orig || 0; after -= files[key].size; }   // ersetzt eine frühere Fassung
   const rel = `${key}.${hash(buf)}.${ext}`, full = path.join(OUT, rel);
   fs.mkdirSync(path.dirname(full), { recursive: true });
   fs.writeFileSync(full, buf);
-  files[key] = { url: 'assets/' + rel.replace(/\\/g, '/'), size: buf.length, pack };
+  files[key] = { url: 'assets/' + rel.replace(/\\/g, '/'), size: buf.length, pack, orig };
   before += orig; after += buf.length;
 }
 async function image(key, uri, pack, q = 85) {
@@ -54,8 +55,8 @@ async function image(key, uri, pack, q = 85) {
   if (webp.length < d.buf.length) put(key, 'webp', webp, pack, d.buf.length);
   else put(key, ext, d.buf, pack, d.buf.length);
 }
-async function model(key, b64, pack) {
-  const src = Buffer.from(b64, 'base64');
+async function model(key, data, pack) {
+  const src = Buffer.isBuffer(data) ? data : Buffer.from(data, 'base64');
   const doc = await io.readBinary(new Uint8Array(src));
   await doc.transform(
     dedup(), prune(),
@@ -77,6 +78,15 @@ for (const [k, v] of Object.entries(SHIPDATA.models)) await model('ship/' + k, v
 for (const [k, v] of Object.entries(SHIPDATA.paints)) await image('paint/' + k, v, 'core', 88);
 for (const [k, v] of Object.entries(STATIONDATA)) await model('station/' + k, v, 'core');
 for (const [k, v] of Object.entries(CHARDATA)) await model('char/' + k, v, 'core');
+// ---- Neue Modelle direkt als GLB (asset-src/glb/<Art>/<Name>.glb); ersetzen gleichnamige aus den Quellpaketen ----
+const GLB = path.join(ROOT, 'asset-src', 'glb');
+for (const kind of ['ship', 'station', 'char', 'deco']) {
+  const dir = path.join(GLB, kind);
+  if (!fs.existsSync(dir)) continue;
+  for (const n of fs.readdirSync(dir).filter(x => x.toLowerCase().endsWith('.glb'))) {
+    await model(`${kind}/${path.basename(n, path.extname(n))}`, fs.readFileSync(path.join(dir, n)), kind === 'deco' ? 'world' : 'core');
+  }
+}
 // ---- Klänge ----
 const { SOUNDDATA = {} } = bundle('sounds.js');
 for (const [k, v] of Object.entries(SOUNDDATA)) { const d = dataUri(v); if (d) put('sound/' + k, d.mime.includes('ogg') ? 'ogg' : 'mp3', d.buf, 'core', d.buf.length); }
@@ -84,6 +94,7 @@ for (const [k, v] of Object.entries(SOUNDDATA)) { const d = dataUri(v); if (d) p
 // ---- Paketliste ----
 const packs = {};
 for (const f of Object.values(files)) { const p = (packs[f.pack] = packs[f.pack] || { files: 0, size: 0 }); p.files++; p.size += f.size; }
+for (const f of Object.values(files)) delete f.orig;   // nur für die Statistik
 const v = hash(Buffer.from(JSON.stringify(files)));
 fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify({ v, packs, files }, null, 0));
 const mb = n => (n / 1048576).toFixed(1) + ' MB';
