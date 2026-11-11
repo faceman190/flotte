@@ -515,7 +515,7 @@ export function enterShip(info: ShipInfo, m: ShipModel) {
   rects = room.rects; obstacles = room.obstacles; shipObs = []; shipLabels = []; labels = []; shipInters = [];
   inters = room.spots.map(sp => Object.assign(shipInter(sp, info), { y: (sp as any).y }));
   IN.ship = info; IN.panel = null; IN.target = null;
-  IN.x = room.spawn.x; IN.z = room.spawn.z; IN.yaw = room.spawn.yaw; IN.pitch = 0; IN.bob = 0; IN.fy = mesh ? mesh.spawn.y : 0; IN.jy = IN.jv = 0;
+  IN.x = room.spawn.x; IN.z = room.spawn.z; IN.yaw = room.spawn.yaw; IN.pitch = 0; IN.bob = 0; IN.fy = mesh ? mesh.spawn.y : 0; IN.jy = IN.jv = 0; walkV.x = walkV.z = 0;
   lamps.forEach((l, i) => { const q = room!.lamps[i]; room!.g.localToWorld(l.position.set(q[0], q[1], q[2])); l.distance = 22; l.intensity = mesh ? 0 : q[3] * Math.PI; });   // Modell-Räume bringen eigene Lampen mit
   setExposure(planet ? 0.5 : 0.2);
   G.mode = 'walk';
@@ -668,6 +668,7 @@ function free(x: number, z: number) {
   return true;
 }
 let stepT = 0;
+const walkV = { x: 0, z: 0 };   // Laufgeschwindigkeit (m/s) in Raumkoordinaten
 // Springen (Leertaste): nur vom Boden aus
 export function jump() { if (!IN.active || IN.jy > 0 || IN.jv !== 0) return; IN.jv = 4.6; snd(95, 0.05, 'triangle', 0.02, 40); }
 export function updateWalk(dt: number) {
@@ -675,6 +676,8 @@ export function updateWalk(dt: number) {
   IN.say.t = Math.max(0, IN.say.t - dt);
   // Blick: Maus eingefangen → direkte Steuerung; sonst dreht die Zeigerposition wie beim Fliegen
   IN.locked = document.pointerLockElement === gl;
+  // zu Fuß gehört die Maus dem Blick: sobald der Browser es erlaubt (kurz nach einem Tastendruck oder Klick), wird sie eingefangen
+  if (!IN.locked && G.mode === 'walk' && (grabT -= dt) <= 0) { grabT = 0.3; grabMouse(); }
   if (!IN.locked) {
     const mx = clamp((mouse.x - view.W / 2) / (view.W / 2), -1, 1), my = clamp((mouse.y - view.H / 2) / (view.H / 2), -1, 1);
     const dz = 0.14, sh = (v: number) => Math.sign(v) * Math.max(0, Math.abs(v) - dz) / (1 - dz);
@@ -684,21 +687,28 @@ export function updateWalk(dt: number) {
   }
   if (keys.ArrowLeft) IN.yaw += 2 * dt;
   if (keys.ArrowRight) IN.yaw -= 2 * dt;
-  // Bewegung
+  // Bewegung: weich anlaufen und abbremsen (Geschwindigkeit folgt der Eingabe), an Wänden entlanggleiten
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
-  if (f || s) {
-    const sp = (keys.ShiftLeft || keys.ShiftRight ? 10 : 6) / Math.hypot(f, s), sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
-    const dx = (-sy * f + cy * s) * sp * dt, dzz = (-cy * f - sy * s) * sp * dt;
-    const ox = IN.x, oz = IN.z;
-    if (free(IN.x + dx, IN.z + dzz)) { IN.x += dx; IN.z += dzz; }
-    else if (free(IN.x + dx, IN.z)) IN.x += dx;
-    else if (free(IN.x, IN.z + dzz)) IN.z += dzz;
-    const moved = Math.hypot(IN.x - ox, IN.z - oz);
+  {
+    const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run ? 10 : 6) / Math.hypot(f, s) : 0, sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
+    const k = Math.min(1, dt * (f || s ? 9 : 12));
+    walkV.x += ((-sy * f + cy * s) * sp - walkV.x) * k; walkV.z += ((-cy * f - sy * s) * sp - walkV.z) * k;
+    if (Math.hypot(walkV.x, walkV.z) < 0.05) walkV.x = walkV.z = 0;
+    const dx = walkV.x * dt, dzz = walkV.z * dt, ox = IN.x, oz = IN.z;
+    if (dx || dzz) {
+      if (free(IN.x + dx, IN.z + dzz)) { IN.x += dx; IN.z += dzz; }
+      else if (free(IN.x + dx, IN.z)) { IN.x += dx; walkV.z = 0; }
+      else if (free(IN.x, IN.z + dzz)) { IN.z += dzz; walkV.x = 0; }
+      else walkV.x = walkV.z = 0;
+    }
+    const moved = Math.hypot(IN.x - ox, IN.z - oz), v = dt > 0 ? moved / dt : 0;
     IN.dist += moved;
     stepT -= moved;
-    if (stepT <= 0 && moved > 0) { stepT = 1.9; snd(70 + Math.random() * 20, 0.06, 'triangle', 0.018, -20); }
-    IN.bob = Math.sin(IN.dist * 3.3) * 0.045;
-  } else IN.bob *= Math.pow(0.001, dt);
+    if (stepT <= 0 && moved > 0 && IN.jy === 0) { stepT = v > 8 ? 2.3 : 1.9; snd(70 + Math.random() * 20, 0.06, 'triangle', v > 8 ? 0.026 : 0.018, -20); }
+    // Wippen: stärker beim Rennen, klingt aus, wenn man steht
+    const amp = Math.min(1, v / 6) * (v > 8 ? 0.075 : 0.045);
+    IN.bob += (Math.sin(IN.dist * 3.3) * amp - IN.bob) * Math.min(1, dt * 14);
+  }
   // Modell-Raum: Bodenhöhe folgen (Treppen, Rampen, Decks); im Sprung bleibt die Höhe über alles erhalten, der Boden darunter wechselt
   if (mesh) {
     const air = IN.jy > 0.05, fy = mesh.floorAt(IN.x, IN.z, IN.fy + IN.jy, air);
@@ -845,14 +855,21 @@ document.addEventListener('mousemove', e => {
   IN.yaw -= e.movementX * k;
   IN.pitch = clamp(IN.pitch - e.movementY * k * (settings.invertY ? -1 : 1), -1.3, 1.3);
 });
-gl.addEventListener('click', () => {
-  if (!IN.active || G.mode !== 'walk' || document.pointerLockElement === gl) return;
+let grabT = 0;
+const typing = () => { const t = (document.activeElement as HTMLElement | null)?.tagName; return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT'; };
+// Maus einfangen, wenn man zu Fuß unterwegs ist. Browser erlauben das nur kurz nach einer Eingabe; ohne Erlaubnis bleibt die Zeigersteuerung.
+export function grabMouse(force = false) {
+  if (!IN.active || G.mode !== 'walk' || document.pointerLockElement === gl || typing()) return;
+  const ua = (navigator as any).userActivation;
+  if (!force && ua && !ua.isActive) return;
   try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* nicht erlaubt: Zeigersteuerung bleibt */ }
-});
+}
+gl.addEventListener('click', () => grabMouse(true));
+addEventListener('keydown', () => { if (IN.active && G.mode === 'walk') grabT = 0; });
 document.addEventListener('pointerlockchange', () => {
   const now = document.pointerLockElement === gl;
-  // Esc löst die Maus: dann das Pausenmenü zeigen
-  if (IN.locked && !now && IN.active && G.mode === 'walk') interiorHooks.pause();
+  // Esc löst die Maus: dann das Pausenmenü zeigen. Kurz warten: öffnet gerade ein Menü oder das Funkfeld, hat das Spiel die Maus selbst freigegeben.
+  if (IN.locked && !now && IN.active && G.mode === 'walk') setTimeout(() => { if (document.pointerLockElement !== gl && IN.active && G.mode === 'walk' && !typing()) interiorHooks.pause(); }, 80);
   IN.locked = now;
 });
 
