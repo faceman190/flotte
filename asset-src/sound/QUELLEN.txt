@@ -4,3 +4,4 @@ door_open = doorOpen_000 · door_close = doorClose_000 · amb_ship = spaceEngine
 launch = thrusterFire_000 (Sci-Fi Sounds)
 explosion0-2 = explosionCrunch_000-002 · hull_hit0-2 = impactMetal_000-002 (Sci-Fi) · shield_hit = forceField_000 · rock0-2 = impactMining_000-002 (Impact) · ui_confirm = confirmation_001 · pickup = pluck_001
 (land entfernt: passte nicht)
+space-explosion = vom Projektinhaber bereitgestellt (Zusammenbruch des Halden-Tors im Intro); Herkunft und Lizenz dort erfragen
