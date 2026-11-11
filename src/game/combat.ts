@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { scene, basicAdd, glowMat } from '../core/engine';
+import { scene, camera, basicAdd, glowMat } from '../core/engine';
 import { rand, ri, pick, d3, clamp, rng, hashStr } from '../core/util';
 import { snd, sfx, boom } from '../core/audio';
 import { DRONE_T, BOMBER_T, buildMother } from '../models/ferrox';
@@ -18,6 +18,8 @@ const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
 // ---------------- Geschosse ----------------
 const TRACER_GEO = new THREE.BoxGeometry(0.3, 0.3, 7);
 const BUL_M: Record<string, THREE.Material> = { p: basicAdd(0xffd27a), w: basicAdd(0xfff0b0), e: basicAdd(0xc070ff) };
+// Triebwerksspur der Ferrox: Kegel nach hinten (−Z), 28 m lang
+const TRAIL_GEO = (() => { const c = new THREE.ConeGeometry(1.3, 28, 8, 1, true); c.rotateX(-Math.PI / 2); c.translate(0, 0, -14); return c; })();
 const TORP_GEO = new THREE.SphereGeometry(1.6, 10, 8), TORP_M = new THREE.MeshBasicMaterial({ color: 0xc070ff });
 export const ROCKET_GEO = new THREE.CylinderGeometry(0.2, 0.2, 1.8, 6);
 
@@ -56,19 +58,29 @@ function bountyFor(type: string) {
   return Math.round((BOUNTY[type as keyof typeof BOUNTY] || 0) * bountyFactor());
 }
 function enemyStats(type: string, d: number) {
-  if (type === 'drone') return { hp: 40 + 15 * d, spd: Math.min(255, 170 + 12 * d), dmgP: 4 + 1.3 * d, dmgS: 10 + 3 * d };
-  if (type === 'bomber') return { hp: 180 + 55 * d, spd: 95 + 5 * d, dmgP: 6 + d, dmgS: 110 + 20 * d };
+  if (type === 'drone') return { hp: 40 + 15 * d, spd: Math.min(165, 115 + 8 * d), dmgP: 4 + 1.3 * d, dmgS: 10 + 3 * d };
+  if (type === 'bomber') return { hp: 180 + 55 * d, spd: 70 + 4 * d, dmgP: 6 + d, dmgS: 110 + 20 * d };
   return { hp: 3500 + 900 * d, spd: 0, dmgP: 10 + 2 * d, dmgS: 25 };
 }
 export function spawnEnemy(type: 'drone' | 'bomber' | 'mother', x: number, y: number, z: number, home?: { x: number; y: number; z: number }) {
   const d = world.def?.danger ?? 2, es = enemyStats(type, d);
   const m = type === 'drone' ? DRONE_T.clone() : type === 'bomber' ? BOMBER_T.clone() : buildMother();
+  // Jäger und Bomber größer als maßstabsgetreu, damit man sie im Kampf sieht; dazu Triebwerksspur und Glühpunkt
+  let glow: THREE.Sprite | null = null;
+  const big = type === 'drone' ? 1.6 : type === 'bomber' ? 1.4 : 1;
+  if (type !== 'mother') {
+    m.scale.multiplyScalar(big);
+    const gk = 1 / m.scale.x;   // Kinder in Metern angeben
+    glow = new THREE.Sprite(glowMat(0xb060ff, 0.75)); glow.position.set(0, 0, -5 * gk * big); glow.scale.setScalar(9 * gk); m.add(glow);
+    const tm = basicAdd(0xa050ff); tm.opacity = 0.45; tm.side = THREE.DoubleSide;
+    const trail = new THREE.Mesh(TRAIL_GEO, tm); trail.scale.setScalar(gk * big * (type === 'bomber' ? 1.5 : 1)); trail.position.set(0, 0, -4 * gk * big); m.add(trail);
+  }
   m.position.set(x, y, z);
   scene.add(m);
   burst(x, y, z, '#b070ff', type === 'mother' ? 160 : 24, type === 'mother' ? 120 : 40, 1);
   const e = {
     type, x, y, z, vx: 0, vy: 0, vz: 0, hp: es.hp, maxhp: es.hp, es, cool: rand(1, 2.5), strafe: Math.random() < 0.5 ? 1 : -1, bob: rand(0, 6),
-    target: null as any, rt: 0, launch: 8, mesh: m, home: home || { x, y, z }, wp: null as any, hive: -1,
+    target: null as any, rt: 0, launch: 8, mesh: m, home: home || { x, y, z }, wp: null as any, hive: -1, glow, big,
   };
   world.enemies.push(e);
   return e;
@@ -253,7 +265,7 @@ export function updateEnemies(dt: number) {
       d = Math.hypot(dx, dy, dz) || 1;
       const nx = dx / d, ny = dy / d, nz = dz / d;
       isShip = !!e.target.ship;
-      const keep = isShip ? (e.type === 'bomber' ? 380 : e.target.ship.R + 120) : 300, close = isShip ? keep - 120 : 150;
+      const keep = isShip ? (e.type === 'bomber' ? 380 : e.target.ship.R + 120) : 190, close = isShip ? keep - 120 : 90;   // Spieler und Piloten: dicht umkreisen
       if (d > keep) { ax += nx; ay += ny; az += nz; } else if (d < close) { ax -= nx; ay -= ny; az -= nz; }
       ax += -nz * e.strafe * 0.5; az += nx * e.strafe * 0.5; ay += Math.sin(e.bob * 1.3) * 0.3;
       const tv = e.target.player ? P : e.target.pilot ? T : e.target.ally || e.target.ship, lead = d / 750;
@@ -280,6 +292,7 @@ export function updateEnemies(dt: number) {
     if (world.ground) { const gy = world.ground(e.x, e.z) + 30; if (e.y < gy) { e.y = gy; e.vy = Math.max(0, e.vy); } }
     e.mesh.position.set(e.x, e.y, e.z);
     e.mesh.lookAt(tx, ty, tz);
+    if (e.glow) e.glow.scale.setScalar(Math.max(10, d3(e.x, e.y, e.z, camera.position.x, camera.position.y, camera.position.z) * 0.02) / e.mesh.scale.x);
     e.cool -= dt;
     if (!attacking) continue;
     if (e.type === 'bomber') {
@@ -304,7 +317,7 @@ export function updateProjectiles(dt: number) {
     b.mesh.position.set(b.x, b.y, b.z);
     let hit = false;
     for (let j = enemies.length - 1; j >= 0; j--) {
-      const e = enemies[j], r = e.type === 'mother' ? 80 : e.type === 'bomber' ? 13 : 8;
+      const e = enemies[j], r = e.type === 'mother' ? 80 : e.type === 'bomber' ? 18 : 13;   // Trefferkugel passend zur neuen Größe
       if (segHit(b, e.x, e.y, e.z, r)) {
         burst(b.px, b.py, b.pz, '#d0a0ff', 6, 35, 0.35); hit = true;
         if (b.kind === 'p') G.hitMark = 0.12;
