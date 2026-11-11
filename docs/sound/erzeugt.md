@@ -67,3 +67,31 @@ drone_hum dJOnd9khwN5DCHaICDz8 (W1DOX28cysXVFzZEHBxk)
 ## Stand Alpha 0.50
 
 Alle Geräusche aus docs/sound/prompts.md sind erzeugt und eingebaut. Zuletzt: step_grate0 bis step_grate3 (vier Varianten, Laderaum der Pfeil), oath (Vereidigung), Erfolgston auch bei Fraktionsmissionen. Verbrauch am 2026-11-11 insgesamt 1025 Credits.
+
+## Stimmen Kapitel 1 (eingebaut in Alpha 0.57, 2026-11-11)
+
+Flow `DjfXlXQs7BmZdyMK99Kd`, Modell `eleven_v4`, je Zeile eine Fassung. Kosten: 1 Credit je Zeichen des Prompts,
+die Regie in eckigen Klammern zählt mit. Zusammen 3.394 Credits (Hollweg 1.032, Tamm 1.389, Krull 461, Roth 273, Brummer 239).
+Texte und Regie: docs/voice/kapitel1.md. Dateien: asset-src/voice/kapitel1/<Kennung>.mp3.
+
+Stimmen: Hollweg „Commander Blake“ · Brummer eigene Stimme · Tamm „Maria - Autorin - warm und freundlich“ (`7SPou3nQ7wlCIHhDegzd`) ·
+Krull „Moreana - Dark, Charismatic, Seductive“ (`V8IDMv79XsMfnx3b9E2U`) · Roth „Lola - Female Action Character“ (`KzAyD2tTf9r77ytc2bYC`).
+
+| Kennung | Fassung | Kennung | Fassung |
+|---|---|---|---|
+| k01_hollweg | 9VgVZvk161LJk9IteYry | k02_hollweg | bvuBohDVeG9yvW1ZRyt1 |
+| k03_tamm | ZOCLJZN0RUKmPDpmZuVK | k04_tamm | 7zfyivHjTAtbsiGVZQxX |
+| k05_tamm | wsEGn9CDH8PgNRZYPRWL | k06_tamm | whVCaKjHSfx51Rib28Vp |
+| k07_tamm | kCmVKbRqT7EBa5kcqeDv | k08_tamm | i8hcOqnPKz2ywravL1Q8 |
+| k09_tamm | OyXIuvLuaU4VC1zzimfF | k10_tamm | TUBnEYwFzxWsJhfcZ0CI |
+| k11_tamm | JynPQ6NvfUEpY2ZGSVTB | k13_hollweg | agRqVuUpMqiIDCdglrHT |
+| k14_tamm | tfVVzuBups5lGowtAuYY | k15_tamm | XvkNV4vAQHDBv9p5jhJw |
+| k16_hollweg | cGxfLxweCRZ8jMs4oApn | k17_hollweg | xH1wd1vNCkzVj9VgdUIX |
+| k18_hollweg | GsyMFkH7ltvO930jlTpR | k19_krull | QkJI0fBRCqREQhImaubj |
+| k20_krull | c0VGxWh5IjYvSDQGp8pf | k21_roth | Qotx3WpvX5aRO14RvIGo |
+| k22_roth | n3askIUEccJyDCBtSd7g | k23_hollweg | tY3e8fjItoVIWvlOEMqR |
+| k24_brummer | VOtDs3WEPyrdvyB3iw4v | k25_brummer | 7EKkYHz3He1OVVS9Cd8Q |
+| k26_hollweg | flVjzST38nQjJs2W39Pt | k27_krull | g2fTaULvqO7KGgcxjbnK |
+
+Eine Zeile neu erzeugen: `creative_generate_speech` mit demselben Flow, Text aus der Sprechliste, Stimme wie oben, `generations_count` 1;
+die neue Datei unter demselben Namen ablegen und `npm run assets`.

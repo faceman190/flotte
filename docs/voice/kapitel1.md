@@ -12,9 +12,9 @@ Zuordnung Zeile → Kennung: `src/data/voice.ts`.
 |---|---|---|
 | Ratsherr Hollweg | „Commander Blake“ (`Z2yQ1EdlDmcIgh9Pn4Lw`) | wie im Prolog |
 | Lotse Brummer | eigene Stimme „Brummer“ (`qrAVdiuWINwZUeJuzGA1`) | wie im Prolog |
-| Rika Tamm (Leiterin der Sonnenwacht) | Vorschlag: „Maria - Autorin - warm und freundlich“ (`7SPou3nQ7wlCIHhDegzd`) | noch zu bestätigen |
-| Gildemeisterin Krull (Bergbaugilde) | Vorschlag: „Moreana - Dark, Charismatic, Seductive“ (`V8IDMv79XsMfnx3b9E2U`) | noch zu bestätigen |
-| Wachtmeisterin Roth (Grenzwacht) | Vorschlag: „Lola - Female Action Character“ (`KzAyD2tTf9r77ytc2bYC`) | noch zu bestätigen |
+| Rika Tamm (Leiterin der Sonnenwacht) | „Maria - Autorin - warm und freundlich“ (`7SPou3nQ7wlCIHhDegzd`) | bestätigt, erzeugt in Alpha 0.57 |
+| Gildemeisterin Krull (Bergbaugilde) | „Moreana - Dark, Charismatic, Seductive“ (`V8IDMv79XsMfnx3b9E2U`) | bestätigt, erzeugt in Alpha 0.57 |
+| Wachtmeisterin Roth (Grenzwacht) | „Lola - Female Action Character“ (`KzAyD2tTf9r77ytc2bYC`) | bestätigt, erzeugt in Alpha 0.57 |
 
 Beschreibungen der neuen Figuren (für die Stimmwahl oder eine eigene Stimme):
 
