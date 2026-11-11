@@ -65,12 +65,23 @@ const Vignette = {
     void main(){ vec4 c = texture2D(tDiffuse, vUv); vec2 d = vUv - 0.5; float v = 1.0 - amount * smoothstep(0.25, 0.85, dot(d, d) * 2.2);
       c.rgb *= v; c.rgb += (rnd(vUv * 731.0) - 0.5) * grain * c.rgb; gl_FragColor = c; }`,
 };
+// Schutz vor dem Bloom: Ein einzelner ungültiger Bildpunkt (NaN/Inf aus irgendeinem Shader) würde vom Weichzeichner des Blooms
+// zu einem schwarzen Rechteck aufgeblasen, das für ein Bild aufblitzt. Solche Punkte werden hier schwarz, sehr helle gedeckelt.
+const Guard = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+    void main(){ vec4 c = texture2D(tDiffuse, vUv);
+      if (any(isnan(c.rgb)) || any(isinf(c.rgb))) c.rgb = vec3(0.0);
+      gl_FragColor = vec4(clamp(c.rgb, 0.0, 64.0), 1.0); }`,
+};
 export let vignettePass: ShaderPass | null = null, bloomPass: UnrealBloomPass | null = null;
 try {
   // Mehrfach-Abtastung (MSAA) auch mit Bloom: eigenes Renderziel mit 4 Samples
   const rt = new THREE.WebGLRenderTarget(view.W, view.H, { type: THREE.HalfFloatType, samples: 4 });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
+  composer.addPass(new ShaderPass(Guard));
   bloomPass = new UnrealBloomPass(new THREE.Vector2(view.W, view.H), 0.5, 0.45, 0.82);
   composer.addPass(bloomPass);
   vignettePass = new ShaderPass(Vignette);

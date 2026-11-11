@@ -90,10 +90,12 @@ void main(){
     col = mix(col, cc, c * 0.92);
   }
   // Atmosphäre: Streulicht am Rand der Tagseite, rötlicher Saum an der Dämmerungslinie
-  float fr = pow(1.0 - max(dot(N, V), 0.0), 2.6);
+  // clamp: Schaut die Kamera genau senkrecht auf die Kugel, wird dot(N, V) durch Rundung minimal größer als 1. Eine negative
+  // Basis in pow() ergibt einen ungültigen Bildpunkt, den das Bloom zu einem schwarzen Kasten aufbläst.
+  float fr = pow(clamp(1.0 - dot(N, V), 0.0, 1.0), 2.6);
   col += atm * fr * atmK * smoothstep(-0.3, 0.6, ndl) * 1.4;
-  col += vec3(1.0, 0.45, 0.2) * atmK * 0.25 * exp(-pow(ndl * 7.0, 2.0)) * fr;
-  gl_FragColor = vec4(col, 1.0);
+  col += vec3(1.0, 0.45, 0.2) * atmK * 0.25 * exp(-(ndl * 7.0) * (ndl * 7.0)) * fr;
+  gl_FragColor = vec4(max(col, vec3(0.0)), 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -105,9 +107,9 @@ varying vec3 vN; varying vec3 vP;
 void main(){
   vec3 N = normalize(vN), V = normalize(cameraPosition - vP);
   float d = -dot(N, V);                       // 0 am äußeren Rand, ~inner an der Planetenkante
-  float i = pow(smoothstep(0.0, inner, d), 2.2);
+  float i = pow(clamp(smoothstep(0.0, inner, d), 0.0, 1.0), 2.2);
   float lit = smoothstep(-0.45, 0.5, dot(N, normalize(sdir)));
-  gl_FragColor = vec4(atm * i * lit * k, 1.0);
+  gl_FragColor = vec4(max(atm * i * lit * k, vec3(0.0)), 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
