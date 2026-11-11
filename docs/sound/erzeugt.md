@@ -37,3 +37,21 @@ Einzeltöne: step_grate0 bis step_grate4, oath.
 Brummer = eigene Stimme „Brummer“ (`qrAVdiuWINwZUeJuzGA1`) · Hollweg = „Commander Blake“ (`Z2yQ1EdlDmcIgh9Pn4Lw`) ·
 Achterberg = „Nora Vale - Mission Control“ (`iV1OKYxbmgRtpzJ2q8kx`) · Erzähler: noch nicht bestätigt
 (im Arbeitsbereich liegen „Robert Ranger - Cool Storyteller“ und „Waldfried - Deep, Theatrical“).
+
+## Schleifen (Knoten angelegt, noch NICHT erzeugt)
+
+Eigener Flow: `0gDWtMztf77PvsfH9bZg`. Alle Knoten mit `loop: true`, `prompt_influence: 0.5`.
+Vorabschätzung für alle neun mit je zwei Fassungen: 2680 Credits (mit je einer Fassung etwa die Hälfte).
+Erzeugen: `creative_run_flow_nodes` mit dem Flow und den Knoten, `generations_count` 1 oder 2.
+
+| Name | Knoten | Länge |
+|---|---|---|
+| amb_ship | dDsqs1y8epkwTAGn1r3T | 22 s |
+| amb_planet_wind | NIgQDOpViyr4EGGX0fgJ | 22 s |
+| amb_planet_ice | kr2wnMO0LtyeFRLtKr4p | 22 s |
+| amb_planet_lava | Ba1GGb5y0KHdJBlJ7iq1 | 22 s |
+| torpedo_fly | P71w0NsYgWEW0Ec4aOFS | 6 s |
+| mother_hum | n1CC7xKlsw25RX4Lm1vV | 20 s |
+| rover_engine | clNVjMc1Tdw5WfGjyRVZ | 8 s |
+| rover_drill | IvSZXQmkS3ogrNY41cz3 | 6 s |
+| drone_hum | I9D3fJfnOBe6sQ5btAD1 | 6 s |
