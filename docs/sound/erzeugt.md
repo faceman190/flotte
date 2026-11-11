@@ -63,3 +63,7 @@ amb_planet_ice ZxlCaEfKayhJG5gLhKix (6jKgD4XBcRXS71zo5iSi) · amb_planet_lava 5z
 torpedo_fly 3POg5r1TwtnzjSwamGdm (UDxWRJeASEaERAvwIQvd) · mother_hum ebrs84M2IrnZSLw1jsAT (aRJyeBamv9c1MCRGbVlW) ·
 rover_engine RSeEAYVXo9PJ4crTnrbz (mlHZcpilFX6Sz4CzfF1y) · rover_drill gOCI7YaMNtenqaRWbKqJ (rnTpHFpLTyOO5nu9Kbv8) ·
 drone_hum dJOnd9khwN5DCHaICDz8 (W1DOX28cysXVFzZEHBxk)
+
+## Stand Alpha 0.50
+
+Alle Geräusche aus docs/sound/prompts.md sind erzeugt und eingebaut. Zuletzt: step_grate0 bis step_grate3 (vier Varianten, Laderaum der Pfeil), oath (Vereidigung), Erfolgston auch bei Fraktionsmissionen. Verbrauch am 2026-11-11 insgesamt 1025 Credits.

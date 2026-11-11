@@ -1,5 +1,5 @@
 import { $, d3, esc } from '../core/util';
-import { voice, stopVoice, snd } from '../core/audio';
+import { voice, stopVoice, snd, sfx } from '../core/audio';
 import { voiceIdFor, RADIO_VOICES } from '../data/voice';
 import { releaseAll, centerMouse } from '../core/input';
 import { P, G, saveGame, type Mode } from './state';
@@ -30,6 +30,7 @@ const queue: Line[] = [];
 let lineT = 0, lineTok = 0;
 // passende Aufnahme zu einer Zeile (über das Textstück in data/voice.ts); über Funk klingt sie verfremdet
 function speak(who: string | undefined, text: string) {
+  if (text.includes('Willkommen in der Crew, Pilot')) sfx('oath', 0.5);   // feierlicher Ton zur Aufnahme in die Crew
   const id = voiceIdFor(text);
   if (!id) { stopVoice(); return Promise.resolve(0); }
   return voice(id, !!who && (RADIO_VOICES.has(who) || G.mode === 'play'));

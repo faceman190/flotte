@@ -9,3 +9,4 @@ Mit ElevenLabs vom Projektinhaber erzeugt (Prompts in docs/sound/prompts.md): am
 Über die ElevenLabs-Verbindung erzeugt (vom Projektinhaber ausgewählte Fassungen): cruise_on, cruise_off, rocket_fire, warn_hull, warn_shield, warn_heat
 Über die ElevenLabs-Verbindung erzeugt: ferrox_attack, ferrox_death, torpedo_fire, entry, success, rank_up
 Über die ElevenLabs-Verbindung erzeugte Schleifen: amb_ship, amb_planet_wind, amb_planet_ice, amb_planet_lava, torpedo_fly, mother_hum, rover_engine, rover_drill, drone_hum
+Über die ElevenLabs-Verbindung erzeugt: step_grate0 bis step_grate3 (vier Varianten), oath

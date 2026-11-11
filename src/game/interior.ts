@@ -744,7 +744,7 @@ export function updateWalk(dt: number) {
     const moved = Math.hypot(IN.x - ox, IN.z - oz), v = dt > 0 ? moved / dt : 0;
     IN.dist += moved;
     stepT -= moved;
-    if (stepT <= 0 && moved > 0 && IN.jy === 0) { stepT = v > 8 ? 2.3 : 1.9; sfx('step' + Math.floor(Math.random() * 5), v > 8 ? 0.5 : 0.34, 0.9 + Math.random() * 0.2, () => snd(70 + Math.random() * 20, 0.06, 'triangle', v > 8 ? 0.026 : 0.018, -20)); }
+    if (stepT <= 0 && moved > 0 && IN.jy === 0) { stepT = v > 8 ? 2.3 : 1.9; sfx(mesh && IN.area === 'Frachtraum' ? 'step_grate' + Math.floor(Math.random() * 4) : 'step' + Math.floor(Math.random() * 5), v > 8 ? 0.5 : 0.34, 0.9 + Math.random() * 0.2, () => snd(70 + Math.random() * 20, 0.06, 'triangle', v > 8 ? 0.026 : 0.018, -20)); }
     // Wippen: stärker beim Rennen, klingt aus, wenn man steht
     const amp = Math.min(1, v / 6) * (v > 8 ? 0.075 : 0.045);
     IN.bob += (Math.sin(IN.dist * 3.3) * amp - IN.bob) * Math.min(1, dt * 14);

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { scene, glowMat } from '../core/engine';
 import { rng, hashStr, d3, rand } from '../core/util';
-import { snd } from '../core/audio';
+import { snd, sfx } from '../core/audio';
 import { SECTOR, SECTORS, findRoute } from '../data/galaxy';
 import { P, G } from './state';
 import { world } from './world';
@@ -103,7 +103,7 @@ function complete(m: Mission) {
   P.credits += m.reward; P.earned += m.reward;
   radio(REP[m.fac].n.toUpperCase(), `Mission erfüllt: ${m.title}. Lohn überwiesen: ${m.reward.toLocaleString('de-DE')} Credits.`, REP[m.fac].c);
   addRep(m.fac, m.rep);
-  snd(523, 0.2, 'triangle', 0.06, 0); setTimeout(() => snd(784, 0.3, 'triangle', 0.06, 0), 160); setTimeout(() => snd(1046, 0.4, 'triangle', 0.05, 0), 340);
+  sfx('success', 0.6, 1, () => { snd(523, 0.2, 'triangle', 0.06, 0); setTimeout(() => snd(784, 0.3, 'triangle', 0.06, 0), 160); setTimeout(() => snd(1046, 0.4, 'triangle', 0.05, 0), 340); });
   missionHooks.completed(m);
 }
 export const missionHooks = { completed: (_m: Mission) => {} };
