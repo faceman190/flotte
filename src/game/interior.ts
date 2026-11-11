@@ -990,6 +990,7 @@ export function nearestOther(max = 3.2): { id: number; name: string } | null {
 
 // Story: eine benannte Figur in den Stationsraum stellen (z. B. die Ausbilderin im Prolog).
 // Steht neben dem Spieler, schaut ihn an und lässt sich mit E ansprechen.
+// model: 'merchant' ist die Frauenfigur (Mantel), 'worker' die Männerfigur (Arbeitsanzug): passend zur Rolle wählen
 export interface NpcLook { model?: 'worker' | 'merchant'; tint?: [number, number, number] }
 export function storyNpc(name: string, title: string, label: string, act: () => void, col = '#ffb347', at?: { x: number; z: number }, look: NpcLook = {}) {
   if (!IN.active || !stationGroup || IN.ship) return false;

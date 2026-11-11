@@ -1,5 +1,5 @@
 // Vertonte Zeilen: ein unverwechselbares Textstück → Kennung der Aufnahme (asset-src/voice/**/<Kennung>.mp3).
-// Die Liste zum Einsprechen steht in docs/voice/prolog.md. Fehlt eine Datei, bleibt es beim Untertitel.
+// Die Listen zum Einsprechen stehen in docs/voice/prolog.md und docs/voice/kapitel1.md. Fehlt eine Datei, bleibt es beim Untertitel.
 export const VOICE_LINES: [string, string][] = [
   ['Schichtwechsel auf allen Decks', 'p01_brummer'],
   ['Hier drüben, bei deiner', 'p02_achterberg'],
@@ -25,6 +25,33 @@ export const VOICE_LINES: [string, string][] = [
   ['Und jetzt raus mit dir', 'p21_achterberg'],
   ['Willkommen, Pilot. Aufträge gibt es', 'p22_brummer'],
   ['Signal aus den Trümmern im Sonnenfeld', 'p23_brummer'],
+  // Kapitel 1 (docs/voice/kapitel1.md, Aufnahmen in asset-src/voice/kapitel1/)
+  ['Das Signal aus dem Sonnenfeld wird stärker', 'k01_hollweg'],
+  ['bevor die Gerüchte schneller sind', 'k02_hollweg'],
+  ['Wir sehen dich. Komm rein', 'k03_tamm'],
+  ['ich leite diesen Außenposten', 'k04_tamm'],
+  ['Seit drei Tagen pfeift es', 'k05_tamm'],
+  ['Aus drei Peilungen rechne ich', 'k06_tamm'],
+  ['Den Rest rechne ich', 'k07_tamm'],
+  ['Erste Peilung steht', 'k08_tamm'],
+  ['Zweite Peilung. Es wird schärfer', 'k09_tamm'],
+  ['Ich hab sie! Mitten im Feld', 'k10_tamm'],
+  ['Sie fressen am Tor', 'k11_tamm'],
+  ['Die Bastion schickt Verstärkung', 'k13_hollweg'],
+  ['es pulsiert im Takt des Signals', 'k14_tamm'],
+  ['Kern gelöst', 'k15_tamm'],
+  ['keine von beiden ist gut gelaunt', 'k16_hollweg'],
+  ['Der Kern ist ausgewertet', 'k17_hollweg'],
+  ['Ein Ruf der Erbauer', 'k18_hollweg'],
+  ['gleicht dem Gitter in unseren Ferrit-Kristallen', 'k19_krull'],
+  ['Das Ferrit spricht dieselbe Sprache', 'k20_krull'],
+  ['Ihr redet über Kristalle', 'k21_roth'],
+  ['Das Signal lockt sie an', 'k22_roth'],
+  ['Niemand verlegt hier irgendetwas', 'k23_hollweg'],
+  ['Unter dem Rauschen, drei Sekunden lang', 'k24_brummer'],
+  ['Eine Transponderkennung', 'k25_brummer'],
+  ['Kein Wort davon verlässt diesen Hangar', 'k26_hollweg'],
+  ['Pilot, auf ein Wort', 'k27_krull'],
 ];
 export const voiceIdFor = (text: string) => VOICE_LINES.find(([s]) => text.includes(s))?.[1] || null;
 // Über Funk gesprochen (bekommt im Spiel den Funkklang): Lotse und Frachter immer, alle anderen nur im Flug

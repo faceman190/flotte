@@ -142,9 +142,9 @@ const STEPS: Step[] = [
       if (G.mode === 'dock' && G.inside) closeMenu();
       if (IN.active && !IN.ship) {
         const hx = IN.x - 1.2, hz = IN.z - 6;
-        storyNpc('Hollweg', 'Flottenrat', 'Ratsherr Hollweg', () => {}, '#bcd8ff', { x: hx, z: hz }, { model: 'merchant', tint: [0.72, 0.8, 1.05] });
-        storyNpc('Krull', 'Bergbaugilde', 'Gildemeisterin Krull', () => {}, '#ffb347', { x: hx - 2.6, z: hz + 1.2 }, { model: 'worker', tint: [1.05, 0.95, 0.8] });
-        storyNpc('Roth', 'Grenzwacht', 'Wachtmeisterin Roth', () => {}, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'worker', tint: [0.48, 0.76, 0.4] });
+        storyNpc('Hollweg', 'Flottenrat', 'Ratsherr Hollweg', () => {}, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
+        storyNpc('Krull', 'Bergbaugilde', 'Gildemeisterin Krull', () => {}, '#ffb347', { x: hx - 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [1.05, 0.95, 0.8] });
+        storyNpc('Roth', 'Grenzwacht', 'Wachtmeisterin Roth', () => {}, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [0.6, 0.85, 0.55] });
         IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0;
       }
       setTimeout(() => playScene([
