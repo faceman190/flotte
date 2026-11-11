@@ -120,3 +120,11 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   und das Skript überträgt die Drehungen ohne Angleichen. `--align` nur bei Bewegungen auf einem fremden Körper (Mixamo-Standardfigur).
   Die jetzigen Dateien beruhen auf dem Händler-Körper; auf den Arbeiter passen sie über die gleiche Grundhaltung.
 - Finger hat unser Skelett (24 Knochen) nicht; Fingerbewegungen entfallen.
+
+## Bastion (Alpha 0.58)
+- Quelle: `asset-src/neu/bastion/Bastion.blend` (in Blender per Skript gebaut; die Hilfsfunktionen liegen als Text `bastion_lib` in der Datei).
+  Export fürs Spiel: alle Netze der Sammlung „Bastion“ zu einem Netz verbunden → `asset-src/glb/station/Carrier.glb`, dann `npm run assets`.
+- Im Spiel: `buildCarrierModel()` in `src/models/stationModels.ts`. Maßstab `CARRIER_K` 1,9 (Rumpf rund 975 m, doppelt so lang wie die alte Bastion).
+  Punkte sind dort in Blender-Koordinaten notiert (`B(x, y, z)`): Andockpunkt über der Plattform an Steuerbord, Startpunkt in der Mitte der
+  Hangaröffnung (dort schließt der begehbare Hangar an), Kollisionskugeln, Lauflichter, Triebwerksglühen.
+- Materialnamen `bastion_*` steuern im Spiel Leuchtstärke und Durchsicht (Hangarfeld). Fehlt die Datei, erscheint die alte Bastion aus Grundformen.

@@ -402,8 +402,9 @@ function updateCamera(dt: number) {
   if (IN.active) { applyWalkCamera(); return; }
   if (G.mode === 'rover' || (G.mode === 'pause' && ROVER.active) || (G.mode === 'map' && ROVER.active)) { roverCamera(dt); return; }
   if (G.mode === 'menu' || (G.mode === 'dock' && G.dockedAt) || (G.mode === 'map' && G.dockedAt)) {
+    const big = world.stations[0] && world.stations[0].R > 400;   // neue, doppelt so große Bastion
     const c = G.mode === 'menu' ? { x: 0, y: 0, z: 0, R: 260 } : G.dockedAt;
-    const R = G.mode === 'menu' ? 820 : c.R * 3.2;
+    const R = G.mode === 'menu' ? (big ? 1450 : 820) : c.R * (c.R > 400 ? 2.6 : 3.2);
     // Hauptmenü: sanft um den Blickwinkel pendeln, an dem der Nebel hinter der Szene liegt; angedockt weiter kreisen
     if (G.mode === 'menu') { menuT += dt; orbit = MENU_ORBIT + Math.sin(menuT * 0.045) * 0.45; } else orbit += dt * 0.04;
     camera.position.set(c.x + Math.cos(orbit) * R, c.y + R * 0.3, c.z + Math.sin(orbit) * R);

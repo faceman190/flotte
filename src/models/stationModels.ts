@@ -90,3 +90,48 @@ export function buildModelStation(name: string, size: number, opt: { ground?: nu
     launch: { x: 0, y: padY + 14, z: padZ + 60, yaw: Math.PI },
   };
 }
+
+// ---------- Trägerschiff Bastion (eigenes Modell aus Blender: asset-src/neu/bastion/Bastion.blend → asset-src/glb/station/Carrier.glb) ----------
+// Das Modell ist 514 m lang gebaut (Blender: +Y = Bug, +Z = oben) und wird hier auf die doppelte Länge der alten Bastion gebracht.
+// Punkte unten sind in Blender-Koordinaten des Modells notiert und werden mit B() ins Spiel umgerechnet (x, z, -y) * K.
+export const CARRIER_K = 1.9;
+const B = (x: number, y: number, z: number): [number, number, number] => [x * CARRIER_K, z * CARRIER_K, -y * CARRIER_K];
+export function buildCarrierModel(): (StructureModel & { glows: THREE.Sprite[]; turrets: THREE.Group[] }) | null {
+  const t = TPL.Carrier;
+  if (!t) return null;
+  const g = new THREE.Group(), body = t.group.clone(true);
+  body.children[0].position.set(0, 0, 0);   // der Lader zentriert Modelle; hier gilt der Ursprung aus Blender
+  body.scale.setScalar(CARRIER_K);
+  body.traverse((o: any) => {
+    if (!o.isMesh) return;
+    const m = o.material as THREE.MeshStandardMaterial;
+    // Leuchtstärken fürs Spiel (mit Bloom): Das Hangarfeld bleibt ein dünner Schleier, sonst blendet es beim Start aus dem Hangar
+    if (m.name === 'bastion_hangar_field') { m.transparent = true; m.depthWrite = false; m.side = THREE.DoubleSide; m.opacity = 0.12; m.emissiveIntensity = 0.3; }
+    else if (m.name === 'bastion_windows') m.emissiveIntensity = 1.1;
+    else if (m.name === 'bastion_lamps') m.emissiveIntensity = 1.6;
+    else if (m.name === 'bastion_engine_glow') m.emissiveIntensity = 3;
+    else { m.metalness = Math.min(m.metalness, 0.35); m.envMapIntensity = 1.1; }   // weniger Spiegelglanz: Ohne helle Umgebung wirkt Metall sonst fast schwarz
+  });
+  g.add(body);
+  // Kollision: zwei Reihen Kugeln längs durch den Rumpf, dazu Turm, Flügeldeck und die beiden Landeplattformen
+  const sph: number[][] = [];
+  // im Bereich des Hangartunnels sitzen die Kugeln höher und sind kleiner: Die Öffnungen bleiben frei für Start und Anflug
+  for (let y = -240; y <= 250; y += 30) for (const s of [-1, 1]) { const tun = y > -32 && y < 62, [x, yy, z] = B(s * 18, y, tun ? 11 : -2); sph.push([x, yy, z, (tun ? 26 : y > 140 ? 34 : 32) * CARRIER_K]); }
+  sph.push([...B(0, -128, 42), 40], [...B(0, -132, 62), 24]);
+  for (const s of [-1, 1]) {
+    for (const [x, y, r] of [[58, -110, 15], [86, -160, 15], [112, -200, 16], [140, -214, 15], [66, -215, 16], [95, -238, 14]]) sph.push([...B(s * x, y, -4), r * CARRIER_K]);
+    for (const x of [52, 74]) for (const y of [-12, 15, 42]) sph.push([...B(s * x, y, -27), 8 * CARRIER_K]);
+  }
+  // Lauflichter an den Außenkanten der Plattformen, Glühen an den sechs Triebwerken
+  const lights: THREE.Sprite[] = [], glows: THREE.Sprite[] = [];
+  for (const s of [-1, 1]) {
+    for (let i = 0; i < 8; i++) { const sp = new THREE.Sprite(glowMat(0xffa030, 1)); sp.position.set(...B(s * 86, -22 + i * 10.6, -17.6)); sp.scale.setScalar(9); g.add(sp); lights.push(sp); }
+    for (let i = 0; i < 3; i++) { const sp = new THREE.Sprite(glowMat(0xffa860, 0.5)); sp.position.set(...B(s * (72 + i * 27), -246 - i * 9, -13.5)); sp.scale.setScalar(64); g.add(sp); glows.push(sp); }
+  }
+  const [dx, dy, dz] = B(64, 15, -9), [lx, ly, lz] = B(40.5, 15, -11);
+  return {
+    g, lights, navs: [], glows, turrets: [], sph, R: 520,
+    dock: { x: dx, y: dy, z: dz },                       // über der Landeplattform an Steuerbord
+    launch: { x: lx, y: ly, z: lz, yaw: -Math.PI / 2 },  // Mitte der Hangaröffnung, Blick nach außen (der Hangar-Innenraum schließt hier an)
+  };
+}

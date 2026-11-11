@@ -12,7 +12,7 @@ import { buildStation, buildOutpost, buildGate } from '../models/structures';
 import { burst, clearParticles } from './fx';
 import { snd } from '../core/audio';
 import { planetLook } from '../data/planets';
-import { buildModelStation } from '../models/stationModels';
+import { buildModelStation, buildCarrierModel } from '../models/stationModels';
 import { SHARED } from './shared';
 
 // ---------------- Typen der Sektor-Objekte ----------------
@@ -351,8 +351,9 @@ const Y = new THREE.Vector3(0, 1, 0);
 export function addStation(sd: StationDef, yaw: number) {
   let model: any;
   if (sd.kind === 'carrier') {
-    const c = buildCarrier();
-    model = { g: c.g, lights: c.lights, navs: [], glows: c.glows, turrets: c.turrets, dock: CARRIER_DOCK, launch: CARRIER_LAUNCH, sph: carrierSpheres(), R: 250 };
+    // neues Modell aus Blender, falls geladen; sonst die frühere Bastion aus Grundformen
+    model = buildCarrierModel();
+    if (!model) { const c = buildCarrier(); model = { g: c.g, lights: c.lights, navs: [], glows: c.glows, turrets: c.turrets, dock: CARRIER_DOCK, launch: CARRIER_LAUNCH, sph: carrierSpheres(), R: 250 }; }
     yaw = 0;
   } else {
     // KI-Modelle, falls geladen; sonst die eingebauten Grundformen
