@@ -1,3 +1,4 @@
+import './core/boot';   // zuerst: Spieldaten laden (Ladebalken), alles Weitere wartet darauf
 import * as THREE from 'three';
 import { camera, render, scene, aimShadows, markShadows } from './core/engine';
 import { updateSky, sunDir, sky } from './core/sky';

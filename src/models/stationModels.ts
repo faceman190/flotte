@@ -1,29 +1,24 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { glowMat } from '../core/engine';
 import { std } from '../core/textures';
 import type { StructureModel } from './structures';
 
-// KI-generierte Stationsmodelle aus public/stations.js (scripts/build-stations.mjs).
+// KI-generierte Stationsmodelle als GLB-Dateien aus public/assets/station (scripts/build-stations.mjs → build-assets.mjs).
 // Das Modell bildet den Rumpf; Landeplattform, Lauflichter und Positionslichter kommen weiterhin aus dem Spiel,
 // damit Andocken überall gleich funktioniert. Kollision: Kugeln aus einem Raster über die Modellpunkte.
-declare global { interface Window { STATIONDATA?: Record<string, string> } }
 
 interface Tpl { group: THREE.Group; size: THREE.Vector3 }
 const TPL: Record<string, Tpl> = {};
 
-function b64ToBuf(b64: string) {
-  const bin = atob(b64), u = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-  return u.buffer;
-}
 export async function loadStationModels() {
   const data = window.STATIONDATA;
   if (!data) return false;
-  const loader = new GLTFLoader();
-  await Promise.all(Object.entries(data).map(async ([name, b64]) => {
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  await Promise.all(Object.entries(data).map(async ([name, url]) => {
     try {
-      const g = await loader.parseAsync(b64ToBuf(b64), '');
+      const g = await loader.loadAsync(url);
       const inner = g.scene;
       inner.traverse((o: any) => {
         if (!o.isMesh) return;

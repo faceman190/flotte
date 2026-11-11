@@ -1,11 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
-// Schiffsmodelle aus public/ships.js (erzeugt von scripts/build-ships.mjs).
+// Schiffsmodelle als komprimierte GLB-Dateien aus public/assets/ship (scripts/build-ships.mjs → build-assets.mjs).
 // Alle Modelle werden beim Start einmal geladen, auf Länge 1 normiert und mit der Nase nach −Z gedreht.
-declare global {
-  interface Window { SHIPDATA?: { models: Record<string, string>; paints: Record<string, string> } }
-}
 export const PAINTS = ['Orange', 'Blue', 'Green', 'Purple', 'Red'] as const;
 export type Paint = typeof PAINTS[number];
 export const PAINT_N: Record<Paint, string> = { Orange: 'Bernstein', Blue: 'Kobaltblau', Green: 'Grün', Purple: 'Violett', Red: 'Rot' };
@@ -16,19 +14,13 @@ const TPL: Record<string, Template> = {};
 const PAINT_TEX: Record<string, THREE.Texture> = {};
 let loaded = false;
 
-function b64ToBuf(b64: string) {
-  const bin = atob(b64), u = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-  return u.buffer;
-}
-
 export async function loadShipModels() {
   const data = window.SHIPDATA;
   if (!data) return false;
-  const loader = new GLTFLoader();
-  await Promise.all(Object.entries(data.models).map(async ([name, b64]) => {
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  await Promise.all(Object.entries(data.models).map(async ([name, url]) => {
     try {
-      const g = await loader.parseAsync(b64ToBuf(b64), '');
+      const g = await loader.loadAsync(url);
       const inner = g.scene;
       inner.traverse((o: any) => {
         if (!o.isMesh) return;

@@ -17,7 +17,7 @@ for (const [key, f] of Object.entries(FILES)) {
   out[key] = 'data:audio/mpeg;base64,' + b.toString('base64');
   console.log(key.padEnd(8), f, (b.length / 1024).toFixed(0) + ' KB');
 }
-fs.writeFileSync(path.join(ROOT, 'public', 'sounds.js'), '// Erzeugt von scripts/build-sounds.mjs\nwindow.SOUNDDATA=' + JSON.stringify(out) + ';\n');
+fs.writeFileSync(path.join(ROOT, 'asset-src', 'legacy', 'sounds.js'), '// Erzeugt von scripts/build-sounds.mjs\nwindow.SOUNDDATA=' + JSON.stringify(out) + ';\n');
 
 const MD = path.join(ROOT, 'public', 'music');
 fs.mkdirSync(MD, { recursive: true });

@@ -4,9 +4,8 @@ import { renderer } from './engine';
 // =====================================================================================
 // Planeten im Orbit: KI-Oberflächenkarte je Planetentyp, Tag/Nacht-Grenze, Wolkenschicht,
 // Stadtlichter auf der Nachtseite bewohnter Welten, leuchtende Lava/Kristalle, Atmosphärensaum, Ringe.
-// Karten kommen aus public/planets.js (window.PLANETDATA) und werden erst bei Bedarf dekodiert.
+// Karten kommen als Dateien aus public/assets (window.PLANETDATA, siehe assets.ts) und werden erst bei Bedarf geladen.
 // =====================================================================================
-declare global { interface Window { PLANETDATA?: { map: Record<string, string>; ground: Record<string, string> } } }
 
 const loader = new THREE.TextureLoader();
 const ANISO = Math.min(8, renderer.capabilities.getMaxAnisotropy());

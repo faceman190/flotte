@@ -67,5 +67,5 @@ for (const [name, paints] of Object.entries(MODELS)) {
   }
   console.log(name.padEnd(12), (glb.length / 1024).toFixed(0).padStart(5) + ' KB', paints.length ? `+ ${paints.length} Lackierungen` : '');
 }
-fs.writeFileSync(path.join(ROOT, 'public', 'ships.js'), '// Erzeugt von scripts/build-ships.mjs – Modelle: Quaternius „Ultimate Spaceships“\nwindow.SHIPDATA=' + JSON.stringify(out) + ';\n');
+fs.writeFileSync(path.join(ROOT, 'asset-src', 'legacy', 'ships.js'), '// Erzeugt von scripts/build-ships.mjs – Modelle: Quaternius „Ultimate Spaceships“\nwindow.SHIPDATA=' + JSON.stringify(out) + ';\n');
 console.log('gesamt', (total / 1024 / 1024).toFixed(2), 'MB binär');

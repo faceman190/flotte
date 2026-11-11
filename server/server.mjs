@@ -13,12 +13,18 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import zlib from 'zlib';
 import { WebSocketServer } from 'ws';
 import { openStore, storeInfo } from './store.mjs';
 
 const PORT = +(process.env.PORT || 2567);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.ico': 'image/x-icon', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.json': 'application/json', '.ico': 'image/x-icon', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.glb': 'model/gltf-binary', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml' };
+// Komprimieren lohnt sich für Text, Code und Modelle (Meshopt-Daten packen sich gut weiter), nicht für Bilder und Klänge
+const PACK = new Set(['.html', '.js', '.css', '.json', '.glb', '.webmanifest', '.svg']);
+const packed = new Map();   // Datei|Stand|Verfahren → komprimierte Daten (im Speicher, damit nur einmal gerechnet wird)
+// Spieldaten mit Prüfsumme im Namen (assets/ship/Striker.3f2a9c01de.glb) ändern sich nie: dauerhaft behalten
+const IMMUTABLE = /\/assets\/.+\.[0-9a-f]{10}\.[a-z0-9]+$/;
 
 // ---------- Spiel ausliefern ----------
 const server = http.createServer((req, res) => {
@@ -32,10 +38,28 @@ const server = http.createServer((req, res) => {
   if (p === '/') p = '/index.html';
   const file = path.normalize(path.join(ROOT, p));
   if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
-  fs.readFile(file, (err, data) => {
-    if (err) { res.writeHead(404); res.end('Nicht gefunden'); return; }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-    res.end(data);
+  fs.stat(file, (err, stat) => {
+    if (err || !stat.isFile()) { res.writeHead(404); res.end('Nicht gefunden'); return; }
+    const ext = path.extname(file), etag = `"${stat.size.toString(36)}-${Math.round(stat.mtimeMs).toString(36)}"`;
+    const head = { 'Content-Type': TYPES[ext] || 'application/octet-stream', 'Cache-Control': IMMUTABLE.test(p) ? 'public, max-age=31536000, immutable' : 'no-cache', ETag: etag };
+    if (req.headers['if-none-match'] === etag) { res.writeHead(304, head); res.end(); return; }
+    fs.readFile(file, (err2, data) => {
+      if (err2) { res.writeHead(404); res.end('Nicht gefunden'); return; }
+      const ae = String(req.headers['accept-encoding'] || ''), enc = PACK.has(ext) && data.length > 1024 ? (/\bbr\b/.test(ae) ? 'br' : /\bgzip\b/.test(ae) ? 'gzip' : '') : '';
+      if (PACK.has(ext)) head.Vary = 'Accept-Encoding';
+      if (enc) {
+        const key = file + '|' + etag + '|' + enc;
+        let z = packed.get(key);
+        if (!z) {
+          z = enc === 'br' ? zlib.brotliCompressSync(data, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 9 } }) : zlib.gzipSync(data, { level: 9 });
+          packed.set(key, z);
+        }
+        head['Content-Encoding'] = enc;
+        data = z;
+      }
+      res.writeHead(200, head);
+      res.end(data);
+    });
   });
 });
 

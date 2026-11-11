@@ -1,7 +1,4 @@
 // Ton: Synthesizer-Effekte, Hintergrundmusik und Bergbaulaser (Sounds aus public/sounds.js)
-declare global {
-  interface Window { SOUNDDATA?: { laser?: string; booster?: string; gun?: string } }
-}
 let AC: AudioContext | null = null;
 export const audio = { volume: 0.7, music: 0.5 };
 const ctx = () => (AC = AC || new (window.AudioContext || (window as any).webkitAudioContext)());
@@ -66,12 +63,11 @@ function startMusic() {
 const BUF: Record<string, AudioBuffer> = {};
 const TRIM: Record<string, [number, number]> = {};
 async function loadBuf(key: string) {
-  const src = window.SOUNDDATA?.[key as keyof NonNullable<Window['SOUNDDATA']>];
+  const src = window.SOUNDDATA?.[key];   // Dateiadresse aus der Paketliste (assets.ts)
   if (!src) return;
   try {
-    const ac = ctx(), bin = atob(src.split(',')[1]), u = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-    const b = await ac.decodeAudioData(u.buffer);
+    const ac = ctx(), ab = await (await fetch(src)).arrayBuffer();
+    const b = await ac.decodeAudioData(ab);
     // MP3-Stille am Anfang/Ende überspringen, damit Schleifen nahtlos sind
     const d = b.getChannelData(0), th = 0.004;
     let a = 0, e = d.length - 1;

@@ -1,10 +1,8 @@
+import './boot';   // wartet, bis die Spieldaten-Liste da ist
 import * as THREE from 'three';
 import { renderer } from './engine';
 
-// Generierte Texturen kommen als data-URIs aus public/textures.js (window.TEXDATA)
-declare global {
-  interface Window { TEXDATA?: Record<string, string>; NEBDATA?: Record<string, string> }
-}
+// Texturen und Nebel-Panoramen kommen als Dateien aus public/assets (window.TEXDATA/NEBDATA, siehe assets.ts)
 const TD = window.TEXDATA || {};
 export const TEXT: Record<string, THREE.Texture | null> = {};
 const NORM: Record<string, THREE.Texture> = {};
@@ -118,7 +116,7 @@ export function boxUV(root: THREE.Object3D, scale: number) {
   });
 }
 
-// Nebel-Panoramen (public/nebulae.js) werden erst geladen, wenn ein Sektor sie braucht; höchstens zwei bleiben im Speicher
+// Nebel-Panoramen werden erst geladen, wenn ein Sektor sie braucht; höchstens zwei bleiben im Speicher
 const NEBTEX: Record<string, THREE.Texture> = {};
 export function nebulaTexture(key: string): THREE.Texture | null {
   if (NEBTEX[key]) return NEBTEX[key];

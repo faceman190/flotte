@@ -1,27 +1,22 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
-// KI-generierte Figuren mit Skelett (public/chars.js): 'worker' mit Laufanimation, 'merchant' mit Stand-Animation.
+// KI-generierte Figuren mit Skelett (GLB-Dateien aus public/assets/char): 'worker' mit Laufanimation, 'merchant' mit Stand-Animation.
 // Beide Skelette stammen aus demselben Rigging-Dienst und haben gleiche Knochennamen, daher passen die Clips auf beide.
-declare global { interface Window { CHARDATA?: Record<string, string> } }
 
 interface Tpl { scene: THREE.Group; clips: THREE.AnimationClip[]; scale: number; footY: number }
 const TPL: Record<string, Tpl> = {};
 const HEIGHT: Record<string, number> = { worker: 1.8, merchant: 1.7 };
 
-function b64ToBuf(b64: string) {
-  const bin = atob(b64), u = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-  return u.buffer;
-}
 export async function loadCharModels() {
   const data = window.CHARDATA;
   if (!data) return false;
-  const loader = new GLTFLoader();
-  await Promise.all(Object.entries(data).map(async ([name, b64]) => {
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  await Promise.all(Object.entries(data).map(async ([name, url]) => {
     try {
-      const g = await loader.parseAsync(b64ToBuf(b64), '');
+      const g = await loader.loadAsync(url);
       g.scene.traverse((o: any) => {
         if (!o.isMesh) return;
         o.frustumCulled = false;   // Skinning verschiebt die Hülle, Bounding-Box stimmt sonst nicht

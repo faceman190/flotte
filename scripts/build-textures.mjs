@@ -11,7 +11,7 @@ const b64 = b => 'data:image/jpeg;base64,' + b.toString('base64');
 
 const tex = {};
 for (const f of fs.readdirSync(TEX).filter(f => f.endsWith('.jpg') && !f.startsWith('nebula_'))) tex[path.basename(f, '.jpg')] = b64(fs.readFileSync(path.join(TEX, f)));
-fs.writeFileSync(path.join(ROOT, 'public', 'textures.js'), 'window.TEXDATA=' + JSON.stringify(tex) + ';\n');
+fs.writeFileSync(path.join(ROOT, 'asset-src', 'legacy', 'textures.js'), 'window.TEXDATA=' + JSON.stringify(tex) + ';\n');
 console.log('textures.js:', Object.keys(tex).join(', '));
 
 const neb = {};
@@ -23,7 +23,7 @@ for (const f of fs.readdirSync(NEB).filter(f => /\.(jpe?g|png|webp)$/i.test(f)))
   total += out.length;
   console.log('nebel', key.padEnd(8), (out.length / 1024).toFixed(0) + ' KB');
 }
-fs.writeFileSync(path.join(ROOT, 'public', 'nebulae.js'), '// Erzeugt von scripts/build-textures.mjs – KI-generierte Nebel-Panoramen\nwindow.NEBDATA=' + JSON.stringify(neb) + ';\n');
+fs.writeFileSync(path.join(ROOT, 'asset-src', 'legacy', 'nebulae.js'), '// Erzeugt von scripts/build-textures.mjs – KI-generierte Nebel-Panoramen\nwindow.NEBDATA=' + JSON.stringify(neb) + ';\n');
 console.log('nebulae.js gesamt', (total / 1024 / 1024).toFixed(2), 'MB');
 
 // Planeten: Oberflächenkarten (assets/planet, 2:1) und Bodentexturen (assets/ground, quadratisch) → public/planets.js
@@ -52,6 +52,6 @@ if (fs.existsSync(PL)) {
     const b = await seamless(path.join(GR, f), 1024, 1024, 0.22, true);
     pdata.ground[path.basename(f).replace(/\.[^.]+$/, '')] = b64(b); pt += b.length;
   }
-  fs.writeFileSync(path.join(ROOT, 'public', 'planets.js'), '// Erzeugt von scripts/build-textures.mjs – KI-generierte Planetenkarten und Bodentexturen\nwindow.PLANETDATA=' + JSON.stringify(pdata) + ';\n');
+  fs.writeFileSync(path.join(ROOT, 'asset-src', 'legacy', 'planets.js'), '// Erzeugt von scripts/build-textures.mjs – KI-generierte Planetenkarten und Bodentexturen\nwindow.PLANETDATA=' + JSON.stringify(pdata) + ';\n');
   console.log('planets.js:', Object.keys(pdata.map).join(','), '|', Object.keys(pdata.ground).join(','), (pt / 1024 / 1024).toFixed(2), 'MB');
 }

@@ -2,6 +2,7 @@ import { $ } from '../core/util';
 import { setQuality } from '../core/engine';
 import { audio, snd, setMusicVolume } from '../core/audio';
 import { settings, saveSettings, hasSave, G } from '../game/state';
+import { storageInfo, clearStoredAssets, ASSET_STATE, MANIFEST } from '../core/assets';
 
 export const menuHooks = {
   newGame: (_name: string) => {},
@@ -98,3 +99,24 @@ $('sMusic').oninput = e => { settings.music = +(e.target as HTMLInputElement).va
 $('sHud').oninput = e => { settings.hud = +(e.target as HTMLInputElement).value; labels(); };
 
 export const isMenuMode = () => G.mode === 'menu';
+
+// ---------- Spieldaten auf diesem Gerät (Einstellungen) ----------
+const mbStr = (n: number) => (n / 1048576).toFixed(1).replace('.', ',') + ' MB';
+async function showStorage() {
+  const st = await storageInfo(), total = Object.values(MANIFEST?.files || {}).reduce((a, f) => a + f.size, 0);
+  $('sData').innerHTML = !ASSET_STATE.sw && !st.stored
+    ? 'Dieser Browser speichert die Spieldaten nur im normalen Zwischenspeicher.'
+    : `Gespeichert: <b>${mbStr(st.stored)}</b> von ${mbStr(total)} · ${st.persisted ? 'dauerhaft gesichert' : 'der Browser darf aufräumen, wenn der Platz knapp wird'}.<br>Beim nächsten Start lädt das Spiel aus diesem Speicher.`;
+}
+let installEv: any = null;
+addEventListener('beforeinstallprompt', (e: any) => { e.preventDefault(); installEv = e; $('sInstall').classList.remove('hidden'); });
+$('sInstall').onclick = async () => { if (!installEv) return; installEv.prompt(); await installEv.userChoice.catch(() => null); installEv = null; $('sInstall').classList.add('hidden'); };
+let clearArm = false;
+$('sClear').onclick = async () => {
+  if (!clearArm) { clearArm = true; $('sClear').textContent = 'Wirklich löschen? (Spielstand bleibt)'; setTimeout(() => { clearArm = false; $('sClear').textContent = 'Spieldaten löschen'; }, 3000); return; }
+  clearArm = false; $('sClear').textContent = 'Spieldaten löschen';
+  await clearStoredAssets();
+  $('sData').textContent = 'Gelöscht. Beim nächsten Start werden die Spieldaten neu geladen.';
+};
+$('mSettings').addEventListener('click', showStorage);
+$('pSettings').addEventListener('click', showStorage);

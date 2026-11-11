@@ -58,5 +58,5 @@ for (const f of fs.readdirSync(SRC).filter(f => f.endsWith('.glb'))) {
   total += glb.length;
   console.log(name.padEnd(10), (glb.length / 1024).toFixed(0).padStart(6) + ' KB', (j.images || []).length + ' Bilder');
 }
-fs.writeFileSync(path.join(ROOT, 'public', CH ? 'chars.js' : 'stations.js'), '// Erzeugt von scripts/build-stations.mjs – KI-generierte Modelle (Tripo/Meshy über Higgsfield)\nwindow.' + (CH ? 'CHARDATA' : 'STATIONDATA') + '=' + JSON.stringify(out) + ';\n');
+fs.writeFileSync(path.join(ROOT, 'asset-src', 'legacy', CH ? 'chars.js' : 'stations.js'), '// Erzeugt von scripts/build-stations.mjs – KI-generierte Modelle (Tripo/Meshy über Higgsfield)\nwindow.' + (CH ? 'CHARDATA' : 'STATIONDATA') + '=' + JSON.stringify(out) + ';\n');
 console.log('gesamt', (total / 1024 / 1024).toFixed(2), 'MB');
