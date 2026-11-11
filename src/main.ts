@@ -232,6 +232,7 @@ onKey(code => {
     return;
   }
   if (code === 'KeyR' && G.mode === 'play') { scan(); noteScan(); return; }
+  if ((code === 'ShiftLeft' || code === 'ShiftRight') && G.mode === 'play') { G.cruise = !G.cruise; radio('SYSTEM', G.cruise ? 'Reiseflug: schneller, aber träge in der Lenkung.' : 'Manöverflug.'); return; }
   if (code === 'KeyV' && G.mode === 'play') { CAM.lock = !CAM.lock; radio('SYSTEM', CAM.lock ? 'Freie Kamera: Maus schaut um das Schiff, Pfeiltasten lenken. V beendet sie.' : 'Kamera wieder hinter dem Schiff.'); return; }
   if (G.mode === 'walk' && code === 'Tab') { showMenu(); return; }
   if (G.mode === 'walk' && code === 'Space') { jump(); return; }

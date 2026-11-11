@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { camera, ux, view } from '../core/engine';
 import { mouse, keys, look } from '../core/input';
 import { clamp, d3, fmtD, fmtN, $ } from '../core/util';
-import { P, G, stats, cargoUsed, settings } from '../game/state';
+import { flightMax, P, G, stats, cargoUsed, settings } from '../game/state';
 import { world } from '../game/world';
 import { fwd, nearDock } from '../game/player';
 import { SECTOR, FACTION, findRoute } from '../data/galaxy';
@@ -525,7 +525,7 @@ export function updatePanels(dt: number) {
   $('locNet').innerHTML = NET.status === 'online' ? `<span class="good">online · ${NET.roster.length}</span>` : NET.status === 'verbinde' ? '<span class="acc">verbinde …</span>' : NET.status === 'fehler' ? '<span class="bad">getrennt</span>' : '<span style="color:var(--dim)">allein</span>';
   updateObjectives();
   $('objP').style.transform = `scale(${settings.hud})`;
-  $('speed').textContent = `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} / ${stats().max} m/s` + (world.ground ? ` · Höhe ${Math.round(P.y - world.ground(P.x, P.z))} m` : '');
+  $('speed').textContent = `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} / ${flightMax()} m/s${G.cruise ? ' · REISE' : ''}` + (world.ground ? ` · Höhe ${Math.round(P.y - world.ground(P.x, P.z))} m` : '');
   const pr = $('prompt'), st = G.mode === 'play' ? nearDock() : null, li = !st && G.mode === 'play' ? landInfo() : null;
   if (st) { pr.textContent = `[E] An „${st.name}“ andocken`; pr.classList.remove('hidden'); }
   else if (li) { pr.textContent = li.text; pr.classList.remove('hidden'); }

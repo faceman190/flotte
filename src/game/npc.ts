@@ -139,7 +139,7 @@ const CALLSIGNS = [['RABE', 0x8fd18f, '#8fd18f'], ['FUNKE', 0x7cc4ff, '#7cc4ff']
 function allyCap() {
   const d = world.def;
   if (!d || d.faction === 'ferrox' || !world.stations.length) return 0;
-  return d.faction === 'border' ? 3 : 2;
+  return d.faction === 'border' ? 2 : 1;   // wenige Patrouillen: die Ferrox sollen dem Spieler bleiben
 }
 function spawnAlly() {
   const used = new Set(world.allies.map(a => a.name)), cs = CALLSIGNS.find(c => !used.has(c[0])) || CALLSIGNS[0];
@@ -189,7 +189,7 @@ export function updateAllies(dt: number) {
       }
       w.target = best;
     }
-    let tx: number, ty: number, tz: number, spd = 300;
+    let tx: number, ty: number, tz: number, spd = 220;
     if (w.target) {
       const e = w.target, d = d3(e.x, e.y, e.z, w.x, w.y, w.z), lead = d / 1300;
       tx = e.x + e.vx * lead; ty = e.y + e.vy * lead; tz = e.z + e.vz * lead;
@@ -214,10 +214,10 @@ export function updateAllies(dt: number) {
       _v.normalize();
       _v2.set(w.vx, w.vy, w.vz).normalize();
       if (dd < 700 && _v.dot(_v2) > 0.94) {
-        w.cool = 0.2;
+        w.cool = 0.5;   // Verbündete halten Gegner beschäftigt, statt sie abzuräumen: seltener, ungenauer, schwächer
         const lead = dd / 1300;
-        _v.set(e.x + e.vx * lead - w.x + rand(-6, 6), e.y + e.vy * lead - w.y + rand(-6, 6), e.z + e.vz * lead - w.z + rand(-6, 6)).normalize();
-        fireBullet(world.bullets, w.x + _v.x * 8, w.y + _v.y * 8, w.z + _v.z * 8, _v.x, _v.y, _v.z, 1300, 0.7, 7, 'w');
+        _v.set(e.x + e.vx * lead - w.x + rand(-16, 16), e.y + e.vy * lead - w.y + rand(-16, 16), e.z + e.vz * lead - w.z + rand(-16, 16)).normalize();
+        fireBullet(world.bullets, w.x + _v.x * 8, w.y + _v.y * 8, w.z + _v.z * 8, _v.x, _v.y, _v.z, 1300, 0.7, 4, 'w');
         const pd = d3(w.x, w.y, w.z, P.x, P.y, P.z);
         if (pd < 600) gunSound(0.4 * (1 - pd / 600));
       }

@@ -120,7 +120,11 @@ export const G = {
   warnT: 0,
   saveT: 20,
   camInit: false,
+  cruise: false,   // Reiseflug (Umschalt): schneller, träger; sonst Manöverflug
   heat: 0, overheat: false,
   inside: false,      // zu Fuß in einer Station
   transT: 0, transTo: null as null | 'surface' | 'orbit',
 };
+
+// Flugstufen: Manöverflug bis zur halben Höchstgeschwindigkeit (Jäger: 140 m/s), Reiseflug etwas darüber (Jäger: 300 m/s)
+export const flightMax = () => Math.round(stats().max * (G.cruise ? 1.07 : 0.5));

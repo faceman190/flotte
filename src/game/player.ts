@@ -7,7 +7,7 @@ import { buildShipModel, type ShipModel } from '../models/playerShips';
 import type { ShipId } from '../data/ships';
 import type { Paint } from '../models/gltfShips';
 import { ITEMS, ITEM_IDS } from '../data/items';
-import { P, G, stats, cargoUsed, settings } from './state';
+import { flightMax, P, G, stats, cargoUsed, settings } from './state';
 import { world, SECTOR_RADIUS } from './world';
 import { burst, puff } from './fx';
 import { fireBullet, launchRocket } from './combat';
@@ -47,6 +47,7 @@ export function placePlayer(x: number, y: number, z: number, yaw: number, speed 
 export function hurtPlayer(d: number) {
   if (!playerTargetable()) return;
   G.sinceHit = 0;
+  if (G.cruise) { G.cruise = false; radio('SYSTEM', 'Treffer: Reiseflug abgebrochen.'); }
   G.shake = Math.min(1.6, G.shake + d * 0.05);
   (SHIP.shield.material as THREE.MeshBasicMaterial).opacity = P.shield > 0 ? 0.45 : 0;
   if (P.shield > 0) { const a = Math.min(P.shield, d); P.shield -= a; d -= a; }
@@ -94,21 +95,24 @@ export function updatePlayer(dt: number) {
   if (look.free) { mx = 0; my = 0; }   // freie Kamera: Maus dreht die Kamera, das Schiff hält Kurs (Pfeiltasten lenken weiter)
   if (keys.ArrowLeft) mx = -1; if (keys.ArrowRight) mx = 1; if (keys.ArrowUp) my = -1; if (keys.ArrowDown) my = 1;
   if (settings.invertY) my = -my;
-  const sens = settings.sens;
+  const sens = settings.sens * (G.cruise ? 0.45 : 1);   // im Reiseflug lenkt das Schiff träge
   const yawRate = -(mx * 0.5 + mx * Math.abs(mx) * 0.5) * 2.1 * sens * st.turn, pitchRate = -(my * 0.5 + my * Math.abs(my) * 0.5) * 1.6 * sens * st.turn;
   P.yaw += yawRate * dt;
   P.pitch = clamp(P.pitch + pitchRate * dt, -1.15, 1.15);
   G.roll += ((yawRate * 0.42 + (keys.KeyA ? 0.35 : 0) - (keys.KeyD ? 0.35 : 0)) - G.roll) * Math.min(1, dt * 5);
   const f = fwd(), r = right();
   let th = 0;
-  if (keys.KeyW) { P.vx += f.x * st.acc * dt; P.vy += f.y * st.acc * dt; P.vz += f.z * st.acc * dt; th = 1; }
-  if (keys.KeyS) { P.vx -= f.x * st.acc * 0.6 * dt; P.vy -= f.y * st.acc * 0.6 * dt; P.vz -= f.z * st.acc * 0.6 * dt; }
+  // Flugstufen: Manöverflug fährt gemächlich an (Jäger: gut 2 s bis 140 m/s), Reiseflug baut langsam bis 300 m/s auf
+  const vmax = flightMax(), acc = st.acc * (G.cruise ? 0.135 : 0.115);
+  if (keys.KeyW) { P.vx += f.x * acc * dt; P.vy += f.y * acc * dt; P.vz += f.z * acc * dt; th = 1; }
+  if (keys.KeyS) { P.vx -= f.x * acc * 2 * dt; P.vy -= f.y * acc * 2 * dt; P.vz -= f.z * acc * 2 * dt; }
   const sx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
-  if (sx) { P.vx += r.x * sx * st.acc * 0.7 * dt; P.vz += r.z * sx * st.acc * 0.7 * dt; }
-  const drag = Math.pow(th || sx ? 0.75 : keys.KeyS ? 0.25 : 0.5, dt);
+  if (sx) { P.vx += r.x * sx * acc * 1.2 * dt; P.vz += r.z * sx * acc * 1.2 * dt; }
+  const drag = Math.pow(th || sx ? (G.cruise ? 0.9 : 0.75) : keys.KeyS ? 0.25 : 0.5, dt);
   P.vx *= drag; P.vy *= drag; P.vz *= drag;
   const sp = Math.hypot(P.vx, P.vy, P.vz);
-  if (sp > st.max) { const k = st.max / sp; P.vx *= k; P.vy *= k; P.vz *= k; }
+  // über der Grenze (z. B. nach dem Zurückschalten aus dem Reiseflug) weich abbremsen statt hart kappen
+  if (sp > vmax) { const k = Math.max(vmax / sp, Math.pow(0.35, dt)); P.vx *= k; P.vy *= k; P.vz *= k; }
   P.x += P.vx * dt; P.y += P.vy * dt; P.z += P.vz * dt;
   G.thrust += (th - G.thrust) * Math.min(1, dt * 6);
   // ---- Sektorgrenze bzw. Boden und Rand auf Planeten ----
