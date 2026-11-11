@@ -16,9 +16,11 @@ console.log('textures.js:', Object.keys(tex).join(', '));
 
 const neb = {};
 let total = 0;
+// Sonderfall: hochauflösender Nebel für Hauptmenü und Heimstatt (vom Nutzer geliefert, 12960 × 6480) → 8192 × 4096
+const NEB_KEY = { 'Space-Nebula': 'heimat' }, NEB_BIG = new Set(['heimat']);
 for (const f of fs.readdirSync(NEB).filter(f => /\.(jpe?g|png|webp)$/i.test(f))) {
-  const key = path.basename(f).replace(/\.[^.]+$/, '');
-  const out = await sharp(path.join(NEB, f)).resize(3840, 1920, { fit: 'fill', kernel: 'lanczos3' }).jpeg({ quality: 80, mozjpeg: true }).toBuffer();
+  const base = path.basename(f).replace(/\.[^.]+$/, ''), key = NEB_KEY[base] || base, big = NEB_BIG.has(key);
+  const out = await sharp(path.join(NEB, f), { limitInputPixels: false }).resize(big ? 8192 : 3840, big ? 4096 : 1920, { fit: 'fill', kernel: 'lanczos3' }).jpeg({ quality: big ? 88 : 80, mozjpeg: true }).toBuffer();
   neb[key] = b64(out);
   total += out.length;
   console.log('nebel', key.padEnd(8), (out.length / 1024).toFixed(0) + ' KB');

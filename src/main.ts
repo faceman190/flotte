@@ -332,7 +332,8 @@ function setupMenuScene() {
 
 // =============== Kamera ===============
 const camPos = new THREE.Vector3(), _e = new THREE.Euler(0, 0, 0, 'YXZ'), _o = new THREE.Vector3(), _t = new THREE.Vector3();
-let orbit = 0.6;
+let orbit = 0.6, menuT = 0;
+const MENU_ORBIT = 0.6;   // Blickwinkel im Hauptmenü: dahinter liegt der Heimstatt-Nebel (galaxy.ts, sky.rot)
 function setFov(f: number) { if (Math.abs(camera.fov - f) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } }
 function updateCamera(dt: number) {
   if (G.mode === 'intro') { camera.position.copy(INTRO.pos); camera.lookAt(INTRO.look); setFov(50); return; }
@@ -341,7 +342,8 @@ function updateCamera(dt: number) {
   if (G.mode === 'menu' || (G.mode === 'dock' && G.dockedAt) || (G.mode === 'map' && G.dockedAt)) {
     const c = G.mode === 'menu' ? { x: 0, y: 0, z: 0, R: 260 } : G.dockedAt;
     const R = G.mode === 'menu' ? 820 : c.R * 3.2;
-    orbit += dt * 0.04;
+    // Hauptmenü: sanft um den Blickwinkel pendeln, an dem der Nebel hinter der Szene liegt; angedockt weiter kreisen
+    if (G.mode === 'menu') { menuT += dt; orbit = MENU_ORBIT + Math.sin(menuT * 0.045) * 0.45; } else orbit += dt * 0.04;
     camera.position.set(c.x + Math.cos(orbit) * R, c.y + R * 0.3, c.z + Math.sin(orbit) * R);
     _t.set(c.x, c.y, c.z);
     camera.lookAt(_t);

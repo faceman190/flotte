@@ -69,7 +69,7 @@ async function model(key, data, pack) {
 // ---- Texturen, Nebel, Planeten ----
 const { TEXDATA = {} } = bundle('textures.js'), { NEBDATA = {} } = bundle('nebulae.js'), { PLANETDATA = { map: {}, ground: {} } } = bundle('planets.js');
 for (const [k, v] of Object.entries(TEXDATA)) await image('tex/' + k, v, 'core');
-for (const [k, v] of Object.entries(NEBDATA)) await image('neb/' + k, v, k === 'blue' ? 'core' : 'world', 82);   // blau: Heimstatt und Hauptmenü
+for (const [k, v] of Object.entries(NEBDATA)) await image('neb/' + k, v, k === 'heimat' ? 'core' : 'world', k === 'heimat' ? 86 : 82);   // heimat: Heimstatt und Hauptmenü
 for (const [k, v] of Object.entries(PLANETDATA.map || {})) await image('planet/map/' + k, v, 'world');
 for (const [k, v] of Object.entries(PLANETDATA.ground || {})) await image('planet/ground/' + k, v, 'world');
 // ---- Modelle ----

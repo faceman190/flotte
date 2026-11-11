@@ -3,7 +3,7 @@ import type { ItemId } from './items';
 // Die feste Galaxie. Gleiche Daten für alle Spieler: der Server übernimmt sie später 1:1.
 export type Faction = 'core' | 'border' | 'ferrox';
 export type FieldKind = 'metal' | 'ice' | 'mixed' | 'crystal';
-export type Nebula = 'red' | 'blue' | 'green' | 'gold' | 'violet' | 'crimson';
+export type Nebula = 'red' | 'blue' | 'green' | 'gold' | 'violet' | 'crimson' | 'heimat';   // heimat: hochauflösend, Heimstatt und Hauptmenü
 export interface StationDef {
   id: string;
   kind: 'carrier' | 'station' | 'outpost';
@@ -27,6 +27,7 @@ export interface SectorDef {
   stations: StationDef[];
   fields: FieldDef[];
   hives?: number;               // Ferrox-Bienenstöcke (Mutterschiffe)
+  sky?: { rot?: [number, number, number]; gain?: number };   // feste Himmelsdrehung und Helligkeit (sonst zufällig je Sektor)
 }
 
 export const FACTION = {
@@ -40,7 +41,8 @@ export const SECTORS: SectorDef[] = [
   {
     id: 'heimstatt', name: 'Heimstatt', faction: 'core', danger: 0, map: [170, 300], links: ['lichtwall', 'neuhafen', 'sonnenfeld'],
     desc: 'Herz des Menschenraums. Hier ging die Bastion vor Anker, nachdem ihre Crew hinter dem Riss gestrandet war.',
-    neb: 'blue', tint: 0xc8c8c8, planet: { size: 3000, tint: 0xc8dcff, dir: [-0.6, -0.2, -0.8], atm: 0x80b0ff },
+    // Nebel-Mitte (Bildmitte) liegt hinter der Menüszene: Drehung π − 0,6 passt zur Menükamera (main.ts, MENU_ORBIT)
+    neb: 'heimat', tint: 0xffffff, sky: { rot: [0, Math.PI - 0.6, 0], gain: 1.7 }, planet: { size: 3000, tint: 0xc8dcff, dir: [-0.6, -0.2, -0.8], atm: 0x80b0ff },
     stations: [
       { id: 'bastion', kind: 'carrier', name: 'Bastion', pos: [0, 0, 0], prices: { schrott: 1.2 }, refinery: true },
       { id: 'heimring', kind: 'station', name: 'Heimstatt-Ring', pos: [1100, 120, -900], prices: { zellen: 1.15 }, refinery: true },

@@ -295,8 +295,8 @@ export function buildSector(id: string) {
   world.def = def;
   const R = rng(hashStr(id));
   setSky({
-    neb: def.neb, tint: def.tint,
-    rot: [R.range(-0.5, 0.5), R.range(0, 6.28), R.range(-0.4, 0.4)],
+    neb: def.neb, tint: def.tint, gain: def.sky?.gain,
+    rot: (() => { const r: [number, number, number] = [R.range(-0.5, 0.5), R.range(0, 6.28), R.range(-0.4, 0.4)]; return def.sky?.rot || r; })(),
     sunDir: [R.range(-1, 1), R.range(0.2, 1), R.range(-1, 1)],
     planet: def.planet && { ...def.planet, ...planetLook(id) },
   });

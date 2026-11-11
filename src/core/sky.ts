@@ -114,11 +114,11 @@ sky.add(sunGroup);
 
 let planet: THREE.Object3D | null = null;
 let curNeb: string | null = null, curTex: THREE.Texture | null = null;
-let pending: { t: THREE.Texture; tint: number; rot: [number, number, number] } | null = null;
+let pending: { t: THREE.Texture; tint: number; rot: [number, number, number]; gain?: number } | null = null;
 const ready = (t: THREE.Texture) => { const im = t.image as HTMLImageElement | undefined; return !!im && (im.width || 0) > 0; };
-function applySky(t: THREE.Texture, tint: number, rot: [number, number, number]) {
+function applySky(t: THREE.Texture, tint: number, rot: [number, number, number], gain = 1) {
   skyMat.uniforms.map.value = t;
-  skyMat.uniforms.tint.value.set(tint);
+  skyMat.uniforms.tint.value.set(tint).multiplyScalar(gain);   // gain > 1 hellt dunkle Nebel auf
   skySphere.visible = true;
   skySphere.rotation.set(...rot);
 }
@@ -127,6 +127,7 @@ export const planetInfo = { dir: new THREE.Vector3(), angR: 0, on: false };
 export interface SkyDef {
   neb: string;
   tint: number;
+  gain?: number;
   rot: [number, number, number];
   sunDir: [number, number, number];
   planet?: { size: number; tint: number; dir: [number, number, number]; atm?: number; type?: string; cities?: number; ring?: number };
@@ -139,8 +140,8 @@ export function setSky(d: SkyDef) {
   curTex = t;
   if (t) {
     // Bis das neue Bild dekodiert ist, bleibt der alte Himmel stehen (kein schwarzes Aufblitzen)
-    if (ready(t) || !skyMat.uniforms.map.value) { applySky(t, d.tint, d.rot); pending = null; }
-    else pending = { t, tint: d.tint, rot: d.rot };
+    if (ready(t) || !skyMat.uniforms.map.value) { applySky(t, d.tint, d.rot, d.gain); pending = null; }
+    else pending = { t, tint: d.tint, rot: d.rot, gain: d.gain };
     scene.environment = envFor(curNeb, t) || DEFAULT_ENV;
   }
   if (planet) {
@@ -237,7 +238,7 @@ export function updateSky(camPos: THREE.Vector3) {
   const t = (performance.now() - t0) / 1000, pr = renderer.getPixelRatio();
   for (const m of starUniforms) { m.uniforms.time.value = t; m.uniforms.pr.value = pr; }
   if (planet && planet.visible) updatePlanet(planet as THREE.Group, t);
-  if (pending && ready(pending.t)) { applySky(pending.t, pending.tint, pending.rot); pending = null; if (atmDome.visible) skySphere.visible = false; }
+  if (pending && ready(pending.t)) { applySky(pending.t, pending.tint, pending.rot, pending.gain); pending = null; if (atmDome.visible) skySphere.visible = false; }
   if (curNeb && scene.environment === DEFAULT_ENV) {
     const e = envFor(curNeb, curTex);
     if (e) scene.environment = e;
