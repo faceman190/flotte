@@ -15,7 +15,7 @@ und als `<name>.mp3` nach `asset-src/sound/` legen.
 | warn_shield | 6A8FoLIDv36aNFp1bywO | uFzRvEmK3jsfJVG8XkNh | 1 |
 | warn_heat | SCDe6UXx0uhnfdEPgZHs | OxfUEXs62Lo1MaA4M7Bj | 1 |
 
-## Gruppe 2 (erzeugt, Auswahl offen, noch nicht im Spiel)
+## Gruppe 2 (eingebaut in Alpha 0.48; gewählt: ferrox_attack 1, ferrox_death 1, torpedo_fire 1, entry 1, success 2, rank_up 2)
 
 | Name | Fassung 1 | Fassung 2 | Einbau geplant |
 |---|---|---|---|

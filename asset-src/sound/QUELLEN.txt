@@ -7,3 +7,4 @@ explosion0-2 = explosionCrunch_000-002 · hull_hit0-2 = impactMetal_000-002 (Sci
 space-explosion = vom Projektinhaber bereitgestellt (Zusammenbruch des Halden-Tors im Intro); Herkunft und Lizenz dort erfragen
 Mit ElevenLabs vom Projektinhaber erzeugt (Prompts in docs/sound/prompts.md): amb_hangar, amb_station, band_open, band_close, gear, jump_charge, jump_in, jump_out, launch, lock_tone, scan_pulse, touchdown
 Über die ElevenLabs-Verbindung erzeugt (vom Projektinhaber ausgewählte Fassungen): cruise_on, cruise_off, rocket_fire, warn_hull, warn_shield, warn_heat
+Über die ElevenLabs-Verbindung erzeugt: ferrox_attack, ferrox_death, torpedo_fire, entry, success, rank_up

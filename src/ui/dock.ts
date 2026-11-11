@@ -337,7 +337,7 @@ $('dockCard').addEventListener('click', e => {
       const miss = c.amount - P.cargo[c.item], sid = st().id;
       if (miss > 0 && stored(sid, c.item) >= miss) { P.storage[sid][c.item] = stored(sid, c.item) - miss; P.cargo[c.item] += miss; }
       const rf = stationFaction(c.station, c.sector), r0 = rf ? repOf(rf) : 0;
-      if (deliver(c)) { note = `Auftrag erfüllt! +${fmtN(c.reward)} Credits.${rf ? ` Ruf ${rf === 'rat' ? 'beim' : 'bei der'} ${REP[rf].n} +${Math.round(repOf(rf) - r0)}.` : ''}`; snd(800, 0.4, 'triangle', 0.06, 600); }
+      if (deliver(c)) { sfx('success', 0.6); note = `Auftrag erfüllt! +${fmtN(c.reward)} Credits.${rf ? ` Ruf ${rf === 'rat' ? 'beim' : 'bei der'} ${REP[rf].n} +${Math.round(repOf(rf) - r0)}.` : ''}`; snd(800, 0.4, 'triangle', 0.06, 600); }
     }
   }
   if (a === 'macc') {

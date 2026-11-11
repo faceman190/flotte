@@ -20,6 +20,7 @@ const TRACER_GEO = new THREE.BoxGeometry(0.3, 0.3, 7);
 const BUL_M: Record<string, THREE.Material> = { p: basicAdd(0xffd27a), w: basicAdd(0xfff0b0), e: basicAdd(0xc070ff) };
 // Triebwerksspur der Ferrox: Kegel nach hinten (−Z), 28 m lang
 const TRAIL_GEO = (() => { const c = new THREE.ConeGeometry(1.3, 28, 8, 1, true); c.rotateX(-Math.PI / 2); c.translate(0, 0, -14); return c; })();
+let lastScreech = -99;   // Spielzeit des letzten Angriffslauts
 const TORP_GEO = new THREE.SphereGeometry(1.6, 10, 8), TORP_M = new THREE.MeshBasicMaterial({ color: 0xc070ff });
 export const ROCKET_GEO = new THREE.CylinderGeometry(0.2, 0.2, 1.8, 6);
 
@@ -207,6 +208,7 @@ export function killEnemy(e: any, i: number, byPlayer = false, drops = true) {
   burst(e.x, e.y, e.z, '#c070ff', e.type === 'bomber' ? 110 : 60, e.type === 'bomber' ? 90 : 70, 1.2);
   burst(e.x, e.y, e.z, '#ffd27a', 40, 50, 0.9);
   boom(0.7, 1.1, () => snd(110, 0.5, 'sawtooth', 0.07, -70));
+  sfx('ferrox_death', 0.55, 0.9 + Math.random() * 0.25);   // das Zerbrechen der Ferrox über der Explosion
   if (d3(e.x, e.y, e.z, P.x, P.y, P.z) < 600) G.shake = Math.min(2, G.shake + 0.5);
   if (!drops) return;
   if (e.type === 'bomber') { dropPick(e.x, e.y, e.z, 'schrott', 1); dropPick(e.x, e.y, e.z, 'schrott', 1); }
@@ -296,12 +298,12 @@ export function updateEnemies(dt: number) {
     e.cool -= dt;
     if (!attacking) continue;
     if (e.type === 'bomber') {
-      if (isShip && d < 700 && e.cool <= 0) { e.cool = rand(5.5, 7.5); fireTorp(e, e.target.ship); snd(180, 0.4, 'triangle', 0.03, -80); }
+      if (isShip && d < 700 && e.cool <= 0) { e.cool = rand(5.5, 7.5); fireTorp(e, e.target.ship); if (d3(e.x, e.y, e.z, P.x, P.y, P.z) < 1600) sfx('torpedo_fire', 0.6, 1, () => snd(180, 0.4, 'triangle', 0.03, -80)); }
     } else if (d < (isShip ? e.target.ship.R + 500 : 650) && e.cool <= 0) {
       e.cool = isShip ? rand(0.6, 1) : rand(0.8, 1.5);
       _v.set(tx - e.x + rand(-10, 10), ty - e.y + rand(-10, 10), tz - e.z + rand(-10, 10)).normalize();
       fireBullet(world.ebullets, e.x + _v.x * 8, e.y + _v.y * 8, e.z + _v.z * 8, _v.x, _v.y, _v.z, 750, 1.4, 0, 'e', { dmgP: e.es.dmgP, dmgS: e.es.dmgS });
-      if (d3(e.x, e.y, e.z, P.x, P.y, P.z) < 800) snd(320, 0.06, 'square', 0.015, -150);
+      if (d3(e.x, e.y, e.z, P.x, P.y, P.z) < 800) { snd(320, 0.06, 'square', 0.015, -150); if (G.time - lastScreech > 4.5) { lastScreech = G.time; sfx('ferrox_attack', 0.45, 0.9 + Math.random() * 0.2); } }
     }
   }
 }

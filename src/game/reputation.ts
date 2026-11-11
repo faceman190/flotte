@@ -1,7 +1,7 @@
 import { P } from './state';
 import { SECTOR } from '../data/galaxy';
 import { radio } from '../ui/radio';
-import { snd } from '../core/audio';
+import { snd, sfx } from '../core/audio';
 
 // =====================================================================================
 // Ruf bei den Fraktionen der Crew
@@ -78,7 +78,7 @@ export function addRep(id: RepId | null, d: number) {
   if (after > before) {
     const name = rankName(id), perks = after > 0 ? REP[id].perk(after) : [];
     radio('RUF', `${REP[id].n}: Du giltst jetzt als „${name}“.${after === TRUST_LV ? ' Ihre Stationen bieten dir ab sofort Vertrauensaufträge an.' : ''} ${perks[0] ? perks[0] + '.' : ''}`, REP[id].c);
-    snd(660, 0.15, 'triangle', 0.05, 500); setTimeout(() => snd(990, 0.2, 'triangle', 0.05, 300), 150);
+    sfx('rank_up', 0.6, 1, () => snd(660, 0.15, 'triangle', 0.05, 500)); setTimeout(() => snd(990, 0.2, 'triangle', 0.05, 300), 150);
   } else if (after < before) {
     radio('RUF', `${REP[id].n}: Dein Ruf ist gesunken, du giltst nur noch als „${rankName(id)}“.`, '#ff6b5b');
   }

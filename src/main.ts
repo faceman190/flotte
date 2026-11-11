@@ -309,6 +309,7 @@ function updateJump(dt: number) {
 // =============== Atmosphäreneintritt / Aufstieg in den Orbit ===============
 function startEntry(to: 'surface' | 'orbit') {
   G.mode = 'entry';
+  if (to === 'surface') sfx('entry', 0.7);   // Rauschen und Rütteln beim Eintritt in die Atmosphäre
   G.transT = to === 'surface' ? 2.4 : 1.4;
   G.transTo = to;
   releaseAll();
