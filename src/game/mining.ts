@@ -105,7 +105,7 @@ export function updateMining(dt: number, wantFire: boolean) {
   G.heat += st.laserHeat * dt;
   if (G.heat >= 100) {
     G.heat = 100; G.overheat = true;
-    snd(160, 0.5, 'sawtooth', 0.05, -80);
+    sfx('warn_heat', 0.6, 1, () => snd(160, 0.5, 'sawtooth', 0.05, -80));
     radio('SYSTEM', 'Bergbaulaser überhitzt! Kühlt ab …');
   }
   _e.set(P.pitch, P.yaw, G.roll);

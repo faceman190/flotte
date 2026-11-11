@@ -50,8 +50,11 @@ export function hurtPlayer(d: number) {
   if (G.cruise) { G.cruise = false; radio('SYSTEM', 'Treffer: Reiseflug abgebrochen.'); }
   G.shake = Math.min(1.6, G.shake + d * 0.05);
   (SHIP.shield.material as THREE.MeshBasicMaterial).opacity = P.shield > 0 ? 0.45 : 0;
+  const hadShield = P.shield > 0, hullBefore = P.hull, crit = stats().maxHull * 0.3;
   if (P.shield > 0) { const a = Math.min(P.shield, d); P.shield -= a; d -= a; }
   P.hull -= d;
+  if (hadShield && P.shield <= 0) sfx('warn_shield', 0.6);                                   // Schild zusammengebrochen
+  if (hullBefore >= crit && P.hull < crit && P.hull > 0) sfx('warn_hull', 0.65);              // Hülle unter 30 %
   // Treffer: Schild knistert, blanke Hülle scheppert
   sfx(P.shield > 0 ? 'shield_hit' : 'hull_hit' + Math.floor(Math.random() * 3), P.shield > 0 ? 0.45 : 0.6, 0.9 + Math.random() * 0.2, () => snd(140, 0.12, 'sawtooth', 0.05, -60));
   if (P.hull <= 0) die();
@@ -206,7 +209,7 @@ export function updatePlayer(dt: number) {
     else if (P.rockets <= 0) radio('SYSTEM', 'Keine Raketen mehr.');
     else if (!G.lockT) radio('SYSTEM', 'Kein Ziel erfasst. Ferrox ins Fadenkreuz nehmen.');
     else {
-      P.rockets--;
+      sfx('rocket_fire', 0.7); P.rockets--;
       _e.set(P.pitch, P.yaw, G.roll);
       _v.set(world.rockets.length % 2 ? 3.6 : -3.6, -0.6, 0).applyEuler(_e);
       launchRocket(P.x + _v.x, P.y + _v.y, P.z + _v.z, P.vx + f.x * 150, P.vy + f.y * 150, P.vz + f.z * 150, G.lockT);
