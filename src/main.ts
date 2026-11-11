@@ -5,7 +5,7 @@ import { updateSky, sunDir, sky } from './core/sky';
 import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience';
 import { ux } from './core/engine';
 import { onKey, centerMouse, releaseAll, keys, look } from './core/input';
-import { ambience, preloadSfx, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode, sfx, sfxHeld } from './core/audio';
+import { ambience, preloadSfx, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode, sfx, sfxHeld, loopVol } from './core/audio';
 import { rand, clamp, $ } from './core/util';
 import { P, G, settings, loadSettings, saveSettings, newPlayer, setPlayer, loadGame, saveGame, stats, type Player, type Tool } from './game/state';
 import { world, buildSector, stationById, gateTo, updateAsteroids } from './game/world';
@@ -499,7 +499,27 @@ function loop(now: number, manual = false) {
   updateStory(dt);
   updateChapter1(dt);
   // Grundgeräusch zu Fuß: im Schiff ein tiefes Brummen, in der Station leiser
-  ambience(IN.active && (G.mode === 'walk' || G.mode === 'launch') ? (IN.ship ? 'amb_ship' : IN.area === 'Hangardeck' || G.mode === 'launch' ? 'amb_hangar' : 'amb_station') : null, IN.ship ? 0.16 : 0.22);
+  // Grundgeräusch: zu Fuß Schiff, Hangar oder Station; auf einer Planetenoberfläche der Wind (je nach Planetenart)
+  {
+    const onFoot = IN.active && (G.mode === 'walk' || G.mode === 'launch');
+    const ground = !onFoot && !!world.surface && (G.mode === 'rover' || G.mode === 'play');
+    const kind = ground ? JSON.stringify([(world.surface as any)?.kind, (world.surface as any)?.type, (world.surface as any)?.ground, (world.def as any)?.id]).toLowerCase() : '';
+    const wind = /eis|ice|frost/.test(kind) ? 'amb_planet_ice' : /vulkan|lava|asche/.test(kind) ? 'amb_planet_lava' : 'amb_planet_wind';
+    ambience(onFoot ? (IN.ship ? 'amb_ship' : IN.area === 'Hangardeck' || G.mode === 'launch' ? 'amb_hangar' : 'amb_station') : ground ? wind : null, onFoot ? (IN.ship ? 0.2 : 0.22) : 0.3);
+    // weitere Schleifen: Rover, Bohrer, Drohnen, Mutterschiff in der Nähe, anfliegender Torpedo
+    const rv = ROVER.active && G.mode === 'rover';
+    loopVol('rover_engine', rv ? clamp(Math.abs((ROVER as any).speed || 0) / 26, 0, 1) * 0.35 : 0);
+    loopVol('rover_drill', rv && (ROVER as any).drilling ? 0.4 : 0);
+    const fly = G.mode === 'play' && !G.dead;
+    loopVol('drone_hum', fly && P.dronesOn && stats().drones ? 0.1 : 0);
+    let dm = 1e9, dt2 = 1e9;
+    if (fly) {
+      for (const e of world.enemies as any[]) if (e.type === 'mother') dm = Math.min(dm, d3(P.x, P.y, P.z, e.x, e.y, e.z));
+      for (const b of world.ebullets as any[]) if (b.torp) dt2 = Math.min(dt2, d3(P.x, P.y, P.z, b.x, b.y, b.z));
+    }
+    loopVol('mother_hum', dm < 2600 ? 0.5 * (1 - dm / 2600) : 0);
+    loopVol('torpedo_fly', dt2 < 900 ? 0.45 * (1 - dt2 / 900) : 0);
+  }
   if (world.def && G.mode !== 'map') {
     animateStructures(dt);
     if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); }

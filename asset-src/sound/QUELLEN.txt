@@ -8,3 +8,4 @@ space-explosion = vom Projektinhaber bereitgestellt (Zusammenbruch des Halden-To
 Mit ElevenLabs vom Projektinhaber erzeugt (Prompts in docs/sound/prompts.md): amb_hangar, amb_station, band_open, band_close, gear, jump_charge, jump_in, jump_out, launch, lock_tone, scan_pulse, touchdown
 Über die ElevenLabs-Verbindung erzeugt (vom Projektinhaber ausgewählte Fassungen): cruise_on, cruise_off, rocket_fire, warn_hull, warn_shield, warn_heat
 Über die ElevenLabs-Verbindung erzeugt: ferrox_attack, ferrox_death, torpedo_fire, entry, success, rank_up
+Über die ElevenLabs-Verbindung erzeugte Schleifen: amb_ship, amb_planet_wind, amb_planet_ice, amb_planet_lava, torpedo_fly, mother_hum, rover_engine, rover_drill, drone_hum
