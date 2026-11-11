@@ -52,7 +52,8 @@ function nextShot() {
   c.classList.remove('show'); void (c as HTMLElement).offsetWidth;
   c.textContent = s.text; c.classList.toggle('last', !s.path);
   setTimeout(() => c.classList.add('show'), 600);
-  voice('intro_0' + (shot + 1));   // Erzähler (falls die Aufnahme vorhanden ist)
+  // Erzähler (falls die Aufnahme vorhanden ist): setzt ein, wenn der Text eingeblendet ist
+  { const n = shot; setTimeout(() => { if (shot === n && G.mode === 'intro') voice('intro_0' + (n + 1)); }, 700); }
 }
 function flash() {
   const f = $('introFlash') as HTMLElement;
