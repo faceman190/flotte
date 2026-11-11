@@ -25,7 +25,7 @@ if (opt.debug) console.log(`Mitte (Modellkoordinaten) ${cx.toFixed(2)} / ${cy.to
 // Innen- und Außenmodell einlesen (Dreiecke in Schiffskoordinaten), Holz-Bereich merken (für die Koje).
 // Beide zusammen: Teile der Decks sind von außen sichtbar und stecken deshalb im Außenmodell; im Spiel stehen beide ineinander.
 const doc = await io.read(inInner);
-const allNodes = [...doc.getRoot().listNodes(), ...outer.getRoot().listNodes()];
+const allNodes = inInner === inOuter ? doc.getRoot().listNodes() : [...doc.getRoot().listNodes(), ...outer.getRoot().listNodes()];   // volles Modell: nur einmal
 let nv = 0, nt = 0;
 for (const n of allNodes) { const m = n.getMesh(); if (!m) continue; for (const p of m.listPrimitives()) { nv += p.getAttribute('POSITION').getCount(); const i = p.getIndices(); nt += i ? i.getCount() / 3 : p.getAttribute('POSITION').getCount() / 3; } }
 const pos = new Float32Array(nv * 3), idx = new Uint32Array(nt * 3);

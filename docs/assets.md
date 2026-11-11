@@ -63,12 +63,16 @@ claude.ai stellt keine `.glb`-Dateien bereit. Für das Artifact gibt es deshalb 
 `assets/models.json` und vermerkt das in der Paketliste („embed“). Veröffentlicht wird `dist-artifact/`.
 
 ## Begehbare Innenräume aus Modellen (Pfeil)
-1. Volles Modell (innen + außen) mit `scripts/split-visible.mjs` in sichtbare Hülle und Innenteile trennen.
-2. Innenteile mit `scripts/simplify-hard.mjs` vereinfachen → `asset-src/glb/interior/<Modell>.glb` (gleiche Koordinaten wie die Hülle).
-3. Laufkarte: `node --max-old-space-size=12000 scripts/build-walkmap.mjs <innen.glb> <aussen.glb> asset-src/walk/<Modell>.json`
-   (20-cm-Zellen, mehrere Decks, Treppen bis 45 cm, Türen gelten als offen, Gitterroste werden geschlossen; Einstieg, Sitz, Koje usw. und acht Lampen werden automatisch gesetzt).
-   Pfeil: `--start=1.7,-4.3,10 --minY=-6.4` (Hauptdeck an dieser Stelle; der Zwischenraum unter dem Deck zählt nicht).
-   Längsschnitt zur Kontrolle der Decks: `node scripts/slice-image.mjs <innen.glb> <aussen.glb> bild.png <x> [walk.json]`
-   Kontrollbild: `node scripts/walkmap-image.mjs asset-src/walk/<Modell>.json bild.png 2`
-4. `npm run assets` – Innenmodell und Laufkarte landen im Hintergrund-Paket (world).
-Im Spiel (src/game/meshRoom.ts) bleibt die Außenhülle beim Betreten sichtbar; sie bildet Wände und Decke.
+Das Schiffsmodell ist das **vollständige** Modell (innen und außen in einer Datei, asset-src/glb/ship/<Modell>.glb); es wird nicht mehr
+in Hülle und Innenteile getrennt. (Die Trennung per split-visible hatte Rumpfschalen und die Glaskanzel fälschlich nach innen sortiert,
+weil deren Flächen nach innen zeigen.)
+1. Volles Modell mit Materialien versehen und vereinfachen: `scripts/split-visible.mjs … --min=0` (nur zum Übertragen der FBX-Materialien),
+   dann `scripts/simplify-hard.mjs <roh.glb> asset-src/glb/ship/<Modell>.glb 0.3 0.0004 35 --rotY=90`.
+2. Materialwerte stehen in `LOOK` (scripts/glb-lib.mjs). Die Kaufdateien der Pfeil enthalten keine Texturen und nur sieben einfarbige
+   Platzhalter; die Werte sind den Verkaufsbildern nachempfunden. Nach Änderungen: `node scripts/relook.mjs asset-src/glb/ship/<Modell>.glb`.
+3. Laufkarte: `node --max-old-space-size=12000 scripts/build-walkmap.mjs <modell.glb> <modell.glb> asset-src/walk/<Modell>.json`
+   (20-cm-Zellen, mehrere Decks, Treppen bis 45 cm, Türen gelten als offen, Gitterroste werden geschlossen; Einstieg, Sitz, Koje usw.
+   und acht Lampen werden automatisch gesetzt). Pfeil: `--start=1.7,-4.3,10 --minY=-6.4`.
+   Kontrolle: `node scripts/walkmap-image.mjs …` (Draufsicht) und `node scripts/slice-image.mjs <modell.glb> <modell.glb> bild.png <x> [walk.json]` (Längsschnitt).
+4. `npm run assets`. Nicht ausführen, während jemand im Entwicklungsfenster spielt (Dateinamen ändern sich).
+Im Spiel (src/game/meshRoom.ts) bleibt das Schiffsmodell beim Betreten stehen; der Raum bringt Licht, Spiegelungen und die Laufkarte mit.

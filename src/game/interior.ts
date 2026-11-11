@@ -20,7 +20,7 @@ import { SECTOR } from '../data/galaxy';
 import { sectorOres } from '../data/ores';
 import { world } from './world';
 import { saveGame } from './state';
-import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom } from './meshRoom';
+import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom, interiorEnv } from './meshRoom';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -89,7 +89,7 @@ let field: THREE.Mesh | null = null, holo: THREE.Object3D | null = null, standGr
 let shipPad = { y: 0, z: 4 };
 let dims = PROM.station, kind: 'station' | 'carrier' | 'outpost' = 'station';
 const disposables: (THREE.Material | THREE.Texture)[] = [];
-let room: ShipRoom | null = null, roomModel: THREE.Object3D | null = null;
+let room: ShipRoom | null = null, roomModel: THREE.Object3D | null = null, outsideEnv: THREE.Texture | null = null;
 let mesh: ReturnType<typeof buildMeshRoom> = null, boarding = false;   // Innenraum aus einem Modell (Laufkarte statt Rechtecke)
 let saved: null | { group: THREE.Group | null; rects: Rect[]; obstacles: Rect[]; shipObs: Rect[]; inters: Inter[]; shipInters: Inter[]; labels: Label[]; shipLabels: Label[]; x: number; z: number; yaw: number; lamps: [THREE.Vector3, number, number][] } = null;
 
@@ -397,8 +397,8 @@ export function refreshHangarShips() {
 const _wp = new THREE.Vector3();
 export function syncParkedShip() {
   if (!group) return;
-  if (!IN.station) { SHIP.g.visible = !IN.ship; return; }   // Planet: Schiff steht auf dem Landeplatz
-  if (saved) { SHIP.g.visible = !(IN.ship && IN.ship.uid === P.uid); return; }   // im Schiffsraum: Stationsgruppe ist gespeichert
+  if (!IN.station) { SHIP.g.visible = !IN.ship || !!mesh; return; }   // Planet: Schiff steht auf dem Landeplatz
+  if (saved) { SHIP.g.visible = !(IN.ship && IN.ship.uid === P.uid) || !!mesh; return; }   // Modell-Raum: das Schiffsmodell ist der Innenraum   // im Schiffsraum: Stationsgruppe ist gespeichert
   group.localToWorld(_wp.set(0, shipPad.y, shipPad.z));
   SHIP.g.position.copy(_wp);
   SHIP.g.rotation.set(0, group.rotation.y + Math.PI, 0);
@@ -498,7 +498,8 @@ export function enterShip(info: ShipInfo, m: ShipModel) {
   room.g.rotation.set(0, m.g.rotation.y, 0);
   room.g.updateMatrixWorld(true);
   scene.add(room.g);
-  roomModel = m.g; m.g.visible = !!mesh;   // Modell-Räume: die Außenhülle bleibt stehen, sie ist Wand und Decke des Innenraums
+  roomModel = m.g; m.g.visible = !!mesh;   // Modell-Räume: das Schiffsmodell bleibt stehen, es enthält den Innenraum
+  if (mesh) { outsideEnv = scene.environment; scene.environment = interiorEnv(); }   // Spiegelungen wie in einem beleuchteten Raum
   group = room.g;
   rects = room.rects; obstacles = room.obstacles; shipObs = []; shipLabels = []; labels = []; shipInters = [];
   inters = room.spots.map(sp => Object.assign(shipInter(sp, info), { y: (sp as any).y }));
@@ -518,6 +519,7 @@ export function leaveShip() {
   mesh = null; IN.fy = 0; IN.jy = IN.jv = 0;
   for (const d of room.disposables) d.dispose();
   if (roomModel) roomModel.visible = true;
+  if (outsideEnv) { scene.environment = outsideEnv; outsideEnv = null; }
   room = null; roomModel = null; IN.ship = null; IN.panel = null; IN.target = null;
   if (saved) {
     const s = saved;
