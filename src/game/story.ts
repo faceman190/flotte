@@ -118,7 +118,7 @@ const STEPS: Step[] = [
       S.talked = false;
       storyNpc('Achterberg', 'Ausbilderin', 'Bei Hauptfrau Achterberg melden', () => { S.talked = true; }, '#ffb347', undefined, { model: 'worker', tint: [0.72, 0.78, 0.9] });
       talk(['BRUMMER', 'Guten Morgen, Bastion. Jahr 38 nach dem Riss, Tag 112. Schichtwechsel auf allen Decks.'],
-        ['ACHTERBERG', `Kadett ${P.name}! Hier drüben, bei deiner Falke. Beweg dich.`]);
+        ['ACHTERBERG', `Kadett ${P.name}! Hier drüben, bei deiner ${P.shipName}. Beweg dich.`]);
     },
     lines: () => [['Melde dich bei Hauptfrau Achterberg · <b>E</b>', S.talked, false], ['Laufen mit W A S D, Maus zum Umsehen', false, true]],
     done: () => S.talked,
@@ -136,8 +136,8 @@ const STEPS: Step[] = [
   },
   { // 2: an Bord und starten
     title: 'Prolog · Erster Flug',
-    enter: () => talk(['ACHTERBERG', 'Gut. Und jetzt rein in die Falke. Pilotensitz, dann holst du dir beim Lotsen die Startfreigabe.']),
-    lines: () => [['Geh an Bord deiner Falke · <b>E</b> am Schiff', IN.ship != null, false], ['Vom Pilotensitz aus starten', false, false]],
+    enter: () => talk(['ACHTERBERG', `Gut. Und jetzt rein in die ${P.shipName}. Pilotensitz, dann holst du dir beim Lotsen die Startfreigabe.`]),
+    lines: () => [[`Geh an Bord deiner ${P.shipName} · <b>E</b> am Schiff`, IN.ship != null, false], ['Vom Pilotensitz aus starten', false, false]],
     done: () => G.mode === 'play' && !G.dockedAt,
   },
   { // 3: Übungsbojen
@@ -149,7 +149,7 @@ const STEPS: Step[] = [
         st().wp = [[L.x + fx * 650, L.y, L.z + fz * 650], [L.x + fx * 1250 + rx * 450, L.y + 80, L.z + fz * 1250 + rz * 450], [L.x + fx * 1050 + rx * 1150, L.y + 160, L.z + fz * 1050 + rz * 1150]].map(p => p.map(Math.round));
         st().wi = 0;
       }
-      talk(['BRUMMER', `Falke ${P.name} von Bastion: Startfreigabe erteilt. Drei Übungsbojen sind markiert.`],
+      talk(['BRUMMER', `${P.shipName} ${P.name} von Bastion: Startfreigabe erteilt. Drei Übungsbojen sind markiert.`],
         ['ACHTERBERG', 'Flieg sie der Reihe nach ab. W gibt Schub, mit der Maus lenkst du. Und ramm die Bojen nicht, die sind teurer als du.']);
     },
     lines: () => (st().wp || []).map((p, i) => [`Übungsboje ${i + 1}${i === (st().wi || 0) ? ` · <b>${fmtDist(d3(p[0], p[1], p[2], P.x, P.y, P.z))}</b>` : ''}`, i < (st().wi || 0), false] as Obj),

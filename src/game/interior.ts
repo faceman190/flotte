@@ -361,7 +361,8 @@ function park(m: ShipModel, px: number, pz: number, name: string, cls: string, o
   // Stützen
   const sm = mat(std(0x3a3e46, { roughness: 0.7, metalness: 0.6 }));
   for (const dz of [-l * 0.25, l * 0.25]) box(standGroup!, sm, Math.min(1.2, w * 0.12), 1.3, 0.8, px, 0.65, pz + dz);
-  const hw = Math.max(1.2, w * 0.16), hl = l * 0.44;
+  // Sperrzone unter dem Rumpf: kleine Schiffe nur der schmale Mittelteil (unter den Flügeln kann man durch), große Schiffe breiter
+  const hw = Math.max(1.2, w * (w > 30 ? 0.3 : 0.16)), hl = l * 0.44;
   shipObs.push([px - hw, px + hw, pz - hl, pz + hl]);
   shipLabels.push({ p: new THREE.Vector3(px, y + (b.max.y - b.min.y) / 2 + 1.5, pz), text: `${name} · ${cls}`, col: '#e8e2d6' });
   onUse.x = px; onUse.z = pz; onUse.r = Math.max(hw, hl) + 3.5;

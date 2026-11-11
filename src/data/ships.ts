@@ -40,6 +40,12 @@ export const SHIPS = {
     hull: 230, shield: 90, speed: 265, acc: 490, turn: 0.85, cargo: 20, ammo: 500, rockets: 8, dmg: 1.6,
     laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1300, charges: 0, drones: 0, radius: 8, camUp: 10, camBack: 34, upMul: 1.4, col: 0xc04040, model: 'Executioner', len: 22,
   },
+  // Modell: „Arrow Carbine Spaceship“ (CGTrader, Royalty-Free), maßstabsgetreu 93 m, mit begehbaren Innenräumen
+  pfeil: {
+    n: 'Pfeil', role: 'Langstreckenkreuzer', price: 45000, desc: 'Großer Allzweck-Kreuzer mit Wohndeck, Frachtraum und Cockpit. Kräftig, gut gepanzert, mit Bergbaulaser und Drohne. Innen begehbar.',
+    hull: 400, shield: 160, speed: 240, acc: 360, turn: 0.7, cargo: 220, ammo: 450, rockets: 6, dmg: 1.2,
+    laser: 1.2, beams: 1, laserRange: 300, heat: 0.9, scan: 2000, charges: 4, drones: 1, radius: 22, camUp: 46, camBack: 150, upMul: 2, col: 0xff8a2a, model: 'Pfeil', len: 93,
+  },
 } satisfies Record<string, ShipClass>;
 export type ShipId = keyof typeof SHIPS;
 export const SHIP_IDS = Object.keys(SHIPS) as ShipId[];

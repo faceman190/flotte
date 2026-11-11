@@ -51,6 +51,7 @@ function layout(cls: ShipId): Layout {
         ],
       };
     }
+    case 'pfeil':   // vorläufig wie der Kärrner, bis der echte Innenraum aus dem Modell kommt
     case 'kaerrner': {
       const br: Zone = { name: 'Brücke', x0: -3.5, x1: 3.5, z0: -17, z1: -12, h: 2.8 };
       const gang: Zone = { name: 'Gang', x0: -1, x1: 1, z0: -12, z1: -9, h: 2.5 };

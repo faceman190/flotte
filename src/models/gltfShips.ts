@@ -25,8 +25,9 @@ export async function loadShipModels() {
       inner.traverse((o: any) => {
         if (!o.isMesh) return;
         const m = o.material as THREE.MeshStandardMaterial;
-        if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = 4; m.map.needsUpdate = true; }
-        m.metalness = 0.35; m.roughness = 0.55; m.envMapIntensity = 0.8;
+        // Texturierte Modelle (Lackierungen) bekommen einheitliche Werte; Modelle mit eigenen Materialien behalten ihre
+        if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = 4; m.map.needsUpdate = true; m.metalness = 0.35; m.roughness = 0.55; }
+        m.envMapIntensity = 0.8;
       });
       inner.rotation.y = Math.PI;                 // Nase von +Z nach −Z
       const wrap = new THREE.Group(); wrap.add(inner);

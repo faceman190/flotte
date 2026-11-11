@@ -18,6 +18,23 @@
 3. `npm run assets` komprimiert sie und nimmt sie in die Paketliste auf (`ship/<Name>`, `station/<Name>` …);
    danach wird das Modell im Spielcode eingebunden (Schiffsklasse, Stationsart, Figur, Dekoration).
 
+## Schwere Modelle spieltauglich machen (Beispiel: Pfeil / Carbine Arrow)
+
+Gekaufte Modelle sind oft für Renderbilder gemacht (Millionen Dreiecke, Innenräume, Materialien nur in der FBX).
+Werkzeuge in `scripts/`:
+
+1. `inspect-glb.mjs <datei.glb>`: Aufbau, Dreiecke, Texturen, Materialien, Abmessungen.
+2. `fbx-materials.mjs <datei.fbx> <karte.json>`: liest aus der FBX, welches Teil welches Material hat (falls die GLB alles weiß zeigt).
+3. `measure-decks.mjs <datei.glb> [Raster] [x0,x1,z0,z1]`: misst Raumhöhen, um den Maßstab zu prüfen (2,2–2,6 = Meter).
+4. `split-visible.mjs <ein.glb> <außen.glb> <teile.json> --mat=<karte.json>`: per Sichtstrahlen nur die von außen
+   sichtbaren Teile behalten (Flugmodell); die verdeckten Teile (Innenräume) stehen in `teile.json`.
+5. `simplify-hard.mjs <ein.glb> <aus.glb> [Anteil] [Fehler] [Knick] --rotY=<Grad>`: stark vereinfachen (ohne Nähte),
+   Normalen mit Knickwinkel neu, Transformationen einrechnen, Nase nach +Z drehen.
+6. Ergebnis nach `asset-src/glb/ship/<Name>.glb`, dann `npm run assets`.
+
+Der Pfeil: `split-visible` (3 Mio. → 2,3 Mio. sichtbare Dreiecke) und `simplify-hard 0.03 0.002 35 --rotY=90`
+(→ 78.000 Dreiecke, 1,5 MB komprimiert). Spielwerte in `src/data/ships.ts`. Vorschau: `/modelview.html?f=…`.
+
 ## Ältere Wege: Rohdaten und Erzeugungsskripte
 
 1. Rohdaten ablegen wie bisher:
