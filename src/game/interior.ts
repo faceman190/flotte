@@ -9,7 +9,7 @@ import type { Station } from './world';
 import { SHIP } from './player';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { shipsAt, board } from './fleet';
-import { SHIPS } from '../data/ships';
+import { SHIPS, hasInterior } from '../data/ships';
 import { SECTORS, FACTION } from '../data/galaxy';
 import type { Paint } from '../models/gltfShips';
 import { hasChar, charInstance } from '../models/charModels';
@@ -388,15 +388,19 @@ export function refreshHangarShips() {
   while (standGroup!.children.length) { const c = standGroup!.children[0] as THREE.Mesh; standGroup!.remove(c); c.geometry.dispose(); }
   const st = IN.station!;
   shipPad.z = PADZ;
-  shipPad.y = park(SHIP, 0, shipPad.z, P.shipName, SHIPS[P.cls].role, { x: 0, z: 0, r: 0, label: () => `An Bord der ${P.shipName} gehen`, act: () => enterShip({ cls: P.cls, uid: P.uid, name: P.shipName, ctx: 'hangar' }, SHIP) });
+  shipPad.y = park(SHIP, 0, shipPad.z, P.shipName, SHIPS[P.cls].role, { x: 0, z: 0, r: 0, label: () => hasInterior(P.cls) ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} steigen und ablegen`, act: () => hasInterior(P.cls) ? enterShip({ cls: P.cls, uid: P.uid, name: P.shipName, ctx: 'hangar' }, SHIP) : interiorHooks.undock() });
   const others = shipsAt(st.id).slice(0, 2);
   others.forEach((r, i) => {
     const m = buildShipModel(r.cls, (r.paint || 'Orange') as Paint);
     scene.add(m.g);
     parked.push({ m, uid: r.uid });
     park(m, i ? PADX : -PADX, PADZ, r.name, SHIPS[r.cls].role, {
-      x: 0, z: 0, r: 0, label: () => `An Bord der ${r.name} gehen`,
-      act: () => enterShip({ cls: r.cls, uid: r.uid, name: r.name, ctx: 'hangar' }, m),
+      x: 0, z: 0, r: 0, label: () => hasInterior(r.cls) ? `An Bord der ${r.name} gehen` : `Auf die ${r.name} umsteigen`,
+      act: () => {
+        if (hasInterior(r.cls)) { enterShip({ cls: r.cls, uid: r.uid, name: r.name, ctx: 'hangar' }, m); return; }
+        // kleiner Flieger: direkt umsteigen
+        if (board(r, { sector: P.sector, station: st.id })) { say('SYSTEM', `Du bist auf die ${P.shipName} umgestiegen.`); snd(400, 0.4, 'sine', 0.05, 300); refreshHangarShips(); }
+      },
     });
   });
 }

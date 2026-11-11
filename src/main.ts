@@ -38,6 +38,7 @@ const openMap = () => openBand('karte'), closeMap = closeBand;
 import { menuHooks, showMainMenu, hideMainMenu, showPause, hidePause, applySettings, pauseSubOpen, closePauseSub } from './ui/menus';
 import { SECTOR, FACTION } from './data/galaxy';
 import { loadShipModels, setGear, type Paint } from './models/gltfShips';
+import { hasInterior } from './data/ships';
 import { loadStationModels } from './models/stationModels';
 import { loadCharModels } from './models/charModels';
 import type { Gate } from './game/world';
@@ -237,8 +238,8 @@ onKey(code => {
     else if (G.mode === 'dock' && !G.inside) undock();
     else if (G.mode === 'rover') {
       if (!nearShip()) { /* nichts */ }
-      else if (settings.walk) {
-        // zu Fuß an Bord: Rover bleibt neben dem Schiff stehen
+      else if (settings.walk && hasInterior(P.cls)) {
+        // zu Fuß an Bord: Rover bleibt neben dem Schiff stehen (kleine Flieger: direkt einsteigen)
         syncLandedShip(); ROVER.active = false; laserSound(false);
         const u = unloadRover(); if (u.moved) radio('SYSTEM', `${u.moved} Einheiten aus dem Rover in den Frachtraum verladen.`);
         $('hud').classList.add('hidden');

@@ -4,7 +4,7 @@
  "parts": [
   [
    "^polySurface2$",
-   "Glass"
+   "glass_clear"
   ],
   [
    "^polySurface34$",

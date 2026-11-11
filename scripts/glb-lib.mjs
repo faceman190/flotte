@@ -31,6 +31,7 @@ export const LOOK = {
   copper: { color: [0.75, 0.38, 0.2], metal: 0.9, rough: 0.35 },              // Rohre
   floor_dark: { color: [0.085, 0.09, 0.1], metal: 0.6, rough: 0.42 },         // Böden, Gitterroste
   gunmetal: { color: [0.035, 0.035, 0.04], metal: 0.7, rough: 0.4 },          // Waffen
+  glass_clear: { color: [0.72, 0.8, 0.84], metal: 0.0, rough: 0.04, alpha: 0.16 },   // normales, klares Glas
   venom_hull: { color: [0.2, 0.215, 0.235], metal: 0.6, rough: 0.5 },         // Venom: Graphit
   venom_green: { color: [0.2, 0.52, 0.1], metal: 0.3, rough: 0.45 },          // Venom: giftgrüne Leitwerke
   interior_dark: { color: [0.065, 0.07, 0.08], metal: 0.4, rough: 0.6 },

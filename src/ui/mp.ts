@@ -4,6 +4,8 @@ import { releaseAll, centerMouse } from '../core/input';
 import { settings, saveSettings, G, hasSave } from '../game/state';
 import { refreshContinue } from './menus';
 import { SECTOR } from '../data/galaxy';
+import { runCommand, devMode } from '../game/cheats';
+import { radio } from './radio';
 import { NET, connect, disconnect, defaultUrl, netHooks, sendChat, isOnline, register, login, logout, authHooks } from '../game/net';
 
 // Mehrspieler-Fenster (aus Hauptmenü oder Pause) und Chat-Eingabe im Spiel
@@ -57,7 +59,7 @@ authHooks.changed = () => { accountNote(); render(); };
 // ---------- Chat ----------
 let chatFrom = '';
 export function openChat() {
-  if (!isOnline() || !(G.mode === 'play' || G.mode === 'walk' || G.mode === 'rover')) return false;
+  if ((!isOnline() && !devMode()) || !(G.mode === 'play' || G.mode === 'walk' || G.mode === 'rover')) return false;
   chatFrom = G.mode;
   releaseAll();
   if (document.pointerLockElement) document.exitPointerLock();
@@ -67,7 +69,11 @@ export function openChat() {
 const closeChat = () => { chatIn.classList.add('hidden'); chatIn.blur(); if (chatFrom) centerMouse(); chatFrom = ''; };
 chatIn.addEventListener('keydown', e => {
   e.stopPropagation();
-  if (e.key === 'Enter') { sendChat(chatIn.value); closeChat(); }
+  if (e.key === 'Enter') {
+    const v = chatIn.value;
+    if (!runCommand(v)) { if (isOnline()) sendChat(v); else if (v.trim()) radio('SYSTEM', 'Nicht verbunden. Befehle: /hilfe'); }
+    closeChat();
+  }
   else if (e.key === 'Escape') closeChat();
 });
 chatIn.addEventListener('blur', () => { if (!chatIn.classList.contains('hidden')) closeChat(); });

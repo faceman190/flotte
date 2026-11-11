@@ -53,6 +53,8 @@ export const SHIPS = {
   },
 } satisfies Record<string, ShipClass>;
 export type ShipId = keyof typeof SHIPS;
+// Kleine Flieger (unter 30 m) haben keinen begehbaren Innenraum: man steigt ein und fliegt los
+export const hasInterior = (cls: string) => ((SHIPS as any)[cls]?.len || 0) >= 30;
 export const SHIP_IDS = Object.keys(SHIPS) as ShipId[];
 
 export type Up = Record<'guns' | 'rate' | 'hull' | 'shield' | 'mag' | 'engine' | 'laser' | 'cargo' | 'scanner', number>;
