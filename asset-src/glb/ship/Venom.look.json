@@ -1,0 +1,34 @@
+{
+ "hinweis": "Venom (Kaufmodell „Venom X Spaceship“, ohne Texturen, alles ein graues Material): Materialien nach Teilnamen. Quelle: asset-src/neu/venom-x-spaceship/Venom_obj.obj → scripts/obj-to-glb.mjs → scripts/simplify-hard.mjs.",
+ "drop": [],
+ "parts": [
+  [
+   "^polySurface2$",
+   "Glass"
+  ],
+  [
+   "^polySurface34$",
+   "light_warm"
+  ],
+  [
+   "^(pCylinder[0-9]+|polySurface9|base1|polySurface5|polySurface29|polySurface25|polySurface23|polySurface24)$",
+   "gunmetal"
+  ],
+  [
+   "^pCube43$",
+   "venom_green"
+  ],
+  [
+   "^(pCube40|pCube41|bed)$",
+   "leather"
+  ],
+  [
+   "^(Keyboard|pPlane9|polySurface13|pPipe[0-9]+|pCube28|pCube29|pPlane4|MASH1_ReproMesh|pCube47|pCube49|pCube25)$",
+   "interior_dark"
+  ],
+  [
+   ".",
+   "venom_hull"
+  ]
+ ]
+}

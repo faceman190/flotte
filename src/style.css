@@ -244,3 +244,18 @@ button.mini{padding:3px 8px;font-size:12px;letter-spacing:.5px}
 @media (max-width:700px){#sceneTxt{font-size:19px}#sceneTxt.big{font-size:24px}#introCard{font-size:19px}#introCard.last{font-size:24px}#dlgTxt{font-size:16px}}
 #storyObj{background:linear-gradient(90deg,rgba(6,18,28,.82),rgba(6,18,28,.45))}
 #storyObj .ot{font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--txt);font-size:15px;margin-bottom:6px}
+
+/* ---------- Tafel im Schiff (Logbuch, Scanner) ---------- */
+#shipPanel{position:fixed;left:50%;top:44%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 32px));pointer-events:none;z-index:6}
+#shipPanel .card{padding:16px 20px 14px;border:1px solid var(--line2);box-shadow:0 0 0 1px rgba(0,0,0,.5),0 18px 50px rgba(0,0,0,.55),0 0 28px rgba(95,208,255,.08) inset;position:relative}
+#shipPanel .card::before,#shipPanel .card::after{content:"";position:absolute;width:14px;height:14px;border:2px solid var(--acc);pointer-events:none}
+#shipPanel .card::before{left:-1px;top:-1px;border-right:none;border-bottom:none}
+#shipPanel .card::after{right:-1px;bottom:-1px;border-left:none;border-top:none}
+.sphead{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:8px}
+.sphead h3{margin:0;font-size:15px}
+.sphead span{font-size:12px;color:var(--dim);font-family:var(--mono);white-space:nowrap}
+.sprow{display:flex;justify-content:space-between;gap:18px;padding:5px 0;border-bottom:1px solid rgba(95,208,255,.08);font-size:15px;font-weight:600}
+.sprow span{color:var(--mut);font-weight:500}
+.sprow b{color:var(--txt);font-weight:600;text-align:right}
+.spline{padding:3px 0;font-size:14px;font-weight:500}
+.spsec{margin:12px 0 4px;font-size:12px;letter-spacing:3px;color:var(--acc);font-weight:700;text-transform:uppercase}

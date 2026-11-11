@@ -50,7 +50,7 @@ export const IN = {
   target: null as Inter | null,
   say: { who: '', text: '', t: 0 },
   ship: null as null | { cls: string; uid: number; name: string; ctx: 'hangar' | 'planet' },
-  panel: null as null | { title: string; lines: [string, string][]; x: number; z: number },
+  panel: null as null | { title: string; lines: any[]; x: number; z: number },
 };
 
 // ---------- Maße (lokal: +Z zeigt aus dem Hangartor in den Raum, Boden bei y = 0) ----------
@@ -546,19 +546,39 @@ export function leaveShip() {
     if (document.pointerLockElement === gl) document.exitPointerLock();
   }
 }
-function openPanel(title: string, lines: [string, string][]) { IN.panel = { title, lines, x: IN.x, z: IN.z }; snd(880, 0.06, 'sine', 0.03, 200); }
-function logLines(): [string, string][] {
-  const W = '#e8e2d6', M = '#9a9284', S = stats();
-  const out: [string, string][] = [
-    [`Pilot ${P.name} · ${fmtN(P.credits)} Credits`, '#ffb347'],
-    [`${P.shipName} (${SHIPS[P.cls].role}) · Hülle ${Math.ceil(P.hull)}/${S.maxHull} · Fracht ${cargoUsed()}/${S.cargo}`, W],
-    [P.route && SECTOR[P.route] ? `Route nach ${SECTOR[P.route].name}` : 'Keine Route geplant (Galaxiekarte: M)', M],
-    [`Heimathafen: ${SECTOR[P.home.sector]?.stations.find(s => s.id === P.home.station)?.name || '—'}`, M],
-    ['', W],
-    [P.contracts.length ? 'AUFTRÄGE' : 'Keine Aufträge angenommen', '#7cc4ff'],
+// Tafel (Logbuch, Scanner): Zeilen sind Text mit Farbe, Wertepaare { k, v } oder Abschnittstitel { h }
+type PanelLine = [string, string] | { k: string; v: string; c?: string } | { h: string };
+function openPanel(title: string, lines: PanelLine[]) { IN.panel = { title, lines, x: IN.x, z: IN.z }; snd(880, 0.06, 'sine', 0.03, 200); }
+const esc = (t: string) => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+let shownPanel: unknown = null;
+// Fenster im Stil der übrigen Oberfläche (index.html #shipPanel); wird jeden Frame mit IN.panel abgeglichen
+function syncShipPanel() {
+  const want = IN.active && G.mode === 'walk' ? IN.panel : null;
+  if (want === shownPanel) return;
+  shownPanel = want;
+  const el = document.getElementById('shipPanel'); if (!el) return;
+  el.classList.toggle('hidden', !want);
+  if (!want) return;
+  document.getElementById('spTitle')!.textContent = want.title;
+  document.getElementById('spBody')!.innerHTML = (want.lines as PanelLine[]).map(l =>
+    Array.isArray(l) ? (l[0] ? `<div class="spline" style="color:${l[1]}">${esc(l[0])}</div>` : '<div style="height:8px"></div>')
+      : 'h' in l ? `<div class="spsec">${esc(l.h)}</div>`
+        : `<div class="sprow"><span>${esc(l.k)}</span><b${l.c ? ` style="color:${l.c}"` : ''}>${esc(l.v)}</b></div>`).join('');
+}
+function logLines(): PanelLine[] {
+  const S = stats();
+  const out: PanelLine[] = [
+    { k: 'Pilot', v: P.name },
+    { k: 'Credits', v: `${fmtN(P.credits)} Cr`, c: '#ffb347' },
+    { k: 'Schiff', v: `${P.shipName} · ${SHIPS[P.cls].role}` },
+    { k: 'Hülle', v: `${Math.ceil(P.hull)} / ${S.maxHull}`, c: P.hull < S.maxHull * 0.4 ? '#ff6b5b' : undefined },
+    { k: 'Fracht', v: `${cargoUsed()} / ${S.cargo}` },
+    { k: 'Route', v: P.route && SECTOR[P.route] ? SECTOR[P.route].name : 'keine (Galaxiekarte: M)' },
+    { k: 'Heimathafen', v: SECTOR[P.home.sector]?.stations.find(s => s.id === P.home.station)?.name || '—' },
+    { h: P.contracts.length ? 'Aufträge' : 'Keine Aufträge angenommen' },
   ];
-  for (const c of P.contracts) out.push([`• ${c.amount}× ${ITEMS[c.item].n} → ${c.stName} (${SECTOR[c.sector]?.name || ''}) · ${fmtN(c.reward)} Cr`, P.cargo[c.item] >= c.amount ? '#8fd18f' : W]);
-  out.push(['', W], [`Abgebaut ${fmtN(P.mined)} E · Verdient ${fmtN(P.earned)} Cr · Ferrox ${P.kills}`, M]);
+  for (const c of P.contracts) out.push({ k: `${c.amount}× ${ITEMS[c.item].n} → ${c.stName} (${SECTOR[c.sector]?.name || ''})`, v: `${fmtN(c.reward)} Cr`, c: P.cargo[c.item] >= c.amount ? '#7fe0a0' : undefined });
+  out.push({ h: 'Bilanz' }, { k: 'Abgebaut', v: `${fmtN(P.mined)} E` }, { k: 'Verdient', v: `${fmtN(P.earned)} Cr` }, { k: 'Ferrox abgeschossen', v: String(P.kills) });
   return out;
 }
 function cargoLines(c: Partial<Record<ItemId, number>>): [string, string][] {
@@ -583,7 +603,7 @@ function shipInter(sp: ShipSpot, info: ShipInfo): Inter {
     case 'hatch': return { ...base, label: () => planet ? 'Über die Rampe zum Rover' : 'Von Bord gehen', act: () => planet ? interiorHooks.toRover() : leaveShip() };
     case 'log': return {
       ...base, label: () => 'Logbuch lesen',
-      act: () => openPanel(`Logbuch · ${info.name}`, active ? logLines() : [['Geparktes Schiff. Ladung:', '#9a9284'], ...cargoLines(P.fleet.find(f => f.uid === info.uid)?.cargo || {})]),
+      act: () => openPanel(`Logbuch · ${info.name}`, active ? logLines() : [{ h: 'Geparktes Schiff · Ladung' }, ...cargoLines(P.fleet.find(f => f.uid === info.uid)?.cargo || {})]),
     };
     case 'scanner': return {
       ...base, label: () => 'Scanner-Konsole',
@@ -757,6 +777,7 @@ export function applyWalkCamera() {
 // ---------- Anzeige ----------
 const _p = new THREE.Vector3();
 export function drawWalkHUD() {
+  syncShipPanel();
   if (!IN.active || !group || G.mode !== 'walk') return;
   const W = view.W, H = view.H, pal = IN.ship && !IN.station ? PAL.outpost : PAL[kind], title = IN.ship ? IN.ship.name : IN.station ? IN.station.name : '';
   ux.save();
@@ -810,16 +831,6 @@ export function drawWalkHUD() {
   }
   // Tasten stehen in der Steuerungsleiste links unten; hier nur der Hinweis zum Maus-Einfangen
   if (!IN.locked) { ux.textAlign = 'center'; ux.font = '11px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = '#8aa0b0'; ux.fillText('Klick: Maus einfangen', W / 2, H - 12); }
-  // Tafel (Logbuch, Scanner)
-  if (IN.panel) {
-    const pw = Math.min(W - 40, 520), lh = 18, ph = 54 + IN.panel.lines.length * lh, px = W / 2 - pw / 2, py = Math.max(20, H * 0.42 - ph / 2);
-    ux.fillStyle = 'rgba(6,16,26,.92)'; ux.strokeStyle = pal.css; ux.lineWidth = 1;
-    ux.beginPath(); ux.rect(px, py, pw, ph); ux.fill(); ux.stroke();
-    ux.textAlign = 'left'; ux.font = '700 14px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = pal.css; ux.fillText(IN.panel.title.toUpperCase(), px + 16, py + 24);
-    ux.font = '13px "Share Tech Mono",Consolas,monospace';
-    IN.panel.lines.forEach(([t, c], i) => { ux.fillStyle = c; ux.fillText(t, px + 16, py + 48 + i * lh, pw - 32); });
-    ux.fillStyle = '#4a5c6a'; ux.textAlign = 'right'; ux.fillText('[E] schließen', px + pw - 12, py + 24);
-  }
   ux.restore();
 }
 

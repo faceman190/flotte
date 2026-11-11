@@ -247,6 +247,15 @@ const lamps = [];
 }
 const r2 = v => Math.round(v * 100) / 100;
 const spot = (kind, p, r = 1.4) => ({ kind, x: r2(p.x), y: r2(p.y), z: r2(p.z), r });
+// --spots=<datei.json>: Auslöser an echten Gegenständen ({ spots: { art: [x, y, z] } }). Der Auslöser sitzt am Gegenstand,
+// die Reichweite reicht bis zur nächsten begehbaren Stelle und etwas darüber hinaus.
+const fixed = opt.spots ? JSON.parse(fs.readFileSync(opt.spots, 'utf8')).spots || {} : {};
+const place = (kind, auto, r) => {
+  const t = fixed[kind]; if (!t) return spot(kind, auto, r);
+  const n = near(t[0], t[1], t[2]), d = Math.hypot(n.x - t[0], n.z - t[2]);
+  console.log(`  Auslöser ${kind}: Gegenstand ${t.join('/')} · nächste Stelle ${n.x.toFixed(1)}/${n.y.toFixed(1)}/${n.z.toFixed(1)} (${d.toFixed(1)} m)`);
+  return { kind, x: r2(t[0]), y: r2(n.y), z: r2(t[2]), r: r2(d + 1.3) };
+};
 // Laufkarte kompakt: je begehbarer Zelle Index und Bodenhöhe (cm)
 const all = inside.map(c => [Math.floor(c / 4), floors[Math.floor(c / 4)][c % 4].y, floors[Math.floor(c / 4)][c % 4].ceil]);
 for (const [ci, y] of extra) all.push([ci, y, 2.1]);   // Türen
@@ -256,7 +265,7 @@ const res = {
   cell: CELL, x0: r2(x0), z0: r2(z0), nx: NX, nz: NZ, step: STEP,
   cells: Buffer.from(cells.buffer).toString('base64'), ys: Buffer.from(ys.buffer).toString('base64'), hs: Buffer.from(hs.buffer).toString('base64'),
   spawn: { x: r2(spawn.x), y: r2(spawn.y), z: r2(spawn.z), yaw: 0 },
-  spots: [spot('seat', seat, 1.6), spot('log', log), spot('hatch', spawn, 1.8), spot('bed', bed, 1.8), spot('locker', locker), spot('scanner', scanner, 1.6)],
+  spots: [place('seat', seat, 1.6), place('log', log), spot('hatch', spawn, 1.8), place('bed', bed, 1.8), place('locker', locker), place('scanner', scanner, 1.6)],
   lamps: lamps.map(l => l.map(r2)),
   areas: [{ name: 'Cockpit', z1: r2(zMin + third) }, { name: 'Wohndeck', z1: r2(zMin + 2 * third) }, { name: 'Frachtraum', z1: 9999 }],
 };

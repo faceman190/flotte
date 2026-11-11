@@ -1,10 +1,14 @@
 {
- "hinweis": "Zusatzangaben zum Kaufmodell: Teile, die entfallen (geschlossene Türen), und Materialien nach Teilnamen (erste passende Regel gilt). Werte der Materialien stehen in scripts/glb-lib.mjs (LOOK).",
+ "hinweis": "Zusatzangaben zum Kaufmodell: Teile, die entfallen (geschlossene Türen), und Materialien nach Teilnamen (erste passende Regel gilt). Werte der Materialien stehen in scripts/glb-lib.mjs (LOOK). spots: Auslöser im Innenraum an echten Gegenständen (Schiffskoordinaten: x, y, z); die Laufkarte setzt sie an die nächste begehbare Stelle.",
  "drop": [
   "R_door_trap_door",
   "Interior_SecondDoor_Left"
  ],
  "parts": [
+  [
+   "^(L_B_Leg|L_B_Leg1|polySurface240|pCube640)$",
+   "gear"
+  ],
   [
    "^Sofa_rims$",
    "fabric_dark"
@@ -69,5 +73,32 @@
    "^thick_glass$",
    "Glass"
   ]
- ]
+ ],
+ "spots": {
+  "seat": [
+   2.8,
+   -2,
+   -37.2
+  ],
+  "scanner": [
+   -2.8,
+   -2,
+   -37.2
+  ],
+  "log": [
+   5.25,
+   -4.6,
+   -19.2
+  ],
+  "bed": [
+   -3.7,
+   -4.6,
+   -18.9
+  ],
+  "locker": [
+   -2.8,
+   -4.2,
+   11.6
+  ]
+ }
 }

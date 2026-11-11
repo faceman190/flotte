@@ -15,6 +15,11 @@ export interface ShipClass {
 }
 
 export const SHIPS = {
+  venom: {
+    n: 'Venom', role: 'Abfangjäger', price: 0, desc: 'Schlanker Abfangjäger der Bastion: schnell, wendig, zwei Triebwerke. Das Schiff, auf dem jeder Pilot anfängt.',
+    hull: 110, shield: 45, speed: 285, acc: 520, turn: 1, cargo: 32, ammo: 300, rockets: 4, dmg: 1,
+    laser: 1, beams: 1, laserRange: 220, heat: 1, scan: 1300, charges: 0, drones: 0, radius: 7, camUp: 8, camBack: 28, upMul: 1, col: 0x6fbf3a, model: 'Venom', len: 18,
+  },
   falke: {
     n: 'Falke', role: 'Jäger', price: 0, desc: 'Wendiger Jäger. Stark im Kampf, kleiner Frachtraum, einfacher Bergbaulaser.',
     hull: 100, shield: 40, speed: 280, acc: 520, turn: 1, cargo: 30, ammo: 300, rockets: 4, dmg: 1,

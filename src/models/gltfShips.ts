@@ -63,6 +63,13 @@ export function modelInstance(name: string, length: number, paint: Paint = 'Oran
   return { obj: holder, w: t.w * length, h: t.h * length, l: length };
 }
 
+// Fahrwerk und Rampe (Meshes mit dem Material „gear“) zeigen oder verbergen: im Flug eingezogen, am Boden ausgefahren
+export function setGear(root: THREE.Object3D, down: boolean) {
+  let list = root.userData.gear as THREE.Object3D[] | undefined;
+  if (!list) { list = []; root.traverse((o: any) => { if (o.isMesh && o.material?.name === 'gear') list!.push(o); }); root.userData.gear = list; }
+  for (const o of list) o.visible = down;
+}
+
 // Koordinatensystem eines Modells im Spiel (für Innenmodelle, die deckungsgleich zum Außenmodell sitzen sollen):
 // Modell um 180° gedreht, um innerPos verschoben, mit s × Länge skaliert
 export const modelFrame = (name: string) => TPL[name]?.frame || null;

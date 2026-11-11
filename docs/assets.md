@@ -79,3 +79,14 @@ weil deren Flächen nach innen zeigen.)
    Kontrolle: `node scripts/walkmap-image.mjs …` (Draufsicht) und `node scripts/slice-image.mjs <modell.glb> <modell.glb> bild.png <x> [walk.json]` (Längsschnitt).
 4. `npm run assets`. Nicht ausführen, während jemand im Entwicklungsfenster spielt (Dateinamen ändern sich).
 Im Spiel (src/game/meshRoom.ts) bleibt das Schiffsmodell beim Betreten stehen; der Raum bringt Licht, Spiegelungen und die Laufkarte mit.
+
+## Venom (Startschiff)
+Kaufmodell „Venom X Spaceship“ (asset-src/neu/venom-x-spaceship, ohne Texturen, ein graues Material). Weg ins Spiel:
+1. `node scripts/obj-to-glb.mjs asset-src/neu/venom-x-spaceship/Venom_obj.obj asset-src/neu/_test/venom_raw.glb` (OBJ → GLB mit benannten Teilen)
+2. `node scripts/simplify-hard.mjs asset-src/neu/_test/venom_raw.glb asset-src/glb/ship/Venom.glb 1 0.0001 35 --mat=asset-src/glb/ship/Venom.materials.json --look=asset-src/glb/ship/Venom.look.json`
+   (keine Vereinfachung nötig: 150.000 Dreiecke; Farben nach Teilnamen in Venom.look.json)
+3. `npm run assets`. Schiffsklasse `venom` in src/data/ships.ts, Startschiff in src/game/state.ts (newPlayer).
+
+## Fahrwerk
+Teile mit dem Material `gear` (Regel in <Modell>.look.json) bilden ein eigenes Mesh; `setGear()` in src/models/gltfShips.ts blendet es im Flug aus.
+Auslöser im Innenraum: `spots` in <Modell>.look.json, an die Laufkarte übergeben mit `--spots=<Modell>.look.json`.

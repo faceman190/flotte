@@ -1,0 +1,122 @@
+{
+ "materials": {
+  "aiWireframe1": {
+   "color": [
+    0.5,
+    0.5,
+    0.5
+   ],
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "opacity": 1,
+   "specular": null,
+   "shininess": null
+  },
+  "light": {
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "opacity": 1,
+   "specular": null,
+   "shininess": null
+  },
+  "Default_Material": {
+   "color": [
+    0.5,
+    0.5,
+    0.5
+   ],
+   "emissive": [
+    0,
+    0,
+    0
+   ],
+   "opacity": 1,
+   "specular": null,
+   "shininess": null
+  }
+ },
+ "parts": {
+  "polySurface18": "aiWireframe1",
+  "polySurface20": "aiWireframe1",
+  "polySurface34": "light",
+  "polySurface36": "aiWireframe1",
+  "polySurface16": "aiWireframe1",
+  "polySurface28": "aiWireframe1",
+  "polySurface30": "aiWireframe1",
+  "polySurface32": "aiWireframe1",
+  "polySurface33": "aiWireframe1",
+  "polySurface1": "aiWireframe1",
+  "pCube11": "aiWireframe1",
+  "pCube12": "aiWireframe1",
+  "pCube13": "aiWireframe1",
+  "pCube14": "aiWireframe1",
+  "pCube15": "aiWireframe1",
+  "pCube16": "aiWireframe1",
+  "polySurface12": "aiWireframe1",
+  "polySurface4": "aiWireframe1",
+  "polySurface5": "aiWireframe1",
+  "pCube17": "aiWireframe1",
+  "pCube18": "aiWireframe1",
+  "polySurface6": "aiWireframe1",
+  "polySurface8": "aiWireframe1",
+  "polySurface9": "aiWireframe1",
+  "pCube19": "aiWireframe1",
+  "pCube20": "aiWireframe1",
+  "pCube21": "aiWireframe1",
+  "base1": "aiWireframe1",
+  "pCube22": "aiWireframe1",
+  "polySurface15": "aiWireframe1",
+  "pPlane2": "aiWireframe1",
+  "polySurface13": "aiWireframe1",
+  "pCube23": "aiWireframe1",
+  "pCube24": "aiWireframe1",
+  "pCube25": "aiWireframe1",
+  "pCube27": "aiWireframe1",
+  "pPipe3": "aiWireframe1",
+  "pPipe4": "aiWireframe1",
+  "pPipe5": "aiWireframe1",
+  "polySurface24": "aiWireframe1",
+  "polySurface25": "aiWireframe1",
+  "pCube28": "aiWireframe1",
+  "pCylinder8": "aiWireframe1",
+  "pCube29": "aiWireframe1",
+  "pPlane3": "aiWireframe1",
+  "pPlane4": "aiWireframe1",
+  "pPlane7": "aiWireframe1",
+  "pPipe6": "aiWireframe1",
+  "pCube35": "Default_Material",
+  "pCube32": "aiWireframe1",
+  "pCube36": "aiWireframe1",
+  "pPlane9": "Default_Material",
+  "pCube39": "aiWireframe1",
+  "pCube40": "aiWireframe1",
+  "pCube41": "aiWireframe1",
+  "pCube42": "aiWireframe1",
+  "pCylinder9": "aiWireframe1",
+  "pCylinder10": "aiWireframe1",
+  "pCylinder11": "aiWireframe1",
+  "pCube43": "aiWireframe1",
+  "Keyboard": "aiWireframe1",
+  "MASH1_ReproMesh": "aiWireframe1",
+  "pCube47": "aiWireframe1",
+  "pCube49": "aiWireframe1",
+  "pCube50": "aiWireframe1",
+  "pCube51": "aiWireframe1",
+  "pCube52": "aiWireframe1",
+  "pCylinder12": "aiWireframe1",
+  "pCylinder13": "aiWireframe1",
+  "pCube54": "aiWireframe1",
+  "pCube55": "aiWireframe1"
+ }
+}

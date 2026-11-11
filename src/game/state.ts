@@ -64,8 +64,8 @@ export function newPlayer(name: string): Player {
     sector: 'heimstatt', x: 0, y: 0, z: 0, yaw: 0, pitch: 0, vx: 0, vy: 0, vz: 0,
     home: { sector: 'heimstatt', station: 'bastion' }, visited: ['heimstatt'], route: null, kills: 0, earned: 0, playtime: 0,
     tool: 'guns', mined: 0, market: {}, contracts: [], cctr: {},
-    // zum Testen startet man im Pfeil (sonst: cls 'falke', shipName 'Falke')
-    cls: 'pfeil', shipName: 'Pfeil', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2, rep: {}, missions: [], story: { prolog: 'done' },
+    // Startschiff: Venom
+    cls: 'venom', shipName: 'Venom', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2, rep: {}, missions: [], story: { prolog: 'done' },
   };
 }
 export function setPlayer(p: Player) {

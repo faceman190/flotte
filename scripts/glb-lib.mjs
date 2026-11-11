@@ -11,13 +11,14 @@ export const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDepend
 // Spieltaugliche Werte je Materialname. Die FBX kennt nur sieben einfarbige Platzhalter (ohne Texturen); die Werte hier
 // sind den Verkaufsbildern des Modells nachempfunden: dunkle Tragflächen und Rückgrat, silberner Rumpf, orange Leuchtakzente, getöntes Glas.
 export const LOOK = {
-  main_mat: { color: [0.17, 0.18, 0.2], metal: 0.75, rough: 0.45 },          // Rumpfschalen, Tragflächen, Rückgrat: dunkles Geschützmetall
-  secondary_mat: { color: [0.34, 0.355, 0.38], metal: 0.65, rough: 0.5 },   // Technik, Verkleidungen, Innenwände: gebürstetes Silber (gedämpft, sonst überstrahlt die Sonne)
+  main_mat: { color: [0.17, 0.18, 0.2], metal: 0.6, rough: 0.55 },          // Rumpfschalen, Tragflächen, Rückgrat: dunkles Geschützmetall
+  secondary_mat: { color: [0.34, 0.355, 0.38], metal: 0.6, rough: 0.55 },   // Technik, Verkleidungen, Innenwände: gebürstetes Silber (gedämpft, sonst überstrahlt die Sonne)
   Orange: { color: [1.0, 0.36, 0.03], metal: 0.1, rough: 0.5, emissive: [0.55, 0.16, 0.01] },
   rubber: { color: [0.03, 0.03, 0.035], metal: 0.0, rough: 0.85 },
   Glass: { color: [0.05, 0.08, 0.11], metal: 0.1, rough: 0.05, alpha: 0.32 },
   wood_mat: { color: [0.5, 0.3, 0.15], metal: 0.0, rough: 0.6 },
   Default_Material: { color: [0.3, 0.31, 0.33], metal: 0.5, rough: 0.5 },
+  gear: { color: [0.3, 0.31, 0.33], metal: 0.6, rough: 0.5 },                // Fahrwerk und Heckrampe: eigenes Mesh, im Flug ausgeblendet
   // Innenraum: Materialien nach Teilnamen (asset-src/glb/ship/<Modell>.look.json)
   fabric_dark: { color: [0.055, 0.06, 0.08], metal: 0.0, rough: 0.85 },       // Sofa
   fabric_light: { color: [0.78, 0.72, 0.62], metal: 0.0, rough: 0.9 },        // Kissen
@@ -30,6 +31,9 @@ export const LOOK = {
   copper: { color: [0.75, 0.38, 0.2], metal: 0.9, rough: 0.35 },              // Rohre
   floor_dark: { color: [0.085, 0.09, 0.1], metal: 0.6, rough: 0.42 },         // Böden, Gitterroste
   gunmetal: { color: [0.035, 0.035, 0.04], metal: 0.7, rough: 0.4 },          // Waffen
+  venom_hull: { color: [0.2, 0.215, 0.235], metal: 0.6, rough: 0.5 },         // Venom: Graphit
+  venom_green: { color: [0.2, 0.52, 0.1], metal: 0.3, rough: 0.45 },          // Venom: giftgrüne Leitwerke
+  interior_dark: { color: [0.065, 0.07, 0.08], metal: 0.4, rough: 0.6 },
   light_warm: { color: [1, 0.95, 0.85], metal: 0.0, rough: 0.6, emissive: [1, 0.9, 0.7] },
   screen: { color: [0.05, 0.3, 0.4], metal: 0.0, rough: 0.3, emissive: [0.1, 0.65, 0.85] },
 };

@@ -37,7 +37,7 @@ import { openChat } from './ui/mp';
 const openMap = () => openBand('karte'), closeMap = closeBand;
 import { menuHooks, showMainMenu, hideMainMenu, showPause, hidePause, applySettings, pauseSubOpen, closePauseSub } from './ui/menus';
 import { SECTOR, FACTION } from './data/galaxy';
-import { loadShipModels, type Paint } from './models/gltfShips';
+import { loadShipModels, setGear, type Paint } from './models/gltfShips';
 import { loadStationModels } from './models/stationModels';
 import { loadCharModels } from './models/charModels';
 import type { Gate } from './game/world';
@@ -470,10 +470,11 @@ function loop(now: number, manual = false) {
   updateChapter1(dt);
   if (world.def && G.mode !== 'map') {
     animateStructures(dt);
-    if (IN.active) syncParkedShip();
-    else if (ROVER.active) syncLandedShip();
+    if (IN.active) { syncParkedShip(); setGear(SHIP.g, true); }
+    else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); }
     else {
       SHIP.g.visible = (G.mode === 'play' || G.mode === 'jump' || G.mode === 'pause' || G.mode === 'entry') && !G.dead;
+      setGear(SHIP.g, G.mode === 'entry');   // im Flug eingezogen, beim Landeanflug ausgefahren
       if (SHIP.g.visible) syncShip();
     }
     setDustVisible(!IN.active);

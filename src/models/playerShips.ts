@@ -146,7 +146,7 @@ function gltfShip(cls: ShipId, paint: Paint): ShipModel {
   const c = SHIPS[cls], m = modelInstance(c.model, c.len, paint), g = new THREE.Group(), glows: THREE.Sprite[] = [], navs: THREE.Sprite[] = [], drones: THREE.Group[] = [];
   g.add(m.obj);
   const { w, h, l } = m, rear = l * 0.5, front = -l * 0.5;
-  const ex = cls === 'maulwurf' || cls === 'kaerrner' ? w * 0.2 : w * 0.1;
+  const ex = cls === 'maulwurf' || cls === 'kaerrner' || cls === 'venom' ? w * 0.2 : w * 0.1;
   // Pfeil: vier Triebwerke nebeneinander am Heck
   const enginePts = cls === 'pfeil' ? [-0.164, -0.055, 0.055, 0.164].map(f => [l * f, -h * 0.02, rear * 0.97])   /* an der Länge bemessen: die Seitenflügel machen das Modell breiter als das Heck */ : [[-ex, 0, rear * 0.96], [ex, 0, rear * 0.96]];
   for (const e of enginePts) {
