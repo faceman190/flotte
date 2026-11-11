@@ -39,6 +39,7 @@ import { menuHooks, showMainMenu, hideMainMenu, showPause, hidePause, applySetti
 import { SECTOR, FACTION } from './data/galaxy';
 import { loadShipModels, setGear, type Paint } from './models/gltfShips';
 import { hasInterior } from './data/ships';
+import { loadRockModel } from './game/world';
 import { loadStationModels } from './models/stationModels';
 import { loadCharModels } from './models/charModels';
 import type { Gate } from './game/world';
@@ -569,6 +570,7 @@ if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterSh
 // Schiffsmodelle laden (kurz), dann Menü zeigen. Ohne Modelle laufen die eingebauten Ersatzmodelle.
 Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false)]).then(() => {
   setTimeout(preloadMeshRooms, 3000);
+  loadRockModel();   // Felsmodell für Asteroiden (kleine Datei, ist vor dem ersten Flug geladen)
   setTimeout(preloadSfx, 1500);   // Schritte, Klicks, Türen   // begehbare Innenräume aus Modellen im Hintergrund vorladen
   setShipModel('falke', 'Orange', true);
   showMainMenu();

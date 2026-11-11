@@ -96,6 +96,9 @@ if (fs.existsSync(WALK)) for (const n of fs.readdirSync(WALK).filter(x => x.ends
 const { SOUNDDATA = {} } = bundle('sounds.js');
 for (const [k, v] of Object.entries(SOUNDDATA)) { const d = dataUri(v); if (d) put('sound/' + k, d.mime.includes('ogg') ? 'ogg' : 'mp3', d.buf, 'core', d.buf.length); }
 
+// ---- Einzelne Texturen (asset-src/tex/<name>.png|jpg): höchstens 1024 px, WebP ----
+const TEXDIR = path.join(ROOT, 'asset-src', 'tex');
+if (fs.existsSync(TEXDIR)) for (const n of fs.readdirSync(TEXDIR).filter(x => /\.(png|jpe?g)$/i.test(x))) { const src = fs.readFileSync(path.join(TEXDIR, n)); const b = await sharp(src).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 86, effort: 5 }).toBuffer(); put('tex/' + path.basename(n, path.extname(n)), 'webp', b, 'core', src.length); }
 // ---- Einzelne Aufnahmen (asset-src/sound/<name>.ogg|mp3), z. B. Schritte, Klicks, Türen ----
 const SND = path.join(ROOT, 'asset-src', 'sound');
 if (fs.existsSync(SND)) for (const n of fs.readdirSync(SND).filter(x => /.(ogg|mp3)$/i.test(x))) { const b = fs.readFileSync(path.join(SND, n)); put('sound/' + path.basename(n, path.extname(n)), path.extname(n).slice(1).toLowerCase(), b, 'core', b.length); }

@@ -113,7 +113,31 @@ export const astHooks = { gone: (_a: Asteroid, _how: 'mined' | 'break' | 'blast'
 const ORE_GEO = new THREE.OctahedronGeometry(1);
 const SHARD_M = new THREE.MeshStandardMaterial({ color: 0xb070ff, emissive: 0x7030ff, emissiveIntensity: 1.1, metalness: 0.2, roughness: 0.15, flatShading: true });
 
+// Felsmodell für Asteroiden (asset-src/glb/deco/Rock.glb, Bilder tex/rock_d und tex/rock_n): wird beim Start geladen.
+// Solange es fehlt, entstehen die bisherigen berechneten Brocken.
+let RK_GEO: THREE.BufferGeometry | null = null, RK_TEX: THREE.Texture | null = null, RK_NRM: THREE.Texture | null = null;
+export async function loadRockModel() {
+  try {
+    const url = (window as any).DECODATA?.Rock, tex = (window as any).TEXDATA || {};
+    if (!url) return;
+    const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+    const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+    const { mergeVertices } = await import('three/examples/jsm/utils/BufferGeometryUtils.js');
+    const gl = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url);
+    let geo: THREE.BufferGeometry | null = null;
+    gl.scene.traverse((o: any) => { if (o.isMesh && !geo) geo = o.geometry; });
+    if (!geo) return;
+    let g2 = (geo as THREE.BufferGeometry).clone(); g2.deleteAttribute('normal');
+    g2 = mergeVertices(g2, 1e-4); g2.computeVertexNormals(); g2.center(); g2.computeBoundingSphere();
+    const k = 1 / (g2.boundingSphere!.radius || 1); g2.scale(k, k, k);   // auf Radius 1 bringen
+    const tl = new THREE.TextureLoader();
+    if (tex.rock_d) { RK_TEX = tl.load(tex.rock_d); RK_TEX.colorSpace = THREE.SRGBColorSpace; RK_TEX.flipY = false; RK_TEX.anisotropy = 4; }
+    if (tex.rock_n) { RK_NRM = tl.load(tex.rock_n); RK_NRM.flipY = false; }
+    RK_GEO = g2;
+  } catch (e) { console.warn('Felsmodell nicht geladen; Asteroiden bleiben berechnet.', e); }
+}
 function rockGeo(r: number) {
+  if (RK_GEO) { const g0 = RK_GEO.clone(); g0.scale(r * 1.15, r * 0.95, r * 1.1); return g0; }
   const g = new THREE.IcosahedronGeometry(r, 1), p = g.attributes.position, m = new Map<string, number>();
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`;
@@ -128,6 +152,8 @@ function rockGeo(r: number) {
 export function makeAst(x: number, y: number, z: number, r: number, kind: RockKind, field: Field | null = null, comp?: Ore[], yieldFrac = 1) {
   comp = comp || makeComp(kind, field, field ? field.rng.next : Math.random);
   const m = new THREE.Mesh(rockGeo(r), rockMat(kind, comp[0].k));
+  // Felsmodell: sein eigenes Farb- und Reliefbild auf das (gemeinsame) Material legen
+  if (RK_GEO && RK_TEX) { const mm = m.material as THREE.MeshStandardMaterial; if (mm.map !== RK_TEX) { mm.map = RK_TEX; mm.normalMap = RK_NRM; mm.needsUpdate = true; } }
   boxUV(m, 1 / (r * 1.4));
   for (let i = 0; i < 5; i++) {
     const o = new THREE.Mesh(ORE_GEO, oreMat(comp[Math.min(comp.length - 1, i < 3 ? 0 : i - 2)].k));
