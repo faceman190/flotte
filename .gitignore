@@ -22,3 +22,6 @@ Thumbs.db
 # Ablage für neue Modelle: Rohdateien nicht ins Repository (oft sehr groß); nur die Anleitung
 /asset-src/neu/*
 !/asset-src/neu/LIESMICH.md
+
+# Heruntergeladene Soundpakete (Rohdaten); ins Spiel kommen nur ausgewählte Dateien unter asset-src/sound/
+/asset-src/sound-packs/

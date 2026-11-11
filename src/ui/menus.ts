@@ -1,6 +1,6 @@
 import { $ } from '../core/util';
 import { setQuality } from '../core/engine';
-import { audio, snd, setMusicVolume } from '../core/audio';
+import { audio, snd, sfx, setMusicVolume } from '../core/audio';
 import { settings, saveSettings, hasSave, G } from '../game/state';
 import { storageInfo, clearStoredAssets, ASSET_STATE, MANIFEST } from '../core/assets';
 
@@ -15,7 +15,7 @@ export const menuHooks = {
 let returnTo: string | null = null;
 const show = (id: string) => $(id).classList.remove('hidden');
 const hide = (id: string) => $(id).classList.add('hidden');
-const click = () => snd(600, 0.05, 'sine', 0.03, 100);
+const click = () => sfx('ui_click', 0.5, 1, () => snd(600, 0.05, 'sine', 0.03, 100));
 
 export function applySettings() {
   setQuality(settings.quality === 'high');

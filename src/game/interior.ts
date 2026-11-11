@@ -3,7 +3,7 @@ import { scene, camera, view, ux, gl, setExposure } from '../core/engine';
 import { texMat, std, boxUV } from '../core/textures';
 import { keys, mouse } from '../core/input';
 import { rng, hashStr, clamp, fmtN } from '../core/util';
-import { snd } from '../core/audio';
+import { snd, sfx } from '../core/audio';
 import { P, G, stats, cargoUsed, settings } from './state';
 import type { Station } from './world';
 import { SHIP } from './player';
@@ -519,7 +519,7 @@ export function enterShip(info: ShipInfo, m: ShipModel) {
   lamps.forEach((l, i) => { const q = room!.lamps[i]; room!.g.localToWorld(l.position.set(q[0], q[1], q[2])); l.distance = 22; l.intensity = mesh ? 0 : q[3] * Math.PI; });   // Modell-Räume bringen eigene Lampen mit
   setExposure(planet ? 0.5 : 0.2);
   G.mode = 'walk';
-  snd(220, 0.5, 'sawtooth', 0.03, -120);
+  sfx('door_open', 0.6, 1, () => snd(220, 0.5, 'sawtooth', 0.03, -120));
   say('SYSTEM', `An Bord der ${info.name}.`);
 }
 // Verlässt den Schiffsraum: zurück in den Hangar oder (auf Planeten) ganz aus der Ego-Ansicht
@@ -540,7 +540,7 @@ export function leaveShip() {
     setExposure(0.2);
     saved = null;
     G.mode = 'walk';
-    snd(220, 0.5, 'sawtooth', 0.03, 120);
+    sfx('door_close', 0.6, 1, () => snd(220, 0.5, 'sawtooth', 0.03, 120));
   } else {
     group = null;
     for (const l of lamps) l.intensity = 0;
@@ -552,7 +552,7 @@ export function leaveShip() {
 }
 // Tafel (Logbuch, Scanner): Zeilen sind Text mit Farbe, Wertepaare { k, v } oder Abschnittstitel { h }
 type PanelLine = [string, string] | { k: string; v: string; c?: string } | { h: string };
-function openPanel(title: string, lines: PanelLine[]) { IN.panel = { title, lines, x: IN.x, z: IN.z }; snd(880, 0.06, 'sine', 0.03, 200); }
+function openPanel(title: string, lines: PanelLine[]) { IN.panel = { title, lines, x: IN.x, z: IN.z }; sfx('ui_open', 0.5, 1, () => snd(880, 0.06, 'sine', 0.03, 200)); }
 const esc = (t: string) => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 let shownPanel: unknown = null;
 // Fenster im Stil der übrigen Oberfläche (index.html #shipPanel); wird jeden Frame mit IN.panel abgeglichen
@@ -704,7 +704,7 @@ export function updateWalk(dt: number) {
     const moved = Math.hypot(IN.x - ox, IN.z - oz), v = dt > 0 ? moved / dt : 0;
     IN.dist += moved;
     stepT -= moved;
-    if (stepT <= 0 && moved > 0 && IN.jy === 0) { stepT = v > 8 ? 2.3 : 1.9; snd(70 + Math.random() * 20, 0.06, 'triangle', v > 8 ? 0.026 : 0.018, -20); }
+    if (stepT <= 0 && moved > 0 && IN.jy === 0) { stepT = v > 8 ? 2.3 : 1.9; sfx('step' + Math.floor(Math.random() * 5), v > 8 ? 0.5 : 0.34, 0.9 + Math.random() * 0.2, () => snd(70 + Math.random() * 20, 0.06, 'triangle', v > 8 ? 0.026 : 0.018, -20)); }
     // Wippen: stärker beim Rennen, klingt aus, wenn man steht
     const amp = Math.min(1, v / 6) * (v > 8 ? 0.075 : 0.045);
     IN.bob += (Math.sin(IN.dist * 3.3) * amp - IN.bob) * Math.min(1, dt * 14);
@@ -722,7 +722,7 @@ export function updateWalk(dt: number) {
     IN.jy += IN.jv * dt; IN.jv -= 15 * dt;
     const top = mesh ? Math.max(0, mesh.head() - 1.9) : 0.9;
     if (IN.jy > top) { IN.jy = top; IN.jv = Math.min(IN.jv, 0); }
-    if (IN.jy <= 0) { IN.jy = 0; IN.jv = 0; snd(60, 0.07, 'triangle', 0.03, -25); }
+    if (IN.jy <= 0) { IN.jy = 0; IN.jv = 0; sfx('land', 0.4, 0.9, () => snd(60, 0.07, 'triangle', 0.03, -25)); }
   }
   IN.area = room ? room.area(IN.x, IN.z) : IN.z > HZ0 ? 'Hangardeck' : IN.z > PZ1 ? 'Korridor' : PAL[kind].hall;
   if (IN.panel && Math.hypot(IN.x - IN.panel.x, IN.z - IN.panel.z) > 2.5) IN.panel = null;

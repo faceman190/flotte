@@ -1,5 +1,5 @@
 import { $, esc } from '../core/util';
-import { snd } from '../core/audio';
+import { snd, sfx } from '../core/audio';
 import { releaseAll, centerMouse } from '../core/input';
 import { settings, saveSettings, G, hasSave } from '../game/state';
 import { refreshContinue } from './menus';
@@ -11,7 +11,7 @@ import { NET, connect, disconnect, defaultUrl, netHooks, sendChat, isOnline, reg
 // Mehrspieler-Fenster (aus Hauptmenü oder Pause) und Chat-Eingabe im Spiel
 let from: 'menu' | 'pause' = 'menu';
 const urlIn = $('mpUrl') as HTMLInputElement, chatIn = $('chatIn') as HTMLInputElement;
-const click = () => snd(600, 0.05, 'sine', 0.03, 100);
+const click = () => sfx('ui_click', 0.5, 1, () => snd(600, 0.05, 'sine', 0.03, 100));
 
 export const roomName = (room: string) => { const [id, pl] = room.split(':'); const s = SECTOR[id]; return s ? s.name + (pl ? ' (Planet)' : '') : room ? '…' : 'Menü'; };
 export function openMp(f: 'menu' | 'pause') {

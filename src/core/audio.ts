@@ -78,6 +78,34 @@ async function loadBuf(key: string) {
   } catch (e) { /* Datei fehlt oder defekt: Ersatzton bleibt aktiv */ }
 }
 
+// Kurze Aufnahmen (asset-src/sound): werden beim ersten Gebrauch geladen; bis dahin spielt der Ersatzton (fallback)
+const pending: Record<string, boolean> = {};
+function want(key: string) { if (!BUF[key] && !pending[key]) { pending[key] = true; loadBuf(key); } return BUF[key]; }
+// alle einzelnen Aufnahmen vorab laden (alles außer den drei Schleifen für Laser, Triebwerk, Kanone)
+export function preloadSfx() { for (const k of Object.keys(window.SOUNDDATA || {})) if (!['laser', 'booster', 'gun'].includes(k)) want(k); }
+export function sfx(key: string, vol = 1, rate = 1, fallback?: () => void) {
+  const b = want(key);
+  if (!b || !AC) { fallback?.(); return false; }
+  const s = AC.createBufferSource(), g = AC.createGain();
+  s.buffer = b; s.playbackRate.value = rate; g.gain.value = vol * audio.volume;
+  s.connect(g).connect(AC.destination); s.start();
+  return true;
+}
+// Grundgeräusch (Schleife) mit weichem Wechsel; key null = aus
+let amb: { key: string; vol: number; src: AudioBufferSourceNode; g: GainNode } | null = null;
+export function ambience(key: string | null, vol = 0.1) {
+  if (amb && amb.key === key) { if (Math.abs(amb.vol - vol * audio.volume) > 0.002 && AC) { amb.vol = vol * audio.volume; amb.g.gain.setTargetAtTime(amb.vol, AC.currentTime, 0.4); } return; }
+  if (amb && AC) { const a = amb; a.g.gain.setTargetAtTime(0, AC.currentTime, 0.35); setTimeout(() => { try { a.src.stop(); } catch (e) { /* schon aus */ } }, 2200); amb = null; }
+  if (!key) return;
+  const b = want(key);
+  if (!b || !AC) return;   // noch nicht geladen: der nächste Aufruf startet die Schleife
+  const s = AC.createBufferSource(), g = AC.createGain();
+  s.buffer = b; s.loop = true; s.loopStart = TRIM[key][0]; s.loopEnd = TRIM[key][1];
+  g.gain.value = 0; g.gain.setTargetAtTime(vol * audio.volume, AC.currentTime, 0.9);
+  s.connect(g).connect(AC.destination); s.start(0, TRIM[key][0]);
+  amb = { key, vol: vol * audio.volume, src: s, g };
+}
+
 // Dauerschleife mit weichem Ein-/Ausblenden, Lautstärke und Tonhöhe laufend steuerbar
 class Loop {
   src: AudioBufferSourceNode | null = null;

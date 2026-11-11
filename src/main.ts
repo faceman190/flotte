@@ -5,7 +5,7 @@ import { updateSky, sunDir, sky } from './core/sky';
 import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience';
 import { ux } from './core/engine';
 import { onKey, centerMouse, releaseAll, keys, look } from './core/input';
-import { snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode } from './core/audio';
+import { ambience, preloadSfx, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode } from './core/audio';
 import { rand, clamp, $ } from './core/util';
 import { P, G, settings, loadSettings, saveSettings, newPlayer, setPlayer, loadGame, saveGame, stats, type Player, type Tool } from './game/state';
 import { world, buildSector, stationById, gateTo, updateAsteroids } from './game/world';
@@ -469,6 +469,8 @@ function loop(now: number, manual = false) {
   updateIntro(dt);
   updateStory(dt);
   updateChapter1(dt);
+  // Grundgeräusch zu Fuß: im Schiff ein tiefes Brummen, in der Station leiser
+  ambience(IN.active && G.mode === 'walk' ? (IN.ship ? 'amb_ship' : 'amb_station') : null, IN.ship ? 0.16 : 0.09);
   if (world.def && G.mode !== 'map') {
     animateStructures(dt);
     if (IN.active) { syncParkedShip(); setGear(SHIP.g, true); }
@@ -516,7 +518,8 @@ if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterSh
 // =============== Start ===============
 // Schiffsmodelle laden (kurz), dann Menü zeigen. Ohne Modelle laufen die eingebauten Ersatzmodelle.
 Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false)]).then(() => {
-  setTimeout(preloadMeshRooms, 3000);   // begehbare Innenräume aus Modellen im Hintergrund vorladen
+  setTimeout(preloadMeshRooms, 3000);
+  setTimeout(preloadSfx, 1500);   // Schritte, Klicks, Türen   // begehbare Innenräume aus Modellen im Hintergrund vorladen
   setShipModel('falke', 'Orange', true);
   showMainMenu();
   setupMenuScene();

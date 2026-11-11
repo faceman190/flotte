@@ -90,3 +90,8 @@ Kaufmodell „Venom X Spaceship“ (asset-src/neu/venom-x-spaceship, ohne Textur
 ## Fahrwerk
 Teile mit dem Material `gear` (Regel in <Modell>.look.json) bilden ein eigenes Mesh; `setGear()` in src/models/gltfShips.ts blendet es im Flug aus.
 Auslöser im Innenraum: `spots` in <Modell>.look.json, an die Laufkarte übergeben mit `--spots=<Modell>.look.json`.
+
+## Einzelne Aufnahmen (Schritte, Klicks, Türen, Grundgeräusche)
+Dateien unter asset-src/sound/<name>.ogg kommen mit `npm run assets` ins Startpaket und sind im Spiel über `sfx('<name>')` bzw.
+`ambience('<name>')` (src/core/audio.ts) abspielbar. Herkunft und Lizenz stehen in asset-src/sound/QUELLEN.txt.
+Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Repository): Kenney Sci-Fi, Interface und Impact Sounds, alle CC0.
