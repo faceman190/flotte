@@ -2,3 +2,5 @@ Quelle: Kenney (www.kenney.nl), Pakete Sci-Fi Sounds, Interface Sounds, Impact S
 step0-4 = footstep_concrete_000-004 · land = impactMetal_light_000 · ui_click = click_001 · ui_open = open_001 · ui_close = close_001
 door_open = doorOpen_000 · door_close = doorClose_000 · amb_ship = spaceEngineLow_000 · amb_station = spaceEngineLow_002
 launch = thrusterFire_000 (Sci-Fi Sounds)
+explosion0-2 = explosionCrunch_000-002 · hull_hit0-2 = impactMetal_000-002 (Sci-Fi) · shield_hit = forceField_000 · rock0-2 = impactMining_000-002 (Impact) · ui_confirm = confirmation_001 · pickup = pluck_001
+(land entfernt: passte nicht)

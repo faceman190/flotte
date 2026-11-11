@@ -1,5 +1,5 @@
 import { $, fmtN, esc } from '../core/util';
-import { snd } from '../core/audio';
+import { snd, sfx, boom } from '../core/audio';
 import { releaseAll, centerMouse } from '../core/input';
 import { P, G, stats, cargoUsed, saveGame, emptyUp, settings } from '../game/state';
 import { world, type Station } from '../game/world';
@@ -92,12 +92,12 @@ export function undock() {
 function doSell(k: ItemId, n: number) {
   const amt = Math.min(n, P.cargo[k]);
   const cr = sell(st().def, secId(), k, amt);
-  if (cr) { note = `${amt}× ${ITEMS[k].n} verkauft: +${fmtN(cr)} Credits`; snd(900, 0.12, 'sine', 0.05, 300); }
+  if (cr) { note = `${amt}× ${ITEMS[k].n} verkauft: +${fmtN(cr)} Credits`; sfx('ui_confirm', 0.5, 1, () => snd(900, 0.12, 'sine', 0.05, 300)); }
 }
 function sellAll() {
   let cr = 0, n = 0;
   for (const k of ITEM_IDS) { if (P.cargo[k]) { n += P.cargo[k]; cr += sell(st().def, secId(), k, P.cargo[k]); } }
-  if (n) { note = `Gesamte Fracht verkauft (${n} Einheiten): +${fmtN(cr)} Credits`; snd(900, 0.15, 'sine', 0.05, 400); }
+  if (n) { note = `Gesamte Fracht verkauft (${n} Einheiten): +${fmtN(cr)} Credits`; sfx('ui_confirm', 0.5, 1, () => snd(900, 0.15, 'sine', 0.05, 400)); }
 }
 function upgrade(k: UpgId) {
   const l = P.up[k], c = upCost(l, P.cls);
@@ -317,7 +317,7 @@ $('dockCard').addEventListener('click', e => {
   if (a === 'walk') { $('dock').classList.add('hidden'); document.body.classList.add('playing'); dockHooks.enter(st()); centerMouse(); return; }
   if (a === 'buy1' || a === 'buy10' || a === 'buymax') {
     const r = buy(st().def, secId(), k, a === 'buy1' ? 1 : a === 'buy10' ? 10 : 9999);
-    if (r.n) { note = `${r.n}× ${ITEMS[k as ItemId].n} gekauft: −${fmtN(r.cost)} Credits`; snd(700, 0.12, 'sine', 0.05, -200); }
+    if (r.n) { note = `${r.n}× ${ITEMS[k as ItemId].n} gekauft: −${fmtN(r.cost)} Credits`; sfx('ui_confirm', 0.5, 1, () => snd(700, 0.12, 'sine', 0.05, -200)); }
     else note = 'Kauf nicht möglich: zu wenig Credits oder kein Platz im Frachtraum.';
   }
   if (a === 'map') { dockHooks.openMap(); return; }
@@ -328,7 +328,7 @@ $('dockCard').addEventListener('click', e => {
   if (a === 'refine') { const bars = refine(k); if (bars) { note = `${bars}× ${ITEMS[REFINE[k as ItemId]!.to].n} hergestellt.`; snd(300, 0.4, 'sawtooth', 0.04, 300); } }
   if (a === 'accept') {
     const o = offers(st().def, secId()).find(x => x.slot === +k);
-    if (o && accept(o)) { note = `Auftrag angenommen: ${o.amount}× ${ITEMS[o.item].n} für ${fmtN(o.reward)} Credits.`; snd(700, 0.15, 'sine', 0.05, 300); }
+    if (o && accept(o)) { note = `Auftrag angenommen: ${o.amount}× ${ITEMS[o.item].n} für ${fmtN(o.reward)} Credits.`; sfx('ui_confirm', 0.5, 1, () => snd(700, 0.15, 'sine', 0.05, 300)); }
   }
   if (a === 'deliver') {
     const c = P.contracts[n];
@@ -342,7 +342,7 @@ $('dockCard').addEventListener('click', e => {
   }
   if (a === 'macc') {
     const o = missionOffers(st().id, st().name, secId()).find(x => x.slot === +k);
-    if (o && acceptMission(o)) { note = `Mission angenommen: ${o.title}. Sie steht rechts oben im HUD.`; snd(700, 0.15, 'sine', 0.05, 300); }
+    if (o && acceptMission(o)) { note = `Mission angenommen: ${o.title}. Sie steht rechts oben im HUD.`; sfx('ui_confirm', 0.5, 1, () => snd(700, 0.15, 'sine', 0.05, 300)); }
   }
   if (a === 'mdrop') {
     const m = (P.missions || [])[n];

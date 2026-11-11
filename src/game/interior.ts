@@ -761,7 +761,7 @@ export function updateWalk(dt: number) {
     IN.jy += IN.jv * dt; IN.jv -= 15 * dt;
     const top = mesh ? Math.max(0, mesh.head() - 1.9) : 0.9;
     if (IN.jy > top) { IN.jy = top; IN.jv = Math.min(IN.jv, 0); }
-    if (IN.jy <= 0) { IN.jy = 0; IN.jv = 0; sfx('land', 0.4, 0.9, () => snd(60, 0.07, 'triangle', 0.03, -25)); }
+    if (IN.jy <= 0) { IN.jy = 0; IN.jv = 0; stepT = 0; }   // kein eigener Ton beim Aufkommen: der nächste Schritt folgt sofort
   }
   IN.area = room ? room.area(IN.x, IN.z) : IN.z > HZ0 ? 'Hangardeck' : IN.z > PZ1 ? 'Korridor' : PAL[kind].hall;
   if (IN.panel && Math.hypot(IN.x - IN.panel.x, IN.z - IN.panel.z) > 2.5) IN.panel = null;

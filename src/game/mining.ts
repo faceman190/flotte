@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { scene, glowMat } from '../core/engine';
 import { rand, d3 } from '../core/util';
-import { snd, laserSound } from '../core/audio';
+import { snd, laserSound, sfx, boom } from '../core/audio';
 import { ITEMS, type ItemId } from '../data/items';
 import { P, G, stats, cargoUsed } from './state';
 import { world, pickOre, removeAst, makeAst, dropPick, astHooks, type Asteroid } from './world';
@@ -43,7 +43,7 @@ export function crumble(a: Asteroid, remote = false) {
   if (SHARED.client && !remote) astHooks.gone(a, 'mined');
   burst(a.x, a.y, a.z, ITEMS[a.comp[0].k].c, 40, a.r0 * 1.4, 1.1);
   burst(a.x, a.y, a.z, '#8a8f9a', 24, a.r0, 1.4);
-  snd(120, 0.4, 'triangle', 0.05, -60);
+  sfx('rock' + Math.floor(Math.random() * 3), 0.6, 0.85 + Math.random() * 0.3, () => snd(120, 0.4, 'triangle', 0.05, -60));
   removeAst(i);
   if (MINE.target === a) MINE.target = null;
 }
@@ -159,7 +159,7 @@ function explode(c: Charge) {
   burst(c.x, c.y, c.z, '#ffd27a', 120, 110, 1.1);
   burst(c.x, c.y, c.z, '#ff7040', 80, 80, 1.4);
   burst(c.x, c.y, c.z, '#8a8f9a', 60, 60, 2);
-  snd(70, 1, 'sawtooth', 0.09, -40);
+  boom(1, 0.72, () => snd(70, 1, 'sawtooth', 0.09, -40));
   const dp = d3(c.x, c.y, c.z, P.x, P.y, P.z);
   if (dp < 400) G.shake = Math.min(2.5, G.shake + (400 - dp) / 160);
   if (dp < 45 + stats().radius) hurtPlayer(30);

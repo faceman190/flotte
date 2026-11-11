@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { scene, view } from '../core/engine';
 import { keys, mouse, actions, look } from '../core/input';
 import { rand, clamp, d3 } from '../core/util';
-import { snd, gunSound } from '../core/audio';
+import { snd, gunSound, sfx, boom } from '../core/audio';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
 import type { ShipId } from '../data/ships';
 import type { Paint } from '../models/gltfShips';
@@ -51,7 +51,8 @@ export function hurtPlayer(d: number) {
   (SHIP.shield.material as THREE.MeshBasicMaterial).opacity = P.shield > 0 ? 0.45 : 0;
   if (P.shield > 0) { const a = Math.min(P.shield, d); P.shield -= a; d -= a; }
   P.hull -= d;
-  snd(140, 0.12, 'sawtooth', 0.05, -60);
+  // Treffer: Schild knistert, blanke Hülle scheppert
+  sfx(P.shield > 0 ? 'shield_hit' : 'hull_hit' + Math.floor(Math.random() * 3), P.shield > 0 ? 0.45 : 0.6, 0.9 + Math.random() * 0.2, () => snd(140, 0.12, 'sawtooth', 0.05, -60));
   if (P.hull <= 0) die();
 }
 function die() {
@@ -61,7 +62,7 @@ function die() {
   burst(P.x, P.y, P.z, '#ffb347', 140, 90, 1.5);
   burst(P.x, P.y, P.z, '#ffffff', 60, 50, 0.8);
   G.shake = 2.5;
-  snd(90, 0.8, 'sawtooth', 0.09, -60);
+  boom(1, 0.75, () => snd(90, 0.8, 'sawtooth', 0.09, -60));
   const lost = cargoUsed();
   for (const k of ITEM_IDS) P.cargo[k] = 0;
   radio('SYSTEM', `Jäger zerstört! Rettungskapsel ausgestoßen.${lost ? ' Fracht verloren.' : ''} Ein neuer Jäger wartet im Heimathafen.`);
@@ -238,7 +239,7 @@ export function updatePickups(dt: number) {
     p.mesh.visible = !(p.life < 8 && Math.sin(p.life * 12) > 0);
     let gone = p.life <= 0;
     if (alive && d < 6 + st.radius) {
-      if (room) { P.cargo[p.k] += p.amt; snd(1000, 0.05, 'sine', 0.03, 300); gone = true; }
+      if (room) { P.cargo[p.k] += p.amt; sfx('pickup', 0.4, 1, () => snd(1000, 0.05, 'sine', 0.03, 300)); gone = true; }
       else if (fullWarn <= 0) { radio('SYSTEM', `Frachtraum voll! ${ITEMS[p.k].n} kann nicht geladen werden. An einer Station verkaufen.`); fullWarn = 5; }
     }
     if (gone) { world.pickups.splice(i, 1); p.mesh.parent?.remove(p.mesh); }

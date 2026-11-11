@@ -91,6 +91,8 @@ export function sfx(key: string, vol = 1, rate = 1, fallback?: () => void) {
   s.connect(g).connect(AC.destination); s.start();
   return true;
 }
+// Explosion: eine von drei Aufnahmen, Tonhöhe leicht gestreut (rate < 1 = größer, tiefer)
+export function boom(vol = 0.8, rate = 1, fallback?: () => void) { return sfx('explosion' + Math.floor(Math.random() * 3), vol, rate * (0.92 + Math.random() * 0.16), fallback); }
 // Grundgeräusch (Schleife) mit weichem Wechsel; key null = aus
 let amb: { key: string; vol: number; src: AudioBufferSourceNode; g: GainNode } | null = null;
 export function ambience(key: string | null, vol = 0.1) {

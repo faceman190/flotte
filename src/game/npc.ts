@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { scene } from '../core/engine';
 import { rand, pick, d3, clamp } from '../core/util';
-import { snd, gunSound } from '../core/audio';
+import { snd, gunSound, sfx, boom } from '../core/audio';
 import { buildCivilian, SHIPDEF, SHIPNAMES, type CivType } from '../models/ships';
 import { buildAllyModel } from '../models/playerShips';
 import { world, type Station, type Gate } from './world';
@@ -166,7 +166,7 @@ export function damageAlly(a: any, d: number) {
     npcRadio(a.name, 'Ich bin getroffen! Steige aus!', a.col);
   }
 }
-function allyBoom(a: any) { burst(a.x, a.y, a.z, '#ffb347', 90, 70, 1.2); snd(100, 0.6, 'sawtooth', 0.05, -60); }
+function allyBoom(a: any) { burst(a.x, a.y, a.z, '#ffb347', 90, 70, 1.2); boom(0.5, 1, () => snd(100, 0.6, 'sawtooth', 0.05, -60)); }
 export function updateAllies(dt: number) {
   if (SHARED.client) { mirrorAllies(dt); return; }   // Mitspieler: Patrouillen kommen vom Gastgeber
   // Verluste nach einer Weile von der Station ersetzen

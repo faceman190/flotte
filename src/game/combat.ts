@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { scene, basicAdd, glowMat } from '../core/engine';
 import { rand, ri, pick, d3, clamp, rng, hashStr } from '../core/util';
-import { snd } from '../core/audio';
+import { snd, sfx, boom } from '../core/audio';
 import { DRONE_T, BOMBER_T, buildMother } from '../models/ferrox';
 import { MK } from '../models/ships';
 import { world, dropPick, breakAst, SECTOR_RADIUS } from './world';
@@ -183,7 +183,7 @@ export function killEnemy(e: any, i: number, byPlayer = false, drops = true) {
   if (e.type === 'mother') {
     for (let k = 0; k < 6; k++) setTimeout(() => {
       burst(e.x + rand(-60, 60), e.y + rand(-60, 60), e.z + rand(-60, 60), k % 2 ? '#d0a0ff' : '#ffd27a', 160, 140, 2);
-      snd(50 + k * 10, 0.9, 'sawtooth', 0.08, -25);
+      boom(0.9, 0.7 + k * 0.04, () => snd(50 + k * 10, 0.9, 'sawtooth', 0.08, -25));
       G.shake = Math.min(3, G.shake + 1);
     }, k * 200);
     if (drops) for (let k = 0; k < 10; k++) dropPick(e.x, e.y, e.z, 'schrott', 2, 80);
@@ -194,7 +194,7 @@ export function killEnemy(e: any, i: number, byPlayer = false, drops = true) {
   }
   burst(e.x, e.y, e.z, '#c070ff', e.type === 'bomber' ? 110 : 60, e.type === 'bomber' ? 90 : 70, 1.2);
   burst(e.x, e.y, e.z, '#ffd27a', 40, 50, 0.9);
-  snd(110, 0.5, 'sawtooth', 0.07, -70);
+  boom(0.7, 1.1, () => snd(110, 0.5, 'sawtooth', 0.07, -70));
   if (d3(e.x, e.y, e.z, P.x, P.y, P.z) < 600) G.shake = Math.min(2, G.shake + 0.5);
   if (!drops) return;
   if (e.type === 'bomber') { dropPick(e.x, e.y, e.z, 'schrott', 1); dropPick(e.x, e.y, e.z, 'schrott', 1); }
@@ -313,7 +313,7 @@ export function updateProjectiles(dt: number) {
       }
     }
     if (!hit) for (const t of ebullets) if (t.torp && t.life > 0 && segHit(b, t.x, t.y, t.z, 4.5)) {
-      t.life = 0; burst(t.x, t.y, t.z, '#c070ff', 30, 45, 0.6); snd(300, 0.15, 'triangle', 0.04, -150); hit = true; break;
+      t.life = 0; burst(t.x, t.y, t.z, '#c070ff', 30, 45, 0.6); boom(0.35, 1.6, () => snd(300, 0.15, 'triangle', 0.04, -150)); hit = true; break;
     }
     if (!hit && b.kind === 'p') for (let j = asteroids.length - 1; j >= 0; j--) {
       const a = asteroids[j];
@@ -343,7 +343,7 @@ export function updateProjectiles(dt: number) {
       const e = enemies[j], rr = e.type === 'mother' ? 85 : e.type === 'bomber' ? 15 : 10;
       if (d3(r.x, r.y, r.z, e.x, e.y, e.z) < rr) { boom = true; hitEnemy(e, j, 150 + 20 * P.up.guns, true); }
     }
-    if (boom) { burst(r.x, r.y, r.z, '#ffd27a', 60, 60, 0.9); snd(120, 0.4, 'sawtooth', 0.06, -60); scene.remove(r.mesh); rockets.splice(i, 1); }
+    if (boom) { burst(r.x, r.y, r.z, '#ffd27a', 60, 60, 0.9); sfx('explosion' + Math.floor(Math.random() * 3), 0.6, 1.25, () => snd(120, 0.4, 'sawtooth', 0.06, -60)); scene.remove(r.mesh); rockets.splice(i, 1); }
   }
   for (let i = ebullets.length - 1; i >= 0; i--) {
     const b = ebullets[i];
