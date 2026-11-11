@@ -13,20 +13,22 @@ import { radioLog, radioHooks } from './radio';
 import { itemIcon } from './icons';
 import { showMap, hideMap, drawMap } from './galaxyMap';
 import { SIL, trackedContract } from './hud';
-import { NET, netHooks, sendChat, isOnline } from '../game/net';
+import { NET, netHooks, sendChat, isOnline, pilotsHere, myStation } from '../game/net';
+import { TRADE, tradeHooks, requestTrade, acceptTrade, declineTrade, withdrawTrade, cancelTrade, setOffer, setReady, tradeValue, offerCount, cargoSpaceAfter, offerCovered, type Offer } from '../game/trade';
 import { roomName } from './mp';
 
 // =====================================================================================
 // Flottenband: der Armbandrechner, den die Flotte jedem Piloten mitgibt.
-// Apps: Übersicht, Aufträge, Karte, Fuhrpark, Fracht, Funk. Solange es offen ist, steht das Spiel (Modus 'map').
+// Apps: Übersicht, Aufträge, Karte, Fuhrpark, Fracht, Handel, Funk. Solange es offen ist, steht das Spiel (Modus 'map').
 // =====================================================================================
-export type App = 'start' | 'auftraege' | 'karte' | 'fuhrpark' | 'fracht' | 'funk';
+export type App = 'start' | 'auftraege' | 'karte' | 'fuhrpark' | 'fracht' | 'handel' | 'funk';
 const APPS: { id: App; n: string; sub: string; ico: string }[] = [
   { id: 'start', n: 'Übersicht', sub: 'Pilot, Standort und Schiff', ico: '<path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/>' },
   { id: 'auftraege', n: 'Aufträge', sub: 'Angenommene Lieferaufträge', ico: '<path d="M5 3h10l4 4v14H5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11h8M8 15h8M8 7h5" stroke="currentColor" stroke-width="2"/>' },
   { id: 'karte', n: 'Karte', sub: 'Galaxiekarte und Routenplanung', ico: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="1.5"/><circle cx="15" cy="9" r="2"/>' },
   { id: 'fuhrpark', n: 'Fuhrpark', sub: 'Deine Schiffe und ihre Ausstattung', ico: '<path d="M12 2 15 10l7 4-7 1-3 7-3-7-7-1 7-4z"/>' },
   { id: 'fracht', n: 'Fracht', sub: 'Frachtraum, Rover und Stationslager', ico: '<path d="M3 8 12 3l9 5v9l-9 5-9-5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 8l9 5 9-5M12 13v9" stroke="currentColor" stroke-width="2"/>' },
+  { id: 'handel', n: 'Handel', sub: 'Waren und Credits mit anderen Piloten tauschen', ico: '<path d="M4 8h13l-3-3M20 16H7l3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' },
   { id: 'funk', n: 'Funk', sub: 'Verlauf der Funkmeldungen', ico: '<path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2"/>' },
 ];
 let app: App = 'start', prevMode: Mode = 'play', fleetSel = 0, hudWasOn = false;
@@ -55,6 +57,7 @@ export function openBand(a?: App) {
 }
 export function closeBand() {
   if (G.mode !== 'map') return;
+  if (TRADE.open) cancelTrade();   // das Handelsfenster gehört zum Band: zu = Handel abgebrochen
   hideMap();
   $('band').classList.add('hidden');
   if (hudWasOn) $('hud').classList.remove('hidden');
@@ -63,6 +66,7 @@ export function closeBand() {
   bandHooks.closed(prevMode);
 }
 export function setApp(a: App) {
+  if (a !== 'handel' && app === 'handel' && TRADE.open) cancelTrade();
   app = a;
   for (const b of $('bandApps').querySelectorAll('button')) b.classList.toggle('on', (b as HTMLElement).dataset.app === a);
   const def = APPS.find(x => x.id === a)!;
@@ -96,7 +100,7 @@ const hms = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor(s / 
 
 function render() {
   const b = $('bandBody');
-  b.innerHTML = app === 'start' ? startApp() : app === 'auftraege' ? jobsApp() : app === 'fuhrpark' ? fleetApp() : app === 'fracht' ? cargoApp() : funkApp();
+  b.innerHTML = app === 'start' ? startApp() : app === 'auftraege' ? jobsApp() : app === 'fuhrpark' ? fleetApp() : app === 'fracht' ? cargoApp() : app === 'handel' ? tradeApp() : funkApp();
   b.querySelectorAll<HTMLElement>('[data-a]').forEach(el => el.onclick = () => act(el.dataset.a!, el.dataset.k || ''));
   const ci = document.getElementById('bandChat') as HTMLInputElement | null;
   if (ci) {
@@ -104,10 +108,24 @@ function render() {
     ci.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') go(); });
     document.getElementById('bandChatGo')!.onclick = go;
   }
+  const cr = document.getElementById('trCr') as HTMLInputElement | null;
+  if (cr) {
+    const go = () => { const v = Math.floor(+cr.value || 0); if (v !== TRADE.mine.cr) setOffer('cr', v); else render(); };
+    cr.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') cr.blur(); });
+    cr.addEventListener('change', go);
+  }
 }
 // Online-Liste oder neue Funkmeldung: Übersicht und Funk neu zeichnen (ohne eine angefangene Nachricht zu verlieren)
 const prevNet = netHooks.changed;
-netHooks.changed = () => { prevNet(); if (bandOpen() && app === 'start') render(); };
+netHooks.changed = () => { prevNet(); if (bandOpen() && (app === 'start' || (app === 'handel' && !TRADE.open))) render(); };
+// Handel: Fenster neu zeichnen (ohne eine angefangene Credit-Eingabe zu verlieren); angenommener Handel öffnet die App
+tradeHooks.changed = () => {
+  if (!bandOpen() || (app !== 'handel' && app !== 'start')) return;
+  const ci = document.getElementById('trCr') as HTMLInputElement | null;
+  if (ci && document.activeElement === ci) return;
+  render();
+};
+tradeHooks.opened = () => { if (bandOpen()) setApp('handel'); else if (G.mode === 'play' || G.mode === 'dock' || G.mode === 'walk' || G.mode === 'rover') openBand('handel'); };
 export function bandRadioChanged() {
   if (!bandOpen() || app !== 'funk') return;
   const ci = document.getElementById('bandChat') as HTMLInputElement | null, txt = ci?.value || '', focus = document.activeElement === ci;
@@ -121,6 +139,7 @@ function act(a: string, k: string) {
   if (a === 'drop') { const c = P.contracts.find(x => x.id === k); if (c && confirmDrop(c.id)) { abandon(c); if (P.track === c.id) P.track = undefined; } }
   if (a === 'ship') fleetSel = +k;
   if (a === 'app') { setApp(k as App); return; }
+  if (a.startsWith('tr')) { tradeAct(a, k); return; }
   saveGame();
   render();
 }
@@ -129,6 +148,7 @@ function confirmDrop(id: string) { if (dropArm === id) { dropArm = ''; return tr
 
 // ---------- Übersicht ----------
 function startApp() {
+  const here = new Set(pilotsHere().map(r => r.id));
   const S = stats(), sec = SECTOR[P.sector], fac = FACTION[sec.faction], c = trackedContract();
   const home = stationName(P.home.station).name;
   return `<div class="bgrid">
@@ -151,7 +171,7 @@ function startApp() {
       <div class="row"><span>An Bord</span><b>${Math.min(P.cargo[c.item], c.amount)}/${c.amount}</b></div>${meter(P.cargo[c.item], c.amount, 'var(--grn)')}
       <div class="row"><span>Belohnung</span><b class="amb">${fmtN(c.reward)} Cr</b></div>` : '<p>Kein Auftrag angenommen. Aufträge gibt es im Stationsmenü.</p>'}
       <div class="btnRow" style="justify-content:flex-start"><button data-a="app" data-k="auftraege">Alle Aufträge</button></div></div>
-    <div class="bcard"><h4>Piloten online</h4>${NET.status === 'online' ? NET.roster.map(r => `<div class="row"><span style="color:${r.id === NET.id ? 'var(--amb)' : 'var(--grn)'}">${esc(r.name)}${r.id === NET.id ? ' (du)' : ''}</span><b>${esc(roomName(r.room))}</b></div>`).join('') : '<p class="hint">Nicht mit einem Mehrspieler-Server verbunden. Verbinden: Pausenmenü → Mehrspieler.</p>'}</div>
+    <div class="bcard"><h4>Piloten online</h4>${NET.status === 'online' ? NET.roster.map(r => `<div class="row" style="align-items:center"><span style="color:${r.id === NET.id ? 'var(--amb)' : 'var(--grn)'}">${esc(r.name)}${r.id === NET.id ? ' (du)' : ''}</span><b>${here.has(r.id) ? `<button class="mini" data-a="trAsk" data-k="${r.id}">Handeln</button>` : esc(roomName(r.room))}</b></div>`).join('') : '<p class="hint">Nicht mit einem Mehrspieler-Server verbunden. Verbinden: Pausenmenü → Mehrspieler.</p>'}</div>
     <div class="bcard"><h4>Bilanz</h4>
       <div class="row"><span>Erz abgebaut</span><b>${fmtN(P.mined)} E</b></div>
       <div class="row"><span>Ferrox zerstört</span><b>${P.kills}</b></div>
@@ -262,6 +282,62 @@ function cargoApp() {
     ${stores.map(([id, v]) => { const s = stationName(id); return `<div class="bcard"><h4>Lager · ${esc(s.name)}</h4><div class="hint" style="margin-bottom:6px">${esc(SECTOR[s.sector]?.name || '')}</div>${cargoTable(v as any)}</div>`; }).join('')}
     ${!stores.length ? '<div class="bcard"><h4>Stationslager</h4><p class="hint">Noch nichts eingelagert. Lagern kannst du im Stationsmenü unter „Lager“.</p></div>' : ''}
   </div>`;
+}
+
+// ---------- Handel ----------
+function tradeAct(a: string, k: string) {
+  if (a === 'trAsk') requestTrade(+k);
+  else if (a === 'trYes') acceptTrade();
+  else if (a === 'trNo') declineTrade();
+  else if (a === 'trBack') withdrawTrade();
+  else if (a === 'trCancel') cancelTrade();
+  else if (a === 'trReady') setReady(!TRADE.readyMe);
+  else if (a === 'trSet') { const [item, n] = k.split(':'); setOffer(item as ItemId, +n); }
+  render();
+}
+const offerList = (o: Offer) => {
+  const ks = ITEM_IDS.filter(k => o.items[k]);
+  if (!ks.length && !o.cr) return '<p class="hint">Noch nichts angeboten.</p>';
+  return `<table><tbody>${ks.map(k => `<tr><td>${itemIcon(k, 20)}${ITEMS[k].n}</td><td class="num">${o.items[k]}</td></tr>`).join('')}${o.cr ? `<tr><td>Credits</td><td class="num amb">${fmtN(o.cr)} Cr</td></tr>` : ''}</tbody></table>`;
+};
+function tradeApp() {
+  if (!isOnline()) return '<div class="bcard" style="max-width:620px"><h4>Handel</h4><p>Handeln geht nur mit einem Mehrspieler-Server (Pausenmenü → Mehrspieler).</p></div>';
+  const last = TRADE.last ? `<div class="msg" style="border-color:var(--amb);max-width:860px;margin-bottom:12px">${esc(TRADE.last)}</div>` : '';
+  if (TRADE.open) {
+    const ks = ITEM_IDS.filter(k => P.cargo[k] > 0 || TRADE.mine.items[k]);
+    const space = cargoSpaceAfter(), ok = offerCovered();
+    const btn = (k: string, n: number, label: string, on: boolean) => `<button class="mini" data-a="trSet" data-k="${k}:${n}" ${on ? '' : 'disabled'}>${label}</button>`;
+    const rows = ks.map(k => {
+      const n = TRADE.mine.items[k] || 0, have = P.cargo[k] || 0;
+      return `<tr><td>${itemIcon(k, 20)}${ITEMS[k].n}<div class="sm">an Bord ${have}</div></td>
+        <td class="trQ">${btn(k, 0, '0', n > 0)}${btn(k, n - 10, '−10', n > 0)}${btn(k, n - 1, '−1', n > 0)}<b class="${n > have ? 'bad' : ''}">${n}</b>${btn(k, n + 1, '+1', n < have)}${btn(k, n + 10, '+10', n < have)}${btn(k, have, 'Alles', n < have)}</td></tr>`;
+    }).join('');
+    const mine = `<div class="bcard"><h4>Dein Angebot</h4>
+      ${ks.length ? `<table class="trT"><tbody>${rows}</tbody></table>` : '<p class="hint">Dein Frachtraum ist leer. Waren aus dem Stationslager holst du vorher im Stationsmenü (Lager) an Bord.</p>'}
+      <div class="row" style="margin-top:12px;align-items:center"><span>Credits (du hast ${fmtN(P.credits)})</span><input id="trCr" type="number" min="0" max="${Math.floor(P.credits)}" step="10" value="${TRADE.mine.cr}" style="width:130px;text-align:right"></div>
+      <div class="row"><span>Richtwert der Waren</span><b>${fmtN(tradeValue(TRADE.mine))} Cr</b></div>
+      ${ok ? '' : '<p class="bad">Dein Angebot ist nicht mehr gedeckt (Frachtraum oder Credits geändert).</p>'}</div>`;
+    const theirs = `<div class="bcard"><h4>Angebot von ${esc(TRADE.withName)}</h4>${offerList(TRADE.theirs)}
+      <div class="row" style="margin-top:12px"><span>Richtwert der Waren</span><b>${fmtN(tradeValue(TRADE.theirs))} Cr</b></div>
+      ${offerCount(TRADE.theirs) && space < 0 ? `<p class="hint">${-space} Einheiten passen nicht in deinen Frachtraum und kommen ins Lager dieser Station.</p>` : ''}</div>`;
+    const st = (who: string, r: boolean) => `<div class="row"><span>${esc(who)}</span><b style="color:${r ? 'var(--grn)' : 'var(--mut)'}">${r ? '✔ bestätigt' : 'noch nicht bestätigt'}</b></div>`;
+    return `${last}<div class="bgrid trade">${mine}${theirs}</div>
+      <div class="bcard" style="margin-top:12px;max-width:860px"><h4>Abschluss</h4>
+        ${st('Du', TRADE.readyMe)}${st(TRADE.withName, TRADE.readyThem)}
+        <p class="hint">Der Handel gilt, sobald beide denselben Stand bestätigt haben. Jede Änderung hebt beide Bestätigungen auf. Schließen des Flottenbands bricht den Handel ab.</p>
+        <div class="btnRow" style="justify-content:flex-start"><button class="${TRADE.readyMe ? '' : 'pri'}" data-a="trReady">${TRADE.readyMe ? 'Bestätigung zurücknehmen' : 'Handel bestätigen'}</button><button data-a="trCancel">Abbrechen</button></div></div>`;
+  }
+  const now = performance.now();
+  const ask = TRADE.ask && now - TRADE.ask.at < 90000 ? `<div class="bcard" style="border-color:var(--amb)"><h4>Handelsanfrage</h4><p><b>${esc(TRADE.ask.name)}</b> möchte mit dir handeln.</p>
+    <div class="btnRow" style="justify-content:flex-start"><button class="pri" data-a="trYes">Annehmen</button><button data-a="trNo">Ablehnen</button></div></div>` : '';
+  const sent = TRADE.sent && now - TRADE.sent.at < 90000 ? `<div class="bcard"><h4>Anfrage gesendet</h4><p>Warte auf Antwort von <b>${esc(TRADE.sent.name)}</b> …</p>
+    <div class="btnRow" style="justify-content:flex-start"><button data-a="trBack">Zurückziehen</button></div></div>` : '';
+  const stn = myStation(), list = pilotsHere();
+  const here = !stn ? '<p>Handeln geht nur in einer Station: Dockt beide an derselben Station an (oder lauft dort zu Fuß herum). Dann tauscht ihr Waren aus dem Frachtraum und Credits.</p>'
+    : list.length ? list.map(r => `<div class="row" style="align-items:center"><span style="color:var(--grn)">${esc(r.name)}</span>${TRADE.ask?.id === r.id ? '<span class="amb">fragt dich an</span>' : `<button class="pri mini" data-a="trAsk" data-k="${r.id}" ${TRADE.sent?.id === r.id ? 'disabled' : ''}>Handel anbieten</button>`}</div>`).join('')
+    : '<p class="hint">Gerade ist kein anderer Pilot in dieser Station. Zu Fuß kannst du auch direkt zu einem Piloten gehen und <kbd>T</kbd> drücken.</p>';
+  return `${last}<div class="bgrid">${ask}${sent}<div class="bcard"><h4>Piloten in dieser Station</h4>${here}</div>
+    <div class="bcard"><h4>So geht's</h4><p>1. Handel anbieten (hier oder zu Fuß mit <kbd>T</kbd> bei einem Piloten).<br>2. Beide legen Waren aus dem Frachtraum und Credits aufs Angebot.<br>3. Beide bestätigen. Erst dann wird getauscht.</p><p class="hint">Was nicht in den Frachtraum passt, kommt ins Lager der Station.</p></div></div>`;
 }
 
 // ---------- Funk ----------

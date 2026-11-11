@@ -24,9 +24,9 @@ export const NET = {
   roster: [] as { id: number; name: string; room: string }[],
   account: null as string | null, authErr: '', savedAt: 0, tempStore: false,
 };
-export const netHooks = { changed: () => {} };   // Status oder Online-Liste geändert (Menüs neu zeichnen)
+export const netHooks = { changed: () => {}, trade: (_m: any) => {}, lost: () => {} };   // Status oder Online-Liste geändert (Menüs neu zeichnen)
 export interface Remote {
-  id: number; name: string; cls: string; paint: string; m: string; s: number; w: any[] | null;   // w: zu Fuß in einer Station [Station, x, z, Blick]
+  id: number; name: string; cls: string; paint: string; m: string; s: number; w: any[] | null; d: string;   // d: Station, an der er angedockt ist   // w: zu Fuß in einer Station [Station, x, z, Blick]
   ship: ShipModel | null; rover: THREE.Group | null; tp: THREE.Vector3; tq: THREE.Quaternion; seen: number;
 }
 export const remotes = new Map<number, Remote>();
@@ -54,7 +54,7 @@ export function connect(url = settings.server || defaultUrl()) {
     if (NET.ws !== ws) return;
     const was = NET.status === 'online';
     NET.ws = null; NET.status = wantOnline ? 'fehler' : 'aus'; NET.roster = []; NET.account = null;
-    clearRemotes(); leaveShared();
+    clearRemotes(); leaveShared(); netHooks.lost();
     if (was) radio('SYSTEM', 'Verbindung zum Mehrspieler-Server verloren.');
     netHooks.changed();
     // automatisch neu verbinden, wenn die Verbindung schon einmal stand
@@ -66,10 +66,10 @@ export function disconnect(silent = false) {
   const ws = NET.ws; NET.ws = null;
   if (ws) try { ws.close(); } catch { /* egal */ }
   NET.status = 'aus'; NET.roster = []; NET.id = 0; NET.account = null;
-  clearRemotes(); leaveShared();
+  clearRemotes(); leaveShared(); netHooks.lost();
   if (!silent) netHooks.changed();
 }
-const sendMsg = (m: object) => { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(m)); };
+export const sendMsg = (m: object) => { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(m)); };
 export function sendChat(text: string) { const t = text.trim().slice(0, 200); if (t) sendMsg({ t: 'chat', text: t }); }
 
 function onMsg(m: any) {
@@ -91,8 +91,8 @@ function onMsg(m: any) {
   } else if (m.t === 'st') {
     if (m.id === NET.id) return;
     let r = remotes.get(m.id);
-    if (!r) { r = { id: m.id, name: m.name, cls: '', paint: '', m: '', s: 0, w: null, ship: null, rover: null, tp: new THREE.Vector3(), tq: new THREE.Quaternion(), seen: 0 }; remotes.set(m.id, r); }
-    r.name = m.name; r.s = m.s || 0; r.m = m.m; r.w = Array.isArray(m.w) ? m.w : null;
+    if (!r) { r = { id: m.id, name: m.name, cls: '', paint: '', m: '', s: 0, w: null, d: '', ship: null, rover: null, tp: new THREE.Vector3(), tq: new THREE.Quaternion(), seen: 0 }; remotes.set(m.id, r); }
+    r.name = m.name; r.s = m.s || 0; r.m = m.m; r.w = Array.isArray(m.w) ? m.w : null; r.d = m.d || '';
     if (m.p?.length === 3) r.tp.set(m.p[0], m.p[1], m.p[2]);
     if (m.q?.length === 4) r.tq.set(m.q[0], m.q[1], m.q[2], m.q[3]).normalize();
     const cls = SHIPS[m.cls as ShipId] ? m.cls : 'falke';
@@ -124,6 +124,8 @@ function onMsg(m: any) {
     if (m.by === NET.id && m.p?.length === 3) rewardKill(m.type, m.p[0], m.p[1], m.p[2]);
   } else if (m.t === 'mkt') {
     (SHARED.market[m.st] = SHARED.market[m.st] || {})[m.k] = { s: m.s, t: m.at };
+  } else if (m.t === 'tr') {
+    netHooks.trade(m);
   } else if (m.t === 'chat') {
     radio(m.name, m.text, m.id === NET.id ? '#ffb347' : '#7fe0a0');
   }
@@ -133,6 +135,10 @@ function removeRemote(id: number) { const r = remotes.get(id); if (!r) return; i
 function clearRemotes() { for (const id of [...remotes.keys()]) removeRemote(id); syncOtherPilots([]); }
 
 // Was gerade sichtbar ist: Schiff, Rover oder nichts (zu Fuß in der Station, angedockt)
+// Station, an der man gerade ist (angedockt, zu Fuß oder im eigenen Schiff im Hangar)
+export function myStation(): string { return (G.dockedAt && G.dockedAt.id) || (IN.active && IN.station ? IN.station.id : '') || ''; }
+// andere Piloten in derselben Station
+export function pilotsHere() { const st = myStation(); return st ? [...remotes.values()].filter(r => r.d === st) : []; }
 function myState() {
   if (IN.active || G.dockedAt) return { o: SHIP.g, m: 'innen' };
   if (ROVER.active && ROVER.model) return { o: ROVER.model.g, m: 'rover' };
@@ -152,7 +158,7 @@ function sendState() {
   const s = myState(), p = s.m === 'schiff' ? P : s.o.position, q = s.o.quaternion;
   // zu Fuß in einer Station (nicht im eigenen Schiff): Position im Stationsraum mitschicken
   const w = IN.active && IN.station && !IN.ship ? [IN.station.id, IN.x, IN.z, IN.yaw] : null;
-  sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w });
+  sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation() });
 }
 setInterval(sendState, 100);
 export function netUpdate(dt: number) {
@@ -376,7 +382,7 @@ function onAuth(m: any) {
 }
 let pushT = 0, pushTimer = 0;
 function pushRaw(d: any) { if (NET.account && d) sendMsg({ t: 'save', data: d }); }
-function pushSave(now = false) {
+export function pushSave(now = false) {
   if (!NET.account || !P.name) return;
   const wait = now ? 0 : Math.max(0, 5000 - (Date.now() - pushT));
   clearTimeout(pushTimer);

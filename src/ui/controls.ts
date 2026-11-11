@@ -3,7 +3,9 @@ import { P, G, stats } from '../game/state';
 import { world } from '../game/world';
 import { nearDock } from '../game/player';
 import { landInfo, nearShip, ROVER } from '../game/surface';
-import { IN } from '../game/interior';
+import { IN, nearestOther } from '../game/interior';
+import { TRADE } from '../game/trade';
+import { isOnline } from '../game/net';
 import { MINE } from '../game/mining';
 
 // Steuerungsleiste links unten: zeigt nur die Tasten, die gerade Sinn ergeben.
@@ -11,12 +13,16 @@ import { MINE } from '../game/mining';
 type Row = [string, string, boolean?];   // Taste, Aktion, hervorgehoben
 let last = '', t = 0;
 
+const tradeAsk = () => (TRADE.ask && performance.now() - TRADE.ask.at < 90000 ? TRADE.ask.name : '');
 function rowsFor(): { title: string; rows: Row[] } | null {
   const m = G.mode;
   if (G.dead) return null;
   if (m === 'walk') {
     const r: Row[] = [];
     if (IN.target) r.push(['E', IN.target.label(), true]);
+    const ask = tradeAsk(), near = isOnline() ? nearestOther() : null;
+    if (ask) r.push(['T', `Handelsanfrage von ${ask}`, true]);
+    else if (near) r.push(['T', `Handel mit ${near.name} anbieten`, true]);
     r.push(['W A S D', 'Laufen'], ['Umschalt', 'Rennen']);
     if (IN.station && !IN.ship) r.push(['Tab', 'Stationsmenü']);
     r.push(['B', 'Flottenband'], ['M', 'Karte'], ['Esc', 'Menü']);
@@ -31,6 +37,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
   }
   if (m === 'play') {
     const r: Row[] = [], st = stats();
+    if (tradeAsk()) r.push(['T', `Handelsanfrage von ${tradeAsk()}`, true]);
     const dock = nearDock(), li = !dock ? landInfo() : null;
     if (dock) r.push(['E', `Andocken · ${dock.name}`, true]);
     else if (li && li.ok) r.push(['E', 'Landen, Rover aussetzen', true]);

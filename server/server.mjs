@@ -5,6 +5,7 @@
 // Chat und die Online-Liste an alle. Pilotenkonten mit Kennwort speichern den Spielstand auf dem Server (store.mjs).
 // Gemeinsame Welt: Der erste Pilot in einem Raum ist Gastgeber und rechnet die Asteroiden; er schickt den Stand ('w')
 // an die anderen, deren Abbau-Meldungen ('a') gehen an ihn. Den Markt (Preissättigung je Station) führt der Server.
+// Handel zwischen Piloten in derselben Station ('tr'): der Server führt Anfrage, Angebote und beidseitige Bestätigung.
 // Start: node server/server.mjs   (Port über PORT, Standard 2567)
 // =====================================================================================
 import http from 'http';
@@ -98,6 +99,7 @@ wss.on('connection', ws => {
       const room = clean(m.room, 40);
       if (room === c.room) return;
       const old = c.room;
+      if (c.trade) endTrade(c.trade, `${c.name} hat die Station verlassen.`);
       if (old) toRoom(old, { t: 'leave', id: c.id }, ws);
       c.room = room; c.st = null; c.joinN = ++joinCounter;
       if (old) announceHost(old);
@@ -108,7 +110,9 @@ wss.on('connection', ws => {
     } else if (m.t === 'st') {
       if (!c.room) return;
       const n = v => (typeof v === 'number' && isFinite(v) ? Math.round(v * 100) / 100 : 0);
-      c.st = { p: (m.p || []).slice(0, 3).map(n), q: (m.q || []).slice(0, 4).map(n), s: n(m.s), cls: clean(m.cls, 12), paint: clean(m.paint, 10), m: clean(m.m, 8), w: Array.isArray(m.w) && m.w.length === 4 ? [clean(m.w[0], 40), n(m.w[1]), n(m.w[2]), n(m.w[3])] : null };
+      c.st = { p: (m.p || []).slice(0, 3).map(n), q: (m.q || []).slice(0, 4).map(n), s: n(m.s), cls: clean(m.cls, 12), paint: clean(m.paint, 10), m: clean(m.m, 8), w: Array.isArray(m.w) && m.w.length === 4 ? [clean(m.w[0], 40), n(m.w[1]), n(m.w[2]), n(m.w[3])] : null, d: clean(m.d, 40) };
+      // wer beim Handeln die Station verlässt, bricht den Handel ab
+      if (c.trade && c.st.d !== c.trade.station) endTrade(c.trade, `${c.name} hat die Station verlassen.`);
       toRoom(c.room, { t: 'st', id: c.id, name: c.name, ...c.st }, ws);
     } else if (m.t === 'w' || m.t === 'f' || m.t === 'fk') {
       // Weltstand (Asteroiden 'w', Ferrox 'f', Abschuss 'fk') vom Gastgeber an die anderen im Raum
@@ -123,6 +127,8 @@ wss.on('connection', ws => {
       const cur = satNow(market[st]?.[k]);
       (market[st] = market[st] || {})[k] = { s: Math.max(-80, cur + n), t: now() };
       toAll({ t: 'mkt', st, k, s: market[st][k].s, at: market[st][k].t });
+    } else if (m.t === 'tr') {
+      trade(ws, c, m);
     } else if (m.t === 'chat') {
       const now = Date.now(), text = clean(m.text, 200);
       if (!text || now - c.chatT < 700) return;   // einfache Bremse gegen Spam
@@ -131,6 +137,8 @@ wss.on('connection', ws => {
     }
   });
   ws.on('close', () => {
+    if (c.trade) endTrade(c.trade, `${c.name} ist nicht mehr verbunden.`);
+    dropInvites(c, 'ist nicht mehr verbunden');
     if (c.room) toRoom(c.room, { t: 'leave', id: c.id }, ws);
     clients.delete(ws);
     if (c.room) announceHost(c.room);
@@ -148,6 +156,93 @@ setInterval(() => {
   }
 }, 25000);
 wss.on('connection', ws => { ws.alive = true; ws.on('pong', () => { ws.alive = true; }); });
+
+// ---------- Handel zwischen Piloten ----------
+// Zwei Piloten in derselben Station (angedockt oder zu Fuß) tauschen Waren aus dem Frachtraum und Credits.
+// Ablauf: Anfrage ('ask') → Annahme ('yes') → beide stellen ihr Angebot zusammen ('offer') → beide bestätigen
+// denselben Stand ('ready' mit rev; jede Änderung hebt beide Bestätigungen auf) → der Server schickt beiden 'done'
+// mit dem, was sie abgeben und bekommen. Jede Seite bucht das in ihrem Spielstand.
+const byId = id => { for (const o of clients.values()) if (o.id === id) return o; return null; };
+const stationOf = o => (o && o.st && o.st.d) || '';
+const tsend = (o, m) => { const w = wsOf(o); if (w) send(w, { t: 'tr', ...m }); };
+const ITEM_KEY = /^[a-z0-9]{1,12}$/;
+function cleanOffer(m) {
+  const items = {};
+  if (m.items && typeof m.items === 'object') for (const [k, v] of Object.entries(m.items).slice(0, 24)) {
+    const n = Math.floor(+v);
+    if (ITEM_KEY.test(k) && n > 0 && n <= 100000) items[k] = n;
+  }
+  return { items, cr: Math.max(0, Math.min(1e9, Math.floor(+m.cr) || 0)) };
+}
+function tradeState(T) {
+  for (const o of [T.a, T.b]) {
+    const other = o === T.a ? T.b : T.a;
+    tsend(o, { op: 'st', mine: T.off.get(o.id), theirs: T.off.get(other.id), rm: T.ready.has(o.id), rt: T.ready.has(other.id), rev: T.rev });
+  }
+}
+function endTrade(T, why) {
+  if (T.over) return;
+  T.over = true;
+  for (const o of [T.a, T.b]) { if (o.trade === T) o.trade = null; tsend(o, { op: 'end', why }); }
+}
+// offene Anfragen von und an diesen Piloten zurückziehen
+function dropInvites(c, why) {
+  if (c.invite) { const to = byId(c.invite.to); if (to) tsend(to, { op: 'gone', from: c.id }); c.invite = null; }
+  for (const o of clients.values()) if (o.invite && o.invite.to === c.id) { o.invite = null; tsend(o, { op: 'no', name: c.name, why: `${c.name} ${why}.` }); }
+}
+function trade(ws, c, m) {
+  const err = why => tsend(c, { op: 'err', why });
+  if (m.op === 'ask') {
+    const o = byId(+m.to), nowMs = Date.now();
+    if (nowMs - (c.askT || 0) < 2000) return err('Bitte einen Moment warten.');
+    c.askT = nowMs;
+    if (!o || o === c || !o.name) return err('Dieser Pilot ist nicht mehr da.');
+    if (!stationOf(c)) return err('Handeln geht nur in einer Station (angedockt oder zu Fuß).');
+    if (o.room !== c.room || stationOf(o) !== stationOf(c)) return err(`${o.name} ist nicht in deiner Station.`);
+    if (c.trade) return err('Du handelst schon mit jemandem.');
+    if (o.trade) return err(`${o.name} handelt gerade mit jemand anderem.`);
+    if (c.invite && c.invite.to !== o.id) { const old = byId(c.invite.to); if (old) tsend(old, { op: 'gone', from: c.id }); }
+    c.invite = { to: o.id, at: nowMs };
+    tsend(o, { op: 'ask', from: c.id, name: c.name });
+    tsend(c, { op: 'sent', to: o.id, name: o.name });
+  } else if (m.op === 'yes') {
+    const o = byId(+m.from);
+    if (!o || !o.invite || o.invite.to !== c.id || Date.now() - o.invite.at > 90000) { if (o) o.invite = null; return err('Die Anfrage ist nicht mehr gültig.'); }
+    o.invite = null;
+    if (!stationOf(c) || stationOf(o) !== stationOf(c) || o.room !== c.room) return err(`${o.name} ist nicht mehr in deiner Station.`);
+    if (c.trade || o.trade) return err('Einer von euch handelt schon mit jemand anderem.');
+    if (c.invite) { const old = byId(c.invite.to); if (old) tsend(old, { op: 'gone', from: c.id }); c.invite = null; }
+    const T = { a: o, b: c, station: stationOf(c), off: new Map([[o.id, { items: {}, cr: 0 }], [c.id, { items: {}, cr: 0 }]]), ready: new Set(), rev: 1, over: false };
+    o.trade = c.trade = T;
+    tsend(o, { op: 'open', id: c.id, name: c.name });
+    tsend(c, { op: 'open', id: o.id, name: o.name });
+    tradeState(T);
+    console.log(`Handel: ${o.name} ↔ ${c.name}`);
+  } else if (m.op === 'no') {
+    const o = byId(+m.from);
+    if (o && o.invite && o.invite.to === c.id) { o.invite = null; tsend(o, { op: 'no', name: c.name, why: `${c.name} hat abgelehnt.` }); }
+  } else if (m.op === 'back') {
+    if (c.invite) { const o = byId(c.invite.to); if (o) tsend(o, { op: 'gone', from: c.id }); c.invite = null; }
+  } else if (m.op === 'offer') {
+    const T = c.trade; if (!T) return;
+    T.off.set(c.id, cleanOffer(m));
+    T.ready.clear(); T.rev++;
+    tradeState(T);
+  } else if (m.op === 'ready') {
+    const T = c.trade; if (!T) return;
+    if (+m.rev !== T.rev) { tradeState(T); return; }   // Angebot hat sich inzwischen geändert
+    if (m.v) T.ready.add(c.id); else T.ready.delete(c.id);
+    if (T.ready.size < 2) { tradeState(T); return; }
+    // beide haben denselben Stand bestätigt: abschließen
+    T.over = true; T.a.trade = T.b.trade = null;
+    const oa = T.off.get(T.a.id), ob = T.off.get(T.b.id);
+    tsend(T.a, { op: 'done', give: oa, get: ob, name: T.b.name });
+    tsend(T.b, { op: 'done', give: ob, get: oa, name: T.a.name });
+    console.log(`Handel abgeschlossen: ${T.a.name} ↔ ${T.b.name}`);
+  } else if (m.op === 'cancel') {
+    if (c.trade) endTrade(c.trade, `${c.name} hat den Handel abgebrochen.`);
+  }
+}
 
 // ---------- Anmelden, Registrieren, Speichern ----------
 async function account(ws, c, m) {

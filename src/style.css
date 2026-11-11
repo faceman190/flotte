@@ -202,3 +202,11 @@ td .hint{font-size:12px;margin-top:1px}
 @media (max-width:760px){#mapSide{left:14px;right:14px;top:auto;width:auto;max-height:42%}}
 
 #err{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:var(--mut);background:var(--bg)}
+/* Handel zwischen Piloten */
+button.mini{padding:3px 8px;font-size:12px;letter-spacing:.5px}
+.trT td{vertical-align:middle;padding:6px 4px}
+.trT .sm{font-size:11px;color:var(--mut);letter-spacing:1px;text-transform:uppercase;margin-left:26px}
+.trQ{text-align:right;white-space:nowrap}
+.trQ button{margin-left:3px}
+.trQ b{display:inline-block;min-width:38px;text-align:center;font-family:var(--mono);font-weight:400;font-size:16px}
+.bgrid.trade{grid-template-columns:repeat(auto-fit,minmax(380px,1fr));max-width:1100px}

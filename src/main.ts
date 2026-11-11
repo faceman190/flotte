@@ -16,7 +16,7 @@ import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
 import { drawHUD, updatePanels, showBanner } from './ui/hud';
 import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
-import { IN, enterInterior, leaveInterior, updateWalk, applyWalkCamera, drawWalkHUD, interact, syncParkedShip, refreshHangarShips, interiorHooks, enterShip } from './game/interior';
+import { IN, enterInterior, leaveInterior, updateWalk, applyWalkCamera, drawWalkHUD, interact, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
 import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, ROVER, SURF } from './game/surface';
@@ -24,7 +24,8 @@ import { PLANETS, PTYPE } from './data/planets';
 import { d3 } from './core/util';
 import { openBand, closeBand, drawBand, bandHooks } from './ui/band';
 import { updateControls } from './ui/controls';
-import { netUpdate, NET } from './game/net';
+import { netUpdate, NET, isOnline } from './game/net';
+import { TRADE, requestTrade } from './game/trade';
 import { openChat } from './ui/mp';
 // Die Galaxiekarte ist eine App im Flottenband
 const openMap = () => openBand('karte'), closeMap = closeBand;
@@ -192,6 +193,13 @@ onKey(code => {
   if (code === 'Digit4' && G.mode === 'play') {
     if (!stats().drones) radio('SYSTEM', 'Dieses Schiff hat keine Bergbaudrohnen.');
     else { P.dronesOn = !P.dronesOn; radio('SYSTEM', P.dronesOn ? 'Bergbaudrohnen aktiviert. Sie bauen Asteroiden in der Nähe ab.' : 'Bergbaudrohnen kehren zurück.'); }
+    return;
+  }
+  // Handel: T öffnet eine eingegangene Anfrage oder bietet dem Piloten daneben (zu Fuß) einen Handel an
+  if (code === 'KeyT' && (G.mode === 'walk' || G.mode === 'play' || G.mode === 'dock' || G.mode === 'rover')) {
+    if (TRADE.ask && performance.now() - TRADE.ask.at < 90000) { openBand('handel'); return; }
+    const o = G.mode === 'walk' && isOnline() ? nearestOther() : null;
+    if (o) requestTrade(o.id);
     return;
   }
   if (code === 'KeyR' && G.mode === 'play') { scan(); return; }

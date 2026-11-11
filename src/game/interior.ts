@@ -844,3 +844,10 @@ function otherLabels(): Label[] {
   if (room || !others.size) return [];
   return [...others.values()].map(r => ({ p: new THREE.Vector3(r.x, 2.15, r.z), text: r.name, col: '#7fe0a0' }));
 }
+// nächster anderer Pilot zu Fuß in Reichweite (für „T Handeln“); im eigenen Schiff nicht
+export function nearestOther(max = 3.2): { id: number; name: string } | null {
+  if (room || !IN.active) return null;
+  let best: { id: number; name: string } | null = null, bd = max;
+  for (const [id, r] of others) { const d = Math.hypot(r.x - IN.x, r.z - IN.z); if (d < bd) { bd = d; best = { id, name: r.name }; } }
+  return best;
+}
