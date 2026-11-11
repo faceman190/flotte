@@ -12,6 +12,7 @@ import { MINE, droneInfo } from '../game/mining';
 import { landInfo } from '../game/surface';
 import { NET, remoteMarkers } from '../game/net';
 import { trackedMission, missionLines, missionMarkers } from '../game/missions';
+import { storyObjective, storyMarkers } from '../game/story';
 
 const TAU = Math.PI * 2;
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
@@ -137,7 +138,7 @@ export function drawHUD() {
     if (onScreen(p) && d3(w.x, w.y, w.z, P.x, P.y, P.z) < 1500) { ux.fillStyle = w.col; ux.font = '10px "Share Tech Mono",Consolas,monospace'; ux.fillText(w.name, p.x, p.y); }
   }
   // Missionsziele (Messpunkte, Wrackfeld, Kapseln)
-  for (const mk of missionMarkers()) {
+  for (const mk of [...storyMarkers(), ...missionMarkers()]) {
     const p = proj(mk.x, mk.y, mk.z), d = d3(mk.x, mk.y, mk.z, P.x, P.y, P.z), label = `◆ ${mk.label} · ${fmtD(d)}`;
     if (onScreen(p, 20)) {
       const r = clamp((mk.big ? 9000 : 1600) / Math.max(d, 1), 8, mk.big ? 70 : 26);
@@ -539,7 +540,9 @@ function updateObjectives() {
   // verfolgt wird eine Mission (P.track), sonst ein Lieferauftrag, sonst die erste Mission
   const tm = trackedMission(), c = tm ? null : trackedContract(), mm = tm || (!c ? (P.missions || [])[0] : null);
   let title = '', lines: [string, boolean, boolean][] = [];
-  if (mm) {
+  const so = storyObjective();   // der Prolog hat Vorrang
+  if (so) { title = so.title; lines = so.lines; }
+  else if (mm) {
     const ml = missionLines(mm);
     title = ml.title; lines = ml.lines;
     if (!ml.tgtHere) lines.push(...routeLines(mm.tgt));

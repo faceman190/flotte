@@ -852,3 +852,17 @@ export function nearestOther(max = 3.2): { id: number; name: string } | null {
   for (const [id, r] of others) { const d = Math.hypot(r.x - IN.x, r.z - IN.z); if (d < bd) { bd = d; best = { id, name: r.name }; } }
   return best;
 }
+
+// Story: eine benannte Figur in den Stationsraum stellen (z. B. die Ausbilderin im Prolog).
+// Steht neben dem Spieler, schaut ihn an und lässt sich mit E ansprechen.
+export function storyNpc(name: string, title: string, label: string, act: () => void, col = '#ffb347', at?: { x: number; z: number }, suit = 0x2c3440) {
+  if (!IN.active || !stationGroup || IN.ship) return false;
+  const x = at ? at.x : IN.x - 2.5, z = at ? at.z : IN.z - 7, face = Math.atan2(IN.x - x, IN.z - z);   // vor dem Spieler (Blick zum Korridor)
+  const p = buildPerson(suit, 0xc89474, 0x3a2a1c, 0xffb347);
+  p.g.position.set(x, 0, z); p.g.rotation.y = face;
+  stationGroup.add(p.g);
+  persons.push({ p, x, z, face });
+  labels.push({ p: new THREE.Vector3(x, 2.15, z), text: `${name} · ${title}`, col });
+  inters.push({ x, z, r: 3.4, label: () => label, act });
+  return true;
+}

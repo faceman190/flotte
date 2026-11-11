@@ -39,7 +39,7 @@ export const SECTORS: SectorDef[] = [
   // ---------------- Menschenraum (Westen) ----------------
   {
     id: 'heimstatt', name: 'Heimstatt', faction: 'core', danger: 0, map: [170, 300], links: ['lichtwall', 'neuhafen', 'sonnenfeld'],
-    desc: 'Herz des Menschenraums. Die Bastion liegt hier vor Anker, seit die Flotte Zuflucht gefunden hat.',
+    desc: 'Herz des Menschenraums. Hier ging die Bastion vor Anker, nachdem ihre Crew hinter dem Riss gestrandet war.',
     neb: 'blue', tint: 0xc8c8c8, planet: { size: 3000, tint: 0xc8dcff, dir: [-0.6, -0.2, -0.8], atm: 0x80b0ff },
     stations: [
       { id: 'bastion', kind: 'carrier', name: 'Bastion', pos: [0, 0, 0], prices: { schrott: 1.2 }, refinery: true },
@@ -74,7 +74,7 @@ export const SECTORS: SectorDef[] = [
   },
   {
     id: 'sonnenfeld', name: 'Sonnenfeld', faction: 'core', danger: 0, map: [55, 330], links: ['heimstatt'],
-    desc: 'Erzreiche Trümmerfelder im Licht einer alten Sonne. Ruhig und ertragreich.',
+    desc: 'Erzreiche Trümmerfelder im Licht einer alten Sonne: die Reste des Halden-Tors, das beim Riss zerbrach. Ruhig und ertragreich.',
     neb: 'gold', tint: 0xa89a8c, planet: { size: 3600, tint: 0xffd8a0, dir: [-0.3, 0.1, -1], atm: 0xffb060 },
     stations: [{ id: 'sonnenwacht', kind: 'outpost', name: 'Sonnenwacht', pos: [0, 0, 0], prices: { erz: 0.85 } }],
     fields: [{ kind: 'metal', pos: [1400, 0, -1000], r: 1000, n: 65, ore: { erz: 6, kupfer: 3, titan: 0.3 } }, { kind: 'metal', pos: [-1600, 100, 700], r: 900, n: 50 }],

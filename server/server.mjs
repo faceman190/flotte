@@ -1,5 +1,5 @@
 // =====================================================================================
-// Letzte Flotte – Mehrspieler-Server
+// Letzte Crew – Mehrspieler-Server
 // Liefert das gebaute Spiel (dist/) aus und verbindet die Piloten über WebSocket (/ws).
 // Jeder Sektor ist ein Raum (Planetenoberflächen eigene Räume); Positionen gehen nur an Piloten im selben Raum,
 // Chat und die Online-Liste an alle. Pilotenkonten mit Kennwort speichern den Spielstand auf dem Server (store.mjs).
@@ -300,4 +300,4 @@ async function account(ws, c, m) {
   roster();
 }
 
-server.listen(PORT, () => console.log(`Letzte Flotte läuft auf http://localhost:${PORT}  (WebSocket /ws, Spiel aus ${ROOT})`));
+server.listen(PORT, () => console.log(`Letzte Crew läuft auf http://localhost:${PORT}  (WebSocket /ws, Spiel aus ${ROOT})`));

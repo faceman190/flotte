@@ -26,7 +26,7 @@ export function applySettings() {
 export function showMainMenu() {
   show('menu');
   ($('mContinue') as HTMLButtonElement).disabled = !hasSave();
-  ['newGame', 'pause', 'settings', 'controls', 'about', 'dock', 'band', 'hud', 'ctrlP', 'mp', 'chatIn'].forEach(hide);
+  ['newGame', 'pause', 'settings', 'controls', 'about', 'dock', 'band', 'hud', 'ctrlP', 'mp', 'chatIn', 'dlg', 'storyObj', 'scene', 'intro'].forEach(hide);
 }
 export function hideMainMenu() { hide('menu'); }
 // nach An- oder Abmelden: Weiterspielen hängt vom Speicherplatz ab

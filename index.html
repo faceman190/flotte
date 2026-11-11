@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Letzte Flotte</title>
+<title>Letzte Crew</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap">
@@ -37,12 +37,17 @@
 <div id="ctrlP" class="hidden"></div>
 <input id="chatIn" class="hidden" maxlength="200" autocomplete="off" placeholder="Nachricht an alle Piloten · Enter senden · Esc abbrechen">
 <div id="flash"></div>
+<!-- Story: Dialog, Aufgaben zu Fuß, Szene, Intro -->
+<div id="dlg" class="hidden"><div id="dlgWho"></div><div id="dlgTxt"></div></div>
+<div id="storyObj" class="holo hidden"></div>
+<div id="scene" class="hidden"><div class="ibar top"></div><div class="ibar bot"></div><div id="sceneBox"><div id="sceneWho"></div><div id="sceneTxt"></div></div><div class="sHint">Weiter: Leertaste oder Klick</div></div>
+<div id="intro" class="hidden"><div id="introBlack"></div><div class="ibar top"></div><div class="ibar bot"></div><div id="introCard"></div><div id="introFlash"></div><div class="sHint">Überspringen: Esc</div></div>
 
 <!-- Hauptmenü -->
 <div id="menu" class="screen">
   <div class="menuBox">
-    <div class="logo">LETZTE FLOTTE</div>
-    <div class="tag">Die Ferrox halten den Osten. Der Menschenraum braucht Piloten.</div>
+    <div class="logo">LETZTE CREW</div>
+    <div class="tag">Wir sind die letzte Crew. Niemand kommt uns holen.</div>
     <div class="menuBtns">
       <button class="mbtn pri" id="mContinue">Weiterspielen</button>
       <button class="mbtn" id="mNew">Neues Spiel</button>
@@ -52,7 +57,7 @@
       <button class="mbtn" id="mAbout">Über das Spiel</button>
     </div>
     <div class="hint" id="mAcc" style="margin-top:14px"></div>
-    <div class="ver">Alpha 0.22 · Fraktionsmissionen</div>
+    <div class="ver">Alpha 0.23 · Prolog</div>
   </div>
 </div>
 
@@ -74,6 +79,7 @@
     <button class="mbtn" id="pMp">Mehrspieler</button>
     <button class="mbtn" id="pSettings">Einstellungen</button>
     <button class="mbtn" id="pControls">Steuerung</button>
+    <button class="mbtn hidden" id="pSkip">Prolog überspringen</button>
     <button class="mbtn" id="pQuit">Speichern &amp; Hauptmenü</button>
   </div>
 </div></div>
@@ -81,7 +87,7 @@
 <!-- Mehrspieler -->
 <div id="mp" class="overlay hidden"><div class="card narrow">
   <h2>MEHRSPIELER</h2>
-  <p>Verbinde dich mit einem Server der Letzten Flotte. Piloten im selben Sektor siehst du mit Schiff und Namen, der Funk-Chat geht an alle. Dein Spielstand bleibt auf diesem Gerät.</p>
+  <p>Verbinde dich mit einem Server von Letzte Crew. Piloten im selben Sektor siehst du mit Schiff und Namen, der Funk-Chat geht an alle. Dein Spielstand bleibt auf diesem Gerät.</p>
   <label class="fld">Server-Adresse<input id="mpUrl" autocomplete="off" spellcheck="false"></label>
   <div class="hint" id="mpStatus" style="margin-top:8px"></div>
   <div id="mpAcc" class="hidden">
@@ -146,9 +152,9 @@
 <!-- Über -->
 <div id="about" class="overlay hidden"><div class="card narrow">
   <h2>ÜBER DAS SPIEL</h2>
-  <p>Nach Jahren der Flucht hat die Flotte um die <b class="amb">Bastion</b> eine Zuflucht gefunden. Aus ihr ist der Menschenraum entstanden: ein Netz von Sektoren, verbunden durch Sprungtore.</p>
-  <p>Im Osten herrschen die <b style="color:var(--vio)">Ferrox</b>, eine Maschinenintelligenz. In ihren Sektoren liegen die wertvollsten Rohstoffe, aber auch ihre Bienenstöcke.</p>
-  <p class="hint">Alpha 0.22: Fraktionsmissionen (Säuberung, Vermessung, Bergung mit Hinterhalt, Bienenstock) nach Rang gestaffelt; Ruf bei Flottenrat, Grenzwacht und Bergbaugilde mit sechs Rängen, Rabatten, besseren Preisen und Vertrauensaufträgen; gemeinsamer NPC-Verkehr im Mehrspieler (Frachter, Patrouillenjäger, Bomber-Torpedos und Ferrox-Alarm für alle gleich); Handel zwischen Piloten (Waren und Credits, in derselben Station, beide bestätigen); andere Piloten zu Fuß in Stationen sichtbar; Pilotenkonten mit Spielstand auf dem Server; gemeinsame Welt im Mehrspieler (Asteroiden, Abbau, Marktpreise und Ferrox für alle gleich, Kopfgeld für den Schützen), andere Piloten sehen, Funk-Chat, Online-Liste; Flottenband (Armbandrechner mit Übersicht, Aufträgen, Karte, Fuhrpark, Fracht und Funk), neues HUD mit Aufgaben und Steuerungsleiste; begehbare eigene Schiffe mit Cockpit, Frachtraum (sichtbare Ladung), Logbuch, Werkbank, Drohnenbucht und Quartier; animierte Figuren in den Stationen (Händler und Stationsarbeiter), neue 3D-Modelle für Stationen, Außenposten und Planetenbasen, eigene Planetenoberflächen mit Wolken, Stadtlichtern und Ringen, Bodentexturen auf den Planeten, überarbeitete Grafik (Filmkurve, Schatten, Kantenglättung) und neue Oberfläche, feste Galaxie mit 18 Sektoren, 10 landbare Planeten mit Bergbau-Rover, begehbare Stationen mit Hangar und Promenade, Handel mit Stationshändlern, fünf Schiffsklassen, Bergbau mit Scanner, Laser, Sprengladungen und Drohnen, sechs Erzarten nach Region, Raffinerie, Stationslager, Marktpreise mit Angebot und Nachfrage, Lieferaufträge. Geplant: gemeinsame Beute und Geleitschutz-Missionen.</p>
+  <p>Vor 38 Jahren flog die <b class="amb">Bastion</b> als Vorhut durch das uralte Halden-Tor. Kurz darauf brach das Tor hinter ihr zusammen, die elf Schiffe dahinter kamen nie an. Ihre Besatzung war die letzte Crew: gestrandet, ohne Rückweg. Aus ihr ist der Menschenraum entstanden, ein Netz von Sektoren, verbunden durch die Sprungtore einer verschwundenen Zivilisation.</p>
+  <p>Im Osten breitet sich der <b style="color:var(--vio)">Ferrox</b>-Schwarm aus: halb Maschine, halb Kristall. Er frisst Metall, Wracks und Stationen und lässt daraus Ferrit-Kristall wachsen. In seinen Sektoren liegen die wertvollsten Rohstoffe, aber auch seine Bienenstöcke.</p>
+  <p class="hint">Alpha 0.23: neuer Titel „Letzte Crew“, Intro und spielbarer Prolog „Vereidigung“ mit Ausbilderin, Übungsflug, Bergbau, erstem Ferrox-Kontakt und Vereidigungsszene; Fraktionsmissionen (Säuberung, Vermessung, Bergung mit Hinterhalt, Bienenstock) nach Rang gestaffelt; Ruf bei Flottenrat, Grenzwacht und Bergbaugilde mit sechs Rängen, Rabatten, besseren Preisen und Vertrauensaufträgen; gemeinsamer NPC-Verkehr im Mehrspieler (Frachter, Patrouillenjäger, Bomber-Torpedos und Ferrox-Alarm für alle gleich); Handel zwischen Piloten (Waren und Credits, in derselben Station, beide bestätigen); andere Piloten zu Fuß in Stationen sichtbar; Pilotenkonten mit Spielstand auf dem Server; gemeinsame Welt im Mehrspieler (Asteroiden, Abbau, Marktpreise und Ferrox für alle gleich, Kopfgeld für den Schützen), andere Piloten sehen, Funk-Chat, Online-Liste; Flottenband (Armbandrechner mit Übersicht, Aufträgen, Karte, Fuhrpark, Fracht und Funk), neues HUD mit Aufgaben und Steuerungsleiste; begehbare eigene Schiffe mit Cockpit, Frachtraum (sichtbare Ladung), Logbuch, Werkbank, Drohnenbucht und Quartier; animierte Figuren in den Stationen (Händler und Stationsarbeiter), neue 3D-Modelle für Stationen, Außenposten und Planetenbasen, eigene Planetenoberflächen mit Wolken, Stadtlichtern und Ringen, Bodentexturen auf den Planeten, überarbeitete Grafik (Filmkurve, Schatten, Kantenglättung) und neue Oberfläche, feste Galaxie mit 18 Sektoren, 10 landbare Planeten mit Bergbau-Rover, begehbare Stationen mit Hangar und Promenade, Handel mit Stationshändlern, fünf Schiffsklassen, Bergbau mit Scanner, Laser, Sprengladungen und Drohnen, sechs Erzarten nach Region, Raffinerie, Stationslager, Marktpreise mit Angebot und Nachfrage, Lieferaufträge. Geplant: gemeinsame Beute und Geleitschutz-Missionen.</p>
   <p class="hint">Raumschiffmodelle: „Ultimate Spaceships“ von Quaternius (CC0). Musik (Menü, zwei Ambient-Stücke) und Soundeffekte (Bergbaulaser, Bordkanone, Antrieb): vom Projektinhaber bereitgestellt. Texturen, Nebel-Panoramen, Planetenkarten, Stations- und Figurenmodelle: KI-generiert (Higgsfield, Tripo, Meshy-Rigging).</p>
   <div class="btnRow"><button class="pri" id="aBack">Zurück</button></div>
 </div></div>

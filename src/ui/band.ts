@@ -156,7 +156,7 @@ function startApp() {
   const S = stats(), sec = SECTOR[P.sector], fac = FACTION[sec.faction], c = trackedContract();
   const home = stationName(P.home.station).name;
   return `<div class="bgrid">
-    <div class="bcard"><h4>Pilot</h4><div class="bbig">${esc(P.name.toUpperCase())}</div><div class="bsub">Pilot der Letzten Flotte</div>
+    <div class="bcard"><h4>Pilot</h4><div class="bbig">${esc(P.name.toUpperCase())}</div><div class="bsub">Pilot der Crew</div>
       <div class="row" style="margin-top:12px"><span>Credits</span><b class="amb">${fmtN(P.credits)} Cr</b></div>
       <div class="row"><span>Verdient gesamt</span><b>${fmtN(P.earned)} Cr</b></div>
       <div class="row"><span>Flugzeit</span><b>${hms(P.playtime)}</b></div>

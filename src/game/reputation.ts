@@ -4,7 +4,7 @@ import { radio } from '../ui/radio';
 import { snd } from '../core/audio';
 
 // =====================================================================================
-// Ruf bei den Fraktionen der Letzten Flotte
+// Ruf bei den Fraktionen der Crew
 //  - Flottenrat: regiert den Menschenraum von der Bastion aus (Stationen im Menschenraum)
 //  - Grenzwacht: hält das Grenzgebiet gegen die Ferrox (Stationen im Grenzgebiet)
 //  - Bergbaugilde: Schürfer und Planetenbasen
@@ -28,7 +28,7 @@ export const REP: Record<RepId, { n: string; c: string; desc: string; how: strin
   },
   gilde: {
     n: 'Bergbaugilde', c: '#ffb347',
-    desc: 'Die Schürfer der Flotte. Ihr gehören die Planetenbasen, und sie kennt jeden, der Erz liefert.',
+    desc: 'Die Schürfer der Crew. Ihr gehören die Planetenbasen, und sie kennt jeden, der Erz liefert.',
     how: ['Erz und Barren an Stationen verkaufen', 'In der Raffinerie veredeln', 'Lieferaufträge an Planetenbasen'],
     perk: l => [`Verkaufspreise für Erz und Barren +${(1.5 * l).toFixed(1).replace('.', ',')} %`, `Raffineriegebühr −${10 * l} %`, `Aufträge an Planetenbasen +${5 * l} % Lohn`],
   },

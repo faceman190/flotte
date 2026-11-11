@@ -1,5 +1,5 @@
 /* ======================================================================
-   Letzte Flotte – Oberfläche im Holo-Stil
+   Letzte Crew – Oberfläche im Holo-Stil
    Akzent: Cyan (Anzeigen, Rahmen), Bernstein bleibt für Credits und das Logo.
    Schriften: Rajdhani (Texte, Titel), Share Tech Mono (Zahlen, HUD)
    ====================================================================== */
@@ -218,3 +218,29 @@ button.mini{padding:3px 8px;font-size:12px;letter-spacing:.5px}
 .repL{margin:4px 0 10px;padding-left:18px;font-size:14px;line-height:1.5}
 .repL.dim{color:var(--mut)}
 .bh{margin:0 0 8px;font-size:13px;letter-spacing:3px;color:var(--acc)}
+/* Story: Dialog, Aufgaben zu Fuß, Szene, Intro */
+#dlg{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);width:min(720px,calc(100% - 32px));background:linear-gradient(180deg,rgba(8,22,34,.92),rgba(4,12,20,.92));border:1px solid var(--line2);border-left:3px solid var(--acc);padding:12px 18px 14px;z-index:40;cursor:pointer;box-shadow:0 0 24px rgba(40,150,230,.18)}
+#dlg.pop{animation:dlgIn .35s ease-out}
+@keyframes dlgIn{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+#dlgWho{font-family:var(--mono);font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px}
+#dlgTxt{font-size:18px;line-height:1.4;font-weight:500;color:#eaf6ff}
+#storyObj{position:fixed;top:16px;right:16px;width:min(340px,calc(100% - 32px));z-index:30;pointer-events:none}
+#scene,#intro{position:fixed;inset:0;z-index:60}
+#scene{background:radial-gradient(ellipse at center,rgba(0,0,0,.15),rgba(0,0,0,.65));cursor:pointer}
+.ibar{position:absolute;left:0;right:0;height:11vh;background:#000}
+.ibar.top{top:0}.ibar.bot{bottom:0}
+#sceneBox{position:absolute;left:50%;bottom:16vh;transform:translateX(-50%);width:min(860px,calc(100% - 32px));text-align:center}
+#sceneBox.pop{animation:sceneIn .6s ease-out}
+@keyframes sceneIn{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
+#sceneWho{font-family:var(--mono);font-size:13px;letter-spacing:4px;text-transform:uppercase;margin-bottom:8px}
+#sceneTxt{font-size:24px;line-height:1.45;color:#f2f8ff;text-shadow:0 2px 12px #000;font-weight:500}
+#sceneTxt.big{font-size:34px;color:#ffd27a;font-weight:700;letter-spacing:1px}
+.sHint{position:absolute;right:18px;bottom:calc(11vh + 10px);font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--dim)}
+#introBlack{position:absolute;inset:0;background:#000;transition:opacity 1.2s}
+#introFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+#introCard{position:absolute;left:50%;bottom:17vh;transform:translateX(-50%);width:min(900px,calc(100% - 32px));text-align:center;font-size:26px;line-height:1.45;color:#f2f8ff;text-shadow:0 2px 14px #000;font-weight:500;opacity:0;transition:opacity 1s}
+#introCard.show{opacity:1}
+#introCard.last{bottom:auto;top:50%;transform:translate(-50%,-50%);font-size:34px;letter-spacing:4px;color:#ffd27a;font-weight:700}
+@media (max-width:700px){#sceneTxt{font-size:19px}#sceneTxt.big{font-size:24px}#introCard{font-size:19px}#introCard.last{font-size:24px}#dlgTxt{font-size:16px}}
+#storyObj{background:linear-gradient(90deg,rgba(6,18,28,.82),rgba(6,18,28,.45))}
+#storyObj .ot{font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--txt);font-size:15px;margin-bottom:6px}

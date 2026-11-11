@@ -11,6 +11,8 @@ import { world, buildSector, stationById, gateTo, updateAsteroids } from './game
 import { initFerrox, updateSpawning, updateEnemies, updateProjectiles, updateStationDefense } from './game/combat';
 import { initTraffic, updateTraffic, initAllies, updateAllies } from './game/npc';
 import { updateMissions } from './game/missions';
+import { playIntro, updateIntro, skipIntro, INTRO } from './game/intro';
+import { updateStory, startPrologue, resumePrologue, skipPrologue, prologActive, sceneNext, storyHooks } from './game/story';
 import { SHIP, placePlayer, updatePlayer, updatePickups, syncShip, nearDock, gateHit, hooks, fwd, setShipModel } from './game/player';
 import { updateParticles, syncParticles } from './game/fx';
 import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
@@ -100,27 +102,42 @@ function enterSurface(sector: string, at?: { x: number; y: number; z: number; ya
 }
 
 // =============== Spiel starten / beenden ===============
+// Kulisse für das Intro: Sektor ohne Spieler aufbauen
+function introScene(id: string) {
+  hideMiningFx();
+  buildSector(id);
+  initFerrox();
+  initTraffic();
+  initAllies();
+  SHIP.g.visible = false;
+}
 function startGame(p: Player, fresh: boolean) {
-  setMusicMode('game');
+  setMusicMode(fresh ? 'menu' : 'game');
   setPlayer(p);
   setShipModel(P.cls, (P.paint || 'Orange') as Paint, true);
   hideMainMenu();
   clearRadio();
   Object.assign(G, { mode: 'play', dead: 0, shake: 0, hitMark: 0, sinceHit: 99, thrust: 0, jumpT: 0, lockT: null, dockedAt: null, saveT: 20 });
   if (fresh) {
-    enterSector('heimstatt', { station: 'bastion' });
-    const n = P.name;
-    setTimeout(() => radio('BASTION', `Willkommen an Bord, ${n}. Dein Jäger ist startklar.`), 1200);
-    setTimeout(() => radio('BASTION', 'Der Menschenraum lebt vom Bergbau. Mit [R] scannst du Asteroiden, mit [2] wählst du den Bergbaulaser. Halte ihn auf einen Asteroiden, bis der Frachtraum voll ist.'), 5000);
-    setTimeout(() => radio('BASTION', 'Mit [M] öffnest du die Galaxiekarte. Im Osten liegen die Ferrox. Dort gibt es reiche Beute, aber es ist tödlich.'), 10500);
-    setTimeout(() => radio('BASTION', 'Zum Andocken fliegst du in die markierte Zone einer Station und drückst [E]. Du steigst im Hangar aus; auf der Promenade findest du Händler, Raffinerie und Aufträge.'), 16000);
-    saveGame();
+    // Neues Spiel: Intro, danach beginnt der Prolog zu Fuß im Hangar der Bastion
+    $('hud').classList.add('hidden');
+    document.body.classList.remove('playing');
+    playIntro(introScene, () => {
+      setMusicMode('game');
+      enterSector('heimstatt', { station: 'bastion' });
+      const b = stationById('bastion');
+      if (b) openDock(b);
+      startPrologue();
+      saveGame();
+    });
+    return;
   } else {
     const ok = isFinite(P.x) && isFinite(P.y) && isFinite(P.z) && SECTOR[P.sector];
     if (!ok) { P.sector = P.home.sector; enterSector(P.sector, { station: P.home.station }); }
     else if (P.surface && PLANETS[P.sector]) enterSurface(P.sector, { x: P.x, y: P.y + 30, z: P.z, yaw: P.yaw });
     else enterSector(P.sector, {});
     setTimeout(() => radio('SYSTEM', `Willkommen zurück, ${P.name}.`), 1000);
+    resumePrologue();
   }
   $('hud').classList.remove('hidden');
   document.body.classList.add('playing');
@@ -142,9 +159,11 @@ function toMenu() {
   setupMenuScene();
 }
 let pausedFrom: Mode = 'play';
-function pause() { if (G.mode !== 'play' && G.mode !== 'walk' && G.mode !== 'rover') return; pausedFrom = G.mode; G.mode = 'pause'; releaseAll(); showPause(); duckMusic(0.5); document.body.classList.remove('playing'); }
+function pause() { if (G.mode !== 'play' && G.mode !== 'walk' && G.mode !== 'rover') return; pausedFrom = G.mode; G.mode = 'pause'; releaseAll(); $('pSkip').classList.toggle('hidden', !prologActive()); showPause(); duckMusic(0.5); document.body.classList.remove('playing'); }
 function resume() { hidePause(); G.mode = pausedFrom; duckMusic(1); document.body.classList.add('playing'); centerMouse(); }
 
+$('pSkip').onclick = () => { skipPrologue(); resume(); };
+storyHooks.banner = (t, s, c) => showBanner(t, s, c);
 menuHooks.newGame = name => startGame(newPlayer(NET.account || name), true);   // mit Konto heißt der Pilot wie das Konto
 menuHooks.continueGame = () => { const p = loadGame(); if (p) startGame(p, false); };
 menuHooks.resume = resume;
@@ -169,6 +188,9 @@ bandHooks.closed = m => {
 
 // =============== Tasten ===============
 onKey(code => {
+  // Intro und Szenen: nur überspringen bzw. weiterblättern
+  if (G.mode === 'intro') { if (code === 'Escape') skipIntro(); return; }
+  if (G.mode === 'scene') { if (code === 'Space' || code === 'Enter' || code === 'NumpadEnter' || code === 'Escape') sceneNext(); return; }
   if (code === 'Escape') {
     if (G.mode === 'map') closeMap();
     else if (G.mode === 'play' || G.mode === 'walk' || G.mode === 'rover') pause();
@@ -311,6 +333,7 @@ const camPos = new THREE.Vector3(), _e = new THREE.Euler(0, 0, 0, 'YXZ'), _o = n
 let orbit = 0.6;
 function setFov(f: number) { if (Math.abs(camera.fov - f) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } }
 function updateCamera(dt: number) {
+  if (G.mode === 'intro') { camera.position.copy(INTRO.pos); camera.lookAt(INTRO.look); setFov(50); return; }
   if (IN.active) { applyWalkCamera(); return; }
   if (G.mode === 'rover' || (G.mode === 'pause' && ROVER.active) || (G.mode === 'map' && ROVER.active)) { roverCamera(dt); return; }
   if (G.mode === 'menu' || (G.mode === 'dock' && G.dockedAt) || (G.mode === 'map' && G.dockedAt)) {
@@ -360,7 +383,7 @@ function animateStructures(dt: number) {
 // Ein Simulationsschritt der Spielwelt
 function simulate(dt: number) {
   const m = G.mode, live = m === 'play' || m === 'jump' || m === 'dock' || m === 'walk' || m === 'rover' || m === 'entry';
-  if (!(live || m === 'menu')) return;
+  if (!(live || m === 'menu' || m === 'intro')) return;
   G.time += dt;
   if (live) P.playtime += dt;
   if (m === 'play') {
@@ -398,10 +421,12 @@ function flareOccluders() {
 
 // =============== Hauptschleife ===============
 let last = performance.now(), shadowSweep = 0;
-function loop(now: number) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+function loop(now: number, manual = false) {
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
   simulate(dt);
+  updateIntro(dt);
+  updateStory(dt);
   if (world.def && G.mode !== 'map') {
     animateStructures(dt);
     if (IN.active) syncParkedShip();
@@ -415,7 +440,7 @@ function loop(now: number) {
     shadowSweep -= dt;
     if (shadowSweep <= 0) { shadowSweep = 0.4; markShadows(scene, sky); }
     if (ROVER.active) aimShadows(ROVER.x, ROVER.y, ROVER.z, sunDir, 110, true);
-    else if (!IN.active && G.mode !== 'menu') aimShadows(P.x, P.y, P.z, sunDir, world.surface ? 320 : 240, true);
+    else if (!IN.active && G.mode !== 'menu' && G.mode !== 'intro') aimShadows(P.x, P.y, P.z, sunDir, world.surface ? 320 : 240, true);
     else aimShadows(camera.position.x, camera.position.y, camera.position.z, sunDir, 240, false);
     updateSky(camera.position);
     updateAmbience(dt);
@@ -437,11 +462,13 @@ function loop(now: number) {
   if (G.mode === 'map') drawBand();
   updateControls(dt, settings.hud);
   netUpdate(dt);
-  requestAnimationFrame(loop);
+  if (!manual) requestAnimationFrame(t => loop(t));
 }
 
 // Nur im Entwicklungsmodus: Zugriff für Tests über die Browser-Konsole
-if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterShip, SHIP, enterSector, startJump, openDock, undock, openMap, closeMap, gateTo, stationById, placePlayer, audioDebug, sunDir, IN, showMenu, closeMenu, interact, enterSurface, startEntry, ROVER, sim: (sec: number) => { for (let i = 0; i < sec * 60; i++) simulate(1 / 60); } };
+if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterShip, SHIP, enterSector, startJump, openDock, undock, openMap, closeMap, gateTo, stationById, placePlayer, audioDebug, sunDir, IN, showMenu, closeMenu, interact, enterSurface, startEntry, ROVER, sim: (sec: number) => { for (let i = 0; i < sec * 60; i++) simulate(1 / 60); },
+  // ganze Bilder von Hand laufen lassen (wenn der Browser die Seite im Hintergrund anhält)
+  tick: (sec: number) => { for (let i = 0; i < sec * 20; i++) loop(last + 50, true); } };
 
 // =============== Start ===============
 // Schiffsmodelle laden (kurz), dann Menü zeigen. Ohne Modelle laufen die eingebauten Ersatzmodelle.
