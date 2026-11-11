@@ -9,12 +9,22 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 interface Tpl { scene: THREE.Group; clips: THREE.AnimationClip[]; scale: number; footY: number }
 const TPL: Record<string, Tpl> = {};
 const HEIGHT: Record<string, number> = { worker: 1.8, merchant: 1.7 };
+// Zusätzliche Bewegungen aus FBX-Dateien (scripts/fbx-anim.mjs → asset-src/data/anim_<figur>_<art>.json), z. B. merchant_idle.
+// Sie sind auf das Skelett genau dieser Figur umgerechnet und ersetzen deren eingebaute Bewegung.
+const EXTRA: Record<string, THREE.AnimationClip> = {};
+async function loadExtraClips() {
+  const files = ((window as any).DATAFILES || {}) as Record<string, string>;
+  await Promise.all(Object.entries(files).filter(([k]) => k.startsWith('anim_')).map(async ([k, url]) => {
+    try { EXTRA[k.slice(5)] = THREE.AnimationClip.parse(await (await fetch(url)).json()); }
+    catch (e) { console.warn('Bewegung nicht geladen:', k, e); }
+  }));
+}
 
 export async function loadCharModels() {
   const data = window.CHARDATA;
   if (!data) return false;
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-  await Promise.all(Object.entries(data).map(async ([name, url]) => {
+  await Promise.all([loadExtraClips(), ...Object.entries(data).map(async ([name, url]) => {
     try {
       const g = await loader.loadAsync(url);
       g.scene.traverse((o: any) => {
@@ -30,12 +40,13 @@ export async function loadCharModels() {
       const scale = (HEIGHT[name] || 1.75) / h;
       TPL[name] = { scene: g.scene, clips: g.animations, scale, footY: -box.min.y * scale };
     } catch (e) { console.warn('Figur nicht geladen:', name, e); }
-  }));
+  })]);
   return Object.keys(TPL).length > 0;
 }
 export const hasChar = (name: string) => !!TPL[name];
 
-const clipOf = (kind: 'walk' | 'idle') => {
+const clipOf = (kind: 'walk' | 'idle', name: string) => {
+  if (EXTRA[name + '_' + kind]) return EXTRA[name + '_' + kind];   // eigene Bewegung dieser Figur
   const own = kind === 'walk' ? TPL.worker : TPL.merchant;
   return own?.clips[0] || null;
 };
@@ -49,7 +60,7 @@ export function charInstance(name: string, tint: number | [number, number, numbe
   if (tint !== 1) obj.traverse((o: any) => { if (o.isMesh) { o.material = o.material.clone(); if (Array.isArray(tint)) o.material.color.multiply(new THREE.Color(tint[0], tint[1], tint[2])); else o.material.color.multiplyScalar(tint); } });
   const g = new THREE.Group(); g.add(obj);
   const mixer = new THREE.AnimationMixer(obj);
-  const w = clipOf('walk'), i = clipOf('idle');
+  const w = clipOf('walk', name), i = clipOf('idle', name);
   const walk = w ? mixer.clipAction(w) : null, idle = i ? mixer.clipAction(i) : null;
   return { g, mixer, walk, idle, mats: [] as THREE.Material[] };
 }

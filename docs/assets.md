@@ -105,3 +105,12 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
 - Sektorgröße: Grundwerte in `src/data/galaxy.ts`, einmalig gestreckt mit `STRETCH` (1,3; Feldradius ×1,4; Anzahl ×1,6),
   Tore bei `GATE_DIST` 6000 m, Grenze `SECTOR_RADIUS` 8000 m.
 - Vorspann: `clearRocks` räumt den Raum um das Halden-Tor und den Keil dahinter frei (`src/game/intro.ts`, `placeGate`).
+
+## Bewegungen der Figuren aus FBX-Dateien (Alpha 0.55)
+- Ablage der Rohdatei: `asset-src/neu/` (nicht im Git). Umrechnen: `node scripts/fbx-anim.mjs <datei.fbx> <figur>_<art> [figur] [fps] [align]`,
+  z. B. `node scripts/fbx-anim.mjs asset-src/neu/standing_idle_merchant.fbx merchant_idle`. Ohne Namen zeigt das Skript nur, was in der Datei steckt.
+- Ergebnis: `asset-src/data/anim_<figur>_<art>.json` (Art `idle` oder `walk`), nach `npm run assets` im Spiel als `DATAFILES.anim_…`.
+  `src/models/charModels.ts` lädt diese Clips und nimmt sie für genau diese Figur statt der eingebauten Bewegung.
+- Mixamo: am besten die eigene Figur dort hochladen und die Bewegung „mit Skin“ laden. Dann steht die Hülle in beiden Skeletten gleich,
+  und das Skript überträgt die Drehungen ohne Angleichen. `align` nur bei Bewegungen auf einem fremden Körper (Mixamo-Standardfigur).
+- Finger hat unser Skelett (24 Knochen) nicht; Fingerbewegungen entfallen.
