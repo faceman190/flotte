@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { glowMat } from '../core/engine';
+import { glowMat, basicAdd } from '../core/engine';
 import { std, texMat, boxUV } from '../core/textures';
 import { mesh, alongZ } from './helpers';
 import { buildFighter, GM, DK, LT, CIV, WIN, MK } from './ships';
@@ -24,6 +24,12 @@ export interface ShipModel {
 function shieldFor(r: number) {
   return new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), new THREE.MeshBasicMaterial({ color: 0x7cc4ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
 }
+// Kleiner Düsenstrahl hinter einem Triebwerk: hängt am Glühpunkt und wächst mit ihm (Schub), zeigt nach hinten (+Z)
+const JET_GEO = (() => { const c = new THREE.ConeGeometry(0.2, 1.7, 10, 1, true); c.rotateX(Math.PI / 2); c.translate(0, 0, 0.85); return c; })();
+function addJet(sp: THREE.Sprite) {
+  const m = basicAdd(0xffb070); m.opacity = 0.5; m.side = THREE.DoubleSide;
+  const jet = new THREE.Mesh(JET_GEO, m); jet.userData.shared = true; sp.add(jet);
+}
 function engine(g: THREE.Group, glows: THREE.Sprite[], x: number, y: number, z: number, r: number, len: number) {
   g.add(alongZ(mesh(new THREE.CylinderGeometry(r, r * 1.15, len, 16), DK, x, y, z)));
   g.add(mesh(new THREE.TorusGeometry(r * 1.02, r * 0.14, 6, 18), MK, x, y, z + len / 2));
@@ -32,6 +38,7 @@ function engine(g: THREE.Group, glows: THREE.Sprite[], x: number, y: number, z: 
   sp.position.set(x, y, z + len / 2 + r * 0.6);
   sp.userData.base = r * 0.85;
   sp.scale.setScalar(r * 3);
+  addJet(sp);
   g.add(sp); glows.push(sp);
 }
 function nav(g: THREE.Group, navs: THREE.Sprite[], x: number, y: number, z: number, s = 2) {
@@ -155,6 +162,7 @@ function gltfShip(cls: ShipId, paint: Paint): ShipModel {
     const gk = cls === 'pfeil' ? l / 36 : l / 15;   // Pfeil: vier kleinere Leuchten statt zwei großer
     sp.userData.base = gk;
     sp.scale.setScalar(3 * gk);
+    addJet(sp);
     g.add(sp); glows.push(sp);
   }
   for (const s of [-1, 1]) nav(g, navs, s * w * 0.47, h * 0.05, l * 0.15, Math.max(0.9, l / 22));

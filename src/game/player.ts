@@ -266,8 +266,9 @@ export function syncShip() {
   SHIP.g.position.set(P.x, P.y, P.z);
   SHIP.g.rotation.set(P.pitch, P.yaw, G.roll);
   SHIP.extraGuns.visible = P.up.guns >= 2;
-  const gs = (2.5 + G.thrust * 3.5) * (1 + P.up.engine * 0.08) * (1 + Math.random() * 0.15);
-  SHIP.glows.forEach(g => g.scale.setScalar(gs * (g.userData.base || 1)));
+  // Triebwerke: kleiner Glühpunkt mit kurzem Düsenstrahl, der mit dem Schub wächst (früher groß und blendend in der Verfolgeransicht)
+  const gs = (0.8 + G.thrust * 0.9 + (G.cruise ? 0.35 : 0)) * (1 + P.up.engine * 0.05) * (1 + Math.random() * 0.1);
+  SHIP.glows.forEach(g => { g.scale.setScalar(gs * (g.userData.base || 1)); (g.material as THREE.SpriteMaterial).opacity = 0.32 + G.thrust * 0.28; });
   const sm = SHIP.shield.material as THREE.MeshBasicMaterial;
   sm.opacity = Math.max(0, sm.opacity - 0.016 * 1.5);
 }
