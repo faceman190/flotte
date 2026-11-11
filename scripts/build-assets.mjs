@@ -58,8 +58,11 @@ async function image(key, uri, pack, q = 85) {
 async function model(key, data, pack) {
   const src = Buffer.isBuffer(data) ? data : Buffer.from(data, 'base64');
   const doc = await io.readBinary(new Uint8Array(src));
+  // Modelle mit zweitem Satz Texturkoordinaten (vorberechnetes Licht, das Bild dazu liegt in asset-src/tex) behalten ihn:
+  // Sonst entfernt prune() ihn, weil kein Material der Datei darauf verweist.
+  const uv2 = doc.getRoot().listMeshes().some(m => m.listPrimitives().some(p => p.getAttribute('TEXCOORD_1')));
   await doc.transform(
-    dedup(), prune(),
+    dedup(), prune({ keepAttributes: uv2 }),
     textureCompress({ encoder: sharp, targetFormat: 'webp', quality: 85, resize: [1024, 1024] }),
     meshopt({ encoder: MeshoptEncoder, level: 'medium' }),
   );
@@ -99,9 +102,9 @@ for (const [k, v] of Object.entries(SOUNDDATA)) { const d = dataUri(v); if (d) p
 // ---- Kleine Datendateien (asset-src/data/<name>.json), z. B. das Felsmodell der Asteroiden ----
 const DATADIR = path.join(ROOT, 'asset-src', 'data');
 if (fs.existsSync(DATADIR)) for (const n of fs.readdirSync(DATADIR).filter(x => x.endsWith('.json'))) { const b = fs.readFileSync(path.join(DATADIR, n)); put('data/' + path.basename(n, '.json'), 'json', b, 'core', b.length); }
-// ---- Einzelne Texturen (asset-src/tex/<name>.png|jpg): höchstens 1024 px, WebP ----
+// ---- Einzelne Texturen (asset-src/tex/<name>.png|jpg): höchstens 1024 px, WebP. Mit "@2048" im Namen (name@2048.png) bis zu dieser Größe ----
 const TEXDIR = path.join(ROOT, 'asset-src', 'tex');
-if (fs.existsSync(TEXDIR)) for (const n of fs.readdirSync(TEXDIR).filter(x => /\.(png|jpe?g)$/i.test(x))) { const src = fs.readFileSync(path.join(TEXDIR, n)); const b = await sharp(src).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 86, effort: 5 }).toBuffer(); put('tex/' + path.basename(n, path.extname(n)), 'webp', b, 'core', src.length); }
+if (fs.existsSync(TEXDIR)) for (const n of fs.readdirSync(TEXDIR).filter(x => /\.(png|jpe?g)$/i.test(x))) { const src = fs.readFileSync(path.join(TEXDIR, n)); const base = path.basename(n, path.extname(n)), at = base.match(/^(.*)@(\d+)$/), max = at ? Math.min(4096, +at[2]) : 1024; const b = await sharp(src).resize(max, max, { fit: 'inside', withoutEnlargement: true }).webp({ quality: at ? 92 : 86, effort: 5 }).toBuffer(); put('tex/' + (at ? at[1] : base), 'webp', b, 'core', src.length); }
 // ---- Einzelne Aufnahmen (asset-src/sound/<name>.ogg|mp3), z. B. Schritte, Klicks, Türen ----
 const SND = path.join(ROOT, 'asset-src', 'sound');
 if (fs.existsSync(SND)) for (const n of fs.readdirSync(SND).filter(x => /.(ogg|mp3)$/i.test(x))) { const b = fs.readFileSync(path.join(SND, n)); put('sound/' + path.basename(n, path.extname(n)), path.extname(n).slice(1).toLowerCase(), b, 'core', b.length); }

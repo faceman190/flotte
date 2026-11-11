@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { scene, camera, view, ux, gl, setExposure } from '../core/engine';
-import { texMat, std, boxUV } from '../core/textures';
+import { texMat, std, boxUV, lightmapTex, WHITE_TEX } from '../core/textures';
 import { keys, mouse } from '../core/input';
 import { rng, hashStr, clamp, fmtN } from '../core/util';
 import { snd, sfx } from '../core/audio';
@@ -154,35 +154,58 @@ function buildPerson(suit: number, skin: number, hair: number, badge: number, ro
 }
 
 // Hangar als Modell aus Blender (asset-src/neu/hangar/Hangar.blend → asset-src/glb/station/Hangar.glb), gebaut in genau den Maßen oben.
-// Die Materialien tragen Namen (hangar_*): Boden und Wände bekommen Farbe und Rumpfbild der Station, Leuchtflächen strahlen von selbst,
-// die Akzentfarbe folgt dem Stationstyp. Fehlt die Datei, entsteht der frühere Hangar aus Grundformen.
+// Zwei Netze: die Hülle (Boden, Wände, Decke) mit vorberechnetem Licht als Bild (tex/hangar_lightmap, zweiter Satz Texturkoordinaten)
+// und alles Übrige (Details, Requisiten) mit vorberechnetem Licht in den Eckpunktfarben. Die Materialien tragen Namen (hangar_*):
+// Boden und Wände nehmen die Farbe der Station, die Akzentfarbe folgt dem Stationstyp, Leuchtflächen strahlen von selbst.
+// Oberflächen: tex/hangar_floor, hangar_wall, hangar_metal, hangar_paint (scripts/make-hangar-tex.mjs). Fehlt das Modell, entsteht der frühere Hangar.
+const HANGAR_LIGHT = 5;   // Stärke des vorberechneten Lichts
 function addHangarModel(parent: THREE.Object3D, pal: { accent: number; wall: number; floor: number }) {
   const tpl = stationTemplate('Hangar');
   if (!tpl) return false;
   const body = tpl.clone(true);
   body.children[0].position.set(0, 0, 0);
-  const tex = (c: number, t: string, o: THREE.MeshStandardMaterialParameters) => mat(texMat(c, t, o));
-  const M: Record<string, THREE.Material> = {
-    hangar_floor: tex(pal.floor, 'hull_mil', { roughness: 0.85, metalness: 0.25, emissive: 0x1a1c20 }),
-    hangar_floor_dark: tex(0x43464d, 'hull_mil', { roughness: 0.85, metalness: 0.3, emissive: 0x121316 }),
-    hangar_wall: tex(pal.wall, 'hull_light', { roughness: 0.7, metalness: 0.2, emissive: 0x2a2d33 }),
-    hangar_wall_dark: tex(0x5a5f68, 'hull_mil', { roughness: 0.7, metalness: 0.35, emissive: 0x1c1e23 }),
-    hangar_panel: tex(0x9aa0a8, 'hull_light', { roughness: 0.65, metalness: 0.25, emissive: 0x30343a }),
-    hangar_ceiling: tex(0x34383e, 'hull_mil', { roughness: 0.9, metalness: 0.3, emissive: 0x0e0f12 }),
-    hangar_steel: tex(0x6a6e75, 'hull_mil', { roughness: 0.55, metalness: 0.45, emissive: 0x1e2025 }),
-    hangar_accent: mat(std(pal.accent, { roughness: 0.6, metalness: 0.15, emissive: new THREE.Color(pal.accent).multiplyScalar(0.28) })),
-    hangar_light: mat(new THREE.MeshBasicMaterial({ color: 0xfff2dc })),
-    hangar_lamp: mat(new THREE.MeshBasicMaterial({ color: 0xffa030 })),
-    hangar_redlamp: mat(new THREE.MeshBasicMaterial({ color: 0xff3a24 })),
-    hangar_screen: mat(new THREE.MeshBasicMaterial({ color: 0x3f9fd0 })),
-    hangar_glass: mat(new THREE.MeshBasicMaterial({ color: 0x7fb0cc })),
+  const LM = lightmapTex('hangar_lightmap');
+  // ohne Lichtbild (Datei fehlt) bekommen die Flächen ein schwaches Eigenleuchten, damit die Halle nicht schwarz bleibt
+  const fill = (c: number) => (LM ? 0x000000 : new THREE.Color(c).multiplyScalar(0.3).getHex());
+  const shell = (c: number, t: string, o: THREE.MeshStandardMaterialParameters = {}) => {
+    const m = mat(texMat(c, t, { roughness: 0.8, metalness: 0.2, emissive: fill(c), ...o }));
+    if (LM) { m.lightMap = LM; m.lightMapIntensity = HANGAR_LIGHT; }
+    return m;
   };
+  const prop = (c: number, t: string | null, o: THREE.MeshStandardMaterialParameters = {}) => {
+    const m = mat(t ? texMat(c, t, { roughness: 0.65, metalness: 0.25, emissive: fill(c), ...o }) : std(c, { roughness: 0.9, metalness: 0, emissive: fill(c), ...o }));
+    if (LM) { m.vertexColors = true; m.lightMap = WHITE_TEX; m.lightMapIntensity = HANGAR_LIGHT; }
+    return m;
+  };
+  const glow = (c: number) => mat(new THREE.MeshBasicMaterial({ color: c }));
+  const M: Record<string, [THREE.Material, number]> = {     // Material und Kachelgröße (eine Wiederholung je so viele Meter)
+    hangar_floor: [shell(pal.floor, 'hangar_floor', { roughness: 0.78, metalness: 0.3 }), 14],
+    hangar_floor_dark: [shell(0x5a5e66, 'hangar_floor', { roughness: 0.82, metalness: 0.3 }), 14],
+    hangar_wall: [shell(pal.wall, 'hangar_wall'), 14],
+    hangar_wall_dark: [shell(0x5f646d, 'hangar_wall', { metalness: 0.3 }), 14],
+    hangar_panel: [shell(0x9aa0a8, 'hangar_wall', { roughness: 0.7 }), 9],
+    hangar_ceiling: [shell(0x41454c, 'hangar_metal', { roughness: 0.85, metalness: 0.3 }), 10],
+    hangar_steel: [prop(0x70747b, 'hangar_metal', { roughness: 0.5, metalness: 0.55 }), 5],
+    hangar_dark: [prop(0x2c2e33, 'hangar_metal', { roughness: 0.6, metalness: 0.45 }), 5],
+    hangar_pipe: [prop(0x8a6a3a, 'hangar_metal', { roughness: 0.45, metalness: 0.6 }), 4],
+    hangar_accent: [prop(pal.accent, 'hangar_paint'), 5],
+    hangar_yellow: [prop(0xe2b21c, 'hangar_paint'), 5],
+    hangar_red: [prop(0xb02a1e, 'hangar_paint'), 5],
+    hangar_white: [prop(0xd4d6da, 'hangar_paint'), 5],
+    hangar_blue: [prop(0x2a5aa8, 'hangar_paint'), 5],
+    hangar_green: [prop(0x3f8a52, 'hangar_paint'), 5],
+    hangar_rubber: [prop(0x17171a, null), 0],
+    hangar_light: [glow(0xfff2dc), 0], hangar_lamp: [glow(0xffa030), 0], hangar_redlamp: [glow(0xff3a24), 0],
+    hangar_screen: [glow(0x3f9fd0), 0], hangar_glass: [glow(0x7fb0cc), 0],
+  };
+  body.updateMatrixWorld(true);
   body.traverse((o: any) => {
     if (!o.isMesh) return;
     o.userData.shared = true;                       // Geometrie gehört der Vorlage und bleibt beim Verlassen erhalten
-    const m = M[o.material.name];
-    if (m) { o.material = m; if ((m as any).map) boxUV(o, 1 / 14); }
-    else if (o.material.isMeshStandardMaterial) { o.material.envMapIntensity = 0.3; if (!o.userData.lit) { o.material.emissive.copy(o.material.color).multiplyScalar(0.25); o.userData.lit = true; } }   // Requisitenfarben: etwas Eigenleuchten
+    const e = M[o.material.name];
+    if (!e) return;
+    o.material = e[0];
+    if (e[1] && (e[0] as any).map) boxUV(o, 1 / e[1], body);   // Kachelung in Metern des Hangars, nicht in den gepackten Koordinaten des Netzes
   });
   parent.add(body);
   return true;

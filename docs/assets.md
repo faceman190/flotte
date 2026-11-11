@@ -162,3 +162,17 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
 - Im Spiel: `addHangarModel()` in `src/game/interior.ts` ersetzt die Grundformen des Hangars (Korridor und Promenade bleiben wie bisher).
   Materialnamen `hangar_*`: Boden und Wand nehmen Farbe und Rumpfbild des Stationstyps, `hangar_accent` dessen Akzentfarbe, Leuchtflächen strahlen von selbst.
 - Der Streifen hinter dem mittleren Stellplatz (x −30 … 30, z −41 … −24,5) bleibt frei: Dort kommt der Spieler an, dort stehen die Story-Figuren.
+
+## Hangar: Oberflächen und vorberechnetes Licht (Alpha 0.63)
+- Oberflächen: `node scripts/make-hangar-tex.mjs` erzeugt vier kachelbare Bilder nach `asset-src/tex/` (`hangar_floor`, `hangar_wall`, `hangar_metal`, `hangar_paint`).
+  Das Relief dazu rechnet das Spiel selbst aus der Helligkeit (src/core/textures.ts). Die Kachelgröße je Material steht in `addHangarModel()` (Meter je Wiederholung).
+- Licht: In `Hangar.blend` liegt die Sammlung `Hangar_Export` mit zwei Netzen. `Hangar_Huelle` (Boden, Wände, Decke; ohne unsichtbare Flächen)
+  hat einen zweiten Satz Texturkoordinaten `Lightmap`; darauf rechnet Cycles das Licht der Deckenleuchten (Bild `Hangar_Lichtkarte`, 2048 px) und die
+  Verdeckung durch nahe Gegenstände (Bild `Hangar_Verdeckung`, Reichweite 3,5 m). Beides zusammen wird `asset-src/tex/hangar_lightmap@2048.png`.
+  `Hangar_Rest` (Details, Requisiten) trägt sein Licht in den Eckpunktfarben (`Col`).
+- Kodierung: Helligkeit L → v = x / (1 + x) mit x = L / 0,2647, gespeichert als sRGB. Die Kontaktschatten sind absichtlich kräftiger als gerechnet
+  (v · (1 − 0,75 · Verdeckung^0,6)), sonst gehen sie unter den vielen Deckenleuchten unter. Stärke im Spiel: `HANGAR_LIGHT` in src/game/interior.ts.
+- Pipeline: Ein Bild `name@2048.png` in `asset-src/tex/` darf bis zu dieser Größe bleiben (sonst höchstens 1024 px). Modelle mit zweitem Satz
+  Texturkoordinaten behalten ihn beim Packen (scripts/build-assets.mjs), sonst ginge die Zuordnung zur Lichtkarte verloren.
+- Nach Änderungen am Hangar in Blender: beide Netze neu erzeugen, Licht und Verdeckung neu rechnen, Bild und GLB neu schreiben, `npm run assets`.
+  Das Spiel leuchtet den Hangar dann nicht mehr selbst aus; fehlt die Lichtkarte, bekommen die Flächen wieder ein schwaches Eigenleuchten.

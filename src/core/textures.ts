@@ -73,10 +73,22 @@ export function buildEmissive(name: string, mats: THREE.MeshStandardMaterial[], 
   img.src = TD[name];
 }
 
-for (const n of ['hull_mil', 'hull_civ', 'hull_light', 'ferrox', 'rock']) TEXT[n] = loadTex(n);
+for (const n of ['hull_mil', 'hull_civ', 'hull_light', 'ferrox', 'rock', 'hangar_floor', 'hangar_wall', 'hangar_metal', 'hangar_paint']) TEXT[n] = loadTex(n);
 TEXT.planet = loadTex('planet', false);
 if (TEXT.planet) TEXT.planet.wrapS = THREE.RepeatWrapping;
-for (const [n, s] of [['hull_mil', 3], ['hull_civ', 3], ['hull_light', 2.5], ['ferrox', 2.5], ['rock', 4]] as const) if (TD[n]) buildNormal(n, s);
+for (const [n, s] of [['hull_mil', 3], ['hull_civ', 3], ['hull_light', 2.5], ['ferrox', 2.5], ['rock', 4], ['hangar_floor', 3.2], ['hangar_wall', 2.6], ['hangar_metal', 1.4], ['hangar_paint', 2]] as const) if (TD[n]) buildNormal(n, s);
+
+// Vorberechnetes Licht (Lightmap) zu einem Modell: liegt auf dem zweiten Satz Texturkoordinaten, ohne Kachelung, glTF-Ausrichtung
+const LIGHTMAPS: Record<string, THREE.Texture | null> = {};
+export function lightmapTex(name: string) {
+  if (name in LIGHTMAPS) return LIGHTMAPS[name];
+  if (!TD[name]) return (LIGHTMAPS[name] = null);
+  const t = loader.load(TD[name]);
+  t.colorSpace = THREE.SRGBColorSpace; t.flipY = false; t.channel = 1; t.anisotropy = 2;
+  return (LIGHTMAPS[name] = t);
+}
+// Weißes Bild: gibt Flächen ohne eigene Lightmap dieselbe Grundhelligkeit (ihr Licht steckt dann in den Eckpunktfarben)
+export const WHITE_TEX = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); WHITE_TEX.needsUpdate = true;
 
 export const std = (color: THREE.ColorRepresentation, o: THREE.MeshStandardMaterialParameters = {}) =>
   new THREE.MeshStandardMaterial(Object.assign({ color, metalness: 0.55, roughness: 0.55, flatShading: true }, o));
@@ -93,9 +105,10 @@ export function texMat(color: THREE.ColorRepresentation, name: string, o: THREE.
 }
 
 // Würfel-Projektion: Texturdichte in Weltgröße, damit große Flächen nicht verzerrt werden
-export function boxUV(root: THREE.Object3D, scale: number) {
-  root.updateMatrixWorld(true);
-  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), v = new THREE.Vector3(), n = new THREE.Vector3();
+// ref: Bezugsrahmen der Kachelung (Standard: root selbst). Nötig bei gepackten Modellen, deren Netze eigene, verkleinerte Koordinaten haben.
+export function boxUV(root: THREE.Object3D, scale: number, ref: THREE.Object3D = root) {
+  ref.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(ref.matrixWorld).invert(), v = new THREE.Vector3(), n = new THREE.Vector3();
   root.traverse((o: any) => {
     if (!o.isMesh || !o.material || !o.material.map || o.geometry.userData.boxuv) return;
     const g = o.geometry as THREE.BufferGeometry;
