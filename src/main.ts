@@ -5,7 +5,7 @@ import { updateSky, sunDir, sky } from './core/sky';
 import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience';
 import { ux } from './core/engine';
 import { onKey, centerMouse, releaseAll, keys, look } from './core/input';
-import { ambience, preloadSfx, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode } from './core/audio';
+import { ambience, preloadSfx, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode, sfx, sfxHeld } from './core/audio';
 import { rand, clamp, $ } from './core/util';
 import { P, G, settings, loadSettings, saveSettings, newPlayer, setPlayer, loadGame, saveGame, stats, type Player, type Tool } from './game/state';
 import { world, buildSector, stationById, gateTo, updateAsteroids } from './game/world';
@@ -265,28 +265,29 @@ function startJump(g: Gate) {
   G.jumpTo = g.to;
   G.jumpFrom = world.def!.id;
   releaseAll();
-  snd(200, 1.4, 'sine', 0.05, 700);
-  snd(80, 1.4, 'sawtooth', 0.03, 300);
+  sfx('jump_out', 0.8, 1, () => { snd(200, 1.4, 'sine', 0.05, 700); snd(80, 1.4, 'sawtooth', 0.03, 300); });
 }
 // Sprungantrieb (J): von überall im All in den nächsten Sektor der geplanten Route. Lädt sechs Sekunden, nur im Reiseflug,
 // nicht nahe an Stationen oder über Planeten; ein Treffer beendet den Reiseflug und damit das Laden. Tore springen weiter sofort.
 const JD_TIME = 6;
+let jdSound: null | (() => void) = null;   // laufende Aufnahme des Aufladens
+const jdStop = () => { jdSound?.(); jdSound = null; };
 function toggleJumpDrive() {
-  if (G.jd) { G.jd = 0; radio('SYSTEM', 'Sprung abgebrochen.'); return; }
+  if (G.jd) { G.jd = 0; jdStop(); radio('SYSTEM', 'Sprung abgebrochen.'); return; }
   const to = nextHop();
   if (!to) radio('SYSTEM', 'Kein Sprungziel. Setze auf der Galaxiekarte (M) eine Route.');
   else if (world.surface) radio('SYSTEM', 'Der Sprungantrieb arbeitet nur im All. Steig erst in den Orbit auf.');
   else if (!G.cruise) radio('SYSTEM', 'Der Sprungantrieb lädt nur im Reiseflug (Umschalt).');
   else if (world.stations.some(s => d3(P.x, P.y, P.z, s.x, s.y, s.z) < s.R + 500)) radio('SYSTEM', 'Zu nah an einer Station für einen Sprung. Flieg ein Stück hinaus.');
-  else { G.jd = JD_TIME; G.jdTo = to; radio('SYSTEM', `Sprungantrieb lädt. Ziel: ${SECTOR[to]?.name || to}. Kurs und Reiseflug halten.`); snd(180, 0.5, 'sine', 0.05, 240); }
+  else { G.jd = JD_TIME; G.jdTo = to; radio('SYSTEM', `Sprungantrieb lädt. Ziel: ${SECTOR[to]?.name || to}. Kurs und Reiseflug halten.`); jdSound = sfxHeld('jump_charge', 0.75); if (!jdSound) snd(180, 0.5, 'sine', 0.05, 240); }
 }
 function updateJumpDrive(dt: number) {
   if (!G.jd) return;
-  if (!G.cruise || G.dead) { G.jd = 0; radio('SYSTEM', 'Sprung abgebrochen: Reiseflug unterbrochen.'); return; }
+  if (!G.cruise || G.dead) { G.jd = 0; jdStop(); radio('SYSTEM', 'Sprung abgebrochen: Reiseflug unterbrochen.'); return; }
   const before = Math.ceil(G.jd);
   G.jd = Math.max(0, G.jd - dt);
-  if (G.jd > 0 && Math.ceil(G.jd) !== before) snd(240 + (JD_TIME - before) * 70, 0.12, 'sine', 0.04, 90);   // Ladeton je Sekunde, steigend
-  if (G.jd <= 0) { G.cruise = false; startJump({ to: G.jdTo } as Gate); }
+  if (!jdSound && G.jd > 0 && Math.ceil(G.jd) !== before) snd(240 + (JD_TIME - before) * 70, 0.12, 'sine', 0.04, 90);   // ohne Aufnahme: Ladeton je Sekunde
+  if (G.jd <= 0) { G.cruise = false; jdSound = null; startJump({ to: G.jdTo } as Gate); }
 }
 function updateJump(dt: number) {
   G.jumpT -= dt;
@@ -300,7 +301,7 @@ function updateJump(dt: number) {
     enterSector(G.jumpTo!, { gateFrom: G.jumpFrom! });
     G.mode = 'play';
     centerMouse();
-    snd(90, 1.2, 'sine', 0.06, -30);
+    sfx('jump_in', 0.75, 1, () => snd(90, 1.2, 'sine', 0.06, -30));
     saveGame();
   }
 }
@@ -451,7 +452,7 @@ function simulate(dt: number) {
   if (!(live || m === 'menu' || m === 'intro')) return;
   G.time += dt;
   if (live) P.playtime += dt;
-  if (m !== 'play') G.jd = 0;
+  if (m !== 'play' && G.jd) { G.jd = 0; jdStop(); }
   if (m === 'play') {
     updatePlayer(dt);
     updateJumpDrive(dt);
@@ -497,7 +498,7 @@ function loop(now: number, manual = false) {
   updateStory(dt);
   updateChapter1(dt);
   // Grundgeräusch zu Fuß: im Schiff ein tiefes Brummen, in der Station leiser
-  ambience(IN.active && G.mode === 'walk' ? (IN.ship ? 'amb_ship' : 'amb_station') : null, IN.ship ? 0.16 : 0.09);
+  ambience(IN.active && (G.mode === 'walk' || G.mode === 'launch') ? (IN.ship ? 'amb_ship' : IN.area === 'Hangardeck' || G.mode === 'launch' ? 'amb_hangar' : 'amb_station') : null, IN.ship ? 0.16 : 0.22);
   if (world.def && G.mode !== 'map') {
     animateStructures(dt);
     if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); }

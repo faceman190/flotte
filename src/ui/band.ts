@@ -1,5 +1,5 @@
 import { $, esc, fmtN, fmtD, d3 } from '../core/util';
-import { snd } from '../core/audio';
+import { snd, sfx } from '../core/audio';
 import { releaseAll } from '../core/input';
 import { P, G, stats, cargoUsed, saveGame, type Mode, type ShipRec } from '../game/state';
 import { world } from '../game/world';
@@ -55,7 +55,7 @@ export function openBand(a?: App) {
   $('hud').classList.add('hidden');
   $('band').classList.remove('hidden');
   document.body.classList.remove('playing');
-  snd(980, 0.06, 'sine', 0.03, 300);
+  sfx('band_open', 0.5, 1, () => snd(980, 0.06, 'sine', 0.03, 300));
   fleetSel = 0;
   setApp(a || app);
 }
@@ -66,7 +66,7 @@ export function closeBand() {
   $('band').classList.add('hidden');
   if (hudWasOn) $('hud').classList.remove('hidden');
   G.mode = prevMode;
-  snd(620, 0.06, 'sine', 0.03, -200);
+  sfx('band_close', 0.5, 1, () => snd(620, 0.06, 'sine', 0.03, -200));
   bandHooks.closed(prevMode);
 }
 export function setApp(a: App) {

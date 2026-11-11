@@ -157,6 +157,7 @@ export function updatePlayer(dt: number) {
   }
   // ---- Zielerfassung ----
   let best = 0.965;
+  const hadLock = G.lockT;
   G.lockT = null;
   for (const e of world.enemies) {
     _v.set(e.x - P.x, e.y - P.y, e.z - P.z);
@@ -166,6 +167,7 @@ export function updatePlayer(dt: number) {
     const c = _v.dot(f);
     if (c > best) { best = c; G.lockT = e; }
   }
+  if (G.lockT && G.lockT !== hadLock) sfx('lock_tone', 0.5);   // neues Ziel erfasst
   // ---- Kanonen ----
   G.cool -= dt;
   fullWarn -= dt;

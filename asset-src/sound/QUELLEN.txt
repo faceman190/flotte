@@ -5,3 +5,4 @@ launch = thrusterFire_000 (Sci-Fi Sounds)
 explosion0-2 = explosionCrunch_000-002 · hull_hit0-2 = impactMetal_000-002 (Sci-Fi) · shield_hit = forceField_000 · rock0-2 = impactMining_000-002 (Impact) · ui_confirm = confirmation_001 · pickup = pluck_001
 (land entfernt: passte nicht)
 space-explosion = vom Projektinhaber bereitgestellt (Zusammenbruch des Halden-Tors im Intro); Herkunft und Lizenz dort erfragen
+Mit ElevenLabs vom Projektinhaber erzeugt (Prompts in docs/sound/prompts.md): amb_hangar, amb_station, band_open, band_close, gear, jump_charge, jump_in, jump_out, launch, lock_tone, scan_pulse, touchdown

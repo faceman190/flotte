@@ -91,6 +91,15 @@ export function sfx(key: string, vol = 1, rate = 1, fallback?: () => void) {
   s.connect(g).connect(AC.destination); s.start();
   return true;
 }
+// Wie sfx, aber abbrechbar: liefert eine Funktion zum Stoppen (oder null, wenn die Aufnahme fehlt)
+export function sfxHeld(key: string, vol = 1): null | (() => void) {
+  const b = want(key);
+  if (!b || !AC) return null;
+  const ac = AC, s = ac.createBufferSource(), g = ac.createGain();
+  s.buffer = b; g.gain.value = vol * audio.volume;
+  s.connect(g).connect(ac.destination); s.start(0, TRIM[key]?.[0] || 0);
+  return () => { g.gain.setTargetAtTime(0, ac.currentTime, 0.05); setTimeout(() => { try { s.stop(); } catch (e) { /* schon aus */ } }, 300); };
+}
 // Explosion: eine von drei Aufnahmen, Tonhöhe leicht gestreut (rate < 1 = größer, tiefer)
 export function boom(vol = 0.8, rate = 1, fallback?: () => void) { return sfx('explosion' + Math.floor(Math.random() * 3), vol, rate * (0.92 + Math.random() * 0.16), fallback); }
 // ---------- Stimmen ----------

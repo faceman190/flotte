@@ -323,7 +323,7 @@ export function scan() {
   SCAN.range = st.scan;
   pulse.position.set(P.x, P.y, P.z);
   pulse.visible = true;
-  snd(500, 0.9, 'sine', 0.05, 900);
+  sfx('scan_pulse', 0.6, 1, () => snd(500, 0.9, 'sine', 0.05, 900));
   let n = 0;
   for (const a of world.asteroids) if (Math.hypot(a.x - P.x, a.y - P.y, a.z - P.z) < st.scan) { a.scanT = 75; n++; }
   if (!n) radio('SYSTEM', 'Scan: keine Asteroiden in Reichweite.');

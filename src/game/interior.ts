@@ -406,7 +406,7 @@ export function refreshHangarShips() {
 }
 // ---------- Start und Landung im Hangar ----------
 // Start: abheben, Fahrwerk einziehen, durchs Tor fliegen (das Tor liegt genau am Startpunkt der Station). Landung: umgekehrt.
-const SEQ = { t: -1, dur: 0, dir: 1, done: null as null | (() => void) };
+const SEQ = { t: -1, dur: 0, dir: 1, done: null as null | (() => void), gear: true };
 export const hangarSequence = () => SEQ.t >= 0;
 const seqP = () => { const q = clamp(SEQ.t / SEQ.dur, 0, 1); return SEQ.dir > 0 ? q : 1 - q; };   // 0 = auf dem Platz, 1 = im Tor
 const ease = (x: number) => x * x * (3 - 2 * x);
@@ -416,7 +416,7 @@ function seqOffset() {
 }
 export const hangarGearDown = () => SEQ.t < 0 || seqP() < 0.3;
 function beginSeq(dir: number, dur: number, done: null | (() => void)) {
-  SEQ.t = 0; SEQ.dur = dur; SEQ.dir = dir; SEQ.done = done;
+  SEQ.t = 0; SEQ.dur = dur; SEQ.dir = dir; SEQ.done = done; SEQ.gear = dir > 0;   // Start: Fahrwerk noch draußen, Landung: noch eingezogen
   IN.panel = null; IN.target = null;
   G.mode = 'launch';
   if (document.pointerLockElement === gl) { IN.locked = false; document.exitPointerLock(); }
@@ -433,12 +433,13 @@ export function startLaunch(done: () => void) {
 export function updateHangarSequence(dt: number) {
   if (SEQ.t < 0) return;
   SEQ.t += dt;
+  { const gd = hangarGearDown(); if (gd !== SEQ.gear) { SEQ.gear = gd; sfx('gear', 0.6); } }   // Fahrwerk fährt ein oder aus
   if (SEQ.t < SEQ.dur) return;
   const done = SEQ.done, dir = SEQ.dir;
   SEQ.t = -1; SEQ.done = null;
   G.mode = 'walk';
   if (dir > 0) done?.();
-  else { for (const g2 of SHIP.glows) g2.visible = false; grabT = 0; }
+  else { for (const g2 of SHIP.glows) g2.visible = false; grabT = 0; sfx('touchdown', 0.7); }
 }
 
 // Das aktive Schiff jeden Frame auf dem Stellplatz halten (das Modell kann beim Umsteigen wechseln)
