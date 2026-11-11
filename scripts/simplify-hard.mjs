@@ -3,17 +3,20 @@
 // (harte Kanten bleiben hart). Teile mit gleichem Material werden zu einem Mesh verschmolzen.
 // Außerdem werden alle Knotentransformationen fest in die Geometrie eingerechnet (Spiel-Lader misst dann genau) und das
 // Modell optional um die Hochachse gedreht (--rotY=Grad), damit die Nase nach +Z zeigt.
-// Aufruf: node --max-old-space-size=12000 scripts/simplify-hard.mjs <ein.glb> <aus.glb> [Anteil=0.1] [Fehler=0.002] [Knick=35] [--rotY=90]
+// Mit --mat=<FBX-Karte.json> (und optional --look=<Zusatz.json>) werden vorher die Materialien gesetzt und Teile entfernt;
+// so lässt sich direkt das Kaufmodell verarbeiten.
+// Aufruf: node --max-old-space-size=12000 scripts/simplify-hard.mjs <ein.glb> <aus.glb> [Anteil=0.1] [Fehler=0.002] [Knick=35] [--rotY=90] [--mat=…] [--look=…]
 import * as THREE from 'three';
 import { mergeVertices, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { dedup, flatten, join, weld, simplify, prune, transformMesh } from '@gltf-transform/functions';
-import { io, MeshoptSimplifier, triCount } from './glb-lib.mjs';
+import { io, MeshoptSimplifier, triCount, applyFbxMaterials, dropSpecGloss } from './glb-lib.mjs';
 
 const args = process.argv.slice(2), opt = Object.fromEntries(args.filter(a => a.startsWith('--')).map(a => a.slice(2).split('=')));
 const [inp, out, ratioArg, errArg, creaseArg] = args.filter(a => !a.startsWith('--'));
 const ratio = +(ratioArg || 0.1), error = +(errArg || 0.002), crease = (+(creaseArg || 35) * Math.PI) / 180;
 const t0 = Date.now();
 const doc = await io.read(inp);
+if (opt.mat) { const r = applyFbxMaterials(doc, opt.mat, opt.look); dropSpecGloss(doc); for (const m of doc.getRoot().listMaterials()) if (!m.listParents().some(p => p.propertyType === 'Primitive')) m.dispose(); console.log(`Materialien: ${r.hit} Teile zugeordnet, ${r.miss} ohne Angabe, ${r.dropped} entfernt`); }
 const before = triCount(doc);
 // Texturlose Primitive: nur Positionen behalten
 for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) {

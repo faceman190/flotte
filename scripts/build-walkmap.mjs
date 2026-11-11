@@ -67,7 +67,7 @@ for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) {
 {
   const R = 3, up = new THREE.Vector3(0, 1, 0), add = [];
   const DIRS = [[1, 0], [0, 1], [1, 1], [1, -1]];
-  const find = (ix, iz, y) => { if (ix < 0 || iz < 0 || ix >= NX || iz >= NZ) return null; return (floors[ix * NZ + iz] || []).find(f => Math.abs(f.y - y) <= 0.15) || null; };
+  const find = (ix, iz, y) => { if (ix < 0 || iz < 0 || ix >= NX || iz >= NZ) return null; return (floors[ix * NZ + iz] || []).find(f => Math.abs(f.y - y) <= 0.35) || null; };   // auch über kleine Absätze (Schwellen) hinweg
   for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) {
     const done = [];
     for (const [dx, dz] of DIRS) for (let a = 1; a <= R; a++) {
@@ -170,7 +170,8 @@ for (const ci of BIG) for (const ka of comps[ci].comp) {
 }
 const extra = new Map();   // zusätzliche begehbare Zellen in den Türen: Zellindex → y
 const doorLinks = [];
-for (const [pk, list] of cand) {
+// --doors=0: keine Durchgänge durch geschlossene Türen (wenn die Türen im Modell entfernt wurden)
+for (const [pk, list] of (opt.doors === '0' ? [] : cand)) {
   // breiteste zusammenhängende Gruppe (gleiche Richtung, nebeneinander) wählen
   let best = null;
   for (const c of list) {
@@ -179,6 +180,7 @@ for (const [pk, list] of cand) {
   }
   if (!best || best.length < 2) continue;
   doorLinks.push(pk.split('-').map(Number));
+  if (opt.debug) { const xs = best.map(c => x0 + (c.ax + 0.5) * CELL), za = z0 + (best[0].az + 0.5) * CELL, zb = z0 + (best[0].bz + 0.5) * CELL; console.log(`  Tür ${pk}: x ${Math.min(...xs).toFixed(1)}…${Math.max(...xs).toFixed(1)} · z ${za.toFixed(1)} → ${zb.toFixed(1)} · y ${best[0].ay.toFixed(2)} · Wand ${best[0].t.toFixed(2)} m · Richtung ${best[0].dx},${best[0].dz}`); }
   for (const c of best) {   // Zellen zwischen A und B begehbar machen
     const n = Math.max(Math.abs(c.bx - c.ax), Math.abs(c.bz - c.az));
     for (let s = 1; s < n; s++) extra.set((c.ax + c.dx * s) * NZ + (c.az + c.dz * s), c.ay + (c.by - c.ay) * (s / n));

@@ -66,13 +66,16 @@ claude.ai stellt keine `.glb`-Dateien bereit. Für das Artifact gibt es deshalb 
 Das Schiffsmodell ist das **vollständige** Modell (innen und außen in einer Datei, asset-src/glb/ship/<Modell>.glb); es wird nicht mehr
 in Hülle und Innenteile getrennt. (Die Trennung per split-visible hatte Rumpfschalen und die Glaskanzel fälschlich nach innen sortiert,
 weil deren Flächen nach innen zeigen.)
-1. Volles Modell mit Materialien versehen und vereinfachen: `scripts/split-visible.mjs … --min=0` (nur zum Übertragen der FBX-Materialien),
-   dann `scripts/simplify-hard.mjs <roh.glb> asset-src/glb/ship/<Modell>.glb 0.3 0.0004 35 --rotY=90`.
+1. Kaufmodell direkt verarbeiten (Materialien setzen, Teile entfernen, vereinfachen):
+   `node --max-old-space-size=14000 scripts/simplify-hard.mjs asset-src/neu/Carbine_Arrow_0.50.glb asset-src/glb/ship/Pfeil.glb 0.25 0.0004 35 --rotY=90 --mat=asset-src/glb/ship/Pfeil.materials.json --look=asset-src/glb/ship/Pfeil.look.json`
+   - `Pfeil.materials.json`: Teil → Material aus der FBX (scripts/fbx-materials.mjs).
+   - `Pfeil.look.json`: entfernte Teile (geschlossene Türen) und Materialien nach Teilnamen (Sofa, Kissen, Rohre, Böden, Leuchten …).
+   - Teile an einer Stelle finden: `node scripts/list-parts.mjs <kauf.glb> <materials.json> x0,x1,y0,y1,z0,z1 [maxDickeZ]` (Schiffskoordinaten).
 2. Materialwerte stehen in `LOOK` (scripts/glb-lib.mjs). Die Kaufdateien der Pfeil enthalten keine Texturen und nur sieben einfarbige
    Platzhalter; die Werte sind den Verkaufsbildern nachempfunden. Nach Änderungen: `node scripts/relook.mjs asset-src/glb/ship/<Modell>.glb`.
 3. Laufkarte: `node --max-old-space-size=12000 scripts/build-walkmap.mjs <modell.glb> <modell.glb> asset-src/walk/<Modell>.json`
    (20-cm-Zellen, mehrere Decks, Treppen bis 45 cm, Türen gelten als offen, Gitterroste werden geschlossen; Einstieg, Sitz, Koje usw.
-   und acht Lampen werden automatisch gesetzt). Pfeil: `--start=1.7,-4.3,10 --minY=-6.4`.
+   und acht Lampen werden automatisch gesetzt). Pfeil: `--start=1.7,-4.3,10 --minY=-6.4 --doors=0` (Türen sind im Modell entfernt).
    Kontrolle: `node scripts/walkmap-image.mjs …` (Draufsicht) und `node scripts/slice-image.mjs <modell.glb> <modell.glb> bild.png <x> [walk.json]` (Längsschnitt).
 4. `npm run assets`. Nicht ausführen, während jemand im Entwicklungsfenster spielt (Dateinamen ändern sich).
 Im Spiel (src/game/meshRoom.ts) bleibt das Schiffsmodell beim Betreten stehen; der Raum bringt Licht, Spiegelungen und die Laufkarte mit.
