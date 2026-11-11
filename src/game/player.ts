@@ -150,14 +150,7 @@ export function updatePlayer(dt: number) {
       }
     }
   }
-  // ---- Abgasspur ----
-  if (th || Math.random() < 0.3) {
-    _e.set(P.pitch, P.yaw, G.roll);
-    for (const ep of SHIP.enginePts) {
-      _v.set(ep[0], ep[1], ep[2]).applyEuler(_e);
-      puff(P.x + _v.x, P.y + _v.y, P.z + _v.z, P.vx * 0.3 - f.x * rand(40, 90) + rand(-6, 6), P.vy * 0.3 - f.y * rand(40, 90) + rand(-6, 6), P.vz * 0.3 - f.z * rand(40, 90) + rand(-6, 6), th ? '#ffb070' : '#7a4a28', th ? 0.45 : 0.25);
-    }
-  }
+  // (Die orange Abgasspur aus Rauchwölkchen ist entfallen: Die Triebwerke zeigen nur noch den kurzen blauen Strahl.)
   // ---- Zielerfassung ----
   let best = 0.965;
   const hadLock = G.lockT;
