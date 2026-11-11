@@ -149,3 +149,7 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   einfrieren und die Haltung als neue Ruhelage übernehmen. Gewichte und Knochenlagen von Meshy bleiben erhalten.
 - Export wie bei den Blender-Figuren nach `asset-src/glb/char/<name>.glb`; im Spiel `HEIGHT` und `RIG_OF` in src/models/charModels.ts.
 - Achterberg nutzt seit Alpha 0.60 die Meshy-Fassung; die aus Bildern gebaute Fassung liegt ausgeblendet in der Blender-Datei.
+- Alpha 0.61: Mechaniker (1,78 m) und Lagerarbeiter (1,86 m) kommen ebenfalls von Meshy. Umstellen und Export erledigt
+  `meshy_to_merchant(Name)` (Textblock `figur_build` in `Figuren.blend`). Im Spiel rechnet `fit()` in src/models/charModels.ts
+  die Hüftspur geliehener Clips auf die Beinlänge der Figur um. Einsatz: Hangarmeister = Mechaniker, die Leute auf den Gängen
+  gemischt aus Arbeiter, Lagerarbeiter und Mechaniker (`buildPerson(..., model)` in src/game/interior.ts).

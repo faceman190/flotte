@@ -8,10 +8,10 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 interface Tpl { scene: THREE.Group; clips: THREE.AnimationClip[]; scale: number; footY: number }
 const TPL: Record<string, Tpl> = {};
-const HEIGHT: Record<string, number> = { worker: 1.8, merchant: 1.7, achterberg: 1.72 };
+const HEIGHT: Record<string, number> = { worker: 1.8, merchant: 1.7, achterberg: 1.72, mechaniker: 1.78, lagerarbeiter: 1.86 };
 // Figuren aus Blender (asset-src/neu/figuren/Figuren.blend) tragen das Skelett des Händlers in derselben Grundhaltung:
 // Sie nutzen dessen Bewegungen (Stehen, Gehen, Anlaufen, Abbremsen, Sprechen), solange es keine eigenen gibt.
-const RIG_OF: Record<string, string> = { achterberg: 'merchant' };
+const RIG_OF: Record<string, string> = { achterberg: 'merchant', mechaniker: 'merchant', lagerarbeiter: 'merchant' };
 const clipKey = (name: string, kind: string) => (EXTRA[name + '_' + kind] || !RIG_OF[name] ? name : RIG_OF[name]) + '_' + kind;
 // Zusätzliche Bewegungen aus FBX-Dateien (scripts/fbx-anim.mjs → asset-src/data/anim_<figur>_<art>.json), z. B. merchant_idle.
 // Sie sind auf das Skelett genau dieser Figur umgerechnet und ersetzen deren eingebaute Bewegung.
@@ -61,6 +61,22 @@ const clipOf = (kind: 'walk' | 'idle', name: string) => {
   const own = kind === 'walk' ? TPL.worker : TPL.merchant;
   return own?.clips[0] || null;
 };
+// Geliehene Bewegungen an die Beinlänge anpassen: Die Hüftspur eines Clips steht in der Höhe des Vorbilds (Händlerin, 97 cm).
+// Bei einer größeren Figur mit gleichem Skelett würde die Hüfte zu tief sitzen und die Knie knickten ein.
+const hipRest = (name: string) => { let y = 0; TPL[name]?.scene.traverse(o => { if (o.name === 'Hips') y = o.position.y; }); return y; };
+const hipScale = (name: string) => { const src = RIG_OF[name]; const a = hipRest(name), b = src ? hipRest(src) : 0; return a && b ? a / b : 1; };
+const FITTED: Record<string, THREE.AnimationClip> = {};
+function fit(clip: THREE.AnimationClip | null, name: string) {
+  const k = hipScale(name);
+  if (!clip || Math.abs(k - 1) < 0.004) return clip;
+  const key = name + '|' + clip.uuid;
+  if (!FITTED[key]) {
+    const c = clip.clone(); c.uuid = THREE.MathUtils.generateUUID();
+    for (const tr of c.tracks) if (tr.name === 'Hips.position') tr.values = tr.values.map(v => v * k);
+    FITTED[key] = c;
+  }
+  return FITTED[key];
+}
 // Eine Figur: Gruppe (Füße auf y=0, Blick nach +Z), Mixer und je eine Aktion fürs Laufen und Stehen
 export function charInstance(name: string, tint: number | [number, number, number] = 1) {
   const t = TPL[name];
@@ -71,14 +87,14 @@ export function charInstance(name: string, tint: number | [number, number, numbe
   if (tint !== 1) obj.traverse((o: any) => { if (o.isMesh) { o.material = o.material.clone(); if (Array.isArray(tint)) o.material.color.multiply(new THREE.Color(tint[0], tint[1], tint[2])); else o.material.color.multiplyScalar(tint); } });
   const g = new THREE.Group(); g.add(obj);
   const mixer = new THREE.AnimationMixer(obj);
-  const w = clipOf('walk', name), i = clipOf('idle', name);
+  const w = fit(clipOf('walk', name), name), i = fit(clipOf('idle', name), name);
   const walk = w ? mixer.clipAction(w) : null, idle = i ? mixer.clipAction(i) : null;
   // Ablaufsteuerung (animStep): eigene Clips dieser Figur für Anlaufen, Abbremsen und Sprechen, falls vorhanden
-  const act = (k: string) => (EXTRA[clipKey(name, k)] ? mixer.clipAction(EXTRA[clipKey(name, k)]) : null);
+  const act = (k: string) => (EXTRA[clipKey(name, k)] ? mixer.clipAction(fit(EXTRA[clipKey(name, k)], name)!) : null);
   const anim: CharAnim = {
     mixer, idle, walk, start: act('start'), stop: act('stop'), talk: [act('talk1'), act('talk2')].filter(Boolean) as THREE.AnimationAction[],
     mode: 'idle', cur: null, talkT: 0, talkI: 0,
-    pace: META[clipKey(name, 'walk')]?.pace || 1.4, mStart: META[clipKey(name, 'start')] || null, mStop: META[clipKey(name, 'stop')] || null,
+    pace: (META[clipKey(name, 'walk')]?.pace || 1.4) * hipScale(name), mStart: META[clipKey(name, 'start')] || null, mStop: META[clipKey(name, 'stop')] || null,
   };
   return { g, mixer, walk, idle, anim, mats: [] as THREE.Material[] };
 }

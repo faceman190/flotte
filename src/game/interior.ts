@@ -120,8 +120,9 @@ function mat<T extends THREE.Material>(m: T) { disposables.push(m); if ((m as an
 
 const WALK_V = 1.5;   // Gehtempo der Leute in den Stationen (m/s)
 // KI-Figur mit Skelett, falls geladen (Händler stehen, Arbeiter laufen); sonst die einfache Figur aus Grundformen
-function buildPerson(suit: number, skin: number, hair: number, badge: number, role: 'idle' | 'walk' = 'idle'): Person {
-  const cn = role === 'walk' ? 'worker' : 'merchant';
+function buildPerson(suit: number, skin: number, hair: number, badge: number, role: 'idle' | 'walk' = 'idle', model?: string): Person {
+  // model: bestimmte Figur (Mechaniker, Lagerarbeiter …), falls geladen; sonst Arbeiter fürs Gehen und Händlerin fürs Stehen
+  const cn = model && hasChar(model) ? model : role === 'walk' ? 'worker' : 'merchant';
   if (hasChar(cn)) {
     const c = charInstance(cn, 0.85 + Math.random() * 0.2);
     c.g.traverse((o: any) => { if (o.isMesh) { o.userData.shared = true; if (o.material !== undefined) disposables.push(o.material); } });
@@ -224,7 +225,7 @@ function build(st: Station) {
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.55), mat(new THREE.MeshBasicMaterial({ map: signTex('Hangar', pal.css) })));
     scr.position.set(tx, 2.9, HZ0 + 0.05); deco.add(scr);
     block(tx - 1.6, tx + 1.6, HZ0, tz + 0.6);
-    const p = buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, pal.accent);
+    const p = buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, pal.accent, 'idle', 'mechaniker');   // Hangarmeister
     p.g.position.set(tx + 3, 0, tz + 0.4); deco.add(p.g);
     const name = nm.pop()!;
     persons.push({ p, x: tx + 3, z: tz + 0.4, face: 0, name });
@@ -326,7 +327,7 @@ function build(st: Station) {
   // Leute, die unterwegs sind
   const lx = PW - 6.2, loop = [[-lx, PZ1 - 5], [-lx, PZ0 + 8], [lx, PZ0 + 8], [lx, PZ1 - 5]];
   const mkWalker = (path: number[][], start: number) => {
-    const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent, 'walk');
+    const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent, 'walk', R.pick(['worker', 'lagerarbeiter', 'mechaniker', 'lagerarbeiter']));   // gemischte Belegschaft
     deco.add(p.g);
     walkers.push({ p, path, i: start % path.length, x: path[start % path.length][0], z: path[start % path.length][1], ph: R.range(0, 6), wait: 0, rest: false });
   };
@@ -991,7 +992,7 @@ export function nearestOther(max = 3.2): { id: number; name: string } | null {
 // Story: eine benannte Figur in den Stationsraum stellen (z. B. die Ausbilderin im Prolog).
 // Steht neben dem Spieler, schaut ihn an und lässt sich mit E ansprechen.
 // model: 'merchant' ist die Frauenfigur (Mantel), 'worker' die Männerfigur (Arbeitsanzug): passend zur Rolle wählen
-export interface NpcLook { model?: 'worker' | 'merchant' | 'achterberg'; tint?: [number, number, number] }
+export interface NpcLook { model?: 'worker' | 'merchant' | 'achterberg' | 'mechaniker' | 'lagerarbeiter'; tint?: [number, number, number] }
 export function storyNpc(name: string, title: string, label: string, act: () => void, col = '#ffb347', at?: { x: number; z: number }, look: NpcLook = {}) {
   if (!IN.active || !stationGroup || IN.ship) return false;
   const x = at ? at.x : IN.x - 2.5, z = at ? at.z : IN.z - 7, face = Math.atan2(IN.x - x, IN.z - z);   // vor dem Spieler (Blick zum Korridor)
