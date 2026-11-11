@@ -1,0 +1,34 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Modell-Vorschau</title>
+<style>html,body{margin:0;height:100%;background:#1c2026;overflow:hidden;font:13px Consolas,monospace;color:#cfe6f5}#i{position:fixed;left:10px;top:8px;white-space:pre;text-shadow:0 1px 2px #000}</style></head>
+<body><div id="i">lade …</div>
+<script type="module">
+// Nur für die Entwicklung: zeigt ein GLB-Modell. Aufruf: /modelview.html?f=/asset-src/neu/x.glb&v=34 (v: Ansicht 34|side|top|front|back)
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+const q = new URLSearchParams(location.search), file = q.get('f'), view = q.get('v') || '34';
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(innerWidth, innerHeight); r.setPixelRatio(Math.min(2, devicePixelRatio)); r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.background = new THREE.Color(0x1c2026);
+sc.environment = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(), 0.04).texture;
+sc.add(new THREE.HemisphereLight(0xdfefff, 0x302820, 1.2));
+const sun = new THREE.DirectionalLight(0xfff2e0, 2.2); sun.position.set(3, 5, 2); sc.add(sun);
+const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 1e5);
+const ctl = new OrbitControls(cam, r.domElement);
+const t0 = performance.now();
+new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load(file, g => {
+  const o = g.scene; sc.add(o);
+  let tris = 0, meshes = 0; o.traverse(m => { if (m.isMesh) { meshes++; const gi = m.geometry; tris += (gi.index ? gi.index.count : gi.attributes.position.count) / 3; } });
+  const box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3()), R = size.length() / 2;
+  const dirs = { '34': [1, 0.55, 1.2], side: [1, 0.05, 0], top: [0.001, 1, 0], front: [0, 0.1, 1], back: [0, 0.1, -1], side2: [-1, 0.05, 0] };
+  const d = new THREE.Vector3(...(dirs[view] || dirs['34'])).normalize();
+  cam.position.copy(c).addScaledVector(d, R * 2.3); cam.near = R / 100; cam.far = R * 20; cam.updateProjectionMatrix();
+  ctl.target.copy(c); ctl.update();
+  document.getElementById('i').textContent = `${file}\nDreiecke ${Math.round(tris).toLocaleString('de-DE')} · Meshes ${meshes} · ${size.toArray().map(v => v.toFixed(1)).join(' × ')} · ${((performance.now() - t0) / 1000).toFixed(1)} s`;
+  window.__ready = true;
+}, undefined, e => { document.getElementById('i').textContent = 'Fehler: ' + e; });
+(function loop() { requestAnimationFrame(loop); ctl.update(); r.render(sc, cam); })();
+</script></body></html>
