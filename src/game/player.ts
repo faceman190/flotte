@@ -86,6 +86,7 @@ function collideBig(o: { x: number; y: number; z: number; sph: number[][]; R: nu
   }
 }
 
+const _up = new THREE.Vector3(), _ue = new THREE.Euler();
 let boundWarn = 0, fullWarn = 0, chargeHeld = false;
 export function updatePlayer(dt: number) {
   const st = stats();
@@ -102,7 +103,8 @@ export function updatePlayer(dt: number) {
   const yawRate = -(mx * 0.5 + mx * Math.abs(mx) * 0.5) * 2.1 * sens * st.turn, pitchRate = -(my * 0.5 + my * Math.abs(my) * 0.5) * 1.6 * sens * st.turn;
   P.yaw += yawRate * dt;
   P.pitch = clamp(P.pitch + pitchRate * dt, -1.15, 1.15);
-  G.roll += ((yawRate * 0.42 + (keys.KeyA ? 0.35 : 0) - (keys.KeyD ? 0.35 : 0)) - G.roll) * Math.min(1, dt * 5);
+  G.rollOff = (G.rollOff || 0) + ((keys.KeyQ ? 1 : 0) - (keys.KeyE && !G.eBusy ? 1 : 0)) * 1.7 * dt;
+  G.roll += ((yawRate * 0.42 + (keys.KeyA ? 0.35 : 0) - (keys.KeyD ? 0.35 : 0)) + G.rollOff - G.roll) * Math.min(1, dt * 5);
   const f = fwd(), r = right();
   let th = 0;
   // Flugstufen: Manöverflug fährt gemächlich an (Jäger: gut 2 s bis 140 m/s), Reiseflug baut langsam bis 300 m/s auf
@@ -111,7 +113,9 @@ export function updatePlayer(dt: number) {
   if (keys.KeyS) { P.vx -= f.x * acc * 2 * dt; P.vy -= f.y * acc * 2 * dt; P.vz -= f.z * acc * 2 * dt; }
   const sx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   if (sx) { P.vx += r.x * sx * acc * 1.2 * dt; P.vz += r.z * sx * acc * 1.2 * dt; }
-  const drag = Math.pow(th || sx ? (G.cruise ? 0.9 : 0.75) : keys.KeyS ? 0.25 : 0.5, dt);
+  const sv = (keys.Space ? 1 : 0) - (keys.ControlLeft || keys.ControlRight || keys.KeyX ? 1 : 0);
+  if (sv) { _up.set(0, 1, 0).applyEuler(_ue.set(P.pitch, P.yaw, G.roll, 'YXZ')); P.vx += _up.x * sv * acc * 1.2 * dt; P.vy += _up.y * sv * acc * 1.2 * dt; P.vz += _up.z * sv * acc * 1.2 * dt; }
+  const drag = Math.pow(th || sx || sv ? (G.cruise ? 0.9 : 0.75) : keys.KeyS ? 0.25 : 0.5, dt);
   P.vx *= drag; P.vy *= drag; P.vz *= drag;
   const sp = Math.hypot(P.vx, P.vy, P.vz);
   // über der Grenze (z. B. nach dem Zurückschalten aus dem Reiseflug) weich abbremsen statt hart kappen
@@ -167,11 +171,11 @@ export function updatePlayer(dt: number) {
   // ---- Kanonen ----
   G.cool -= dt;
   fullWarn -= dt;
-  const trig = mouse.down || !!keys.Space;
+  const trig = mouse.down;
   updateMining(dt, trig);
   if (P.tool === 'charge' && trig && !chargeHeld) throwCharge();
   chargeHeld = trig;
-  if (P.tool === 'guns' && (mouse.down || keys.Space) && G.cool <= 0) {
+  if (P.tool === 'guns' && mouse.down && G.cool <= 0) {
     if (P.ammo <= 0) {
       if (fullWarn <= 0) { radio('SYSTEM', 'Munition leer! An einer Station nachladen.'); fullWarn = 5; }
     } else {

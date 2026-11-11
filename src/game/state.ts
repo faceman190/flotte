@@ -121,6 +121,8 @@ export const G = {
   saveT: 20,
   camInit: false,
   cruise: false,
+  rollOff: 0,      // mit Q/E gehaltene Rolllage
+  eBusy: false,    // E wird gerade zum Andocken/Landen gebraucht (dann rollt E nicht)
   jd: 0, jdTo: null as string | null,   // Sprungantrieb: verbleibende Ladezeit (0 = aus) und Zielsektor   // Reiseflug (Umschalt): schneller, träger; sonst Manöverflug
   heat: 0, overheat: false,
   inside: false,      // zu Fuß in einer Station

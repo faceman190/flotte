@@ -44,9 +44,8 @@ function engine(g: THREE.Group, glows: THREE.Sprite[], x: number, y: number, z: 
   addJet(sp);
   g.add(sp); glows.push(sp);
 }
-function nav(g: THREE.Group, navs: THREE.Sprite[], x: number, y: number, z: number, s = 2) {
-  const nl = new THREE.Sprite(glowMat(x < 0 ? 0xff3030 : 0x30ff70, 1)); nl.position.set(x, y, z); nl.scale.setScalar(s); g.add(nl); navs.push(nl);
-}
+// Positionslichter (rot/grün) sind entfallen; die Funktion bleibt als leerer Platzhalter für die Aufrufer
+function nav(_g: THREE.Group, _navs: THREE.Sprite[], _x: number, _y: number, _z: number, _s = 2) { /* nichts */ }
 
 // Kleine Bergbaudrohne (wird auch frei fliegend genutzt)
 export function buildDrone() {

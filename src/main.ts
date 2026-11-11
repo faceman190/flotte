@@ -498,6 +498,7 @@ function loop(now: number, manual = false) {
   updateIntro(dt);
   updateStory(dt);
   updateChapter1(dt);
+  G.eBusy = G.mode === 'play' && (!!nearDock() || !!world.surface);
   // Grundgeräusch zu Fuß: im Schiff ein tiefes Brummen, in der Station leiser
   // Grundgeräusch: zu Fuß Schiff, Hangar oder Station; auf einer Planetenoberfläche der Wind (je nach Planetenart)
   {

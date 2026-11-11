@@ -16,6 +16,8 @@ addEventListener('keydown', e => {
   if (tag === 'INPUT' || tag === 'SELECT') return;
   keys[e.code] = true;
   if (e.code === 'Space' || e.code === 'Tab' || e.code === 'F1') e.preventDefault();
+  // Strg ist im Flug „runter“: Browser-Kürzel wie Strg+S oder Strg+D abfangen (Strg+W lässt sich nicht abfangen)
+  if (e.ctrlKey && !e.altKey && document.body.classList.contains('playing') && e.code.startsWith('Key')) e.preventDefault();
   if (e.repeat) return;
   for (const h of handlers) h(e.code);
 });

@@ -404,7 +404,7 @@ function drawShipPanel() {
     g.addColorStop(0, `rgba(255,200,120,${thr})`); g.addColorStop(1, 'rgba(255,140,60,0)');
     ux.fillStyle = g; ux.fillRect(ex * s - 16, ey * s - 2, 32, 26);
   }
-  const trig = (mouse.down || keys.Space) && !G.dead;
+  const trig = mouse.down && !G.dead;
   const gc = P.tool === 'guns' ? (P.ammo <= 0 ? '#ff6b5b' : trig ? '#fff2c0' : '#ffd27a') : '#6a6050';
   ux.fillStyle = gc; for (const [gx, gy] of sil.guns) ux.fillRect(gx * s - 1, gy * s - 4, 2, 8);
   if (P.cls === 'falke' && P.up.guns >= 2) for (const m of [-17.5, 17.5]) ux.fillRect(m * s - 1, 4 * s, 2, 10);

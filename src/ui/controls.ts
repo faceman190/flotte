@@ -45,13 +45,13 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (G.lockT && P.rockets > 0) r.push(['F', 'Rakete abfeuern', true]);
     const fire = P.tool === 'laser' ? (MINE.target ? 'Laser halten: abbauen' : 'Bergbaulaser') : P.tool === 'charge' ? 'Sprengladung werfen' : 'Kanonen feuern';
     r.push(['Klick', fire, P.tool === 'laser' && !!MINE.target]);
-    r.push(['W / S', 'Schub / Bremsen'], ['Maus', 'Lenken'], ['A / D', 'Ausweichen'], ['Umschalt', G.cruise ? 'Reiseflug aktiv' : 'Reiseflug', G.cruise]);
+    r.push(['W / S', 'Schub / Bremsen'], ['Maus', 'Lenken'], ['A / D', 'Ausweichen'], ['Leer / Strg', 'Hoch / Runter'], ['Q / E', 'Rollen'], ['Umschalt', G.cruise ? 'Reiseflug aktiv' : 'Reiseflug', G.cruise]);
     r.push(['J', G.jd ? 'Sprung abbrechen' : 'Sprungantrieb', !!G.jd]);
     r.push(['1–4', st.laser ? 'Werkzeug wählen' : 'Waffen']);
     if (st.laser) r.push(['R', 'Asteroiden scannen']);
     r.push(['C / V', look.free ? 'Freie Kamera aktiv' : 'Freie Kamera halten / fest', look.free], ['Mausrad', 'Zoom']);
     r.push(['B', 'Flottenband'], ['M', 'Karte']);
-    return { title: world.surface ? `Flug · ${world.def?.name || ''}` : `Flug · ${P.tool === 'laser' ? 'Bergbau' : P.tool === 'charge' ? 'Sprengen' : 'Kampf'}`, rows: r.slice(0, 13) };
+    return { title: world.surface ? `Flug · ${world.def?.name || ''}` : `Flug · ${P.tool === 'laser' ? 'Bergbau' : P.tool === 'charge' ? 'Sprengen' : 'Kampf'}`, rows: r.slice(0, 15) };
   }
   return null;
 }
