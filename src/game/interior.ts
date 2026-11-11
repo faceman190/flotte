@@ -21,6 +21,8 @@ import { sectorOres } from '../data/ores';
 import { world } from './world';
 import { saveGame } from './state';
 import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom, interiorEnv } from './meshRoom';
+import { stationTemplate } from '../models/stationModels';
+import { HANGAR_BLOCKS } from '../data/hangarBlocks';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -151,6 +153,41 @@ function buildPerson(suit: number, skin: number, hair: number, badge: number, ro
   return { g, legL, legR, armL, armR, head };
 }
 
+// Hangar als Modell aus Blender (asset-src/neu/hangar/Hangar.blend → asset-src/glb/station/Hangar.glb), gebaut in genau den Maßen oben.
+// Die Materialien tragen Namen (hangar_*): Boden und Wände bekommen Farbe und Rumpfbild der Station, Leuchtflächen strahlen von selbst,
+// die Akzentfarbe folgt dem Stationstyp. Fehlt die Datei, entsteht der frühere Hangar aus Grundformen.
+function addHangarModel(parent: THREE.Object3D, pal: { accent: number; wall: number; floor: number }) {
+  const tpl = stationTemplate('Hangar');
+  if (!tpl) return false;
+  const body = tpl.clone(true);
+  body.children[0].position.set(0, 0, 0);
+  const tex = (c: number, t: string, o: THREE.MeshStandardMaterialParameters) => mat(texMat(c, t, o));
+  const M: Record<string, THREE.Material> = {
+    hangar_floor: tex(pal.floor, 'hull_mil', { roughness: 0.85, metalness: 0.25, emissive: 0x1a1c20 }),
+    hangar_floor_dark: tex(0x43464d, 'hull_mil', { roughness: 0.85, metalness: 0.3, emissive: 0x121316 }),
+    hangar_wall: tex(pal.wall, 'hull_light', { roughness: 0.7, metalness: 0.2, emissive: 0x2a2d33 }),
+    hangar_wall_dark: tex(0x5a5f68, 'hull_mil', { roughness: 0.7, metalness: 0.35, emissive: 0x1c1e23 }),
+    hangar_panel: tex(0x9aa0a8, 'hull_light', { roughness: 0.65, metalness: 0.25, emissive: 0x30343a }),
+    hangar_ceiling: tex(0x34383e, 'hull_mil', { roughness: 0.9, metalness: 0.3, emissive: 0x0e0f12 }),
+    hangar_steel: tex(0x6a6e75, 'hull_mil', { roughness: 0.55, metalness: 0.45, emissive: 0x1e2025 }),
+    hangar_accent: mat(std(pal.accent, { roughness: 0.6, metalness: 0.15, emissive: new THREE.Color(pal.accent).multiplyScalar(0.28) })),
+    hangar_light: mat(new THREE.MeshBasicMaterial({ color: 0xfff2dc })),
+    hangar_lamp: mat(new THREE.MeshBasicMaterial({ color: 0xffa030 })),
+    hangar_redlamp: mat(new THREE.MeshBasicMaterial({ color: 0xff3a24 })),
+    hangar_screen: mat(new THREE.MeshBasicMaterial({ color: 0x3f9fd0 })),
+    hangar_glass: mat(new THREE.MeshBasicMaterial({ color: 0x7fb0cc })),
+  };
+  body.traverse((o: any) => {
+    if (!o.isMesh) return;
+    o.userData.shared = true;                       // Geometrie gehört der Vorlage und bleibt beim Verlassen erhalten
+    const m = M[o.material.name];
+    if (m) { o.material = m; if ((m as any).map) boxUV(o, 1 / 14); }
+    else if (o.material.isMeshStandardMaterial) { o.material.envMapIntensity = 0.3; if (!o.userData.lit) { o.material.emissive.copy(o.material.color).multiplyScalar(0.25); o.userData.lit = true; } }   // Requisitenfarben: etwas Eigenleuchten
+  });
+  parent.add(body);
+  return true;
+}
+
 // ---------- Innenraum aufbauen ----------
 function build(st: Station) {
   kind = st.kind;
@@ -175,6 +212,8 @@ function build(st: Station) {
 
   // ===== Hangar =====
   const HL = HZ1 - HZ0, HC = (HZ0 + HZ1) / 2;
+  const hm = addHangarModel(g, pal);   // Hangar-Modell aus Blender; ohne Modell die Grundformen unten
+  if (!hm) {
   box(S, mFloor, HW * 2, 0.5, HL, 0, -0.25, HC);
   box(S, mCeil, HW * 2, 0.5, HL, 0, HH + 0.25, HC);
   for (const s of [-1, 1]) {
@@ -191,10 +230,12 @@ function build(st: Station) {
   box(S, mWall, CW * 2, HH - CH, 0.6, 0, (HH + CH) / 2, HZ0 - 0.3);
   box(S, mDark, DW * 2, HH - DH, 1.2, 0, (HH + DH) / 2, HZ1 + 0.6);
   box(deco, mAccent, DW * 2, 0.4, 0.4, 0, DH, HZ1 - 0.1);
+  }
   // Kraftfeld im Tor
   field = new THREE.Mesh(new THREE.PlaneGeometry(DW * 2, DH), mat(new THREE.MeshBasicMaterial({ color: 0x60b8ff, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false })));
   field.position.set(0, DH / 2, HZ1);
   deco.add(field);
+  if (!hm) {
   // Deckenlichter und Bodenmarkierungen
   for (const x of [-75, -45, -15, 15, 45, 75]) box(deco, mLight, 1.6, 0.15, HL - 16, x, HH - 0.1, HC);
   for (let z = HZ0 + 10; z < HZ1; z += 20) box(S, mDark, HW * 2, 1.2, 1.2, 0, HH - 0.6, z);
@@ -217,13 +258,14 @@ function build(st: Station) {
       block(x - 1.5, x + 1.5, z + 4.5, z + 7.5);
     }
   }
+  } else for (const b of HANGAR_BLOCKS) block(b[0], b[1], b[2], b[3]);   // Requisiten des Modells
   // Hangar-Terminal mit Deckmeister
   const nm = [...NAMES].sort(() => R.next() - 0.5);
   {
     const tx = 9, tz = HZ0 + 2.2;
-    box(S, mDark, 3, 1.15, 0.9, tx, 0.575, tz);
+    if (!hm) box(S, mDark, 3, 1.15, 0.9, tx, 0.575, tz);
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.55), mat(new THREE.MeshBasicMaterial({ map: signTex('Hangar', pal.css) })));
-    scr.position.set(tx, 2.9, HZ0 + 0.05); deco.add(scr);
+    scr.position.set(tx, hm ? 3.3 : 2.9, HZ0 + (hm ? 0.33 : 0.05)); deco.add(scr);
     block(tx - 1.6, tx + 1.6, HZ0, tz + 0.6);
     const p = buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, pal.accent, 'idle', 'mechaniker');   // Hangarmeister
     p.g.position.set(tx + 3, 0, tz + 0.4); deco.add(p.g);

@@ -37,6 +37,8 @@ export async function loadStationModels() {
   return Object.keys(TPL).length > 0;
 }
 export const hasStationModel = (name: string) => !!TPL[name];
+// Vorlage eines geladenen Modells (zentriert; das erste Kind trägt die Verschiebung zum Ursprung der Datei)
+export const stationTemplate = (name: string) => TPL[name]?.group || null;
 
 // Kollisionskugeln: belegte Rasterzellen (lokale Koordinaten nach Skalierung)
 function collisionSpheres(obj: THREE.Object3D, cell: number) {

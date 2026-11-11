@@ -153,3 +153,12 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   `meshy_to_merchant(Name)` (Textblock `figur_build` in `Figuren.blend`). Im Spiel rechnet `fit()` in src/models/charModels.ts
   die Hüftspur geliehener Clips auf die Beinlänge der Figur um. Einsatz: Hangarmeister = Mechaniker, die Leute auf den Gängen
   gemischt aus Arbeiter, Lagerarbeiter und Mechaniker (`buildPerson(..., model)` in src/game/interior.ts).
+
+## Hangar (Alpha 0.62)
+- Quelle: `asset-src/neu/hangar/Hangar.blend` (per Skript gebaut; Textblöcke `hangar_lib` und `hangar_build` mit `build_shell`, `build_details`, `build_props`).
+  Gebaut in den Maßen aus `src/game/interior.ts` (184 × 162 × 42 m, Tor 124 × 32 m, drei Stellplätze). Koordinaten im Skript sind Spielkoordinaten.
+- Export: alle Netze der Sammlung „Hangar“ verbunden → `asset-src/glb/station/Hangar.glb`, dann `npm run assets`.
+  Die Standflächen der Requisiten schreibt das Skript nach `hangar_blocks.json`; daraus entsteht `src/data/hangarBlocks.ts` (im Spiel nicht begehbar).
+- Im Spiel: `addHangarModel()` in `src/game/interior.ts` ersetzt die Grundformen des Hangars (Korridor und Promenade bleiben wie bisher).
+  Materialnamen `hangar_*`: Boden und Wand nehmen Farbe und Rumpfbild des Stationstyps, `hangar_accent` dessen Akzentfarbe, Leuchtflächen strahlen von selbst.
+- Der Streifen hinter dem mittleren Stellplatz (x −30 … 30, z −41 … −24,5) bleibt frei: Dort kommt der Spieler an, dort stehen die Story-Figuren.
