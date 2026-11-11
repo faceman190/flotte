@@ -55,3 +55,11 @@ Erzeugen: `creative_run_flow_nodes` mit dem Flow und den Knoten, `generations_co
 | rover_engine | clNVjMc1Tdw5WfGjyRVZ | 8 s |
 | rover_drill | IvSZXQmkS3ogrNY41cz3 | 6 s |
 | drone_hum | I9D3fJfnOBe6sQ5btAD1 | 6 s |
+
+### Schleifen erzeugt (je eine Fassung, zusammen 446 Credits)
+
+amb_ship 3kEn6ntPBAtSYerZWHG2 (Sitzung 6kOceWbFpFL0F7I1HK87) · amb_planet_wind qK0MwuTxtcsgmEUcxSLe (wPY4howY7YmboA2IMluu) ·
+amb_planet_ice ZxlCaEfKayhJG5gLhKix (6jKgD4XBcRXS71zo5iSi) · amb_planet_lava 5zwFp5RE4WjWt6qlzu1G (c6Rd3MNDkGJrmFPlg5y6) ·
+torpedo_fly 3POg5r1TwtnzjSwamGdm (UDxWRJeASEaERAvwIQvd) · mother_hum ebrs84M2IrnZSLw1jsAT (aRJyeBamv9c1MCRGbVlW) ·
+rover_engine RSeEAYVXo9PJ4crTnrbz (mlHZcpilFX6Sz4CzfF1y) · rover_drill gOCI7YaMNtenqaRWbKqJ (rnTpHFpLTyOO5nu9Kbv8) ·
+drone_hum dJOnd9khwN5DCHaICDz8 (W1DOX28cysXVFzZEHBxk)
