@@ -24,17 +24,20 @@ export interface ShipModel {
 function shieldFor(r: number) {
   return new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), new THREE.MeshBasicMaterial({ color: 0x7cc4ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
 }
-// Kleiner Düsenstrahl hinter einem Triebwerk: hängt am Glühpunkt und wächst mit ihm (Schub), zeigt nach hinten (+Z)
-const JET_GEO = (() => { const c = new THREE.ConeGeometry(0.2, 1.7, 10, 1, true); c.rotateX(Math.PI / 2); c.translate(0, 0, 0.85); return c; })();
+// Triebwerksstrahl: kurzer, weicher, blassblauer Schweif direkt an der Düse (zwei Lagen: breiter Schleier, heller Kern).
+// Hängt am Glühpunkt und wächst mit ihm (Schub), zeigt nach hinten (+Z).
+const cone = (r: number, len: number) => { const c = new THREE.ConeGeometry(r, len, 14, 1, true); c.rotateX(Math.PI / 2); c.translate(0, 0, len / 2); return c; };
+const JET_OUTER = cone(0.36, 1.25), JET_CORE = cone(0.17, 0.8);
 function addJet(sp: THREE.Sprite) {
-  const m = basicAdd(0xffb070); m.opacity = 0.5; m.side = THREE.DoubleSide;
-  const jet = new THREE.Mesh(JET_GEO, m); jet.userData.shared = true; sp.add(jet);
+  const mo = basicAdd(0x8fc8ff); mo.opacity = 0.26; mo.side = THREE.DoubleSide;
+  const mc = basicAdd(0xeaf6ff); mc.opacity = 0.5; mc.side = THREE.DoubleSide;
+  for (const [g, m] of [[JET_OUTER, mo], [JET_CORE, mc]] as const) { const j = new THREE.Mesh(g, m); j.userData.shared = true; sp.add(j); }
 }
 function engine(g: THREE.Group, glows: THREE.Sprite[], x: number, y: number, z: number, r: number, len: number) {
   g.add(alongZ(mesh(new THREE.CylinderGeometry(r, r * 1.15, len, 16), DK, x, y, z)));
   g.add(mesh(new THREE.TorusGeometry(r * 1.02, r * 0.14, 6, 18), MK, x, y, z + len / 2));
   g.add(mesh(new THREE.CircleGeometry(r * 0.82, 18), new THREE.MeshBasicMaterial({ color: 0xffd8a0 }), x, y, z + len / 2 + 0.03));
-  const sp = new THREE.Sprite(glowMat(0xffb070, 0.9));
+  const sp = new THREE.Sprite(glowMat(0xbfe2ff, 0.8));
   sp.position.set(x, y, z + len / 2 + r * 0.6);
   sp.userData.base = r * 0.85;
   sp.scale.setScalar(r * 3);
@@ -157,7 +160,7 @@ function gltfShip(cls: ShipId, paint: Paint): ShipModel {
   // Pfeil: vier Triebwerke nebeneinander am Heck
   const enginePts = cls === 'pfeil' ? [-0.164, -0.055, 0.055, 0.164].map(f => [l * f, -h * 0.02, rear * 0.97])   /* an der Länge bemessen: die Seitenflügel machen das Modell breiter als das Heck */ : [[-ex, 0, rear * 0.96], [ex, 0, rear * 0.96]];
   for (const e of enginePts) {
-    const sp = new THREE.Sprite(glowMat(0xffb070, 0.9));
+    const sp = new THREE.Sprite(glowMat(0xbfe2ff, 0.8));
     sp.position.set(e[0], e[1], e[2] + 0.5);
     const gk = cls === 'pfeil' ? l / 36 : l / 15;   // Pfeil: vier kleinere Leuchten statt zwei großer
     sp.userData.base = gk;
@@ -186,7 +189,7 @@ export function buildAllyModel(i: number, markCol: number) {
   const m = modelInstance(name, 15, paint), g = new THREE.Group(), glows: THREE.Sprite[] = [], navs: THREE.Sprite[] = [];
   g.add(m.obj);
   for (const s of [-1, 1]) {
-    const sp = new THREE.Sprite(glowMat(0xffb070, 0.9)); sp.position.set(s * m.w * 0.1, 0, m.l * 0.5); sp.scale.setScalar(3); g.add(sp); glows.push(sp);
+    const sp = new THREE.Sprite(glowMat(0xbfe2ff, 0.8)); sp.position.set(s * m.w * 0.1, 0, m.l * 0.5); sp.scale.setScalar(3); g.add(sp); glows.push(sp);
     nav(g, navs, s * m.w * 0.47, 0, m.l * 0.15, 0.9);
   }
   return { g, glows, navs };
