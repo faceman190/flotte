@@ -15,9 +15,12 @@ import { radio } from '../ui/radio';
 // Start, Übungsbojen, Bergbau, erster Ferrox-Kontakt, Andocken und Verkaufen, Vereidigung als Szene.
 // Stand im Spielstand: P.story.prolog (Schritt oder 'done'); Schrittdaten (Bojen, Erz) ebenfalls dort.
 // =====================================================================================
-export interface StoryState { prolog: number | 'done'; wp?: number[][]; wi?: number; erz0?: number }
-const SPK: Record<string, string> = { ACHTERBERG: '#ffb347', BRUMMER: '#7cc4ff', HOLLWEG: '#bcd8ff', KOMPASS: '#d0c8f0', CREW: '#ffd27a' };
-const NAMES: Record<string, string> = { ACHTERBERG: 'Hauptfrau Achterberg', BRUMMER: 'Lotse Brummer · Bastion', HOLLWEG: 'Ratsherr Hollweg', KOMPASS: 'Frachter „Kompass“', CREW: 'Die Crew' };
+export interface StoryState {
+  prolog: number | 'done'; wp?: number[][]; wi?: number; erz0?: number;          // Prolog
+  ch1?: number | 'done'; c1?: { pts?: number[][]; pi?: number; frag?: number[] };  // Kapitel 1 (siehe chapter1.ts)
+}
+const SPK: Record<string, string> = { ACHTERBERG: '#ffb347', BRUMMER: '#7cc4ff', HOLLWEG: '#bcd8ff', KOMPASS: '#d0c8f0', CREW: '#ffd27a', TAMM: '#e0b030', KRULL: '#ffb347', ROTH: '#f2d36b' };
+const NAMES: Record<string, string> = { ACHTERBERG: 'Hauptfrau Achterberg', BRUMMER: 'Lotse Brummer · Bastion', HOLLWEG: 'Ratsherr Hollweg', KOMPASS: 'Frachter „Kompass“', CREW: 'Die Crew', TAMM: 'Rika Tamm · Sonnenwacht', KRULL: 'Gildemeisterin Krull', ROTH: 'Wachtmeisterin Roth' };
 export const storyHooks = { banner: (_t: string, _s: string, _c?: string) => {} };
 
 // ---------- Dialog (unten in der Mitte, läuft im Spiel weiter) ----------
@@ -77,22 +80,43 @@ export function sceneNext() {
 $('scene').addEventListener('click', () => sceneNext());
 function updateScene(dt: number) { if (scene) { scene.t -= dt; if (scene.t <= 0) sceneNext(); } }
 
-// ---------- Prolog ----------
-const S = { talked: false, band: false, foes: [] as any[], docked: false, entered: -1 };
-const st = () => P.story as StoryState;
-export const prologActive = () => !!P.story && st().prolog !== 'done';
-const step = () => (prologActive() ? (st().prolog as number) : -1);
-function goto(n: number) { st().prolog = n; S.entered = -1; saveGame(); }
-const bastion = () => world.stations.find(s => s.id === 'bastion');
-type Obj = [string, boolean, boolean];
+// ---------- Ketten: Prolog, Kapitel 1, … ----------
+// Jede Kette ist eine Folge von Schritten; ihr Stand steht unter ihrem Schlüssel in P.story (Zahl oder 'done').
+// Aktiv ist die erste Kette, die begonnen und nicht fertig ist.
+export const st = () => P.story as StoryState;
+export type Obj = [string, boolean, boolean];
+export interface Marker { x: number; y: number; z: number; label: string; col: string; big?: boolean }
+export interface Step { title: string; enter: () => void; lines: () => Obj[]; done: () => boolean; markers?: () => Marker[]; tick?: (dt: number) => void }
+interface Chain { key: 'prolog' | 'ch1'; steps: Step[]; resume?: (n: number) => number }
+const CHAINS: Chain[] = [];
+export function registerChain(c: Chain) { CHAINS.push(c); }
+function cur(): { c: Chain; n: number } | null {
+  if (!P.story) return null;
+  for (const c of CHAINS) {
+    const v = st()[c.key];
+    if (v === 'done') continue;
+    if (v === undefined || v === null) return null;
+    return { c, n: v };
+  }
+  return null;
+}
+let entered = '';
+export function goto(n: number) { const k = cur(); if (!k) return; st()[k.c.key] = n; entered = ''; saveGame(); }
+export function endChain(key: Chain['key']) { st()[key] = 'done'; entered = ''; saveGame(); }
+// Scanner-Taste (für Peilungen)
+export const storyCtx = { scanAt: -99 };
+export function noteScan() { storyCtx.scanAt = G.time; }
+export const bastion = () => world.stations.find(s => s.id === 'bastion');
 
-interface Step { title: string; enter: () => void; lines: () => Obj[]; done: () => boolean; markers?: () => { x: number; y: number; z: number; label: string; col: string; big?: boolean }[] }
+// ---------- Prolog ----------
+const S = { talked: false, band: false, foes: [] as any[], docked: false };
+export const prologActive = () => !!P.story && st().prolog !== 'done';
 const STEPS: Step[] = [
   { // 0: bei der Ausbilderin melden
     title: 'Prolog · Letzter Ausbildungstag',
     enter: () => {
       S.talked = false;
-      storyNpc('Achterberg', 'Ausbilderin', 'Bei Hauptfrau Achterberg melden', () => { S.talked = true; });
+      storyNpc('Achterberg', 'Ausbilderin', 'Bei Hauptfrau Achterberg melden', () => { S.talked = true; }, '#ffb347', undefined, { model: 'worker', tint: [0.72, 0.78, 0.9] });
       talk(['BRUMMER', 'Guten Morgen, Bastion. Jahr 38 nach dem Riss, Tag 112. Schichtwechsel auf allen Decks.'],
         ['ACHTERBERG', `Kadett ${P.name}! Hier drüben, bei deiner Falke. Beweg dich.`]);
     },
@@ -174,8 +198,8 @@ const STEPS: Step[] = [
       if (G.mode === 'dock' && G.inside) closeMenu();
       if (IN.active && !IN.ship) {
         const hx = IN.x - 1.2, hz = IN.z - 5.5;
-        storyNpc('Hollweg', 'Flottenrat', 'Ratsherr Hollweg', () => {}, '#bcd8ff', { x: hx, z: hz }, 0x1c2638);
-        storyNpc('Achterberg', 'Ausbilderin', 'Hauptfrau Achterberg', () => {}, '#ffb347', { x: hx + 2.4, z: hz + 0.8 });
+        storyNpc('Hollweg', 'Flottenrat', 'Ratsherr Hollweg', () => {}, '#bcd8ff', { x: hx, z: hz }, { model: 'merchant', tint: [0.72, 0.8, 1.05] });
+        storyNpc('Achterberg', 'Ausbilderin', 'Hauptfrau Achterberg', () => {}, '#ffb347', { x: hx + 2.4, z: hz + 0.8 }, { model: 'worker', tint: [0.72, 0.78, 0.9] });
         IN.yaw = Math.atan2(-(hx + 1.2 - IN.x), -(hz - IN.z)); IN.pitch = 0;
       }
       const go = () => playScene([
@@ -197,17 +221,22 @@ const STEPS: Step[] = [
 ];
 const fmtDist = (d: number) => (d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m');
 
+// Beim Laden mitten im Prolog: Schritte zu Fuß gehen nur in der Bastion; die Szene wird wiederholt
+registerChain({ key: 'prolog', steps: STEPS, resume: n => (n <= 2 && !IN.active ? 3 : n === 7 ? 6 : n) });
 export function startPrologue() {
   P.story = { prolog: IN.active && !IN.ship ? 0 : 3 };
-  S.entered = -1;
+  entered = '';
 }
-// Beim Laden mitten im Prolog: Schritte zu Fuß gehen nur in der Bastion
-export function resumePrologue() {
-  if (!prologActive()) return;
-  if (step() <= 2 && !IN.active) st().prolog = 3;
-  if (step() === 7) st().prolog = 6;
-  S.entered = -1;
+// Spielstand geladen: Kette dort fortsetzen, wo es sinnvoll ist. Wer den Prolog hinter sich hat, beginnt Kapitel 1.
+export function resumeStory() {
+  if (!P.story) return;
+  if (st().prolog === 'done' && st().ch1 === undefined) st().ch1 = 0;
+  const k = cur();
+  if (k && k.c.resume) st()[k.c.key] = k.c.resume(k.n);
+  entered = '';
 }
+export const resumePrologue = resumeStory;
+const startChapter1 = (ms: number) => setTimeout(() => { if (P.story && st().prolog === 'done' && st().ch1 === undefined) { st().ch1 = 0; entered = ''; saveGame(); } }, ms);
 function finishPrologue() {
   st().prolog = 'done';
   P.credits += 300;
@@ -217,6 +246,7 @@ function finishPrologue() {
   saveGame();
   setTimeout(() => talk(['BRUMMER', 'Bastion an alle Piloten: Willkommen, Pilot. Aufträge gibt es an jeder Station, Missionen bei den Fraktionen.'],
     ['BRUMMER', 'Moment … die Sonnenwacht meldet ein Signal aus den Trümmern im Sonnenfeld. Aus dem alten Tor. Das gab es noch nie.']), 5000);
+  startChapter1(22000);
 }
 export function skipPrologue() {
   if (!prologActive()) return;
@@ -225,6 +255,7 @@ export function skipPrologue() {
   P.credits += 300;
   radio('BASTION', 'Prolog übersprungen. Du bist vereidigt und in die Crew aufgenommen: +300 Credits.');
   saveGame();
+  startChapter1(5000);
 }
 
 // Aufgabenfeld zu Fuß und im Stationsmenü (dort ist das Flug-HUD aus)
@@ -245,24 +276,31 @@ export function updateStory(dt: number) {
   updateDialog(dt);
   updateScene(dt);
   updateWalkObjective(dt);
-  const n = step();
-  if (n < 0 || G.mode === 'menu' || G.mode === 'intro' || G.mode === 'scene') return;
+  const k = cur();
+  if (!k || G.mode === 'menu' || G.mode === 'intro' || G.mode === 'scene') return;
+  const { c, n } = k, s = c.steps[n];
+  if (!s) return;
   // wer im Prolog schon losfliegt, überspringt die Schritte zu Fuß
-  if (n <= 1 && G.mode === 'play') { goto(3); return; }
-  if (S.entered !== n) {
+  if (c.key === 'prolog' && n <= 1 && G.mode === 'play') { goto(3); return; }
+  const id = c.key + ':' + n;
+  if (entered !== id) {
     // Zeilen eines früheren Schritts, die noch nicht dran waren, verwerfen (wer schnell spielt, hört nichts Veraltetes)
     queue.length = 0; if (lineT > 1.2) lineT = 1.2;
-    S.entered = n; STEPS[n].enter();
+    entered = id; s.enter();
   }
-  if (n === 1 && G.mode === 'map') S.band = true;
-  if (n === 3) { const wp = st().wp, i = st().wi || 0; if (wp && wp[i] && d3(wp[i][0], wp[i][1], wp[i][2], P.x, P.y, P.z) < 90) { st().wi = i + 1; snd(880, 0.1, 'sine', 0.05, 300); } }
-  if (n === 6 && G.dockedAt && G.dockedAt.id === 'bastion') S.docked = true;
-  if (STEPS[n].done()) goto(n + 1);
+  if (c.key === 'prolog') {
+    if (n === 1 && G.mode === 'map') S.band = true;
+    if (n === 3) { const wp = st().wp, i = st().wi || 0; if (wp && wp[i] && d3(wp[i][0], wp[i][1], wp[i][2], P.x, P.y, P.z) < 90) { st().wi = i + 1; snd(880, 0.1, 'sine', 0.05, 300); } }
+    if (n === 6 && G.dockedAt && G.dockedAt.id === 'bastion') S.docked = true;
+  }
+  s.tick?.(dt);
+  if (s.done()) goto(n + 1);
 }
 // Anzeigen
 export function storyObjective(): { title: string; lines: Obj[] } | null {
-  const n = step();
-  if (n < 0 || !STEPS[n]) return null;
-  return { title: STEPS[n].title, lines: STEPS[n].lines() };
+  const k = cur(), s = k && k.c.steps[k.n];
+  return s ? { title: s.title, lines: s.lines() } : null;
 }
-export function storyMarkers() { const n = step(); return n >= 0 && STEPS[n]?.markers && G.mode === 'play' ? STEPS[n].markers!() : []; }
+export function storyMarkers(): Marker[] { const k = cur(), s = k && k.c.steps[k.n]; return s && s.markers && G.mode === 'play' ? s.markers() : []; }
+// für das Flottenband: Kapitelname und Stand
+export function storyChapter() { const k = cur(); return k ? { key: k.c.key, n: k.n, total: k.c.steps.length } : null; }

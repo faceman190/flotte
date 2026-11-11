@@ -45,12 +45,13 @@ const clipOf = (kind: 'walk' | 'idle') => {
   return own?.clips[0] || null;
 };
 // Eine Figur: Gruppe (Füße auf y=0, Blick nach +Z), Mixer und je eine Aktion fürs Laufen und Stehen
-export function charInstance(name: string, tint = 1) {
+export function charInstance(name: string, tint: number | [number, number, number] = 1) {
   const t = TPL[name];
   const obj = SkeletonUtils.clone(t.scene) as THREE.Group;
   obj.scale.setScalar(t.scale);
   obj.position.y = t.footY;
-  if (tint !== 1) obj.traverse((o: any) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(tint); } });
+  // Einfärben: Zahl = heller/dunkler, Dreier = Farbton (für Story-Figuren)
+  if (tint !== 1) obj.traverse((o: any) => { if (o.isMesh) { o.material = o.material.clone(); if (Array.isArray(tint)) o.material.color.multiply(new THREE.Color(tint[0], tint[1], tint[2])); else o.material.color.multiplyScalar(tint); } });
   const g = new THREE.Group(); g.add(obj);
   const mixer = new THREE.AnimationMixer(obj);
   const w = clipOf('walk'), i = clipOf('idle');

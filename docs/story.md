@@ -109,6 +109,7 @@ Diese drei Spannungen tragen die spätere Geschichte: **Sicherheit** (Rat), **Ka
 | **Wachtmeisterin Sanna Roth** | Grenzwacht, Wachtposten Ost | Direkt, laut, mutig. Will die Narbe zurückerobern. |
 | **Gildemeisterin Hedda Krull** | Bergbaugilde, Talstation Heimstatt | Rechnet in Tonnen und Credits, aber ehrlich. Hat als Erste vermutet, dass Ferrit mehr ist als Kristall. |
 | **Lotse „Brummer“** | Funk der Bastion | Die Stimme im Funk, wenn man ablegt oder andockt. Kennt jeden Piloten beim Rufzeichen. |
+| **Rika Tamm** | Leiterin der Sonnenwacht | Hütet seit 20 Jahren den kleinen Außenposten am Trümmerfeld. Hat als Kind den Riss miterlebt. Ruhig, genau, abergläubisch, was das Tor angeht. |
 
 ---
 
@@ -124,6 +125,36 @@ Diese drei Spannungen tragen die spätere Geschichte: **Sicherheit** (Rat), **Ka
 | später | **Die Altwelten** | Langfristig können die Altwelten zurückkehren: ein neu geöffnetes Tor, ein Schiff der elf, die nie ankamen, oder etwas ganz anderes. Bewusst offen, damit die Geschichte über Jahre wachsen kann. |
 
 Jedes Kapitel verbindet Hauptmissionen mit dem, was das Spiel schon kann: Bergbau, Bergung, Kampf, Handel, Planeten.
+
+---
+
+## Kapitel 1: „Echo im Sonnenfeld“
+
+**Worum es geht:** Zum ersten Mal seit 38 Jahren sendet das zerbrochene Halden-Tor ein Signal. Die ganze Crew hofft auf eine Nachricht der Altwelten. Der Spieler findet heraus, woher es kommt, und stößt dabei auf Ferrox, die mitten im Menschenraum an den Trümmern des Tors fressen.
+
+**Ablauf (20–30 Minuten):**
+
+| Schritt | Ort | Was passiert |
+|---|---|---|
+| 1 | überall | Ratsherr Hollweg funkt: Das Signal aus dem Sonnenfeld wird stärker. Flieg zur Sonnenwacht. Die Route wird gesetzt. |
+| 2 | Sonnenwacht | Andocken. Rika Tamm erzählt vom Riss, den sie als Kind gesehen hat. Ihre Antennen hören das Signal, finden aber die Quelle nicht. |
+| 3 | Sonnenfeld | **Peilung:** drei Peilpunkte rund um das Trümmerfeld anfliegen und dort scannen (R). Nach jeder Peilung wird die Richtung genauer. |
+| 4 | Trümmerfeld | **Das Kernstück:** Tief im Feld treibt ein riesiges Bogenstück des Tors, an dem ein schwaches Licht pulsiert. Ferrox fressen daran. Es ist der erste Ferrox-Angriff im Kern des Menschenraums seit Jahren. |
+| 5 | Kernstück | Ferrox vertreiben. |
+| 6 | Kernstück | In den Lichtkern fliegen und den **Datenkern** des Tors bergen. |
+| 7 | Bastion | Zurück zur Bastion und andocken. |
+| 8 | Bastion | **Szene „Auswertung“** mit Hollweg, Gildemeisterin Krull und Wachtmeisterin Roth (siehe unten). |
+
+**Die Auswertung (Szene):**
+- Das Signal kommt nicht aus den Altwelten. Es ist das Tor selbst: ein uralter Ruf der Erbauer, der wieder angesprungen ist.
+- Krull: Das Muster im Signal gleicht dem Gitter im Inneren von Ferrit-Kristallen. „Das Ferrit spricht dieselbe Sprache wie das Tor.“
+- Roth: Die Ferrox im Sonnenfeld sind vom Signal angelockt worden, zwei Sprünge von der Bastion entfernt. „Sie fressen das Tor. Und dann uns.“
+- Hollweg will Ruhe bewahren, Roth will die Grenzwacht ins Sonnenfeld verlegen, Krull will den Splittergürtel nach Ferrit durchsuchen. Die drei Fraktionen ziehen zum ersten Mal sichtbar in verschiedene Richtungen.
+- **Die Wendung:** Brummer meldet sich: Unter dem Rauschen stecken drei Sekunden eines menschlichen Transpondersignals. Die Kennung WS-07, die **„Weitsicht“**, eines der elf Schiffe, die nie ankamen. Stille im Hangar.
+- Belohnung: 1.500 Credits, Ruf bei allen drei Fraktionen.
+- Übergang zu Kapitel 2: Krull will wissen, was das Ferrit sagt, und der Splittergürtel ist voll davon.
+
+**Was bleibt:** Das Kernstück des Tors bleibt als Ort im Sonnenfeld sichtbar, nach dem Kapitel mit erloschenem Licht.
 
 ---
 

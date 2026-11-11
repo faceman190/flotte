@@ -12,7 +12,8 @@ import { initFerrox, updateSpawning, updateEnemies, updateProjectiles, updateSta
 import { initTraffic, updateTraffic, initAllies, updateAllies } from './game/npc';
 import { updateMissions } from './game/missions';
 import { playIntro, updateIntro, skipIntro, INTRO } from './game/intro';
-import { updateStory, startPrologue, resumePrologue, skipPrologue, prologActive, sceneNext, storyHooks } from './game/story';
+import { updateStory, startPrologue, resumePrologue, skipPrologue, prologActive, sceneNext, storyHooks, noteScan } from './game/story';
+import { updateChapter1 } from './game/chapter1';
 import { SHIP, placePlayer, updatePlayer, updatePickups, syncShip, nearDock, gateHit, hooks, fwd, setShipModel } from './game/player';
 import { updateParticles, syncParticles } from './game/fx';
 import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
@@ -225,7 +226,7 @@ onKey(code => {
     if (o) requestTrade(o.id);
     return;
   }
-  if (code === 'KeyR' && G.mode === 'play') { scan(); return; }
+  if (code === 'KeyR' && G.mode === 'play') { scan(); noteScan(); return; }
   if (G.mode === 'walk' && code === 'Tab') { showMenu(); return; }
   if (code === 'KeyE') {
     if (G.mode === 'walk') interact();
@@ -427,6 +428,7 @@ function loop(now: number, manual = false) {
   simulate(dt);
   updateIntro(dt);
   updateStory(dt);
+  updateChapter1(dt);
   if (world.def && G.mode !== 'map') {
     animateStructures(dt);
     if (IN.active) syncParkedShip();
