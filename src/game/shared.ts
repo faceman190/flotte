@@ -15,6 +15,7 @@ export const SHARED = {
   foeHit: (_e: any, _dmg: number, _byPlayer: boolean) => {},
   // NPC-Verkehr und Patrouillen: Ereignisse (Funk, Explosionen, Sprünge) und Patrouillenschüsse des Gastgebers
   ev: [] as any[][],
+  onKill: (_type: string) => {},   // eigener Ferrox-Abschuss (für Missionen)
   ashots: [] as number[][],
 };
 // Gastgeber: Ereignis für die Mitspieler im Sektor mitschreiben

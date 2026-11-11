@@ -217,3 +217,4 @@ button.mini{padding:3px 8px;font-size:12px;letter-spacing:.5px}
 .repC .lv i.f{background:var(--rc);box-shadow:0 0 6px var(--rc)}
 .repL{margin:4px 0 10px;padding-left:18px;font-size:14px;line-height:1.5}
 .repL.dim{color:var(--mut)}
+.bh{margin:0 0 8px;font-size:13px;letter-spacing:3px;color:var(--acc)}

@@ -17,6 +17,7 @@ import { NET, netHooks, sendChat, isOnline, pilotsHere, myStation } from '../gam
 import { TRADE, tradeHooks, requestTrade, acceptTrade, declineTrade, withdrawTrade, cancelTrade, setOffer, setReady, tradeValue, offerCount, cargoSpaceAfter, offerCovered, type Offer } from '../game/trade';
 import { roomName } from './mp';
 import { REP, REP_IDS, RANKS, TRUST_LV, level, nextRank, rankName, repOf, repHooks, type RepId } from '../game/reputation';
+import { abandonMission, missionLines, missionTypeName, missionHooks } from '../game/missions';
 
 // =====================================================================================
 // Flottenband: der Armbandrechner, den die Flotte jedem Piloten mitgibt.
@@ -138,6 +139,7 @@ export function bandRadioChanged() {
 function act(a: string, k: string) {
   if (a === 'track') { P.track = k; snd(800, 0.06, 'sine', 0.03, 200); }
   if (a === 'route') { P.route = k === P.sector ? null : k; snd(700, 0.08, 'sine', 0.04, 200); }
+  if (a === 'mdrop') { const m = (P.missions || []).find(x => x.id === k); if (m && confirmDrop(m.id)) { abandonMission(m); if (P.track === m.id) P.track = undefined; } }
   if (a === 'drop') { const c = P.contracts.find(x => x.id === k); if (c && confirmDrop(c.id)) { abandon(c); if (P.track === c.id) P.track = undefined; } }
   if (a === 'ship') fleetSel = +k;
   if (a === 'app') { setApp(k as App); return; }
@@ -186,9 +188,22 @@ function startApp() {
 
 // ---------- Aufträge ----------
 function jobsApp() {
-  if (!P.contracts.length) return `<div class="bcard" style="max-width:560px"><h4>Keine Aufträge</h4><p>Lieferaufträge nimmst du an Stationen an: Stationsmenü → Aufträge. Angenommene Aufträge erscheinen hier und rechts oben im HUD.</p></div>`;
+  const ms = P.missions || [];
+  const mis = ms.length ? `<h4 class="bh">FRAKTIONSMISSIONEN (${ms.length}/2)</h4><div class="blist" style="margin-bottom:18px">${ms.map(m => {
+    const on = P.track === m.id, ml = missionLines(m), r = findRoute(P.sector, m.tgt), j = r ? r.length - 1 : 0;
+    return `<div class="bitem${on ? ' on' : ''}" style="cursor:default;align-items:flex-start;border-left:3px solid ${REP[m.fac].c}">
+      <div style="flex:1;min-width:0"><div class="sm" style="color:${REP[m.fac].c}">${esc(REP[m.fac].n)} · ${missionTypeName(m.type)}</div><div class="nm">${esc(m.title)}</div>
+        <div class="sm">${esc(SECTOR[m.tgt].name)} · ${m.tgt === P.sector ? 'hier' : `${j} ${j === 1 ? 'Sprung' : 'Sprünge'}`} · ${m.got}/${m.n}</div>
+        ${meter(m.got, m.n, REP[m.fac].c)}
+        <div class="btnRow" style="justify-content:flex-start;margin-top:6px">
+          <button data-a="track" data-k="${m.id}" ${on ? 'disabled' : ''}>${on ? 'Wird verfolgt' : 'Im HUD verfolgen'}</button>
+          ${m.tgt !== P.sector ? `<button data-a="route" data-k="${m.tgt}" class="${P.route === m.tgt ? '' : 'pri'}">${P.route === m.tgt ? 'Route steht' : 'Route setzen'}</button>` : ''}
+          <button data-a="mdrop" data-k="${m.id}">${dropArm === m.id ? 'Wirklich abbrechen?' : 'Abbrechen'}</button></div></div>
+      <div style="text-align:right"><div class="amb" style="font-family:var(--mono);font-size:20px">${fmtN(m.reward)} Cr</div><div class="sm">+${m.rep} Ruf</div></div></div>`;
+  }).join('')}</div>` : '';
+  if (!P.contracts.length) return mis + (ms.length ? '' : `<div class="bcard" style="max-width:560px;margin-bottom:12px"><h4>Keine Missionen</h4><p>Fraktionsmissionen bekommst du an Stationen: Stationsmenü → Missionen. Sie bringen viel Ruf.</p></div>`) + `<div class="bcard" style="max-width:560px"><h4>Keine Aufträge</h4><p>Lieferaufträge nimmst du an Stationen an: Stationsmenü → Aufträge. Angenommene Aufträge erscheinen hier und rechts oben im HUD.</p></div>`;
   const tr = trackedContract();
-  return `<div class="blist">${P.contracts.map(c => {
+  return mis + `<h4 class="bh">LIEFERAUFTRÄGE</h4><div class="blist">${P.contracts.map(c => {
     const have = Math.min(P.cargo[c.item], c.amount), r = findRoute(P.sector, c.sector), j = r ? r.length - 1 : 0, on = tr === c;
     const st = c.sector === P.sector ? world.stations.find(s => s.id === c.station) : null;
     return `<div class="bitem${on ? ' on' : ''}" style="cursor:default;align-items:flex-start">
@@ -386,3 +401,4 @@ function funkApp() {
 radioHooks.added = () => bandRadioChanged();
 
 repHooks.changed = () => { if (bandOpen() && (app === 'ruf' || app === 'start')) render(); };
+missionHooks.completed = () => { if (bandOpen() && (app === 'auftraege' || app === 'ruf' || app === 'start')) render(); };

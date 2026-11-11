@@ -5,7 +5,7 @@ import { P, G, stats, cargoUsed, saveGame, emptyUp, settings } from '../game/sta
 import { world, type Station } from '../game/world';
 import { placePlayer, setShipModel } from '../game/player';
 import { PAINTS, PAINT_N, PAINT_C, hasPaint, hasModel, type Paint } from '../models/gltfShips';
-import { SECTOR, FACTION } from '../data/galaxy';
+import { SECTOR, FACTION, findRoute } from '../data/galaxy';
 import { ITEMS, ITEM_IDS, REFINE, type ItemId } from '../data/items';
 import { UPG, MAXLV, upCost, upgFor, type UpgId } from '../data/upgrades';
 import { SHIPS, SHIP_IDS, computeStats, type ShipId, type Up } from '../data/ships';
@@ -14,9 +14,10 @@ import { PLANETS, planetBaseId } from '../data/planets';
 import { unitPrice, basePriceHere, sellValue, sell, refineInfo, refine, offers, accept, deliver, abandon, MAX_CONTRACTS, sellsHere, buyPrice, buy } from '../game/economy';
 import { itemIcon } from './icons';
 import { shipsAt, board, buyShip, sellShip, sellPrice, stored, storedTotal, storeFromCargo, takeToCargo, shipPrice } from '../game/fleet';
-import { REP, stationFaction, rankName, serviceFactor, repOf } from '../game/reputation';
+import { REP, stationFaction, rankName, serviceFactor, repOf, level } from '../game/reputation';
+import { missionOffers, acceptMission, abandonMission, MAX_MISSIONS, missionTypeName, minRankName } from '../game/missions';
 
-type Tab = 'markt' | 'raffinerie' | 'auftraege' | 'lager' | 'hangar' | 'werft' | 'werkstatt' | 'service' | 'info';
+type Tab = 'markt' | 'raffinerie' | 'auftraege' | 'missionen' | 'lager' | 'hangar' | 'werft' | 'werkstatt' | 'service' | 'info';
 let tab: Tab = 'markt';
 let note = '';
 export const dockHooks = { openMap: () => {}, shipChanged: () => {}, enter: (_s: Station) => {}, leave: () => {} };
@@ -120,9 +121,9 @@ const dot = (k: ItemId) => itemIcon(k, 20);
 const bar = (v: number, max: number, col: string) => `<span class="bar"><i style="width:${Math.min(100, Math.round(v / Math.max(1, max) * 100))}%;background:${col}"></i></span>`;
 const hasYard = () => st().kind !== 'outpost';
 function tabs(): Tab[] {
-  return ['markt', ...(st().def.refinery ? ['raffinerie' as Tab] : []), 'auftraege', 'lager', 'hangar', ...(hasYard() ? ['werft' as Tab] : []), 'werkstatt', 'service', 'info'];
+  return ['markt', ...(st().def.refinery ? ['raffinerie' as Tab] : []), 'auftraege', ...(stationFaction(st().id, secId()) ? ['missionen' as Tab] : []), 'lager', 'hangar', ...(hasYard() ? ['werft' as Tab] : []), 'werkstatt', 'service', 'info'];
 }
-const TAB_N: Record<Tab, string> = { markt: 'Markt', raffinerie: 'Raffinerie', auftraege: 'Aufträge', lager: 'Lager', hangar: 'Hangar', werft: 'Werft', werkstatt: 'Werkstatt', service: 'Service', info: 'Station' };
+const TAB_N: Record<Tab, string> = { markt: 'Markt', raffinerie: 'Raffinerie', auftraege: 'Aufträge', missionen: 'Missionen', lager: 'Lager', hangar: 'Hangar', werft: 'Werft', werkstatt: 'Werkstatt', service: 'Service', info: 'Station' };
 const n1 = (v: number) => v.toFixed(1).replace('.', ',');
 function shipSummary(cls: ShipId) {
   const s = computeStats(cls, emptyUp() as Up), c = SHIPS[cls];
@@ -195,6 +196,30 @@ function render() {
         <td class="num"><button data-a="accept" data-k="${o.slot}" ${full ? 'disabled' : ''}>Annehmen</button></td></tr>`;
     }
     h += `</table><p class="hint">Aufträge zahlen deutlich mehr als der Markt. Abliefern kannst du nur bei der Station, die den Auftrag vergeben hat; Waren aus dem Lager dieser Station zählen mit.${rf ? ` Erfüllte Aufträge steigern deinen Ruf ${rf === 'rat' ? 'beim' : 'bei der'} ${REP[rf].n}, abgebrochene kosten Ruf. Ab Rang „Vertraut“ gibt es hier einen Vertrauensauftrag.` : ''}</p>`;
+  } else if (tab === 'missionen') {
+    const mf = stationFaction(s.id, def.id)!, F = REP[mf], ms = P.missions || [];
+    h += `<p style="margin-top:0"><b style="color:${F.c}">${F.n}</b> · dein Rang: <b>${rankName(mf)}</b>. ${esc(F.desc)} Missionen erfüllst du unterwegs; der Lohn kommt sofort, dazu viel Ruf.</p>`;
+    h += `<h3>DEINE MISSIONEN (${ms.length}/${MAX_MISSIONS})</h3>`;
+    if (!ms.length) h += `<p class="hint">Keine aktiven Missionen.</p>`;
+    else {
+      h += `<table><tr><th>Mission</th><th>Ziel</th><th class="num">Stand</th><th class="num">Lohn</th><th></th></tr>`;
+      ms.forEach((m, i) => {
+        h += `<tr><td><span style="color:${REP[m.fac].c}">${missionTypeName(m.type)}</span> · ${esc(m.title)}<div class="hint">${esc(REP[m.fac].n)} · ${esc(m.stName)}</div></td><td>${esc(SECTOR[m.tgt].name)}</td>
+          <td class="num">${m.got}/${m.n}</td><td class="num amb">${fmtN(m.reward)} Cr<div class="hint">+${m.rep} Ruf</div></td>
+          <td class="num"><button data-a="mdrop" data-n="${i}">Abbrechen</button></td></tr>`;
+      });
+      h += `</table>`;
+    }
+    h += `<h3>ANGEBOTE · ${esc(F.n.toUpperCase())}</h3><table><tr><th>Mission</th><th>Ziel</th><th class="num">Lohn</th><th></th></tr>`;
+    const full = ms.length >= MAX_MISSIONS, lv = level(mf);
+    for (const o of missionOffers(s.id, s.name, def.id)) {
+      const locked = lv < o.minLv, tg = SECTOR[o.tgt], r = findRoute(def.id, o.tgt), j = r ? r.length - 1 : 0;
+      h += `<tr style="${locked ? 'opacity:.5' : ''}"><td><span style="color:${F.c}">${missionTypeName(o.type)}</span>${o.minLv ? ` <span class="hint">· ab „${minRankName(o.minLv)}“</span>` : ''}<div>${esc(o.title)}</div></td>
+        <td>${esc(tg.name)}<div class="hint">${o.tgt === def.id ? 'dieser Sektor' : `${j} ${j === 1 ? 'Sprung' : 'Sprünge'}`} · Gefahr ${tg.danger}/5</div></td>
+        <td class="num amb">${fmtN(o.reward)} Cr<div class="hint">+${o.rep} Ruf</div></td>
+        <td class="num">${locked ? `<span class="hint">Rang „${minRankName(o.minLv)}“ nötig</span>` : `<button class="pri" data-a="macc" data-k="${o.slot}" ${full ? 'disabled' : ''}>Annehmen</button>`}</td></tr>`;
+    }
+    h += `</table><p class="hint">Säuberung: Ferrox im Zielsektor abschießen. Vermessung: die drei Messpunkte anfliegen. Bergung: Kapseln am Wrackfeld einsammeln (Vorsicht, Hinterhalt). Bienenstock: das Ferrox-Mutterschiff zerstören. Abbrechen kostet Ruf.</p>`;
   } else if (tab === 'lager') {
     const any = ITEM_IDS.some(k => P.cargo[k] || stored(s.id, k));
     h += `<p style="margin-top:0">Jede Station hat ein eigenes Lager ohne Größenbeschränkung. Lagere Erz hier ein und hole es später mit einem Frachter ab, oder sammle für große Aufträge.</p>`;
@@ -311,6 +336,15 @@ $('dockCard').addEventListener('click', e => {
       const rf = stationFaction(c.station, c.sector), r0 = rf ? repOf(rf) : 0;
       if (deliver(c)) { note = `Auftrag erfüllt! +${fmtN(c.reward)} Credits.${rf ? ` Ruf ${rf === 'rat' ? 'beim' : 'bei der'} ${REP[rf].n} +${Math.round(repOf(rf) - r0)}.` : ''}`; snd(800, 0.4, 'triangle', 0.06, 600); }
     }
+  }
+  if (a === 'macc') {
+    const o = missionOffers(st().id, st().name, secId()).find(x => x.slot === +k);
+    if (o && acceptMission(o)) { note = `Mission angenommen: ${o.title}. Sie steht rechts oben im HUD.`; snd(700, 0.15, 'sine', 0.05, 300); }
+  }
+  if (a === 'mdrop') {
+    const m = (P.missions || [])[n];
+    if (m && b.dataset.arm === '1') { const r0 = repOf(m.fac); abandonMission(m); note = `Mission abgebrochen. Ruf ${m.fac === 'rat' ? 'beim' : 'bei der'} ${REP[m.fac].n} ${Math.round(repOf(m.fac) - r0)}.`; }
+    else if (m) { b.dataset.arm = '1'; b.textContent = 'Wirklich abbrechen?'; b.style.borderColor = '#ff6b5b'; return; }
   }
   if (a === 'abandon') { const c = P.contracts[n]; if (c) { const rf = stationFaction(c.station, c.sector), r0 = rf ? repOf(rf) : 0; abandon(c); note = `Auftrag abgebrochen.${rf ? ` Ruf ${rf === 'rat' ? 'beim' : 'bei der'} ${REP[rf].n} ${Math.round(repOf(rf) - r0)}.` : ''}`; } }
   if (a === 'store') { const m = storeFromCargo(st().id, k); if (m) note = `${m}× ${ITEMS[k as ItemId].n} eingelagert.`; }

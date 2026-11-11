@@ -44,6 +44,7 @@ export interface Player {
   surface?: boolean;               // gespeichert auf der Planetenoberfläche
   rover?: Partial<Record<ItemId, number>>; // Ladung des Rovers
   rep?: Record<string, number>;    // Ruf bei den Fraktionen (siehe reputation.ts)
+  missions?: import('./missions').Mission[];   // angenommene Fraktionsmissionen
 }
 export type Tool = 'guns' | 'laser' | 'charge';
 export interface Contract { id: string; station: string; sector: string; stName: string; item: ItemId; amount: number; reward: number; trust?: boolean }
@@ -62,7 +63,7 @@ export function newPlayer(name: string): Player {
     sector: 'heimstatt', x: 0, y: 0, z: 0, yaw: 0, pitch: 0, vx: 0, vy: 0, vz: 0,
     home: { sector: 'heimstatt', station: 'bastion' }, visited: ['heimstatt'], route: null, kills: 0, earned: 0, playtime: 0,
     tool: 'guns', mined: 0, market: {}, contracts: [], cctr: {},
-    cls: 'falke', shipName: 'Falke', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2, rep: {},
+    cls: 'falke', shipName: 'Falke', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2, rep: {}, missions: [],
   };
 }
 export function setPlayer(p: Player) {
@@ -98,6 +99,7 @@ export function loadGame(): Player | null {
     const base = newPlayer(d.name || 'Falke');
     const p: Player = { ...base, ...d, cargo: { ...base.cargo, ...d.cargo }, up: { ...base.up, ...d.up } };
     if (!SHIPS[p.cls]) p.cls = 'falke';
+    if (!Array.isArray(p.missions)) p.missions = [];
     p.fleet = (p.fleet || []).map(r => ({ ...r, cargo: { ...emptyCargo(), ...r.cargo }, up: { ...emptyUp(), ...r.up } }));
     return p;
   } catch (e) { return null; }

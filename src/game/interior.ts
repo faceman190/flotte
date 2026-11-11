@@ -60,11 +60,12 @@ const PAL = {
   carrier: { accent: 0xd9822b, css: '#ffb347', wall: 0x80848c, floor: 0x666a72, hall: 'Hauptdeck' },
   outpost: { accent: 0xe0b030, css: '#e0b030', wall: 0x948c80, floor: 0x726a60, hall: 'Gemeinschaftsraum' },
 };
-const TAB_N: Record<string, string> = { markt: 'Markt', raffinerie: 'Raffinerie', auftraege: 'Aufträge', lager: 'Lager', hangar: 'Hangar', werft: 'Werft', werkstatt: 'Werkstatt', service: 'Service', info: 'Auskunft' };
+const TAB_N: Record<string, string> = { markt: 'Markt', raffinerie: 'Raffinerie', auftraege: 'Aufträge', missionen: 'Missionen', lager: 'Lager', hangar: 'Hangar', werft: 'Werft', werkstatt: 'Werkstatt', service: 'Service', info: 'Auskunft' };
 const GREET: Record<string, string> = {
   markt: 'Zeig her, was du im Frachtraum hast. Oder suchst du Ware?',
   raffinerie: 'Die Öfen laufen. Was soll eingeschmolzen werden?',
   auftraege: 'Wir haben immer Bedarf. Schau dir die Aufträge an.',
+  missionen: 'Wir suchen verlässliche Piloten. Hier sind die Missionen unserer Fraktion.',
   lager: 'Dein Lagerabteil ist bei uns sicher.',
   werft: 'Auf der Suche nach einem neuen Schiff?',
   werkstatt: 'Was sollen wir an deinem Schiff verbessern?',
@@ -263,7 +264,7 @@ function build(st: Station) {
   const tabs = interiorHooks.tabs().filter(t => t !== 'hangar');
   const left = tabs.filter(t => ['markt', 'raffinerie', 'auftraege', 'lager'].includes(t)), right = tabs.filter(t => !left.includes(t));
   const suits = [0x8a5a3a, 0x3a5a8a, 0x5a7a4a, 0x7a4a6a, 0x4a6a7a, 0x8a7a3a], skins = [0xe0b090, 0xc89070, 0x9a6a4a, 0xf0c8a8, 0x7a5238], hairs = [0x1a1410, 0x4a3020, 0x8a6a40, 0x909090, 0x2a2a30];
-  const goods: Record<string, number[]> = { markt: [0xd9822b, 0xbfe6ff, 0xe8664a], raffinerie: [0xc4c8d0, 0xff9a6a, 0xc8dcff], auftraege: [0xe8e2d6], lager: [0x8a8f9a, 0x5a6068], werft: [0x6a9ad8], werkstatt: [0xffb347, 0x9aa0a8], service: [0xff6b5b, 0xffd27a], info: [0x7cc4ff] };
+  const goods: Record<string, number[]> = { markt: [0xd9822b, 0xbfe6ff, 0xe8664a], raffinerie: [0xc4c8d0, 0xff9a6a, 0xc8dcff], auftraege: [0xe8e2d6], missionen: [0x7cc4ff, 0xffb347], lager: [0x8a8f9a, 0x5a6068], werft: [0x6a9ad8], werkstatt: [0xffb347, 0x9aa0a8], service: [0xff6b5b, 0xffd27a], info: [0x7cc4ff] };
   for (const [list, s] of [[left, -1], [right, 1]] as const) {
     list.forEach((tab, i) => {
       const z = list.length === 1 ? PC : PZ1 - 9 - i * ((PD - 18) / (list.length - 1));

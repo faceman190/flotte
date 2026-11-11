@@ -10,6 +10,7 @@ import { P, G, settings, loadSettings, newPlayer, setPlayer, loadGame, saveGame,
 import { world, buildSector, stationById, gateTo, updateAsteroids } from './game/world';
 import { initFerrox, updateSpawning, updateEnemies, updateProjectiles, updateStationDefense } from './game/combat';
 import { initTraffic, updateTraffic, initAllies, updateAllies } from './game/npc';
+import { updateMissions } from './game/missions';
 import { SHIP, placePlayer, updatePlayer, updatePickups, syncShip, nearDock, gateHit, hooks, fwd, setShipModel } from './game/player';
 import { updateParticles, syncParticles } from './game/fx';
 import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
@@ -374,6 +375,7 @@ function simulate(dt: number) {
   else if (m === 'walk') updateWalk(dt);
   else if (m === 'entry') updateEntry(dt);
   else if (m === 'rover') { if (G.dead) updatePlayer(dt); else updateRover(dt); }
+  if (live) updateMissions(dt);
   updateAsteroids(dt);
   if (m !== 'menu') { updateSpawning(dt); updateEnemies(dt); updateProjectiles(dt); updateStationDefense(dt); }
   updateTraffic(dt);

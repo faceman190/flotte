@@ -52,6 +52,7 @@ const KILL_REP = { drone: 2, bomber: 5, mother: 40 };
 // Kopfgeld (Grenzwacht-Rang erhöht es) und Ruf für einen eigenen Abschuss
 function bountyFor(type: string) {
   addRep(killFaction(world.def?.id || ''), KILL_REP[type as keyof typeof KILL_REP] || 0);
+  SHARED.onKill(type);
   return Math.round((BOUNTY[type as keyof typeof BOUNTY] || 0) * bountyFactor());
 }
 function enemyStats(type: string, d: number) {
