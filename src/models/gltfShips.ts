@@ -9,7 +9,7 @@ export type Paint = typeof PAINTS[number];
 export const PAINT_N: Record<Paint, string> = { Orange: 'Bernstein', Blue: 'Kobaltblau', Green: 'Grün', Purple: 'Violett', Red: 'Rot' };
 export const PAINT_C: Record<Paint, string> = { Orange: '#e09a3a', Blue: '#4a86d8', Green: '#5fae5a', Purple: '#9a5fd0', Red: '#d0504a' };
 
-interface Template { group: THREE.Group; w: number; h: number; l: number }
+interface Template { group: THREE.Group; w: number; h: number; l: number; frame: { innerPos: THREE.Vector3; s: number } }
 const TPL: Record<string, Template> = {};
 const PAINT_TEX: Record<string, THREE.Texture> = {};
 let loaded = false;
@@ -36,7 +36,7 @@ export async function loadShipModels() {
       inner.position.sub(c);                      // Mitte in den Ursprung
       const s = 1 / size.z;
       const norm = new THREE.Group(); norm.scale.setScalar(s); norm.add(wrap);
-      TPL[name] = { group: norm, w: size.x * s, h: size.y * s, l: 1 };
+      TPL[name] = { group: norm, w: size.x * s, h: size.y * s, l: 1, frame: { innerPos: inner.position.clone(), s } };
     } catch (e) { console.warn('Modell konnte nicht geladen werden:', name, e); }
   }));
   const tl = new THREE.TextureLoader();
@@ -62,3 +62,7 @@ export function modelInstance(name: string, length: number, paint: Paint = 'Oran
   holder.add(obj);
   return { obj: holder, w: t.w * length, h: t.h * length, l: length };
 }
+
+// Koordinatensystem eines Modells im Spiel (für Innenmodelle, die deckungsgleich zum Außenmodell sitzen sollen):
+// Modell um 180° gedreht, um innerPos verschoben, mit s × Länge skaliert
+export const modelFrame = (name: string) => TPL[name]?.frame || null;

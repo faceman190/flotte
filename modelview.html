@@ -31,4 +31,10 @@ new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load(file, g => {
   window.__ready = true;
 }, undefined, e => { document.getElementById('i').textContent = 'Fehler: ' + e; });
 (function loop() { requestAnimationFrame(loop); ctl.update(); r.render(sc, cam); })();
+// von Hand zeichnen (wenn der Browser die Seite im Hintergrund anhält) und Blickwinkel setzen: __view(x,y,z) relativ zur Mitte
+window.__draw = () => { ctl.update(); r.render(sc, cam); };
+// Kamera frei setzen (z. B. im Innenraum): Position und Blickziel in Modellkoordinaten, mit Innenlicht
+window.__cam = (x, y, z, tx, ty, tz, fov = 70) => { cam.fov = fov; cam.near = 0.05; cam.updateProjectionMatrix(); cam.position.set(x, y, z); ctl.target.set(tx, ty, tz); ctl.update();
+  if (!window.__lamp) { window.__lamp = new THREE.PointLight(0xfff0dc, 30, 25, 1.2); sc.add(window.__lamp); } window.__lamp.position.set(x, y + 0.5, z); r.render(sc, cam); };
+window.__view = (x, y, z, zoom = 2.3) => { const o = sc.children.find(c => c.type === 'Group' || c.isObject3D && c.children?.length && c !== sun); const box = new THREE.Box3().setFromObject(sc), c = box.getCenter(new THREE.Vector3()), R = box.getSize(new THREE.Vector3()).length() / 2; cam.position.copy(c).addScaledVector(new THREE.Vector3(x, y, z).normalize(), R * zoom); ctl.target.copy(c); ctl.update(); r.render(sc, cam); };
 </script></body></html>

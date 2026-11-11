@@ -87,6 +87,11 @@ for (const kind of ['ship', 'station', 'char', 'deco']) {
     await model(`${kind}/${path.basename(n, path.extname(n))}`, fs.readFileSync(path.join(dir, n)), kind === 'deco' ? 'world' : 'core');
   }
 }
+// ---- Begehbare Schiffsinnenräume: Innenmodell (asset-src/glb/interior/<Name>.glb) und Laufkarte (asset-src/walk/<Name>.json) ----
+// Beides im Hintergrund-Paket: wird erst beim Betreten des Schiffs gebraucht.
+const INT = path.join(ROOT, 'asset-src', 'glb', 'interior'), WALK = path.join(ROOT, 'asset-src', 'walk');
+if (fs.existsSync(INT)) for (const n of fs.readdirSync(INT).filter(x => x.toLowerCase().endsWith('.glb'))) await model('shipint/' + path.basename(n, path.extname(n)), fs.readFileSync(path.join(INT, n)), 'world');
+if (fs.existsSync(WALK)) for (const n of fs.readdirSync(WALK).filter(x => x.endsWith('.json'))) { const b = fs.readFileSync(path.join(WALK, n)); put('walk/' + path.basename(n, '.json'), 'json', b, 'world', b.length); }
 // ---- Klänge ----
 const { SOUNDDATA = {} } = bundle('sounds.js');
 for (const [k, v] of Object.entries(SOUNDDATA)) { const d = dataUri(v); if (d) put('sound/' + k, d.mime.includes('ogg') ? 'ogg' : 'mp3', d.buf, 'core', d.buf.length); }

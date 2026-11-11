@@ -20,6 +20,7 @@ import { SECTOR } from '../data/galaxy';
 import { sectorOres } from '../data/ores';
 import { world } from './world';
 import { saveGame } from './state';
+import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom } from './meshRoom';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -44,6 +45,7 @@ export const interiorHooks = {
 export const IN = {
   active: false, station: null as Station | null, locked: false,
   x: 0, z: 0, yaw: 0, pitch: 0, bob: 0, dist: 0, area: 'Hangardeck',
+  fy: 0,   // Bodenhöhe (nur in Innenräumen aus Modellen mit mehreren Decks ≠ 0)
   target: null as Inter | null,
   say: { who: '', text: '', t: 0 },
   ship: null as null | { cls: string; uid: number; name: string; ctx: 'hangar' | 'planet' },
@@ -87,6 +89,7 @@ let shipPad = { y: 0, z: 4 };
 let dims = PROM.station, kind: 'station' | 'carrier' | 'outpost' = 'station';
 const disposables: (THREE.Material | THREE.Texture)[] = [];
 let room: ShipRoom | null = null, roomModel: THREE.Object3D | null = null;
+let mesh: ReturnType<typeof buildMeshRoom> = null;   // Innenraum aus einem Modell (Laufkarte statt Rechtecke)
 let saved: null | { group: THREE.Group | null; rects: Rect[]; obstacles: Rect[]; shipObs: Rect[]; inters: Inter[]; shipInters: Inter[]; labels: Label[]; shipLabels: Label[]; x: number; z: number; yaw: number; lamps: [THREE.Vector3, number, number][] } = null;
 
 // Drei feste Lichter (immer in der Szene, außerhalb mit Stärke 0 – so müssen keine Shader neu gebaut werden)
@@ -460,6 +463,8 @@ export function enterShip(info: ShipInfo, m: ShipModel) {
   const rec = active ? null : P.fleet.find(f => f.uid === info.uid) || null;
   const cargo = active ? P.cargo : rec ? rec.cargo : {};
   const cap = active ? stats().cargo : rec ? computeStats(rec.cls, rec.up as Up).cargo : 0;
+  // Innenraum aus dem Modell: noch nicht geladen → laden und Bescheid geben (meist längst im Hintergrund geladen)
+  if (hasMeshRoom(info.cls) && !meshRoomReady(info.cls)) { say('SYSTEM', 'Der Innenraum wird noch geladen …'); loadMeshRoom(info.cls); return; }
   if (room) leaveShip();
   if (!planet) {
     saved = { group, rects, obstacles, shipObs, inters, shipInters, labels, shipLabels, x: IN.x, z: IN.z, yaw: IN.yaw, lamps: lamps.map(l => [l.position.clone(), l.distance, l.intensity] as [THREE.Vector3, number, number]) };
@@ -467,21 +472,24 @@ export function enterShip(info: ShipInfo, m: ShipModel) {
     IN.active = true; IN.station = null; G.inside = true;
     camera.near = 0.12; camera.updateProjectionMatrix();
   }
-  room = buildShipRoom(info.cls as ShipId, planet ? PAL.outpost.accent : PAL[kind].accent, cargo, cap);
-  // Raum dort, wo das Schiff steht; Boden auf etwa einem Drittel der Rumpfhöhe
+  mesh = hasMeshRoom(info.cls) ? buildMeshRoom(info.cls) : null;
+  room = mesh
+    ? { g: mesh.g, rects: [], obstacles: [], spots: mesh.spots as any, spawn: mesh.spawn, lamps: mesh.lamps, area: mesh.area, height: 3, disposables: [] }
+    : buildShipRoom(info.cls as ShipId, planet ? PAL.outpost.accent : PAL[kind].accent, cargo, cap);
+  // Raum dort, wo das Schiff steht; Boden auf etwa einem Drittel der Rumpfhöhe (Modell-Räume: genau im Schiff)
   const b = measure(m);
   m.g.getWorldPosition(_sv);
-  room.g.position.set(_sv.x, _sv.y + b.min.y + (b.max.y - b.min.y) * 0.3, _sv.z);
+  room.g.position.set(_sv.x, mesh ? _sv.y : _sv.y + b.min.y + (b.max.y - b.min.y) * 0.3, _sv.z);
   room.g.rotation.set(0, m.g.rotation.y, 0);
   room.g.updateMatrixWorld(true);
   scene.add(room.g);
-  roomModel = m.g; m.g.visible = false;
+  roomModel = m.g; m.g.visible = !!mesh;   // Modell-Räume: die Außenhülle bleibt stehen, sie ist Wand und Decke des Innenraums
   group = room.g;
   rects = room.rects; obstacles = room.obstacles; shipObs = []; shipLabels = []; labels = []; shipInters = [];
-  inters = room.spots.map(sp => shipInter(sp, info));
+  inters = room.spots.map(sp => Object.assign(shipInter(sp, info), { y: (sp as any).y }));
   IN.ship = info; IN.panel = null; IN.target = null;
-  IN.x = room.spawn.x; IN.z = room.spawn.z; IN.yaw = room.spawn.yaw; IN.pitch = 0; IN.bob = 0;
-  lamps.forEach((l, i) => { const q = room!.lamps[i]; room!.g.localToWorld(l.position.set(q[0], q[1], q[2])); l.distance = 22; l.intensity = q[3] * Math.PI; });
+  IN.x = room.spawn.x; IN.z = room.spawn.z; IN.yaw = room.spawn.yaw; IN.pitch = 0; IN.bob = 0; IN.fy = mesh ? mesh.spawn.y : 0;
+  lamps.forEach((l, i) => { const q = room!.lamps[i]; room!.g.localToWorld(l.position.set(q[0], q[1], q[2])); l.distance = 22; l.intensity = mesh ? 0 : q[3] * Math.PI; });   // Modell-Räume bringen eigene Lampen mit
   setExposure(planet ? 0.5 : 0.2);
   G.mode = 'walk';
   snd(220, 0.5, 'sawtooth', 0.03, -120);
@@ -491,7 +499,8 @@ export function enterShip(info: ShipInfo, m: ShipModel) {
 export function leaveShip() {
   if (!room) return;
   scene.remove(room.g);
-  room.g.traverse((c: any) => { if (c.geometry) c.geometry.dispose(); });
+  room.g.traverse((c: any) => { if (c.geometry && !c.userData.shared) c.geometry.dispose(); });   // Modell-Räume teilen die Geometrie mit der Vorlage
+  mesh = null; IN.fy = 0;
   for (const d of room.disposables) d.dispose();
   if (roomModel) roomModel.visible = true;
   room = null; roomModel = null; IN.ship = null; IN.panel = null; IN.target = null;
@@ -593,9 +602,16 @@ export function interact() {
 
 // ---------- Laufen ----------
 function free(x: number, z: number) {
+  if (mesh) return mesh.floorAt(x, z, IN.fy) !== null;   // Modell-Raum: Laufkarte
   const R = 0.45;
   let ok = false;
   for (const r of rects) if (x > r[0] + R && x < r[1] - R && z > r[2] + R && z < r[3] - R) { ok = true; break; }
+  // Übergänge zwischen zwei Räumen (z. B. Gang → Frachtraum): frei, wenn der Mittelpunkt und alle vier Ränder des
+  // Körpers in irgendeinem Raum liegen. Sonst entstand an jeder Raumgrenze eine unsichtbare Wand.
+  if (!ok) {
+    const inAny = (px: number, pz: number) => rects.some(r => px >= r[0] && px <= r[1] && pz >= r[2] && pz <= r[3]);
+    ok = inAny(x, z) && inAny(x - R, z) && inAny(x + R, z) && inAny(x, z - R) && inAny(x, z + R);
+  }
   // Durchgänge: im Korridor zählt nur die Breite
   if (!ok && !IN.ship && Math.abs(x) < CW - R && z > PZ1 - 2 && z < HZ0 + 2) ok = true;
   if (!ok) return false;
@@ -627,6 +643,8 @@ export function updateWalk(dt: number) {
     if (free(IN.x + dx, IN.z + dzz)) { IN.x += dx; IN.z += dzz; }
     else if (free(IN.x + dx, IN.z)) IN.x += dx;
     else if (free(IN.x, IN.z + dzz)) IN.z += dzz;
+    // Modell-Raum: Bodenhöhe folgen (Treppen, Rampen, Decks)
+    if (mesh) { const fy = mesh.floorAt(IN.x, IN.z, IN.fy); if (fy !== null) IN.fy += (fy - IN.fy) * Math.min(1, dt * 14); }
     const moved = Math.hypot(IN.x - ox, IN.z - oz);
     IN.dist += moved;
     stepT -= moved;
@@ -643,6 +661,7 @@ export function updateWalk(dt: number) {
     const tx = bx ? clamp(IN.x, bx[0], bx[1]) : it.x, tz = bx ? clamp(IN.z, bx[2], bx[3]) : it.z;
     const dx = tx - IN.x, dzz = tz - IN.z, d = Math.hypot(dx, dzz), lim = bx ? 3.6 : it.r;
     if (d > lim) continue;
+    if ((it as any).y !== undefined && Math.abs((it as any).y - IN.fy) > 1.6) continue;   // anderes Deck
     if (d > 0.8 && (dx * vx + dzz * vz) / d < 0.25) continue;
     if (d < bd) { bd = d; best = it; }
   }
@@ -689,7 +708,7 @@ export function updateWalk(dt: number) {
 const _c = new THREE.Vector3();
 export function applyWalkCamera() {
   if (!group) return;
-  group.localToWorld(_c.set(IN.x, 1.7 + IN.bob, IN.z));
+  group.localToWorld(_c.set(IN.x, 1.7 + IN.bob + IN.fy, IN.z));
   camera.position.copy(_c);
   camera.rotation.order = 'YXZ';
   camera.rotation.set(IN.pitch, group.rotation.y + IN.yaw, 0);

@@ -15,6 +15,7 @@ import { updateMissions } from './game/missions';
 import { playIntro, updateIntro, skipIntro, INTRO } from './game/intro';
 import { updateStory, startPrologue, resumePrologue, skipPrologue, prologActive, sceneNext, storyHooks, noteScan } from './game/story';
 import { updateChapter1 } from './game/chapter1';
+import { preloadMeshRooms } from './game/meshRoom';
 import { SHIP, placePlayer, updatePlayer, updatePickups, syncShip, nearDock, gateHit, hooks, fwd, setShipModel } from './game/player';
 import { updateParticles, syncParticles } from './game/fx';
 import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
@@ -478,6 +479,7 @@ if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterSh
 // =============== Start ===============
 // Schiffsmodelle laden (kurz), dann Menü zeigen. Ohne Modelle laufen die eingebauten Ersatzmodelle.
 Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false)]).then(() => {
+  setTimeout(preloadMeshRooms, 3000);   // begehbare Innenräume aus Modellen im Hintergrund vorladen
   setShipModel('falke', 'Orange', true);
   showMainMenu();
   setupMenuScene();

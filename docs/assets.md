@@ -61,3 +61,12 @@ Ein neues Paket für eine Region (z. B. nur beim ersten Besuch laden) lässt sic
 claude.ai stellt keine `.glb`-Dateien bereit. Für das Artifact gibt es deshalb eine eigene Fassung:
 `npm run build`, dann `node scripts/artifact-pack.mjs`. Das legt `dist-artifact/` an, bündelt die Modelle in
 `assets/models.json` und vermerkt das in der Paketliste („embed“). Veröffentlicht wird `dist-artifact/`.
+
+## Begehbare Innenräume aus Modellen (Pfeil)
+1. Volles Modell (innen + außen) mit `scripts/split-visible.mjs` in sichtbare Hülle und Innenteile trennen.
+2. Innenteile mit `scripts/simplify-hard.mjs` vereinfachen → `asset-src/glb/interior/<Modell>.glb` (gleiche Koordinaten wie die Hülle).
+3. Laufkarte: `node --max-old-space-size=12000 scripts/build-walkmap.mjs <innen.glb> <aussen.glb> asset-src/walk/<Modell>.json`
+   (20-cm-Zellen, mehrere Decks, Treppen bis 45 cm, Türen gelten als offen; Einstieg, Sitz, Koje usw. und sechs Lampen werden automatisch gesetzt).
+   Kontrollbild: `node scripts/walkmap-image.mjs asset-src/walk/<Modell>.json bild.png 2`
+4. `npm run assets` – Innenmodell und Laufkarte landen im Hintergrund-Paket (world).
+Im Spiel (src/game/meshRoom.ts) bleibt die Außenhülle beim Betreten sichtbar; sie bildet Wände und Decke.

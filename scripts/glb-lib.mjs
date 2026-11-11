@@ -26,7 +26,8 @@ export function applyFbxMaterials(doc, mapFile) {
   const matFor = name => {
     if (made[name]) return made[name];
     const src = map.materials[name] || { color: [0.5, 0.5, 0.5] }, look = LOOK[name] || { color: src.color, metal: 0.3, rough: 0.6 };
-    return (made[name] = doc.createMaterial(name).setBaseColorFactor([...look.color, 1]).setMetallicFactor(look.metal).setRoughnessFactor(look.rough));
+    // beidseitig wie im Original: viele Rumpfplatten zeigen mit der Rückseite nach außen
+    return (made[name] = doc.createMaterial(name).setBaseColorFactor([...look.color, 1]).setMetallicFactor(look.metal).setRoughnessFactor(look.rough).setDoubleSided(true));
   };
   let hit = 0, miss = 0;
   for (const node of doc.getRoot().listNodes()) {
