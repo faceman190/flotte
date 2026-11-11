@@ -108,7 +108,7 @@ export function loadGame(): Player | null {
 }
 
 // ---------------- Laufzeitzustand (nicht gespeichert) ----------------
-export type Mode = 'menu' | 'play' | 'pause' | 'dock' | 'map' | 'jump' | 'walk' | 'rover' | 'entry' | 'intro' | 'scene';
+export type Mode = 'menu' | 'play' | 'pause' | 'dock' | 'map' | 'jump' | 'walk' | 'rover' | 'entry' | 'intro' | 'scene' | 'launch';   // launch: Start- oder Landeablauf im Hangar
 export const G = {
   mode: 'menu' as Mode,
   dead: 0,            // Sekunden bis zum Neustart (0 = lebt)

@@ -404,13 +404,51 @@ export function refreshHangarShips() {
     });
   });
 }
+// ---------- Start und Landung im Hangar ----------
+// Start: abheben, Fahrwerk einziehen, durchs Tor fliegen (das Tor liegt genau am Startpunkt der Station). Landung: umgekehrt.
+const SEQ = { t: -1, dur: 0, dir: 1, done: null as null | (() => void) };
+export const hangarSequence = () => SEQ.t >= 0;
+const seqP = () => { const q = clamp(SEQ.t / SEQ.dur, 0, 1); return SEQ.dir > 0 ? q : 1 - q; };   // 0 = auf dem Platz, 1 = im Tor
+const ease = (x: number) => x * x * (3 - 2 * x);
+function seqOffset() {
+  const q = seqP(), fw = clamp((q - 0.2) / 0.8, 0, 1);
+  return { y: (DH / 2 - shipPad.y) * ease(clamp(q / 0.42, 0, 1)), z: (HZ1 - shipPad.z) * fw * fw };
+}
+export const hangarGearDown = () => SEQ.t < 0 || seqP() < 0.3;
+function beginSeq(dir: number, dur: number, done: null | (() => void)) {
+  SEQ.t = 0; SEQ.dur = dur; SEQ.dir = dir; SEQ.done = done;
+  IN.panel = null; IN.target = null;
+  G.mode = 'launch';
+  if (document.pointerLockElement === gl) { IN.locked = false; document.exitPointerLock(); }
+  for (const g2 of SHIP.glows) g2.visible = true;
+  sfx('launch', dir > 0 ? 0.7 : 0.45, dir > 0 ? 1 : 0.85, () => snd(300, 0.6, 'sawtooth', 0.05, dir > 0 ? 500 : -300));
+}
+export function startLaunch(done: () => void) {
+  if (!IN.active || !IN.station || SEQ.t >= 0) return false;
+  if (room) leaveShip();
+  if (!group) return false;
+  beginSeq(1, 5.5, done);
+  return true;
+}
+export function updateHangarSequence(dt: number) {
+  if (SEQ.t < 0) return;
+  SEQ.t += dt;
+  if (SEQ.t < SEQ.dur) return;
+  const done = SEQ.done, dir = SEQ.dir;
+  SEQ.t = -1; SEQ.done = null;
+  G.mode = 'walk';
+  if (dir > 0) done?.();
+  else { for (const g2 of SHIP.glows) g2.visible = false; grabT = 0; }
+}
+
 // Das aktive Schiff jeden Frame auf dem Stellplatz halten (das Modell kann beim Umsteigen wechseln)
 const _wp = new THREE.Vector3();
 export function syncParkedShip() {
   if (!group) return;
   if (!IN.station) { SHIP.g.visible = !IN.ship || !!mesh; return; }   // Planet: Schiff steht auf dem Landeplatz
   if (saved) { SHIP.g.visible = !(IN.ship && IN.ship.uid === P.uid) || !!mesh; return; }   // Modell-Raum: das Schiffsmodell ist der Innenraum   // im Schiffsraum: Stationsgruppe ist gespeichert
-  group.localToWorld(_wp.set(0, shipPad.y, shipPad.z));
+  const so = SEQ.t >= 0 ? seqOffset() : null;
+  group.localToWorld(_wp.set(0, shipPad.y + (so ? so.y : 0), shipPad.z + (so ? so.z : 0)));
   SHIP.g.position.copy(_wp);
   SHIP.g.rotation.set(0, group.rotation.y + Math.PI, 0);
   SHIP.g.visible = true;
@@ -441,6 +479,7 @@ export function enterInterior(st: Station) {
   camera.near = 0.12; camera.updateProjectionMatrix();
   G.inside = true;
   G.mode = 'walk';
+  beginSeq(-1, 4.5, null);   // Landung: das Schiff kommt durchs Tor herein und setzt auf
   say('SYSTEM', `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
 }
 export function leaveInterior() {
@@ -781,6 +820,14 @@ export function updateWalk(dt: number) {
 const _c = new THREE.Vector3();
 export function applyWalkCamera() {
   if (!group) return;
+  if (SEQ.t >= 0) {   // Start/Landung: Kamera steht seitlich hinter dem Stellplatz im Hangar und folgt dem Schiff
+    const so = seqOffset(), cb = Math.min(62, stats().camBack * 0.5 + 22);
+    group.localToWorld(_c.set(clamp(cb * 0.6, 8, HW - 5), clamp(shipPad.y + so.y * 0.5 + cb * 0.22 + 2, 2.5, HH - 4), clamp(shipPad.z + so.z * 0.55 - cb, HZ0 + 5, HZ1 - 14)));
+    camera.position.copy(_c);
+    camera.lookAt(SHIP.g.position);
+    if (Math.abs(camera.fov - 62) > 0.05) { camera.fov = 62; camera.updateProjectionMatrix(); }
+    return;
+  }
   group.localToWorld(_c.set(IN.x, 1.7 + IN.bob + IN.fy + IN.jy, IN.z));
   camera.position.copy(_c);
   camera.rotation.order = 'YXZ';

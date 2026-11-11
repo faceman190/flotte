@@ -22,7 +22,7 @@ import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
 import { drawHUD, updatePanels, showBanner } from './ui/hud';
 import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
-import { IN, enterInterior, leaveInterior, updateWalk, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
+import { startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, leaveInterior, updateWalk, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
 import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, ROVER, SURF } from './game/surface';
@@ -179,6 +179,7 @@ dockHooks.enter = st => enterInterior(st);
 dockHooks.leave = leaveInterior;
 interiorHooks.openTab = (t, n) => showMenu(t, n);
 interiorHooks.undock = undock;
+dockHooks.launch = startLaunch;
 interiorHooks.openMap = openMap;
 interiorHooks.pause = pause;
 interiorHooks.tabs = () => (G.dockedAt ? dockTabs(G.dockedAt) : []);
@@ -192,6 +193,7 @@ bandHooks.closed = m => {
 
 // =============== Tasten ===============
 onKey(code => {
+  if (G.mode === 'launch') return;   // Start/Landung im Hangar läuft von selbst
   // Intro und Szenen: nur überspringen bzw. weiterblättern
   if (G.mode === 'intro') { if (code === 'Escape') skipIntro(); return; }
   if (G.mode === 'scene') { if (code === 'Space' || code === 'Enter' || code === 'NumpadEnter' || code === 'Escape') sceneNext(); return; }
@@ -423,7 +425,7 @@ function animateStructures(dt: number) {
 
 // Ein Simulationsschritt der Spielwelt
 function simulate(dt: number) {
-  const m = G.mode, live = m === 'play' || m === 'jump' || m === 'dock' || m === 'walk' || m === 'rover' || m === 'entry';
+  const m = G.mode, live = m === 'play' || m === 'jump' || m === 'dock' || m === 'walk' || m === 'rover' || m === 'entry' || m === 'launch';
   if (!(live || m === 'menu' || m === 'intro')) return;
   G.time += dt;
   if (live) P.playtime += dt;
@@ -437,6 +439,7 @@ function simulate(dt: number) {
     updateSurfaceFlight(dt);
   } else if (m === 'jump') updateJump(dt);
   else if (m === 'walk') updateWalk(dt);
+  else if ((m as string) === 'launch') updateHangarSequence(dt);
   else if (m === 'entry') updateEntry(dt);
   else if (m === 'rover') { if (G.dead) updatePlayer(dt); else updateRover(dt); }
   if (live) updateMissions(dt);
@@ -473,7 +476,7 @@ function loop(now: number, manual = false) {
   ambience(IN.active && G.mode === 'walk' ? (IN.ship ? 'amb_ship' : 'amb_station') : null, IN.ship ? 0.16 : 0.09);
   if (world.def && G.mode !== 'map') {
     animateStructures(dt);
-    if (IN.active) { syncParkedShip(); setGear(SHIP.g, true); }
+    if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); }
     else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); }
     else {
       SHIP.g.visible = (G.mode === 'play' || G.mode === 'jump' || G.mode === 'pause' || G.mode === 'entry') && !G.dead;

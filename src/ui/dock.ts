@@ -20,7 +20,8 @@ import { missionOffers, acceptMission, abandonMission, MAX_MISSIONS, missionType
 type Tab = 'markt' | 'raffinerie' | 'auftraege' | 'missionen' | 'lager' | 'hangar' | 'werft' | 'werkstatt' | 'service' | 'info';
 let tab: Tab = 'markt';
 let note = '';
-export const dockHooks = { openMap: () => {}, shipChanged: () => {}, enter: (_s: Station) => {}, leave: () => {} };
+export const dockHooks = { openMap: () => {}, shipChanged: () => {}, enter: (_s: Station) => {}, leave: () => {}, launch: (_done: () => void) => false };
+let launched = false;   // der Startablauf im Hangar ist durch: jetzt wirklich ablegen
 
 const CHARGE_COST = 40, PAINT_COST = 250;
 // Servicepreise (Flottenrat-Rang gibt Rabatt, Misstrauen kostet Aufschlag)
@@ -73,6 +74,8 @@ export function closeMenu() {
 export const dockTabs = (s: Station) => { const prev = G.dockedAt; G.dockedAt = s; const t = tabs(); G.dockedAt = prev; return t as string[]; };
 export function undock() {
   const s = st();
+  // erst der Startablauf im Hangar (abheben, durchs Tor), danach geht es hier weiter
+  if (G.inside && !launched && dockHooks.launch(() => { launched = true; try { undock(); } finally { launched = false; } })) { $('dock').classList.add('hidden'); return; }
   if (G.inside) dockHooks.leave();
   $('dock').classList.add('hidden');
   $('hud').classList.remove('hidden');
