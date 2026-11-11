@@ -10,9 +10,20 @@ import { dedup, prune, flatten, join, weld, simplify, resample, textureCompress,
 import { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
 
-const [, , inp, out, ratioArg, errArg] = process.argv;
-if (!inp || !out) { console.log('Aufruf: node scripts/optimize-glb.mjs <ein.glb> <aus.glb> [Anteil] [Fehler]'); process.exit(1); }
+//   --mat=<datei.json>: Materialien aus einer FBX übertragen (scripts/fbx-materials.mjs), Zuordnung über Teilnamen
+const args = process.argv.slice(2), opt = Object.fromEntries(args.filter(a => a.startsWith('--')).map(a => a.slice(2).split('=')));
+const [inp, out, ratioArg, errArg] = args.filter(a => !a.startsWith('--'));
+if (!inp || !out) { console.log('Aufruf: node scripts/optimize-glb.mjs <ein.glb> <aus.glb> [Anteil] [Fehler] [--mat=karte.json]'); process.exit(1); }
 const ratio = +(ratioArg || 0.05), error = +(errArg || 0.01);
+// Spieltaugliche Werte je Materialname (Farbe aus der FBX, Glanz/Metall hier festgelegt)
+const LOOK = {
+  main_mat: { color: [0.82, 0.83, 0.85], metal: 0.35, rough: 0.42 },
+  secondary_mat: { color: [0.36, 0.37, 0.39], metal: 0.65, rough: 0.48 },
+  Orange: { color: [1.0, 0.42, 0.04], metal: 0.2, rough: 0.45 },
+  rubber: { color: [0.05, 0.05, 0.055], metal: 0.0, rough: 0.9 },
+  Glass: { color: [0.02, 0.03, 0.04], metal: 0.6, rough: 0.06 },
+  wood_mat: { color: [0.45, 0.28, 0.15], metal: 0.0, rough: 0.7 },
+};
 await MeshoptDecoder.ready; await MeshoptEncoder.ready; await MeshoptSimplifier.ready;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder, 'meshopt.encoder': MeshoptEncoder });
 
@@ -22,6 +33,25 @@ const count = () => { let t = 0; for (const m of doc.getRoot().listMeshes()) for
 const before = count();
 // Glanz-Materialien (alte Erweiterung) in normale PBR-Materialien umwandeln, damit gleiche zusammenfallen
 for (const ext of doc.getRoot().listExtensionsUsed()) if (ext.extensionName === 'KHR_materials_pbrSpecularGlossiness') ext.dispose();
+// Materialien aus der FBX übertragen: Teilname in der GLB = FBX-Name plus „.Nummer“
+if (opt.mat) {
+  const map = JSON.parse(fs.readFileSync(opt.mat, 'utf8')), made = {};
+  const matFor = name => {
+    if (made[name]) return made[name];
+    const src = map.materials[name] || { color: [0.5, 0.5, 0.5] }, look = LOOK[name] || { color: src.color, metal: 0.3, rough: 0.6 };
+    return (made[name] = doc.createMaterial(name).setBaseColorFactor([...look.color, 1]).setMetallicFactor(look.metal).setRoughnessFactor(look.rough));
+  };
+  let hit = 0, miss = 0;
+  for (const node of doc.getRoot().listNodes()) {
+    const mesh = node.getMesh(); if (!mesh) continue;
+    // der Name steht oft am übergeordneten Knoten, das Mesh hängt an einem namenlosen Kind
+    const nm = node.getName() || node.getParentNode()?.getName() || '';
+    const base = nm.replace(/\.\d+$/, ''), m = map.parts[base];
+    if (m) hit++; else miss++;
+    for (const p of mesh.listPrimitives()) p.setMaterial(matFor(m || 'Default_Material'));
+  }
+  console.log(`Materialien übertragen: ${hit} Teile zugeordnet, ${miss} ohne Zuordnung`);
+}
 await doc.transform(
   dedup(),                 // gleiche Materialien/Daten nur einmal
   flatten(),               // Hierarchie auflösen, damit Teile verschmelzen können
