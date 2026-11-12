@@ -117,7 +117,7 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   gibt der Clip das Tempo vor, damit die Füße nicht rutschen. `npcSpeak(name, sekunden)` in src/game/interior.ts lässt eine Figur gebärden;
   die Geschichte ruft es für jede gesprochene Zeile auf (src/game/story.ts, speak).
 - Mixamo: die eigene Figur dort hochladen und die Bewegung „mit Skin“ laden. Dann steht die Hülle in beiden Skeletten gleich,
-  und das Skript überträgt die Drehungen ohne Angleichen. `--align` nur bei Bewegungen auf einem fremden Körper (Mixamo-Standardfigur).
+  und das Skript überträgt die Drehungen ohne Angleichen (seit Alpha 0.71 zusätzlich mit --limbs, siehe unten). `--align` nur bei Bewegungen auf einem fremden Körper (Mixamo-Standardfigur).
   Die jetzigen Dateien beruhen auf dem Händler-Körper; auf den Arbeiter passen sie über die gleiche Grundhaltung.
 - Finger hat unser Skelett (24 Knochen) nicht; Fingerbewegungen entfallen.
 
@@ -214,3 +214,26 @@ Alles entsteht im Spiel, ohne neue Dateien.
 - **Himmel** (`src/core/sky.ts`, `ATM_FS`): Verlauf mit Dunst am Horizont, Sonnenschein, ziehende Wolken aus Rauschen, Sterne im Zenit und ein Nachbarplanet als beleuchtete Sichel, bei manchen Sektoren mit Ring (Richtung, Größe und Farbe stehen je Sektor fest: `skyBody`). Aufruf über `setSurfaceSky` mit `clouds`, `cloudCol`, `stars`, `body`.
 - **Bewuchs und Felsen** (`src/game/flora.ts`): Felsbrocken und Felsnadeln stehen fest über die Karte verteilt. Gras, Büsche und Bäume entstehen nur rund um die Kamera und ziehen mit; eine feste Zufallszahl je Zelle entscheidet über Ort und Größe, so steht jede Pflanze immer an derselben Stelle. Die Bilder für Gras, Busch und Nadelbaum werden einmal auf eine Zeichenfläche gemalt. Was wächst, steht je Planetentyp in `FLORA`.
 - Seen spiegeln die Himmelsfarbe statt des Weltraums.
+
+## Figuren: aufrechte Haltung, ruhiges Gehen, Blick zum Spieler (Alpha 0.71)
+
+- **Fehler in der Umrechnung behoben** (`scripts/fbx-anim.mjs`, Schalter `--limbs`, in `scripts/anims.sh` überall gesetzt): Mixamo legt sein
+  Skelett nach Markierungen in den Körper; Knie und Ellbogen sitzen dabei nicht genau in der Achse von Bein und Arm (bei der Händlerin
+  steht der Unterschenkelknochen in Ruhe 11° schräg, obwohl das Bein gerade ist). Die Bewegung ist aber für die Knochen gerechnet: Deren
+  Richtungen ergeben die natürliche Haltung (Knie beim Gehen 3–72°). Bisher wurde nur die Drehung gegenüber der Ruhe übertragen; die
+  Schräge blieb als dauernde Beugung im Körper (10–17° zu viel im Knie, geduckter Gang, Stehen mit gebeugten Knien).
+  Mit `--limbs` folgt die Achse des Beins (Hüftgelenk → Knöchel) und des Arms (Schulter → Handgelenk) der Knochenrichtung der Quelle;
+  die Hüfte wird je Bild so nachgeführt, dass der tragende Fuß so hoch steht wie in der Quelle.
+  Für neue Mixamo-Dateien gilt: immer `--limbs` angeben. Wie genau die Markierungen bei Mixamo sitzen, spielt dann kaum noch eine Rolle.
+- **Ruhiges Gehen ohne Zeitlupe** (`animStep` in `src/models/charModels.ts`): Der Gehclip ist für 2,1 m/s gemacht, die Leute in den Stationen
+  gehen 1,5 m/s. Statt den Clip langsamer abzuspielen, werden Schrittfolge und Schrittlänge gleichmäßig verringert; kürzere Schritte
+  entstehen, indem das Stehen mit kleinem Gewicht mitläuft (`under`).
+- **Blick zum Spieler** (`lookStep`): Hals und Kopf drehen sich zum Punkt `anim.look` (die Kamera), wenn er näher als 7 m und nicht hinter
+  der Figur liegt; höchstens 60° zur Seite und 20° nach oben oder unten, weich nachgeführt. Die Drehung kommt nach dem Clip dazu.
+  Achtung: Der Mischer von three.js schreibt einen Knochen nur neu, wenn sich der Clip-Wert ändert; `lookStep` merkt sich deshalb die
+  Clip-Haltung, damit sich die Blickdrehung nicht aufaddiert.
+- Prüfen: Figur im Testfenster über `charInstance` aufstellen, `animStep` schrittweise aufrufen und Bildfolgen rendern (Seite und vorn).
+
+### Was noch fehlt (braucht neue Mixamo-Dateien)
+Ein gemächlicher Gehclip (rund 1,4 m/s), Joggen und Rennen für die Figuren anderer Piloten, Drehen auf der Stelle, Sitzen, Anlehnen,
+Arbeiten an der Konsole, Kiste tragen, weitere Gesprächsgesten. Herunterladen als FBX „mit Skin“, 30 Bilder je Sekunde, bei Gehclips „In Place“ aus.

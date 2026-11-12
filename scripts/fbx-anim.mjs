@@ -6,6 +6,7 @@
 //   --inplace  Vorwärtsbewegung der Hüfte entfernen (die Figur bewegt das Spiel); das Tempo je Bild steht dann als meta.speed dabei
 //   --alt=s    zweiter Einstiegspunkt (Sekunden nach dem Zuschnitt), z. B. beim Abbremsen für den anderen Fuß
 //   --align    siehe unten
+//   --limbs    Arme und Beine nach der Knochenrichtung der Quelle ausrichten (siehe unten); bei allen Mixamo-Dateien angeben
 // Alle Clips einer Figur neu erzeugen: scripts/anims.sh
 // align: nur angeben, wenn die FBX auf einem FREMDEN Körper beruht (z. B. der Mixamo-Standardfigur in T-Haltung). Wurde
 // unsere eigene Figur bei Mixamo hochgeladen, steht die Hülle in beiden Skeletten gleich da: dann darf Schritt 1 nicht laufen,
@@ -15,6 +16,13 @@
 //  2. die Drehung der Quelle gegenüber ihrer Grundhaltung im Weltraum darauf angewendet,
 //  3. das Ergebnis in die Knochenkette der Figur zurückgerechnet.
 // Die Hüfte wandert mit (auf die Größe der Figur umgerechnet); Finger hat unsere Figur nicht, sie entfallen.
+// limbs: Mixamo legt sein Skelett nach Markierungen in den Körper; Knie und Ellbogen sitzen dabei selten genau in der Achse des
+// Beins oder Arms (bei der Händlerin steht der Unterschenkelknochen in Ruhe 11° schräg, obwohl das Bein gerade ist). Die Bewegung
+// selbst ist aber für die Knochen gerechnet: Deren Richtungen ergeben die natürliche Haltung (Knie beim Gehen 3–72°). Überträgt man
+// nur die Drehung gegenüber der Ruhe, bleibt die Schräge als dauernde Beugung im Körper (geduckter Gang, 10–17° zu viel im Knie).
+// Mit --limbs folgt deshalb die ACHSE des Beins (Hüftgelenk → Knöchel) und des Arms (Schulter → Handgelenk) unserer Figur der
+// Knochenrichtung der Quelle. Rumpf, Kopf, Hände und Füße werden weiter als Drehung gegenüber der Ruhe übertragen.
+// Danach wird die Hüfte je Bild so gehoben oder gesenkt, dass der tragende Fuß so hoch steht wie in der Quelle.
 import fs from 'fs';
 globalThis.self = globalThis; globalThis.window = globalThis;
 globalThis.document = { createElementNS: () => ({ addEventListener() {}, removeEventListener() {}, style: {} }), createElement: () => ({ getContext: () => null, style: {} }) };
@@ -24,7 +32,7 @@ const { io } = await import('./glb-lib.mjs');
 
 const args = process.argv.slice(2), flag = Object.fromEntries(args.filter(a => a.startsWith('--')).map(a => { const [k, v = '1'] = a.slice(2).split('='); return [k, v]; }));
 const [inp, name] = args.filter(a => !a.startsWith('--'));
-const figure = flag.figure || 'merchant', ALIGN = !!flag.align, FPS = +(flag.fps || 20), INPLACE = !!flag.inplace;
+const figure = flag.figure || 'merchant', ALIGN = !!flag.align, LIMBS = !!flag.limbs, FPS = +(flag.fps || 20), INPLACE = !!flag.inplace;
 // Zielknochen → Quellknochen (ohne Vorsilbe "mixamorig") und der Kindknochen, der die Richtung angibt
 const MAP = {
   Hips: ['Hips', 'Spine02'], Spine02: ['Spine', 'Spine01'], Spine01: ['Spine1', 'Spine'], Spine: ['Spine2', 'neck'], neck: ['Neck', 'Head'], Head: ['Head', 'head_end'],
@@ -81,16 +89,26 @@ const align = n => {
   const ds = sRestP[clean(sc.name)].clone().sub(sRestP[sn]).normalize(), dt = tRestP[child].clone().sub(tRestP[n]).normalize();
   return { q: new THREE.Quaternion().setFromUnitVectors(dt, ds), deg: dt.angleTo(ds) * 180 / Math.PI };
 };
+// Achse der Gliedmaße in der Ruhelage unserer Figur: Bein = Hüftgelenk → Knöchel, Arm = Schulter → Handgelenk
+const LINE = {};
+for (const sd of ['Left', 'Right']) { LINE[sd + 'UpLeg'] = LINE[sd + 'Leg'] = [sd + 'UpLeg', sd + 'Foot']; LINE[sd + 'Arm'] = LINE[sd + 'ForeArm'] = [sd + 'Arm', sd + 'Hand']; }
+const limbAlign = n => {
+  const L = LINE[n]; if (!L || !T[L[0]] || !T[L[1]]) return null;
+  const [sn, child] = MAP[n], sc = S[MAP[child][0]];
+  if (!sc) return null;
+  const ds = sRestP[clean(sc.name)].clone().sub(sRestP[sn]).normalize(), dt = tRestP[L[1]].clone().sub(tRestP[L[0]]).normalize();
+  return { q: new THREE.Quaternion().setFromUnitVectors(dt, ds), deg: dt.angleTo(ds) * 180 / Math.PI };
+};
 let report = [];
 for (const o of order) {
   const n = o.name; if (!MAP[n] || !S[MAP[n][0]]) continue;
   const a = ALIGN ? align(n) : null;
-  if (!ALIGN) { A[n] = new THREE.Quaternion(); const b = align(n); if (b) report.push(`${n} ${b.deg.toFixed(0)}°`); continue; }
+  if (!ALIGN) { const l = LIMBS ? limbAlign(n) : null; A[n] = l ? l.q : new THREE.Quaternion(); const b = l || align(n); if (b) report.push(`${n} ${b.deg.toFixed(0)}°${l ? ' (Achse)' : ''}`); continue; }
   // Endknochen ohne Richtungsgeber (Hand, Zehen) übernehmen die Angleichung ihres Elternknochens
   A[n] = a ? a.q : (A[o.parent.name] || new THREE.Quaternion());
   if (a) report.push(`${n} ${a.deg.toFixed(0)}°`);
 }
-console.log(ALIGN ? 'Grundhaltung angeglichen:' : 'Unterschied der Knochenrichtungen (nicht angeglichen, gleiche Hülle angenommen):', report.join(', '));
+console.log(ALIGN ? 'Grundhaltung angeglichen:' : LIMBS ? 'Unterschied der Knochenrichtungen (Arme und Beine nach Achse ausgerichtet, Rest wie die Quelle gedreht):' : 'Unterschied der Knochenrichtungen (nicht angeglichen, gleiche Hülle angenommen):', report.join(', '));
 // Maßstab zwischen den Skeletten: Abstand Hüfte–Zehen in der Grundhaltung (die Quelle liegt oft in anderen Einheiten und
 // ihre Grundhaltung nicht auf dem Boden; in der Bewegung selbst steht die Figur bei beiden auf y = 0)
 const sHip = sRestP.Hips.y - sRestP.LeftToeBase.y, tHip = tRestP.Hips.y - tRestP.LeftToeBase.y, ratio = tHip / sHip;
@@ -118,6 +136,10 @@ const hipBindInv = skinned.skeleton.boneInverses[skinned.skeleton.bones.findInde
 const qS = tRestP.Hips.clone().sub(foot(tBox)).divideScalar(K).add(foot(sBox));   // Hüftgelenk der Figur im Körper der Quelle (Bindung)
 const offZ = qS.z - sRestP.Hips.z;
 console.log(`Körpergröße: Quelle ${(sBox.max.y - sBox.min.y).toFixed(4)} → Figur ${(tBox.max.y - tBox.min.y).toFixed(3)} (Faktor ${K.toFixed(2)})`);
+let sAnkleMin = Infinity;
+if (LIMBS) for (let f = 0; f < frames; f++) { mixer.setTime(Math.min(T0 + Math.min(DUR, f / FPS), clip.duration - 1e-4)); fbx.updateMatrixWorld(true); sAnkleMin = Math.min(sAnkleMin, wp(S.LeftFoot).y, wp(S.RightFoot).y); }
+const tAnkleFlat = Math.min(tRestP.LeftFoot.y, tRestP.RightFoot.y);   // Knöchelhöhe unserer Figur, wenn sie flach steht (Ruhelage)
+let liftMin = Infinity, liftMax = -Infinity;
 for (const n of Object.keys(A)) rot[n] = [];
 const cur = {}, inv = new THREE.Quaternion(), d = new THREE.Quaternion(), w = new THREE.Quaternion(), loc = new THREE.Quaternion(), prev = {};
 for (let f = 0; f < frames; f++) {
@@ -145,11 +167,22 @@ for (let f = 0; f < frames; f++) {
   T.Hips.position.copy(tp);
   for (const n of Object.keys(A)) { const v = rot[n]; T[n].quaternion.set(v[v.length - 4], v[v.length - 3], v[v.length - 2], v[v.length - 1]); }
   troot.updateMatrixWorld(true);
+  if (LIMBS) {
+    // Hüfte nachführen: Der tiefere Fuß der Quelle gibt vor, wie hoch der Knöchel unserer Figur stehen soll
+    const sL = wp(S.LeftFoot).y, sR = wp(S.RightFoot).y, want = v => tAnkleFlat + (v - sAnkleMin) * K;
+    const eL = want(sL) - wp(T.LeftFoot).y, eR = want(sR) - wp(T.RightFoot).y;
+    const wL = Math.exp(-(sL - sAnkleMin) * K / 0.03), wR = Math.exp(-(sR - sAnkleMin) * K / 0.03), dy = (wL * eL + wR * eR) / (wL + wR);
+    const hw = wp(T.Hips); hw.y += dy; T.Hips.parent.worldToLocal(hw); T.Hips.position.copy(hw);
+    hipPos[hipPos.length - 3] = hw.x; hipPos[hipPos.length - 2] = hw.y; hipPos[hipPos.length - 1] = hw.z;
+    liftMin = Math.min(liftMin, dy); liftMax = Math.max(liftMax, dy);
+    troot.updateMatrixWorld(true);
+  }
   toeY.push(Math.min(wp(T.LeftToeBase).y, wp(T.RightToeBase).y));
 }
 const off = toeY.slice().sort((a, b) => a - b)[toeY.length >> 1] - Math.min(tRestP.LeftToeBase.y, tRestP.RightToeBase.y);
 for (let i = 0; i < hipPos.length; i++) hipPos[i] = +hipPos[i].toFixed(3);
 console.log(`Zehengelenk des tieferen Fußes: im Median ${(off * 100).toFixed(1)} cm gegenüber der Ruhelage (nur zur Kontrolle, nichts korrigiert)`);
+if (LIMBS) console.log(`Hüfte nachgeführt: ${(liftMin * 100).toFixed(1)} bis ${(liftMax * 100).toFixed(1)} cm`);
 const tracks = Object.entries(rot).map(([n, values]) => ({ name: `${n}.quaternion`, type: 'quaternion', times, values }));
 tracks.push({ name: 'Hips.position', type: 'vector', times, values: hipPos });
 const file = `asset-src/data/anim_${name}.json`;

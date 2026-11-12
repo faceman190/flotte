@@ -91,7 +91,13 @@ export function charInstance(name: string, tint: number | [number, number, numbe
   const walk = w ? mixer.clipAction(w) : null, idle = i ? mixer.clipAction(i) : null;
   // Ablaufsteuerung (animStep): eigene Clips dieser Figur für Anlaufen, Abbremsen und Sprechen, falls vorhanden
   const act = (k: string) => (EXTRA[clipKey(name, k)] ? mixer.clipAction(fit(EXTRA[clipKey(name, k)], name)!) : null);
+  // zweite Spur des Stehens: läuft beim Gehen leise mit und verkürzt so die Schritte (siehe animStep)
+  let under: THREE.AnimationAction | null = null;
+  if (i && w) { const c = i.clone(); c.uuid = THREE.MathUtils.generateUUID(); under = mixer.clipAction(c); under.setEffectiveWeight(0); under.play(); }
+  let neck: THREE.Object3D | null = null, head: THREE.Object3D | null = null;
+  obj.traverse(o => { if (o.name === 'neck') neck = o; else if (o.name === 'Head') head = o; });
   const anim: CharAnim = {
+    under, underW: 0, root: g, neck, head, look: null, lookYaw: 0, lookPitch: 0, lookMem: [0, 1].map(() => ({ base: new THREE.Quaternion(), out: new THREE.Quaternion() })), lookOn: false,
     mixer, idle, walk, start: act('start'), stop: act('stop'), talk: [act('talk1'), act('talk2')].filter(Boolean) as THREE.AnimationAction[],
     mode: 'idle', cur: null, talkT: 0, talkI: 0,
     pace: (META[clipKey(name, 'walk')]?.pace || 1.4) * hipScale(name), mStart: META[clipKey(name, 'start')] || null, mStop: META[clipKey(name, 'stop')] || null,
@@ -106,6 +112,11 @@ export interface CharAnim {
   mode: 'idle' | 'start' | 'walk' | 'stop' | 'talk'; cur: THREE.AnimationAction | null;
   talkT: number; talkI: number;   // verbleibende Sprechzeit (s), nächster Sprech-Clip
   pace: number;                   // Tempo der Gehschleife in m/s bei normaler Abspielgeschwindigkeit
+  under: THREE.AnimationAction | null; underW: number;   // Stehen als Unterlage beim Gehen und sein Gewicht
+  root: THREE.Object3D; neck: THREE.Object3D | null; head: THREE.Object3D | null;
+  look: THREE.Vector3 | null;     // Punkt (Welt), dem der Kopf nachblickt, solange er nah und vor der Figur liegt; null = geradeaus
+  lookYaw: number; lookPitch: number;
+  lookMem: { base: THREE.Quaternion; out: THREE.Quaternion }[]; lookOn: boolean;   // je Knochen: Haltung aus dem Clip und zuletzt geschriebene Haltung
   mStart: ClipMeta | null; mStop: ClipMeta | null;
 }
 function fade(a: CharAnim, to: THREE.AnimationAction | null, dur: number, at = 0, once = false) {
@@ -132,7 +143,7 @@ export function animTalk(a: CharAnim, seconds: number) { if (a.talk.length) a.ta
 // tatsächlich bewegen soll (beim Anlaufen und Abbremsen folgt es dem Clip, damit die Füße nicht rutschen).
 // follow = false: Die Figur wird von außen bewegt (andere Piloten); dann wird nur weich zwischen Stehen und Gehen überblendet.
 export function animStep(a: CharAnim, dt: number, move: boolean, speed = 1.4, follow = true): number {
-  let v = 0;
+  let v = 0, under = 0;
   if (a.talkT > 0) a.talkT -= dt;
   const t = a.cur ? a.cur.time : 0, len = a.cur ? a.cur.getClip().duration : 0;
   switch (a.mode) {
@@ -158,7 +169,13 @@ export function animStep(a: CharAnim, dt: number, move: boolean, speed = 1.4, fo
       break;
     case 'walk':
       v = speed;
-      if (a.walk) a.walk.timeScale = Math.min(3, Math.max(0.5, speed / a.pace));
+      if (a.walk) {
+        // Langsamer als der Clip: nicht in Zeitlupe abspielen, sondern Schrittlänge und Schrittfolge gleichmäßig verringern.
+        // Die Schritte werden kürzer, indem das Stehen mit kleinem Gewicht mitläuft.
+        const r = speed / a.pace, k = r < 1 ? Math.sqrt(Math.max(0.3, r)) : 1;
+        a.walk.timeScale = r < 1 ? k : Math.min(3, r);
+        under = r < 1 && follow ? (1 - k) / k : 0;
+      }
       if (!move) {
         if (follow && a.stop && a.walk) {
           // Einstieg passend zum Fuß, der gerade in der Luft ist (Gehschleife: erst links, ab etwa einem Fünftel rechts)
@@ -173,6 +190,41 @@ export function animStep(a: CharAnim, dt: number, move: boolean, speed = 1.4, fo
       else if (t >= len - 0.4) { fade(a, a.idle, 0.4); a.mode = 'idle'; }
       break;
   }
+  if (a.under) { a.underW += (under - a.underW) * Math.min(1, dt * 4); a.under.setEffectiveWeight(a.underW < 0.002 ? 0 : a.underW); }
   a.mixer.update(dt);
+  lookStep(a, dt);
   return v;
+}
+// Kopf und Hals drehen sich zum Ziel (nach der Bewegung des Clips, in Grenzen und weich)
+const _lv = new THREE.Vector3(), _lr = new THREE.Quaternion(), _lp = new THREE.Quaternion(), _lq = new THREE.Quaternion(), _le = new THREE.Euler(0, 0, 0, 'YXZ');
+function lookStep(a: CharAnim, dt: number) {
+  if (!a.head) return;
+  let yaw = 0, pitch = 0;
+  if (a.look) {
+    a.root.worldToLocal(_lv.copy(a.look));                     // Figur blickt nach +Z, steht auf y = 0
+    const d = Math.hypot(_lv.x, _lv.z), y = Math.atan2(_lv.x, _lv.z);
+    if (d > 0.4 && d < 7 && Math.abs(y) < 1.9) { yaw = Math.max(-1.05, Math.min(1.05, y)); pitch = Math.max(-0.35, Math.min(0.35, Math.atan2(_lv.y - 1.6, d))); }
+  }
+  const k = Math.min(1, dt * 3.2);
+  a.lookYaw += (yaw - a.lookYaw) * k; a.lookPitch += (pitch - a.lookPitch) * k;
+  const off = Math.abs(a.lookYaw) < 0.004 && Math.abs(a.lookPitch) < 0.004;
+  if (off && !a.lookOn) return;
+  a.root.getWorldQuaternion(_lr);
+  const bones = [[a.neck, 0.4], [a.head, 0.6]] as [THREE.Object3D | null, number][];
+  for (let i = 0; i < 2; i++) {
+    const b = bones[i][0], f = bones[i][1], m = a.lookMem[i];
+    if (!b || !b.parent) continue;
+    // Der Mischer schreibt einen Knochen nur neu, wenn sich der Clip-Wert ändert. Steht er noch auf dem zuletzt hier
+    // geschriebenen Wert, gilt die gemerkte Clip-Haltung – sonst würde sich die Blickdrehung Bild für Bild aufaddieren.
+    if (a.lookOn && b.quaternion.equals(m.out)) b.quaternion.copy(m.base); else m.base.copy(b.quaternion);
+    if (off) { m.out.copy(b.quaternion); continue; }
+    // Drehung im Raum der Figur (um die Hochachse, dann nicken), umgerechnet in den Raum des Elternknochens
+    _lq.setFromEuler(_le.set(-a.lookPitch * f, a.lookYaw * f, 0));
+    _lq.premultiply(_lr).multiply(_lp.copy(_lr).invert());     // in die Welt
+    b.parent.getWorldQuaternion(_lp);
+    _lq.multiply(_lp).premultiply(_lp.clone().invert());       // in den Elternraum
+    b.quaternion.premultiply(_lq);
+    m.out.copy(b.quaternion);
+  }
+  a.lookOn = !off;
 }

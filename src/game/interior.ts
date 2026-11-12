@@ -132,6 +132,7 @@ function buildPerson(suit: number, skin: number, hair: number, badge: number, ro
     c.g.traverse((o: any) => { if (o.isMesh) { o.userData.shared = true; if (o.material !== undefined) disposables.push(o.material); } });
     const d = () => new THREE.Group();
     animInit(c.anim, role === 'walk');
+    c.anim.look = camera.position;   // Kopf folgt dem Spieler, wenn er nah vorbeikommt
     return { g: c.g, legL: d(), legR: d(), armL: d(), armR: d(), head: d(), mixer: c.mixer, walk: c.walk, idle: c.idle, moving: role === 'walk', anim: c.anim };
   }
   const g = new THREE.Group();
@@ -1158,5 +1159,6 @@ function storyPerson(look: NpcLook): Person {
   c.g.traverse((o: any) => { if (o.isMesh) { o.userData.shared = true; if (o.material !== undefined) disposables.push(o.material); } });
   const d = () => new THREE.Group();
   animInit(c.anim, false);
+  c.anim.look = camera.position;
   return { g: c.g, legL: d(), legR: d(), armL: d(), armR: d(), head: d(), mixer: c.mixer, walk: c.walk, idle: c.idle, moving: false, anim: c.anim };
 }
