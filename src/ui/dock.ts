@@ -16,8 +16,12 @@ import { itemIcon } from './icons';
 import { shipsAt, board, buyShip, sellShip, sellPrice, stored, storedTotal, storeFromCargo, takeToCargo, shipPrice } from '../game/fleet';
 import { REP, stationFaction, rankName, serviceFactor, repOf, level } from '../game/reputation';
 import { missionOffers, acceptMission, abandonMission, MAX_MISSIONS, missionTypeName, minRankName } from '../game/missions';
+import { RARITY, KIND_N, gearDef } from '../data/gear';
+import { gearStock, gearBuyPrice, gearSellPrice, buyGear, sellGear, toLocker, fromLocker, invCap, canAdd, LOCKER_SLOTS } from '../game/inventory';
+import { gearIcon } from './icons';
+import { statLine } from './invApp';
 
-type Tab = 'markt' | 'raffinerie' | 'auftraege' | 'missionen' | 'lager' | 'hangar' | 'werft' | 'werkstatt' | 'service' | 'info';
+type Tab = 'markt' | 'ausruester' | 'raffinerie' | 'auftraege' | 'missionen' | 'lager' | 'hangar' | 'werft' | 'werkstatt' | 'service' | 'info';
 let tab: Tab = 'markt';
 let note = '';
 export const dockHooks = { openMap: () => {}, shipChanged: () => {}, enter: (_s: Station) => {}, leave: () => {}, launch: (_done: () => void) => false };
@@ -124,9 +128,9 @@ const dot = (k: ItemId) => itemIcon(k, 20);
 const bar = (v: number, max: number, col: string) => `<span class="bar"><i style="width:${Math.min(100, Math.round(v / Math.max(1, max) * 100))}%;background:${col}"></i></span>`;
 const hasYard = () => st().kind !== 'outpost';
 function tabs(): Tab[] {
-  return ['markt', ...(st().def.refinery ? ['raffinerie' as Tab] : []), 'auftraege', ...(stationFaction(st().id, secId()) ? ['missionen' as Tab] : []), 'lager', 'hangar', ...(hasYard() ? ['werft' as Tab] : []), 'werkstatt', 'service', 'info'];
+  return ['markt', 'ausruester', ...(st().def.refinery ? ['raffinerie' as Tab] : []), 'auftraege', ...(stationFaction(st().id, secId()) ? ['missionen' as Tab] : []), 'lager', 'hangar', ...(hasYard() ? ['werft' as Tab] : []), 'werkstatt', 'service', 'info'];
 }
-const TAB_N: Record<Tab, string> = { markt: 'Markt', raffinerie: 'Raffinerie', auftraege: 'Aufträge', missionen: 'Missionen', lager: 'Lager', hangar: 'Hangar', werft: 'Werft', werkstatt: 'Werkstatt', service: 'Service', info: 'Station' };
+const TAB_N: Record<Tab, string> = { ausruester: 'Ausrüster', markt: 'Markt', raffinerie: 'Raffinerie', auftraege: 'Aufträge', missionen: 'Missionen', lager: 'Lager', hangar: 'Hangar', werft: 'Werft', werkstatt: 'Werkstatt', service: 'Service', info: 'Station' };
 const n1 = (v: number) => v.toFixed(1).replace('.', ',');
 function shipSummary(cls: ShipId) {
   const s = computeStats(cls, emptyUp() as Up), c = SHIPS[cls];
@@ -167,6 +171,38 @@ function render() {
     }
     h += `</table><div class="btnRow"><span class="hint" style="margin-right:auto;align-self:center;max-width:430px">Waren von weit her bringen mehr. Stationen verkaufen, was in ihrer Zone gefördert wird. Große Mengen bewegen den Preis; der Markt erholt sich nach einigen Minuten. Frei im Frachtraum: ${room}</span>
       <button class="pri" data-a="sellall" ${total ? '' : 'disabled'}>Alles verkaufen (+${fmtN(total)} Cr)</button></div>`;
+  } else if (tab === 'ausruester') {
+    const gname = (id: string) => { const d = gearDef(id)!; return `${gearIcon(id, 26)}<span style="color:${RARITY[d.rar].c}">${esc(d.n)}</span> <span class="hint" style="display:inline">· ${KIND_N[d.kind]}</span>`; };
+    const stock = gearStock(s.id, def.danger);
+    h += `<p style="margin-top:0">Ausrüstung für dich selbst, nicht für das Schiff. Anlegen kannst du sie im Flottenband unter „Ausrüstung“ (Taste I). Rucksack: <b>${P.inv.length}/${invCap()}</b> Plätze belegt.</p>
+      <h3>ANGEBOT</h3><table><tr><th>Gegenstand</th><th>Werte</th><th class="num">Preis</th><th></th></tr>`;
+    for (const id of stock) {
+      const d = gearDef(id)!, pr = gearBuyPrice(id), ok = P.credits >= pr && canAdd(id);
+      h += `<tr><td>${gname(id)}<div class="hint">${esc(d.desc)}</div></td><td>${statLine(d) || '<span class="hint">—</span>'}</td><td class="num amb">${fmtN(pr)} Cr</td>
+        <td class="num"><button class="pri" data-a="gbuy" data-k="${id}" ${ok ? '' : 'disabled'}>Kaufen</button></td></tr>`;
+    }
+    h += `</table><h3>DEIN RUCKSACK</h3>`;
+    if (!P.inv.length) h += `<p class="hint">Der Rucksack ist leer.</p>`;
+    else {
+      h += `<table><tr><th>Gegenstand</th><th>Werte</th><th class="num">Menge</th><th class="num">Ankauf</th><th></th></tr>`;
+      P.inv.forEach((it, i) => {
+        const d = gearDef(it.id)!;
+        h += `<tr><td>${gname(it.id)}</td><td>${statLine(d) || '<span class="hint">—</span>'}</td><td class="num">${it.n}</td><td class="num amb">${fmtN(gearSellPrice(it.id))} Cr</td>
+          <td class="num"><button data-a="gsell" data-n="${i}">Verkaufen</button>${it.n > 1 ? ` <button data-a="gsellall" data-n="${i}">Alle</button>` : ''} <button data-a="gstore" data-n="${i}">In den Spind →</button></td></tr>`;
+      });
+      h += `</table>`;
+    }
+    h += `<h3>SPIND · ${P.locker.length}/${LOCKER_SLOTS}</h3>`;
+    if (!P.locker.length) h += `<p class="hint">Der Spind ist leer. Er ist von jeder Station aus erreichbar.</p>`;
+    else {
+      h += `<table><tr><th>Gegenstand</th><th>Werte</th><th class="num">Menge</th><th></th></tr>`;
+      P.locker.forEach((it, i) => {
+        const d = gearDef(it.id)!;
+        h += `<tr><td>${gname(it.id)}</td><td>${statLine(d) || '<span class="hint">—</span>'}</td><td class="num">${it.n}</td><td class="num"><button data-a="gtake" data-n="${i}">← In den Rucksack</button></td></tr>`;
+      });
+      h += `</table>`;
+    }
+    h += `<p class="hint">Händler zahlen 45 % des Werts. Angelegte Ausrüstung musst du zum Verkaufen erst ablegen.</p>`;
   } else if (tab === 'raffinerie') {
     h += `<p style="margin-top:0">Die Raffinerie schmilzt je 2 Einheiten Erz oder Eis zu 1 Barren. Barren sind mehr wert als das Rohmaterial und sparen Frachtraum.</p>
       <table><tr><th>Rohstoff</th><th class="num">Fracht</th><th>→ Produkt</th><th class="num">Barren</th><th class="num">Gebühr</th><th class="num">Wertgewinn</th><th></th></tr>`;
@@ -320,6 +356,10 @@ $('dockCard').addEventListener('click', e => {
     if (r.n) { note = `${r.n}× ${ITEMS[k as ItemId].n} gekauft: −${fmtN(r.cost)} Credits`; sfx('ui_confirm', 0.5, 1, () => snd(700, 0.12, 'sine', 0.05, -200)); }
     else note = 'Kauf nicht möglich: zu wenig Credits oder kein Platz im Frachtraum.';
   }
+  if (a === 'gbuy') { const er = buyGear(k); note = er || `${gearDef(k)!.n} gekauft: −${fmtN(gearBuyPrice(k))} Credits.`; if (!er) sfx('ui_confirm', 0.5, 1, () => snd(700, 0.12, 'sine', 0.05, -200)); }
+  if (a === 'gsell' || a === 'gsellall') { const nm = gearDef(P.inv[n]?.id || '')?.n || '', cr = sellGear(n, a === 'gsell' ? 1 : 9999); if (cr) { note = `${nm} verkauft: +${fmtN(cr)} Credits.`; snd(600, 0.12, 'sine', 0.05, 200); } }
+  if (a === 'gstore') { const er = toLocker(n); note = er || 'In den Spind gelegt.'; }
+  if (a === 'gtake') { const er = fromLocker(n); note = er || 'Aus dem Spind genommen.'; }
   if (a === 'map') { dockHooks.openMap(); return; }
   if (a === 'tab') tab = k;
   if (a === 'sell1') doSell(k, 1);

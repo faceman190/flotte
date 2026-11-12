@@ -19,14 +19,16 @@ import { roomName } from './mp';
 import { REP, REP_IDS, RANKS, TRUST_LV, level, nextRank, rankName, repOf, repHooks, type RepId } from '../game/reputation';
 import { abandonMission, missionLines, missionTypeName, missionHooks } from '../game/missions';
 import { storyObjective } from '../game/story';
+import { invApp, invAct } from './invApp';
 
 // =====================================================================================
 // Flottenband: der Armbandrechner, den die Flotte jedem Piloten mitgibt.
 // Apps: Übersicht, Aufträge, Karte, Fuhrpark, Fracht, Ruf, Handel, Funk. Solange es offen ist, steht das Spiel (Modus 'map').
 // =====================================================================================
-export type App = 'start' | 'auftraege' | 'karte' | 'fuhrpark' | 'fracht' | 'ruf' | 'handel' | 'funk';
+export type App = 'start' | 'inventar' | 'auftraege' | 'karte' | 'fuhrpark' | 'fracht' | 'ruf' | 'handel' | 'funk';
 const APPS: { id: App; n: string; sub: string; ico: string }[] = [
   { id: 'start', n: 'Übersicht', sub: 'Pilot, Standort und Schiff', ico: '<path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/>' },
+  { id: 'inventar', n: 'Ausrüstung', sub: 'Was du trägst und was im Rucksack liegt', ico: '<path d="M9 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="5.5" y="7" width="13" height="14" rx="3"/>' },
   { id: 'auftraege', n: 'Aufträge', sub: 'Angenommene Lieferaufträge', ico: '<path d="M5 3h10l4 4v14H5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11h8M8 15h8M8 7h5" stroke="currentColor" stroke-width="2"/>' },
   { id: 'karte', n: 'Karte', sub: 'Galaxiekarte und Routenplanung', ico: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="1.5"/><circle cx="15" cy="9" r="2"/>' },
   { id: 'fuhrpark', n: 'Fuhrpark', sub: 'Deine Schiffe und ihre Ausstattung', ico: '<path d="M12 2 15 10l7 4-7 1-3 7-3-7-7-1 7-4z"/>' },
@@ -35,7 +37,7 @@ const APPS: { id: App; n: string; sub: string; ico: string }[] = [
   { id: 'handel', n: 'Handel', sub: 'Waren und Credits mit anderen Piloten tauschen', ico: '<path d="M4 8h13l-3-3M20 16H7l3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' },
   { id: 'funk', n: 'Funk', sub: 'Verlauf der Funkmeldungen', ico: '<path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="2"/>' },
 ];
-let app: App = 'start', prevMode: Mode = 'play', fleetSel = 0, hudWasOn = false;
+let app: App = 'start', prevMode: Mode = 'play', fleetSel = 0, hudWasOn = false, dockWasOn = false;
 export const bandHooks = { closed: (_m: Mode) => {}, openTab: (_t: string) => {} };
 export const bandOpen = () => G.mode === 'map';
 export const bandApp = () => app;
@@ -53,6 +55,7 @@ export function openBand(a?: App) {
   releaseAll();
   hudWasOn = !$('hud').classList.contains('hidden');
   $('hud').classList.add('hidden');
+  dockWasOn = !$('dock').classList.contains('hidden'); $('dock').classList.add('hidden');   // Stationsmenü scheint sonst durch
   $('band').classList.remove('hidden');
   document.body.classList.remove('playing');
   sfx('band_open', 0.5, 1, () => snd(980, 0.06, 'sine', 0.03, 300));
@@ -65,6 +68,7 @@ export function closeBand() {
   hideMap();
   $('band').classList.add('hidden');
   if (hudWasOn) $('hud').classList.remove('hidden');
+  if (dockWasOn) $('dock').classList.remove('hidden');
   G.mode = prevMode;
   sfx('band_close', 0.5, 1, () => snd(620, 0.06, 'sine', 0.03, -200));
   bandHooks.closed(prevMode);
@@ -104,7 +108,7 @@ const hms = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor(s / 
 
 function render() {
   const b = $('bandBody');
-  b.innerHTML = app === 'start' ? startApp() : app === 'auftraege' ? jobsApp() : app === 'fuhrpark' ? fleetApp() : app === 'fracht' ? cargoApp() : app === 'handel' ? tradeApp() : app === 'ruf' ? repApp() : funkApp();
+  b.innerHTML = app === 'start' ? startApp() : app === 'inventar' ? invApp() : app === 'auftraege' ? jobsApp() : app === 'fuhrpark' ? fleetApp() : app === 'fracht' ? cargoApp() : app === 'handel' ? tradeApp() : app === 'ruf' ? repApp() : funkApp();
   b.querySelectorAll<HTMLElement>('[data-a]').forEach(el => el.onclick = () => act(el.dataset.a!, el.dataset.k || ''));
   const ci = document.getElementById('bandChat') as HTMLInputElement | null;
   if (ci) {
@@ -144,6 +148,7 @@ function act(a: string, k: string) {
   if (a === 'drop') { const c = P.contracts.find(x => x.id === k); if (c && confirmDrop(c.id)) { abandon(c); if (P.track === c.id) P.track = undefined; } }
   if (a === 'ship') fleetSel = +k;
   if (a === 'app') { setApp(k as App); return; }
+  if (invAct(a, k)) { saveGame(); $('bandCr').textContent = `${fmtN(P.credits)} Cr`; render(); return; }
   if (a.startsWith('tr')) { tradeAct(a, k); return; }
   saveGame();
   render();

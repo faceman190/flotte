@@ -26,7 +26,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     else if (near) r.push(['T', `Handel mit ${near.name} anbieten`, true]);
     r.push(['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['Leertaste', 'Springen']);
     if (IN.station && !IN.ship) r.push(['Tab', 'Stationsmenü']);
-    r.push(['B', 'Flottenband'], ['M', 'Karte'], ['Esc', 'Menü']);
+    r.push(['I', 'Ausrüstung'], ['B', 'Flottenband'], ['M', 'Karte'], ['Esc', 'Menü']);
     return { title: IN.ship ? `An Bord · ${IN.area}` : `Zu Fuß · ${IN.area}`, rows: r };
   }
   if (m === 'rover') {

@@ -12,6 +12,7 @@ import { damageTraffic, damageAlly } from './npc';
 import { radio } from '../ui/radio';
 import { SHARED, hostEvent } from './shared';
 import { addRep, killFaction, bountyFactor } from './reputation';
+import { rollKillLoot } from './inventory';
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
 
@@ -178,10 +179,13 @@ export function hitEnemy(e: any, j: number, dmg: number, byPlayer: boolean) {
   e.hp -= dmg;
   if (e.hp <= 0) killEnemy(e, j, byPlayer);
 }
+// Fundstück aus dem Wrack (landet im Rucksack des Piloten)
+function lootNote(type: string) { const n = rollKillLoot(type); if (n) radio('SYSTEM', `Fundstück geborgen: ${n}. Es liegt in deinem Rucksack (Taste I).`); }
 // Kopfgeld und Beute für einen Abschuss, den der Gastgeber gemeldet hat
 export function rewardKill(type: string, x: number, y: number, z: number) {
   const bounty = bountyFor(type);
   P.kills++; P.credits += bounty; P.earned += bounty;
+  lootNote(type);
   if (type === 'mother') { for (let k = 0; k < 10; k++) dropPick(x, y, z, 'schrott', 2, 80); for (let k = 0; k < 6; k++) dropPick(x, y, z, 'ferrit', 1, 80); radio('SYSTEM', 'Bienenstock zerstört! Kopfgeld: +' + bounty + ' Credits.'); }
   else if (type === 'bomber') { dropPick(x, y, z, 'schrott', 1); dropPick(x, y, z, 'schrott', 1); }
   else if (Math.random() < 0.7) dropPick(x, y, z, 'schrott', 1);
@@ -192,7 +196,7 @@ export function killEnemy(e: any, i: number, byPlayer = false, drops = true) {
   world.enemies.splice(i, 1);
   if (G.lockT === e) G.lockT = null;
   const bounty = byPlayer ? bountyFor(e.type) : 0;
-  if (byPlayer) { P.kills++; P.credits += bounty; P.earned += bounty; }
+  if (byPlayer) { P.kills++; P.credits += bounty; P.earned += bounty; lootNote(e.type); }
   if (e.type === 'mother') {
     for (let k = 0; k < 6; k++) setTimeout(() => {
       burst(e.x + rand(-60, 60), e.y + rand(-60, 60), e.z + rand(-60, 60), k % 2 ? '#d0a0ff' : '#ffd27a', 160, 140, 2);

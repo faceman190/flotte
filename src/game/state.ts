@@ -1,6 +1,8 @@
 import { ITEM_IDS, type ItemId } from '../data/items';
 import { UPG_IDS, type UpgId } from '../data/upgrades';
 import { SHIPS, computeStats, type ShipId, type Up } from '../data/ships';
+import type { GearSlot } from '../data/gear';
+import { sanitizeInv, type InvItem } from './inventory';
 
 // ---------------- Einstellungen ----------------
 const SETTINGS_KEY = 'lf_settings_v1';
@@ -46,6 +48,10 @@ export interface Player {
   rep?: Record<string, number>;    // Ruf bei den Fraktionen (siehe reputation.ts)
   missions?: import('./missions').Mission[];   // angenommene Fraktionsmissionen
   story?: import('./story').StoryState;        // Fortschritt der Geschichte (Prolog)
+  // persönliches Inventar des Piloten (siehe inventory.ts)
+  inv: InvItem[];                               // Rucksack: ein Eintrag je belegtem Platz
+  gear: Partial<Record<GearSlot, string>>;      // angelegte Ausrüstung
+  locker: InvItem[];                            // Spind, von jeder Station aus erreichbar
 }
 export type Tool = 'guns' | 'laser' | 'charge';
 export interface Contract { id: string; station: string; sector: string; stName: string; item: ItemId; amount: number; reward: number; trust?: boolean }
@@ -66,6 +72,7 @@ export function newPlayer(name: string): Player {
     tool: 'guns', mined: 0, market: {}, contracts: [], cctr: {},
     // Startschiff: Venom
     cls: 'venom', shipName: 'Venom', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2, rep: {}, missions: [], story: { prolog: 'done' },
+    inv: [], gear: { anzug: 'anzug_overall' }, locker: [],
   };
 }
 export function setPlayer(p: Player) {
@@ -102,6 +109,7 @@ export function loadGame(): Player | null {
     const p: Player = { ...base, ...d, cargo: { ...base.cargo, ...d.cargo }, up: { ...base.up, ...d.up } };
     if (!SHIPS[p.cls]) p.cls = 'falke';
     if (!Array.isArray(p.missions)) p.missions = [];
+    sanitizeInv(p);
     p.fleet = (p.fleet || []).map(r => ({ ...r, cargo: { ...emptyCargo(), ...r.cargo }, up: { ...emptyUp(), ...r.up } }));
     return p;
   } catch (e) { return null; }

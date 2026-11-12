@@ -4,6 +4,7 @@ import { SECTOR, type StationDef } from '../data/galaxy';
 import { P, stats, cargoUsed, type Contract } from './state';
 import { SHARED } from './shared';
 import { addRep, stationFaction, sellFactor, refineFeeFactor, contractFactor, trustSlot } from './reputation';
+import { gearFactor } from './inventory';
 
 // =============== Preise ===============
 // Grundpreis × Stationsfaktor × Herkunft (weit weg = teurer) × Sättigung (viel verkauft = billiger, erholt sich)
@@ -32,7 +33,7 @@ const satFactor = (s: number) => Math.min(1, Math.max(0.45, 1 - SAT_STEP * s));
 
 export function unitPrice(sd: StationDef, sectorId: string, k: ItemId, extra = 0) {
   const z = stationZone(sectorId);
-  const guild = ITEMS[k].cat === 'salvage' ? 1 : sellFactor();   // Bergbaugilde: bessere Preise für Erz und Barren
+  const guild = (ITEMS[k].cat === 'salvage' ? 1 : sellFactor()) * gearFactor('handel');   // Bergbaugilde: bessere Preise für Erz und Barren; dazu der Handelsbonus der Ausrüstung
   return Math.max(1, Math.round(ITEMS[k].base * (sd.prices?.[k] ?? 1) * originFactor(k, z) * satFactor(satNow(sd.id, k) + extra) * guild));
 }
 export function basePriceHere(sd: StationDef, sectorId: string, k: ItemId) {

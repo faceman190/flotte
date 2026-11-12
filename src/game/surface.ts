@@ -12,6 +12,7 @@ import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { PLANETS, PTYPE, planetBaseId, type PlanetDef } from '../data/planets';
 import { buildGate } from '../models/structures';
 import { buildFlora, updateFlora } from './flora';
+import { gearFactor } from './inventory';
 import { setOutpostDust } from '../models/stationModels';
 import { mesh, alongZ } from '../models/helpers';
 import { world, clearSector, addStation, makeAst, removeAst, type Asteroid, type Ore } from './world';
@@ -506,7 +507,7 @@ export function updateRover(dt: number) {
     const a = R.target;
     laserSound(true, 30);
     for (let i = 0; i < 2; i++) puff(dpx, dpy, dpz, rand(-6, 6), rand(1, 8), rand(-6, 6), Math.random() < 0.5 ? '#ffd27a' : ITEMS[a.comp[0].k].c, 0.5);
-    R.acc += 2.4 * dt;
+    R.acc += 2.4 * dt * gearFactor('abbau');
     while (R.acc >= 1 && a.yld > 0) {
       R.acc -= 1;
       if (roverLoad() >= R.cap) { if (R.warn <= 0) { radio('SYSTEM', 'Rover voll! Zum Schiff fahren und mit [E] verladen.'); R.warn = 5; } R.acc = 0; break; }

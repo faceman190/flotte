@@ -67,7 +67,7 @@ const PAL = {
   carrier: { accent: 0xd9822b, css: '#ffb347', wall: 0x80848c, floor: 0x666a72, hall: 'Hauptdeck' },
   outpost: { accent: 0xe0b030, css: '#e0b030', wall: 0x948c80, floor: 0x726a60, hall: 'Gemeinschaftsraum' },
 };
-const TAB_N: Record<string, string> = { markt: 'Markt', raffinerie: 'Raffinerie', auftraege: 'Aufträge', missionen: 'Missionen', lager: 'Lager', hangar: 'Hangar', werft: 'Werft', werkstatt: 'Werkstatt', service: 'Service', info: 'Auskunft' };
+const TAB_N: Record<string, string> = { ausruester: 'Ausrüster', markt: 'Markt', raffinerie: 'Raffinerie', auftraege: 'Aufträge', missionen: 'Missionen', lager: 'Lager', hangar: 'Hangar', werft: 'Werft', werkstatt: 'Werkstatt', service: 'Service', info: 'Auskunft' };
 const GREET: Record<string, string> = {
   markt: 'Zeig her, was du im Frachtraum hast. Oder suchst du Ware?',
   raffinerie: 'Die Öfen laufen. Was soll eingeschmolzen werden?',
@@ -121,6 +121,7 @@ function signTex(text: string, bg: string, fg = '#0c0d10') {
 }
 function mat<T extends THREE.Material>(m: T) { disposables.push(m); if ((m as any).isMeshStandardMaterial) (m as any).envMapIntensity = 0.3; return m; }
 
+import { gearFactor } from './inventory';
 const WALK_V = 1.5;   // Gehtempo der Leute in den Stationen (m/s)
 // KI-Figur mit Skelett, falls geladen (Händler stehen, Arbeiter laufen); sonst die einfache Figur aus Grundformen
 function buildPerson(suit: number, skin: number, hair: number, badge: number, role: 'idle' | 'walk' = 'idle', model?: string): Person {
@@ -385,9 +386,9 @@ function build(st: Station) {
 
   // Stände: links Handel, rechts Technik
   const tabs = interiorHooks.tabs().filter(t => t !== 'hangar');
-  const left = tabs.filter(t => ['markt', 'raffinerie', 'auftraege', 'lager'].includes(t)), right = tabs.filter(t => !left.includes(t));
+  const left = tabs.filter(t => ['markt', 'ausruester', 'raffinerie', 'auftraege', 'lager'].includes(t)), right = tabs.filter(t => !left.includes(t));
   const suits = [0x8a5a3a, 0x3a5a8a, 0x5a7a4a, 0x7a4a6a, 0x4a6a7a, 0x8a7a3a], skins = [0xe0b090, 0xc89070, 0x9a6a4a, 0xf0c8a8, 0x7a5238], hairs = [0x1a1410, 0x4a3020, 0x8a6a40, 0x909090, 0x2a2a30];
-  const goods: Record<string, number[]> = { markt: [0xd9822b, 0xbfe6ff, 0xe8664a], raffinerie: [0xc4c8d0, 0xff9a6a, 0xc8dcff], auftraege: [0xe8e2d6], missionen: [0x7cc4ff, 0xffb347], lager: [0x8a8f9a, 0x5a6068], werft: [0x6a9ad8], werkstatt: [0xffb347, 0x9aa0a8], service: [0xff6b5b, 0xffd27a], info: [0x7cc4ff] };
+  const goods: Record<string, number[]> = { ausruester: [0x5fd0ff, 0xc070ff, 0x8a8f9a], markt: [0xd9822b, 0xbfe6ff, 0xe8664a], raffinerie: [0xc4c8d0, 0xff9a6a, 0xc8dcff], auftraege: [0xe8e2d6], missionen: [0x7cc4ff, 0xffb347], lager: [0x8a8f9a, 0x5a6068], werft: [0x6a9ad8], werkstatt: [0xffb347, 0x9aa0a8], service: [0xff6b5b, 0xffd27a], info: [0x7cc4ff] };
   for (const [list, s] of [[left, -1], [right, 1]] as const) {
     if (pm) {
       // Modell: feste Ladennischen (fünf je Seite); belegt wird gleichmäßig verteilt, leere Nischen bleiben geschlossen
@@ -882,7 +883,7 @@ export function updateWalk(dt: number) {
   // Bewegung: weich anlaufen und abbremsen (Geschwindigkeit folgt der Eingabe), an Wänden entlanggleiten
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   {
-    const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run ? 10 : 6) / Math.hypot(f, s) : 0, sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
+    const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run ? 10 : 6) * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
     const k = Math.min(1, dt * (f || s ? 9 : 12));
     walkV.x += ((-sy * f + cy * s) * sp - walkV.x) * k; walkV.z += ((-cy * f - sy * s) * sp - walkV.z) * k;
     if (Math.hypot(walkV.x, walkV.z) < 0.05) walkV.x = walkV.z = 0;

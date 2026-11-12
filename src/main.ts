@@ -207,8 +207,8 @@ onKey(code => {
   }
   if ((code === 'Enter' || code === 'NumpadEnter') && openChat()) return;
   // Flottenband: M öffnet die Karte, B/F1 die Übersicht; nochmal drücken schließt
-  if (code === 'KeyM' || code === 'KeyB' || code === 'F1') {
-    const app = code === 'KeyM' ? 'karte' : 'start';
+  if (code === 'KeyM' || code === 'KeyB' || code === 'F1' || code === 'KeyI') {
+    const app = code === 'KeyM' ? 'karte' : code === 'KeyI' ? 'inventar' : 'start';
     if (G.mode === 'map') closeBand();
     else if (G.mode === 'play' || G.mode === 'dock' || G.mode === 'walk' || G.mode === 'rover') openBand(app);
     return;
