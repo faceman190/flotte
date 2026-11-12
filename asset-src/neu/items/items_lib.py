@@ -313,3 +313,77 @@ def make_atlas(out_dir, atlas_png, json_path, size=204, cols=10, dim=2048):
     bpy.data.images.remove(out)
     with open(json_path, 'w') as f: json.dump({'cell': size, 'cols': cols, 'dim': dim, 'ids': ids}, f)
     return len(ids)
+
+# ---------- Zusätze für hoch aufgelöste Modelle: Beschriftungen, Formschnitt, Körper als Vorlage ----------
+ITEM_DIR = globals().get('ITEM_DIR', '')
+_DEC = {}
+def _decals():
+    if 'm' not in _DEC:
+        j = json.load(open(os.path.join(ITEM_DIR, 'tex', 'decals.json'), encoding='utf-8')); _DEC['r'] = j['rects']; _DEC['s'] = j['size']
+        img = bpy.data.images.load(os.path.join(ITEM_DIR, 'tex', 'decals.png'), check_existing=True)
+        m = bpy.data.materials.new('beschriftung'); m.use_nodes = True
+        nt = m.node_tree; b = nt.nodes.get('Principled BSDF'); t = nt.nodes.new('ShaderNodeTexImage'); t.image = img
+        nt.links.new(t.outputs['Color'], b.inputs['Base Color']); nt.links.new(t.outputs['Alpha'], b.inputs['Alpha'])
+        b.inputs['Roughness'].default_value = 0.55
+        try: m.blend_method = 'BLEND'
+        except Exception: pass
+        _DEC['m'] = m
+    return _DEC
+def decal(name, w, loc, rot=(0, 0, 0), normal=None, lift=0.003):
+    # Beschriftung als flaches Rechteck (Vorderseite -Y), Breite w; normal = Richtung, in die sie zeigen soll (statt rot)
+    D = _decals(); x, y, pw, ph = D['r'][name]; S = D['s']; h = w * ph / pw
+    bm = bmesh.new(); vs = [bm.verts.new(p) for p in ((-w / 2, -lift, -h / 2), (w / 2, -lift, -h / 2), (w / 2, -lift, h / 2), (-w / 2, -lift, h / 2))]
+    f = bm.faces.new(vs); uv = bm.loops.layers.uv.new('UVMap')
+    for lp, (u, v) in zip(f.loops, ((x / S, 1 - (y + ph) / S), ((x + pw) / S, 1 - (y + ph) / S), ((x + pw) / S, 1 - y / S), (x / S, 1 - y / S))): lp[uv].uv = (u, v)
+    me = bpy.data.meshes.new('schrift'); bm.to_mesh(me); bm.free(); me.materials.append(D['m'])
+    ob = bpy.data.objects.new('schrift_' + name, me); COL.objects.link(ob)
+    if GROUP: ob.parent = GROUP[-1]
+    ob.location = loc
+    if normal is not None:
+        # Rechteck so drehen, dass seine Vorderseite (-Y) entlang normal zeigt und die Schrift aufrecht steht
+        from mathutils import Matrix
+        n = Vector(normal).normalized(); up = Vector((0, 0, 1))
+        if abs(n.dot(up)) > 0.97: up = Vector((0, 1, 0))
+        za = (up - n * up.dot(n)).normalized(); ya = -n; xa = ya.cross(za)
+        ob.rotation_euler = Matrix((xa, ya, za)).transposed().to_euler()
+    else: ob.rotation_euler = Euler([math.radians(a) for a in rot])
+    return ob
+def keep(ob, cutter, solver='FLOAT'):
+    # nur den Teil von ob behalten, der im Schneidkörper liegt
+    md = ob.modifiers.new('ausschnitt', 'BOOLEAN'); md.operation = 'INTERSECT'; md.object = cutter
+    try: md.solver = solver
+    except Exception: pass
+    cutter.hide_render = True; cutter.display_type = 'WIRE'
+    return ob
+def bake(ob):
+    # Modifikatoren einrechnen (danach ist das Netz fest; Schneidkörper werden nicht mehr gebraucht)
+    dg = bpy.context.evaluated_depsgraph_get(); dg.update()
+    me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg)); old = ob.data
+    ob.modifiers.clear(); ob.data = me
+    for p in me.polygons: p.use_smooth = True
+    md = ob.modifiers.new('kanten', 'EDGE_SPLIT'); md.split_angle = math.radians(35)
+    return ob
+def mesh_from(name, weld=1e-5):
+    # Netz eines vorhandenen Objekts (mit Skelett-Haltung), in Weltkoordinaten, Nähte verschweißt
+    src = bpy.data.objects[name]; dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(src.evaluated_get(dg)); me.transform(src.matrix_world)
+    bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=weld); bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me); bm.free()
+    while me.materials: me.materials.pop()
+    return me
+def mesh_obj(me, m, smooth=True):
+    ob = bpy.data.objects.new('netz', me); COL.objects.link(ob); me.materials.append(m) if not me.materials else None
+    if smooth:
+        for p in me.polygons: p.use_smooth = True
+    if GROUP: ob.parent = GROUP[-1]
+    return ob
+def along(p, q, f0, f1, r, m=None, seg=24):
+    # Zylinder entlang der Strecke p→q, von Anteil f0 bis f1 (als Schneidkörper oder Bauteil)
+    p, q = Vector(p), Vector(q); a = p.lerp(q, f0); b = p.lerp(q, f1); d = (b - a); e = Vector((0, 0, 1)).rotation_difference(d.normalized()).to_euler()
+    return cyl(r, d.length, tuple((a + b) / 2), m or BLACK(), rot=tuple(math.degrees(v) for v in e), seg=seg)
+def stick(name, w, target, origin, direction, lift=0.004):
+    # Beschriftung dorthin setzen, wo ein Strahl (origin, direction) das Objekt target trifft, und an dessen Fläche ausrichten
+    dg = bpy.context.evaluated_depsgraph_get(); dg.update()
+    hit, loc, nor, idx = target.evaluated_get(dg).ray_cast(Vector(origin), Vector(direction).normalized())
+    if not hit: return None
+    return decal(name, w, tuple(loc + nor * lift), normal=tuple(nor), lift=0.0)

@@ -63,3 +63,16 @@ Verbrauchsgüter wirken auf das Schiff (Hülle, Schild).
 - Danach `node scripts/make-item-atlas.mjs` (schreibt `src/data/gearAtlas.ts` und meldet Gegenstände ohne Bild) und `npm run assets`.
 - Im Spiel: `gearIcon()` in src/ui/icons.ts zeigt den Ausschnitt aus dem Bogen; fehlt der Bogen, erscheint das gezeichnete Symbol.
 - Neuer Gegenstand: Eintrag in gear.ts, Bauvorschrift mit `@item('<id>', seltenheit)` in items_build.py oder items_pilot.py, rendern, Bogen neu bauen.
+
+## Drei Maßstabsmodelle in hoher Detailstufe (Alpha 0.74)
+- `asset-src/neu/items/items_test.py`: Kryo-Kühler (`sy_kuehler`), Sturmhelm (`helm_sturm`), Sturmrüstung (`anzug_sturm`). Eigene Entwürfe mit eigener
+  Marke („Frostwerk“) und eigenem Flottenzeichen; Vorlagen aus anderen Spielen dienen nur als Maßstab für Bauart und Detaildichte.
+- Beschriftungen: `node scripts/make-item-decals.mjs` erzeugt `asset-src/neu/items/tex/decals.png` und `decals.json`; im Modell setzt
+  `decal(name, breite, ort, drehung)` ein Feld als Fläche, `stick(...)` legt es per Strahl auf eine gekrümmte Oberfläche.
+- Helm: Schale, Rahmen, Kinnschutz, Streifen und Platten sind Kugelschalen, die mit Schneidkörpern zugeschnitten werden (`shell`, `cut`, `keep`).
+- Rüstung: Das Körpernetz `char1` (Sammlung „koerper_quelle“, aus mechaniker_meshy.glb) dient ohne Kopf als Unterzeug. Platten sind saubere Gitter
+  (`patch`) und Manschetten (`sleeve`), die sich mit Shrinkwrap an den Körper legen und dann Wandstärke bekommen. Platten direkt aus dem
+  Körpernetz zu schneiden hat nicht funktioniert (zerrissene, stachelige Flächen).
+- Große Bilder: `render_items(ordner, ids, size=900, samples=72)`; das dauert länger als eine Anfrage, deshalb über `bpy.app.timers` starten
+  und auf `_fertig.txt` warten. Übersicht: `docs/inventar/test-kuehler-helm-ruestung.jpg`.
+- Beim Laden in Blender `ITEM_DIR` (Ordner asset-src/neu/items) ins Verzeichnis legen, bevor items_lib.py ausgeführt wird.

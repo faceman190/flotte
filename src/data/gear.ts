@@ -67,12 +67,14 @@ export const GEAR = {
   helm_werk: { n: 'Werkshelm', kind: 'helm', rar: 0, val: 120, desc: 'Schlichter Schutzhelm der Hangarmannschaften.', st: { schutz: 4 }, shop: 0 },
   helm_pilot: { n: 'Pilotenhelm Mk II', kind: 'helm', rar: 1, val: 480, desc: 'Geschlossener Helm mit Sichtanzeige.', st: { schutz: 8 }, shop: 0 },
   helm_grenz: { n: 'Grenzwacht-Visier', kind: 'helm', rar: 2, val: 1600, desc: 'Gepanzertes Visier der Grenzwacht, stoßfest.', st: { schutz: 14 }, shop: 2 },
+  helm_sturm: { n: 'Sturmhelm', kind: 'helm', rar: 2, val: 1900, desc: 'Geschlossener Kampfhelm mit verspiegeltem Visier und Funkmodulen.', st: { schutz: 15 }, shop: 1 },
   helm_kristall: { n: 'Kristallvisier', kind: 'helm', rar: 3, val: 5200, desc: 'Aus geschliffenem Ferrit. Zeigt Erzadern im Gestein.', st: { schutz: 20, abbau: 5 } },
   // ----- Anzüge -----
   anzug_overall: { n: 'Bordoverall', kind: 'anzug', rar: 0, val: 90, desc: 'Der Overall, den jeder Pilot der Crew bekommt.', st: { schutz: 3 }, shop: 0 },
   anzug_druck: { n: 'Druckanzug', kind: 'anzug', rar: 1, val: 650, desc: 'Dicht, gefüttert, für Arbeiten im Vakuum.', st: { schutz: 12 }, shop: 0 },
   anzug_exo: { n: 'Exo-Rahmen', kind: 'anzug', rar: 2, val: 2900, desc: 'Leichter Anzug mit Stützmotoren an den Beinen.', st: { schutz: 16, tempo: 12 }, shop: 1 },
   anzug_panzer: { n: 'Gefechtspanzer', kind: 'anzug', rar: 2, val: 2400, desc: 'Schwere Platten. Schützt gut, macht aber langsam.', st: { schutz: 26, tempo: -6 }, shop: 2 },
+  anzug_sturm: { n: 'Sturmrüstung', kind: 'anzug', rar: 2, val: 3200, desc: 'Gepanzerter Kampfanzug: rot lackierte Platten über dichtem Unterzeug, Versorgung im Tornister.', st: { schutz: 28, tempo: -3 }, shop: 1 },
   anzug_veteran: { n: 'Veteranenrüstung', kind: 'anzug', rar: 3, val: 7800, desc: 'Getragen von den Letzten, die den Rückzug deckten.', st: { schutz: 34, tempo: 4 } },
   // ----- Rucksäcke -----
   ruck_tasche: { n: 'Umhängetasche', kind: 'rucksack', rar: 0, val: 80, desc: 'Kleine Tasche für das Nötigste.', st: { plaetze: 4 }, shop: 0 },
@@ -137,6 +139,7 @@ export const GEAR = {
   sy_netz: { n: 'Frachtnetze', kind: 'schiffssystem', rar: 0, val: 350, desc: 'Was festgezurrt ist, braucht weniger Platz.', st: { s_cargo: 10 }, shop: 0 },
   sy_linse: { n: 'Fokuslinse', kind: 'schiffssystem', rar: 0, val: 380, desc: 'Bündelt den Bergbaulaser enger.', st: { s_laser: 10 }, shop: 0 },
   sy_antenne: { n: 'Weitbereichsantenne', kind: 'schiffssystem', rar: 0, val: 360, desc: 'Hört weiter ins Dunkel.', st: { s_scan: 15 }, shop: 0 },
+  sy_kuehler: { n: 'Kryo-Kühler FK-220', kind: 'schiffssystem', rar: 1, val: 1600, desc: 'Sechs Kühlkreise von Frostwerk. Hält Kanonen und Bergbaulaser länger auf Temperatur.', st: { s_rate: 6, s_laser: 14 }, shop: 0 },
   sy_ausbau: { n: 'Frachtraum-Ausbau', kind: 'schiffssystem', rar: 1, val: 1400, desc: 'Zwischenwände raus, Regale rein.', st: { s_cargo: 20 }, shop: 0 },
   sy_prisma: { n: 'Prismenlaser', kind: 'schiffssystem', rar: 1, val: 1500, desc: 'Teilt den Strahl und setzt ihn im Gestein wieder zusammen.', st: { s_laser: 22 }, shop: 1 },
   sy_sonde: { n: 'Tiefensonde', kind: 'schiffssystem', rar: 1, val: 1450, desc: 'Sieht durch Staub und Trümmer.', st: { s_scan: 30 }, shop: 1 },
