@@ -49,12 +49,17 @@ Verbrauchsgüter wirken auf das Schiff (Hülle, Schild).
 - Ein Frachtmodul lässt sich nicht ausbauen, solange die Fracht sonst nicht mehr passt.
 
 ## Bilder der Gegenstände (Alpha 0.72)
-- Quelle: `asset-src/neu/items/Items.blend`, gebaut aus `items_lib.py` (Grundformen, Materialien, Kamera, Licht, Rendern, Bildbogen)
-  und `items_build.py` (eine Bauvorschrift je Gegenstand, gleiche ID wie in gear.ts). Jeder Gegenstand ist eine eigene Sammlung `it_<id>`.
-- Die Farbe der Seltenheit steckt im Modell: Leuchten, Glas und Kristall tragen sie (grau, blau, violett, gold).
-- Neu rendern in Blender: beide Dateien mit `exec` in ein gemeinsames Verzeichnis laden, `build_item(id, index)` für jede ID,
-  `render_items(ordner, ids)` (204 px, Cycles, 64 Abtastungen, rund 2 s je Bild; in Teilen von etwa 20 aufrufen),
+- Quelle: `asset-src/neu/items/Items.blend`, gebaut aus `items_lib.py` (Grundformen, Materialien, Kamera, Licht, Rendern, Bildbogen),
+  `items_build.py` (Kleinteile und Baugruppen, Schiffsmodule) und `items_pilot.py` (Pilotenausrüstung). Eine Bauvorschrift je Gegenstand,
+  gleiche ID wie in gear.ts. Jeder Gegenstand ist eine eigene Sammlung `it_<id>`.
+- Stil seit Alpha 0.73: realistische Technik. Dunkle, abgenutzte Metalle (Kantenabrieb, Schmutz in den Fugen und gerundete Kanten entstehen im
+  Material `pbr`), gedeckte Lackfarben, Typenschilder, Schrauben, Lüftungsgitter, Schläuche, kaum Leuchten. Die Seltenheit zeigt sich am
+  Modell nur in kleinen eloxierten Teilen (`anod(A)`); die Kachel im Spiel trägt Farbe und Stufe (T1–T4).
+- Baugruppen in items_build.py: `unit` (Gehäuse mit Rahmen), `rails`, `vent`, `fins`, `conn`, `label`, `hazard`, `hose`, `knurl`, `bolt`;
+  mit `with grp(ort, drehung):` baut man Teile relativ zu einer Baugruppe.
+- Neu rendern in Blender: alle drei Dateien mit `exec` in ein gemeinsames Verzeichnis laden, `build_item(id, index)` für jede ID,
+  `render_items(ordner, ids)` (204 px, Cycles, 80 Abtastungen, rund 2,5 s je Bild; in Teilen von etwa 18 aufrufen),
   dann `make_atlas(ordner, 'asset-src/tex/items@2048.png', 'asset-src/neu/items/atlas.json')`.
 - Danach `node scripts/make-item-atlas.mjs` (schreibt `src/data/gearAtlas.ts` und meldet Gegenstände ohne Bild) und `npm run assets`.
 - Im Spiel: `gearIcon()` in src/ui/icons.ts zeigt den Ausschnitt aus dem Bogen; fehlt der Bogen, erscheint das gezeichnete Symbol.
-- Neuer Gegenstand: Eintrag in gear.ts, Bauvorschrift mit `@item('<id>', seltenheit)` in items_build.py, rendern, Bogen neu bauen.
+- Neuer Gegenstand: Eintrag in gear.ts, Bauvorschrift mit `@item('<id>', seltenheit)` in items_build.py oder items_pilot.py, rendern, Bogen neu bauen.

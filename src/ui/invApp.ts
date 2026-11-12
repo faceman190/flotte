@@ -44,7 +44,7 @@ export function invApp(): string {
   let cells = '';
   for (let i = 0; i < Math.max(cap, P.inv.length); i++) {
     const it = P.inv[i], d = it && gearDef(it.id);
-    cells += d ? `<button class="icell${sel?.w === 'i' && +sel.k === i ? ' on' : ''}" data-a="inv:i" data-k="${i}" style="--rc:${RARITY[d.rar].c}" title="${esc(d.n)}">${gearIcon(it.id, 50)}${it.n > 1 ? `<em>${it.n}</em>` : ''}</button>`
+    cells += d ? `<button class="icell${sel?.w === 'i' && +sel.k === i ? ' on' : ''}" data-a="inv:i" data-k="${i}" style="--rc:${RARITY[d.rar].c}" title="${esc(d.n)}"><i class="tier">T${d.rar + 1}</i>${gearIcon(it.id, 58)}${it.n > 1 ? `<em>${it.n}</em>` : ''}</button>`
       : '<span class="icell empty"></span>';
   }
   // ----- Auswahl -----

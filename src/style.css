@@ -274,8 +274,9 @@ button.mini{padding:3px 8px;font-size:12px;letter-spacing:.5px}
 .islot.empty{cursor:default;border-style:dashed;opacity:.75}.islot.empty b{color:var(--dim);font-weight:500}
 .islot.on,.icell.on{border-color:var(--amb);box-shadow:0 0 10px rgba(255,179,71,.35);background:rgba(255,179,71,.08)}
 .islot .ico,.icell .ico{margin:0}
-.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:7px}
-.icell{position:relative;aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid rgba(95,208,255,.2);border-bottom:3px solid var(--rc,rgba(95,208,255,.2));background:rgba(8,20,30,.55);cursor:pointer;padding:0;min-width:0}
+.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:7px}
+.icell{position:relative;aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:4px;border:1px solid rgba(120,140,160,.22);border-bottom:2px solid var(--rc,rgba(95,208,255,.2));background:linear-gradient(160deg,rgba(26,34,44,.9),rgba(10,15,22,.92));cursor:pointer;padding:0;min-width:0}
+.icell .tier{position:absolute;left:4px;top:2px;font-style:normal;font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--rc)}
 .icell:hover,.islot:not(.empty):hover{background:rgba(95,208,255,.1)}
 .icell.empty{border-bottom-width:1px;border-color:rgba(95,208,255,.13);background:rgba(8,20,30,.4);cursor:default}
 .icell em{position:absolute;right:4px;bottom:1px;font-style:normal;font-family:var(--mono);font-size:12px;color:#eaf6ff;text-shadow:0 0 4px #000,0 0 2px #000}
