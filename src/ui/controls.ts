@@ -9,6 +9,7 @@ import { TRADE } from '../game/trade';
 import { isOnline } from '../game/net';
 import { MINE } from '../game/mining';
 import { DUN } from '../game/dungeon';
+import { FOOT } from '../game/onfoot';
 
 // Steuerungsleiste links unten: zeigt nur die Tasten, die gerade Sinn ergeben.
 // Hervorgehoben (hi) ist, was jetzt möglich ist, z. B. Andocken oder Landen.
@@ -25,7 +26,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     const ask = tradeAsk(), near = isOnline() ? nearestOther() : null;
     if (ask) r.push(['T', `Handelsanfrage von ${ask}`, true]);
     else if (near) r.push(['T', `Handel mit ${near.name} anbieten`, true]);
-    r.push(['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['Leertaste', 'Springen']);
+    r.push(['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['Leertaste', 'Springen'], ['V', 'Ich-Sicht / Außensicht']);
     if (IN.station && !IN.ship) r.push(['Tab', 'Stationsmenü']);
     r.push(['I', 'Ausrüstung'], ['B', 'Flottenband'], ['M', 'Karte'], ['Esc', 'Menü']);
     return { title: IN.ship ? `An Bord · ${IN.area}` : `Zu Fuß · ${IN.area}`, rows: r };
@@ -33,14 +34,21 @@ function rowsFor(): { title: string; rows: Row[] } | null {
   if ((m as string) === 'dungeon') {
     const r: Row[] = [];
     if (DUN.prompt) r.push(['E', DUN.prompt, true]);
-    r.push(['Klick', 'Schießen'], ['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['I', 'Ausrüstung'], ['Esc', 'Menü']);
+    r.push(['Klick', 'Schießen'], ['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['V', 'Ich-Sicht / Außensicht'], ['I', 'Ausrüstung'], ['Esc', 'Menü']);
     return { title: DUN.e ? DUN.e.name : 'Mine', rows: r };
+  }
+  if (m === 'rover' && FOOT.active) {
+    const r: Row[] = [];
+    if (FOOT.prompt) r.push(['E', FOOT.prompt, true]);
+    if (FOOT.act === 'rover') r.push(['F', 'In den Rover steigen', true]);
+    r.push(['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['Leertaste', 'Springen'], ['V', 'Ich-Sicht / Außensicht'], ['I', 'Ausrüstung'], ['B', 'Flottenband'], ['Esc', 'Menü']);
+    return { title: 'Zu Fuß', rows: r };
   }
   if (m === 'rover') {
     const r: Row[] = [];
     if (nearShip()) r.push(['E', `An Bord der ${P.shipName}`, true]);
     if (ROVER.target) r.push(['Klick halten', 'Bohren', true]);
-    r.push(['W / S', 'Gas / Bremse'], ['A / D', 'Lenken'], ['Umschalt', 'Schneller'], ['B', 'Flottenband'], ['Esc', 'Menü']);
+    r.push(['W / S', 'Gas / Bremse'], ['A / D', 'Lenken'], ['Umschalt', 'Schneller'], ['F', 'Aussteigen'], ['B', 'Flottenband'], ['Esc', 'Menü']);
     return { title: 'Bergbau-Rover', rows: r };
   }
   if (m === 'play') {

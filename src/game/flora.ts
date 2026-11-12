@@ -170,6 +170,23 @@ export function buildFlora(type: string, R: { range: (a: number, b: number) => n
   if (F.tree > 0) layer(treeGeo(), card(treeTex(), 0xffffff), 900, 26, 800, F.tree, [9, 21], 1, 3, true);
 }
 
+// Steht im Umkreis r um (x, z) ein Baum? (gleiche Regeln wie updateFlora; für Laufen zu Fuß und die Kamera der Außensicht)
+export function treeNear(x: number, z: number, r: number) {
+  const L = layers.find(l => l.salt === 3); if (!L) return false;
+  const c0x = Math.floor((x - r) / L.cell) - 1, c1x = Math.floor((x + r) / L.cell), c0z = Math.floor((z - r) / L.cell) - 1, c1z = Math.floor((z + r) / L.cell);
+  for (let iz = c0z; iz <= c1z; iz++) for (let ix = c0x; ix <= c1x; ix++) {
+    const tx = (ix + hash(ix, iz, 11 + L.salt)) * L.cell, tz = (iz + hash(ix, iz, 12 + L.salt)) * L.cell;
+    if (Math.hypot(tx - x, tz - z) > r) continue;
+    const patch = hash(Math.floor(ix * L.cell / 70), Math.floor(iz * L.cell / 70), 9 + L.salt) * 0.6 + hash(Math.floor(ix * L.cell / 23), Math.floor(iz * L.cell / 23), 5 + L.salt) * 0.4;
+    if (hash(ix, iz, L.salt) > L.dens * (0.25 + 1.5 * patch)) continue;
+    if (Math.hypot(tx, tz) < 130 || Math.abs(tx) > 3900 || Math.abs(tz) > 3900) continue;
+    const h = hAt(tx, tz);
+    if (h < liquid + 0.6 || Math.abs(hAt(tx + 2, tz) - h) + Math.abs(hAt(tx, tz + 2) - h) > 1.5) continue;
+    return true;
+  }
+  return false;
+}
+
 // Pflanzen neu setzen, sobald sich die Kamera merklich bewegt hat
 export function updateFlora(cam: THREE.Vector3) {
   for (const L of layers) {

@@ -96,6 +96,39 @@ Die Stirnlampe sitzt an der Waffenlampe rechts unten.
 **Rechte:** Felsen (CliffRocks01, Textures.zip) und Drohne (MilitaryDroneCG) hat der Spieleentwickler bereitgestellt; Quelle und Lizenz bitte
 neben den Dateien vermerken (siehe `asset-src/neu/LIESMICH.md`).
 
+## Spielerfigur: Hände und Außensicht (Alpha 0.79/0.80)
+
+Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-src/neu/soldier_src/`, nicht im Repository). Blender-Datei: `asset-src/neu/soldier/Soldat.blend`.
+
+- **Texturen:** `soldat_build.py` → `textures()` wandelt die 4K-TGA (Unity: Metall in Rot, Glätte im Alphakanal) in unser Format: `soldat_col/nrm/orm@2048`,
+  drei weitere Uniformfarben `soldat_col_v2/v4/v6`, Köpfe `kopf_h_*` und `kopf_m_*` (mit Leuchtkarte).
+- **Hände in der Ich-Sicht:** `pose_hands(id)` legt die Arme des Soldaten (`SKM_Custom_Soldier_Arms`) per IK an jede Waffe: rechte Hand am Griff,
+  linke Hand seitlich am Handschutz (Daumen oben, so sieht man Handrücken und Daumen). Oberkörper leicht schräg, links darf die Schulter nach vorn.
+  Die Griffpunkte stehen in `GRIP`; `export_hands()` schreibt `Mine_Haende.glb` (Knoten `haende_k12/ig3/ef2`). Im Spiel hängen sie in der Waffenebene.
+- **Fallstrick Skelett:** In diesem UE-Skelett zeigen die Knochenenden nicht zum nächsten Gelenk (Unterarm, Oberschenkel), und der Handknochen zeigt
+  nicht zu den Fingern. `fix_arm_bones` setzt die Armknochen Gelenk an Gelenk; die Handausrichtung rechnet mit der Linie Handgelenk → Mittelfinger.
+- **Außensicht, Figur:** `soldat_tp.py` → `prepare()` nimmt die ältere Fassung des Soldaten (UE4-Skelett, alle 8 Köpfe, Rüstung, Taschen an einem Skelett).
+- **Animationen (Alpha 0.80):** Mixamo-Gewehrclips (FBX, ohne Skin, 30 fps) liegen in `asset-src/neu/mixamo/` (nicht im Repository), in Blender als
+  Sammlung `mx_rifle`. `soldat_anim.py` → `retarget_full()` überträgt den ganzen Körper inklusive Arme und Finger: je Knochen die Weltdrehung
+  relativ zur Ruhelage; die Ruhelagen (Mixamo T-Pose, Soldat A-Pose) werden angeglichen – Arme und Beine über die Linie zum nächsten Gelenk,
+  Unterarm, Hand und Finger über den Handrahmen (Fingerrichtung + Knöchellinie Zeige- → Kleinfinger). Schleifen laufen am Platz (die Vorwärtsbewegung
+  der Hüfte wird herausgerechnet); gemessen werden Tempo, Richtung, Schrittlänge und Phase (linker Fuß setzt auf) → `soldat_tp.json` → `clips`.
+  `weapon_rels('aim')` legt jede Waffe so an die rechte Hand, dass der Lauf im Zielclip zur linken Hand zeigt. `export_all()` schreibt alles.
+  Clips: idle (Rifle Idle), aim (Rifle Aiming Idle), fire (Firing Rifle), walk_f/b/l/r/fl/fr, death_f/b. Neue Gangart: Clips `run_*` nennen, fertig.
+- **Im Spiel (`src/game/avatar.ts`):** gemeinsam für Mine, Station, Hangar, eigene Schiffe und den Planetenboden.
+  Laufclips werden nach Laufrichtung relativ zum Körper überblendet (die zwei Nachbarrichtungen), Gangarten (walk, run) nach Tempo. Alle laufen in einem
+  gemeinsamen Schrittzyklus, der nach Tempo ÷ Schrittlänge vorrückt (höchstens 1,9 Zyklen/s). Im Stand dreht der Körper erst ab einem Winkel mit
+  Seitschritten nach, bis dahin dreht der Oberkörper; er neigt sich mit dem Blick. Nach einem Schuss (oder mit wachen Wächtern in der Nähe) bleibt die
+  Figur im Anschlag; Schießen legt eine Oberkörper-Ebene darüber; in der Mine spielt beim Tod eine Sterbeanimation.
+  Helm → einer der 8 Köpfe, Anzug → Rüstungsplatten und Uniformfarbe, Rucksack → Taschen (Figur wird bei Wechsel neu gebaut).
+- **Taste V** schaltet überall zu Fuß Ich-Sicht ↔ Außensicht (wird im Browser gemerkt). Kamera über der rechten Schulter; sie rückt vor Wänden,
+  Decken, Felsen, Bäumen und dem Rover heran.
+- **Zu Fuß auf dem Planeten (`src/game/onfoot.ts`):** im Rover **F** = aussteigen (Rover muss stehen), am Rover F oder E = einsteigen.
+  Über die Rampe aus dem Schiff steht man zu Fuß hinter dem Schiff. [E] am Schiff = an Bord, an einem Stolleneingang = Mine betreten
+  (danach steht man wieder am Eingang). Gelände folgt dem Boden, zu steile Hänge, Wasser/Lava, Lagerstätten, Schiff, Rover und Bäume halten auf.
+- **Noch offen:** Renn-Clips (Rifle Run vor/zurück/seitlich/schräg) – bis dahin rutschen die Füße bei schnellem Tempo (Laufen 4,2–6 m/s, Clips ~1–1,8 m/s);
+  Nachladen, Treffer, Springen als Clip; Hände an der Waffe korrigieren (linke Hand per IK an den Handschutz).
+
 ## Noch offen
 - Nur ein Aussehen (Bergwerk). Geplant: je Planetentyp eigene Farben und Einbauten, weitere Arten (Bunker, Wrack), große Meteoriten im All.
 - Fallen, Rätsel über mehrere Schalter, Schlüssel, mehrere Ebenen.

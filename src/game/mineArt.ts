@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { clone as skClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { renderer, GLOW } from '../core/engine';
 import { stationTemplate, stationClips } from '../models/stationModels';
 import { applyKit } from '../models/kit';
@@ -146,6 +147,13 @@ export function buildViewModel(id = 'k12'): ViewModel | null {
     if (n === W.licht) { lens = new THREE.MeshBasicMaterial({ color: W.col, toneMapped: false }); m.material = lens; }
     m.frustumCulled = false; m.renderOrder = n === W.glas ? 2 : n === W.absehen ? 3 : 0;
   }
+  // Hände des Spielers (Arme des Soldaten, in Blender per IK an diese Waffe gelegt: asset-src/neu/soldier/soldat_build.py)
+  const ht = stationTemplate('Mine_Haende'), hn = ht?.getObjectByName('haende_' + id);
+  if (hn) {
+    const hm = pbr('soldat', { metalness: 1, roughness: 1 }); hm.envMapIntensity = 0.12;
+    const c = hn.clone(true); inner.add(c);
+    c.traverse((o: any) => { if (o.isMesh) { o.material = hm; o.frustumCulled = false; } });
+  }
   sceneV.add(gun);
   const key = new THREE.DirectionalLight(0xfff2e4, 0.46); key.position.set(-0.6, 1.0, 0.4); sceneV.add(key); sceneV.add(key.target);
   const fill = new THREE.HemisphereLight(0x8fa4c0, 0x241c14, 0.13); sceneV.add(fill);
@@ -155,4 +163,62 @@ export function buildViewModel(id = 'k12'): ViewModel | null {
   flash.scale.setScalar(0.16); flash.position.copy(muzzle); flash.visible = false; flash.renderOrder = 5; inner.add(flash);
   const flashLight = new THREE.PointLight(0xffb060, 0, 1.5, 1.4); flashLight.position.copy(muzzle).add(new THREE.Vector3(0, 0.05, 0.05)); inner.add(flashLight);
   return { scene: sceneV, cam, gun, flash, flashLight, key, fill, lampWarm, lens, muzzle, lightPos, id, pos: W.pos, glow: id === 'k12' ? null : lens };
+}
+
+// ---------- Spielerfigur in der Außensicht (Soldat.glb aus asset-src/neu/soldier/soldat_tp.py) ----------
+// Ausrüstung bestimmt das Aussehen: Helm → einer der 8 Köpfe, Anzug → Rüstungsplatten und Uniformfarbe, Rucksack → Taschen.
+// Die Waffe hängt an der rechten Hand; ihre Lage dort steht in data/soldat_tp.json (aus der Gewehrhaltung in Blender).
+export interface SoldierVis { g: THREE.Group; root: THREE.Object3D; mixer: THREE.AnimationMixer; clips: THREE.AnimationClip[]; hand: THREE.Object3D | null; spine: THREE.Object3D | null; spine2: THREE.Object3D | null; weapon: THREE.Object3D | null; muzzle: THREE.Vector3; wid: string; gearKey: string }
+// Clipdaten aus Blender (soldat_anim.py): Laufclips mit Tempo (m/s), Richtung [vor, rechts], Schrittlänge je Zyklus und Phase (linker Fuß setzt auf)
+export interface ClipMeta { frames: number; loop: boolean; speed?: number; dir?: [number, number]; stride?: number; phase?: number }
+let TP: { weapon_in_hand: Record<string, number[][]>; clips?: Record<string, ClipMeta> } | null = null, tpLoading = false;
+export const soldierMeta = () => { loadTP(); return TP?.clips || null; };
+export const soldierGearKey = (gear: { helm?: string; anzug?: string; rucksack?: string }) => [gear.helm || '', gear.anzug || '', gear.rucksack || ''].join('|');
+function loadTP() {
+  if (TP || tpLoading) return; tpLoading = true;
+  const url = (window as any).DATAFILES?.soldat_tp;
+  if (url) fetch(url).then(r => r.json()).then(j => { TP = j; }).catch(() => {});
+}
+const hashS = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+const C = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1);         // Blender (z oben) → glTF (y oben)
+const CI = C.clone().invert();
+export function buildSoldier(gear: { helm?: string; anzug?: string; rucksack?: string; waffe?: string }): SoldierVis | null {
+  loadTP();
+  const t = stationTemplate('Soldat'); if (!t) return null;
+  const root = skClone(t) as THREE.Group;
+  const inner = root.children[0]; if (inner) inner.position.set(0, 0, 0);                  // der Lader zentriert Modelle; hier gilt der Ursprung aus Blender (Boden)
+  const variant = gear.anzug ? ['soldat_col', 'soldat_col_v2', 'soldat_col_v4', 'soldat_col_v6'][hashS(gear.anzug) % 4] : 'soldat_col';
+  const body = pbr('soldat', { metalness: 1, roughness: 1 }); body.envMapIntensity = 0.25;
+  if (variant !== 'soldat_col') { const m = tex(variant, true); if (m) body.map = m; }
+  const km = pbr('kopf_m'); km.emissiveMap = tex('kopf_m_emi', true); km.emissive.set(0xffffff); km.emissiveIntensity = 1.5; km.envMapIntensity = 0.4;
+  const kh = pbr('kopf_h'); kh.envMapIntensity = 0.35;
+  const head = gear.helm ? 1 + (hashS(gear.helm) % 8) : 6;
+  root.traverse((o: any) => {
+    o.userData.sh = false;
+    if (!o.isMesh) return;
+    o.frustumCulled = false;
+    const mn = o.material?.name || '';
+    o.material = mn === 'ext_kopf_m' ? km : mn === 'ext_kopf_h' ? kh : body;
+    const n: string = o.name || '';
+    const hm = n.match(/^Head0(\d)/); if (hm) o.visible = +hm[1] === head;
+    if (n.startsWith('Armor')) o.visible = !!gear.anzug;
+    if (n.startsWith('Bags')) o.visible = !!gear.rucksack;
+  });
+  const g = new THREE.Group(); g.add(root);
+  const mixer = new THREE.AnimationMixer(root);
+  const hand = root.getObjectByName('hand_r') || null, spine = root.getObjectByName('spine_03') || null, spine2 = root.getObjectByName('spine_02') || null;
+  return { g, root, mixer, clips: stationClips('Soldat'), hand, spine, spine2, weapon: null, muzzle: new THREE.Vector3(), wid: '', gearKey: soldierGearKey(gear) };
+}
+// Waffe an die rechte Hand hängen (sobald die Lage aus data/soldat_tp.json geladen ist)
+export function soldierWeapon(s: SoldierVis, id: string) {
+  if (s.wid === id || !s.hand || !TP) return;
+  if (s.weapon) { s.weapon.removeFromParent(); s.weapon = null; }
+  const W = WDEFS[id] || WDEFS.k12, t = stationTemplate(W.tpl), rel = TP.weapon_in_hand[id] || TP.weapon_in_hand.k12;
+  const node = t?.getObjectByName(W.body); if (!node || !rel) return;
+  const w = new THREE.Group(), c = node.clone(true); w.add(c);
+  const gm = pbr(W.tex); gm.envMapIntensity = W.env ?? 0.22;
+  c.traverse((o: any) => { if (o.isMesh) { o.material = gm; o.frustumCulled = false; } o.userData.sh = false; });
+  const R = new THREE.Matrix4(); R.set(...(rel.flat() as [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]));
+  w.matrixAutoUpdate = false; w.matrix.copy(C).multiply(R).multiply(CI);
+  s.hand.add(w); s.weapon = w; s.wid = id; s.muzzle.set(...W.muzzle);
 }

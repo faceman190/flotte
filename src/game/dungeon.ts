@@ -13,6 +13,7 @@ import { addItem, canAdd, gearStat, gearFactor } from './inventory';
 import { SECTOR } from '../data/galaxy';
 import { PLANETS, PTYPE } from '../data/planets';
 import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
+import { VIEW, makeAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
 
 // =====================================================================================
 // Dungeons auf Planeten: verlassene Minen als Labyrinth.
@@ -46,6 +47,8 @@ let group: THREE.Group | null = null, lamps: THREE.Vector3[] = [], pool: THREE.P
 let tracer: THREE.Line | null = null, tracerT = 0, lampT = 0, pathT = 0, stepT = 0, grabT = 0;
 let vm: ViewModel | null = null, mflash: THREE.PointLight | null = null, WALL_R = 0.42;     // Waffe im Bild (eigene Ebene), Mündungslicht in der Welt, Abstand zur Wand
 const sway = { x: 0, y: 0, yaw: 0, pitch: 0 };
+let me: Avatar | null = null;                                              // eigene Figur (Außensicht, src/game/avatar.ts)
+export { VIEW };
 let chunks: { x: number; z: number; meshes: THREE.Object3D[] }[] = [];      // Felsbereiche (4 × 4 Kacheln), nach Wegstrecke ein- und ausgeblendet
 const saved = { amb: 0, sun: 0, rim: 0, fogC: 0, fogD: 0, near: 0.5, far: 30000 };
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -576,6 +579,7 @@ export function enterDungeon(e: Entrance) {
   head = new THREE.SpotLight(0xe6eeff, 18, 38, 0.6, 0.55, 1.0); scene.add(head); scene.add(head.target);
   mflash = new THREE.PointLight(0xffb060, 0, 9, 1.6); scene.add(mflash);
   vm = buildViewModel(viewModelId(P.gear?.waffe));
+  me = makeAvatar(P.gear || {}); if (me) { me.s.g.visible = VIEW.tp; group.add(me.s.g); } resetTpCam();
   if (vm) { overlay.scene = vm.scene; overlay.camera = vm.cam; } else { gun = buildGun(); scene.add(gun); }
   tracer = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.9 })); tracer.frustumCulled = false; tracer.visible = false; scene.add(tracer);
   camera.near = 0.06; camera.far = 38; camera.updateProjectionMatrix();      // dahinter verschluckt der Nebel alles; ferne Felsbereiche fallen weg
@@ -592,11 +596,12 @@ export function enterDungeon(e: Entrance) {
 }
 export function leaveDungeon(died = false) {
   if (!DUN.active) return;
+  if (me) me.s.g.removeFromParent();
   if (group) { scene.remove(group); group.traverse((o: any) => { if (o.geometry) o.geometry.dispose(); }); group = null; }
   if (head) { scene.remove(head); scene.remove(head.target); head.dispose(); head = null; }
   if (gun) { scene.remove(gun); gun = null; }
   if (mflash) { scene.remove(mflash); mflash.dispose(); mflash = null; }
-  overlay.scene = null; overlay.camera = null; vm = null;
+  overlay.scene = null; overlay.camera = null; vm = null; me = null;
   if (tracer) { scene.remove(tracer); tracer.geometry.dispose(); tracer = null; }
   for (const b of DUN.bolts) scene.remove(b.m);
   DUN.bolts = []; DUN.foes = []; DUN.crates = []; pool = []; chunks = [];
@@ -652,7 +657,7 @@ function shoot() {
     else burst(hp.x, hp.y, hp.z, w.col, 3, 2, 0.2);
   }
   if (tracer && end && (gun || vm)) {
-    const a = vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : gun!.localToWorld(_w.set(0, 0.008, -0.6)).clone();
+    const a = VIEW.tp && me?.s.weapon ? me.s.weapon.localToWorld(_w.copy(me.s.muzzle)).clone() : vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : gun!.localToWorld(_w.set(0, 0.008, -0.6)).clone();
     (tracer.geometry as THREE.BufferGeometry).setFromPoints([a, end]); tracer.visible = true; tracerT = 0.05;
     (tracer.material as THREE.LineBasicMaterial).color.set(w.col);
   }
@@ -666,7 +671,13 @@ export function updateDungeon(dt: number) {
   DUN.locked = document.pointerLockElement === gl;
   if (vm && vm.id !== viewModelId(P.gear?.waffe)) { const n = buildViewModel(viewModelId(P.gear?.waffe)); if (n) { vm = n; overlay.scene = n.scene; overlay.camera = n.cam; } }
   if (!DUN.locked && (grabT -= dt) <= 0) { grabT = 0.4; const ua = (navigator as any).userActivation; if (!ua || ua.isActive) { try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* bleibt bei Zeigersteuerung */ } } }
-  if (DUN.dead > 0) { DUN.dead -= dt; DUN.pitch += (-1.2 - DUN.pitch) * dt * 2; if (DUN.dead <= 0) leaveDungeon(true); return; }
+  if (DUN.dead > 0) {
+    DUN.dead -= dt;
+    if (VIEW.tp && me) { DUN.pitch += (-0.35 - DUN.pitch) * dt * 2; driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: 0, vx: 0, vz: 0, dead: true }); }
+    else DUN.pitch += (-1.2 - DUN.pitch) * dt * 2;
+    if (DUN.dead <= 0) leaveDungeon(true);
+    return;
+  }
   if (!DUN.locked) {
     const mx = clamp((mouse.x - view.W / 2) / (view.W / 2), -1, 1), my = clamp((mouse.y - view.H / 2) / (view.H / 2), -1, 1), dz = 0.14, sh = (v: number) => Math.sign(v) * Math.max(0, Math.abs(v) - dz) / (1 - dz);
     DUN.yaw -= sh(mx) * 2.4 * settings.sens * dt; DUN.pitch += (-sh(my) * 1.0 * (settings.invertY ? -1 : 1) - DUN.pitch) * Math.min(1, dt * 5);
@@ -791,6 +802,11 @@ export function updateDungeon(dt: number) {
       _w.copy(srt[0].l).sub(_v); _w.applyQuaternion(_q.copy(camera.quaternion).invert()).normalize().multiplyScalar(0.9); vm.lampWarm.position.copy(_w);
     }
   }
+  // eigene Figur (Außensicht): Laufen nach Richtung, Anschlag nach Schüssen, Neigung mit dem Blick
+  if (me) {
+    me.s.g.visible = VIEW.tp;
+    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14) });
+  }
   for (const m of DUN.msg) m.life -= dt;
   DUN.msg = DUN.msg.filter(m => m.life > 0);
   ambient.intensity = saved.amb * 0.1; sun.intensity = 0; rim.intensity = 0;
@@ -799,6 +815,11 @@ export function updateDungeon(dt: number) {
 export function dungeonCamera() {
   camera.position.set(BASE.x + DUN.x, BASE.y + EYE + DUN.bob - (DUN.dead > 0 ? (2.2 - DUN.dead) * 0.5 : 0), BASE.z + DUN.z);
   camera.rotation.order = 'YXZ'; camera.rotation.set(DUN.pitch + DUN.kick * 0.012, DUN.yaw, 0);
+  if (VIEW.tp && me) {
+    // Außensicht: über der rechten Schulter; hält Abstand zu Felswänden
+    tpCamPos(_v, DUN.x, 0, DUN.z, DUN.yaw, DUN.pitch, (x, y, z) => free(x, z, 0.28) && y > 0.25 && y < 2.6);
+    camera.position.set(BASE.x + _v.x, BASE.y + _v.y, BASE.z + _v.z);
+  }
   if (Math.abs(camera.fov - 74) > 0.05) { camera.fov = 74; camera.updateProjectionMatrix(); }
   camera.updateMatrixWorld();
   if (head) {
@@ -807,7 +828,8 @@ export function dungeonCamera() {
     head.target.position.copy(camera.position).add(_v.set(0, -0.04, -1).applyQuaternion(camera.quaternion).multiplyScalar(8)); head.target.updateMatrixWorld();
   }
   if (mflash) { mflash.position.copy(camera.localToWorld(_w.set(0.1, -0.08, -0.7))); mflash.intensity = DUN.flash > 0 ? 34 : 0; }
-  if (vm) {
+  if (vm) { const want = VIEW.tp ? null : vm.scene; if (overlay.scene !== want) { overlay.scene = want; overlay.camera = want ? vm.cam : null; } }
+  if (vm && !VIEW.tp) {
     vm.cam.aspect = view.W / view.H; vm.cam.updateProjectionMatrix();
     // Pendeln: die Waffe bleibt bei schnellen Drehungen kurz zurück
     const dyaw = DUN.yaw - sway.yaw, dp = DUN.pitch - sway.pitch; sway.yaw = DUN.yaw; sway.pitch = DUN.pitch;

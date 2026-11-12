@@ -24,6 +24,8 @@ import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom, interiorEnv } 
 import { stationTemplate } from '../models/stationModels';
 import { applyKit, kitMeta } from '../models/kit';
 import { HANGAR_BLOCKS } from '../data/hangarBlocks';
+import { VIEW, syncAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
+import { viewModelId } from './mineArt';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -95,6 +97,9 @@ let dims = PROM.station, kind: 'station' | 'carrier' | 'outpost' = 'station';
 const disposables: (THREE.Material | THREE.Texture)[] = [];
 let room: ShipRoom | null = null, roomModel: THREE.Object3D | null = null, outsideEnv: THREE.Texture | null = null;
 let mesh: ReturnType<typeof buildMeshRoom> = null, boarding = false;   // Innenraum aus einem Modell (Laufkarte statt Rechtecke)
+// eigene Figur in der Außensicht (Taste V): hängt in einem Halter, der dem aktuellen Raum folgt (Station oder Schiff)
+const meHolder = new THREE.Group(); meHolder.matrixAutoUpdate = false; meHolder.visible = false; scene.add(meHolder);
+let me: Avatar | null = null;
 let saved: null | { group: THREE.Group | null; rects: Rect[]; obstacles: Rect[]; shipObs: Rect[]; inters: Inter[]; shipInters: Inter[]; labels: Label[]; shipLabels: Label[]; x: number; z: number; yaw: number; lamps: [THREE.Vector3, number, number][] } = null;
 
 // Drei feste Lichter (immer in der Szene, außerhalb mit Stärke 0 – so müssen keine Shader neu gebaut werden)
@@ -623,7 +628,7 @@ export function enterInterior(st: Station) {
   IN.x = Math.min(HW - 6, hw + 5); IN.z = -30;
   IN.yaw = Math.atan2(IN.x, 20); IN.pitch = 0; IN.bob = 0; IN.dist = 0; IN.target = null;
   camera.near = 0.12; camera.updateProjectionMatrix();
-  G.inside = true;
+  G.inside = true; resetTpCam();
   G.mode = 'walk';
   beginSeq(-1, 4.5, null);   // Landung: das Schiff kommt durchs Tor herein und setzt auf
   say('SYSTEM', `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
@@ -649,7 +654,7 @@ export function leaveInterior() {
   for (const gl2 of SHIP.glows) gl2.visible = true;
   camera.near = 0.5; camera.updateProjectionMatrix();
   IN.active = false; IN.station = null; IN.target = null; IN.say.t = 0;
-  G.inside = false;
+  G.inside = false; meHolder.visible = false;
 }
 
 // ---------- Eigene Schiffe betreten ----------
@@ -732,7 +737,7 @@ export function leaveShip() {
     for (const l of lamps) l.intensity = 0;
     setExposure(1);
     camera.near = 0.5; camera.updateProjectionMatrix();
-    IN.active = false; G.inside = false; IN.say.t = 0;
+    IN.active = false; G.inside = false; IN.say.t = 0; meHolder.visible = false;
     if (document.pointerLockElement === gl) document.exitPointerLock();
   }
 }
@@ -919,6 +924,14 @@ export function updateWalk(dt: number) {
     if (IN.jy <= 0) { IN.jy = 0; IN.jv = 0; stepT = 0; }   // kein eigener Ton beim Aufkommen: der nächste Schritt folgt sofort
   }
   IN.area = room ? room.area(IN.x, IN.z) : IN.z > HZ0 ? 'Hangardeck' : IN.z > PZ1 ? 'Korridor' : PAL[kind].hall;
+  // eigene Figur (Außensicht)
+  const tpOn = VIEW.tp && SEQ.t < 0;
+  if (tpOn) me = syncAvatar(meHolder, me, P.gear || {});
+  meHolder.visible = tpOn && !!me;
+  if (me && tpOn) {
+    meHolder.matrix.copy(group.matrixWorld); meHolder.matrixWorldNeedsUpdate = true;
+    driveAvatar(me, dt, { x: IN.x, y: IN.fy + IN.jy, z: IN.z, yaw: IN.yaw, pitch: IN.pitch, vx: walkV.x, vz: walkV.z, wid: viewModelId(P.gear?.waffe) });
+  }
   if (IN.panel && Math.hypot(IN.x - IN.panel.x, IN.z - IN.panel.z) > 2.5) IN.panel = null;
   // Was liegt vor mir?
   let best: Inter | null = null, bd = 1e9;
@@ -969,6 +982,12 @@ export function updateWalk(dt: number) {
 
 // ---------- Kamera ----------
 const _c = new THREE.Vector3();
+// Deckenhöhe über dem Boden an der Spielerposition (für die Kamera der Außensicht)
+function ceilY() {
+  if (mesh) { mesh.floorAt(IN.x, IN.z, IN.fy); return IN.fy + Math.max(2.1, mesh.head() - 0.15); }   // head(): Kopffreiheit über dem zuletzt abgefragten Boden
+  if (room) return room.height - 0.15;
+  return (IN.z > HZ0 ? HH : IN.z > PZ1 ? CH : dims.h) - 0.2;
+}
 export function applyWalkCamera() {
   if (!group) return;
   if (SEQ.t >= 0) {   // Start/Landung: Kamera steht seitlich hinter dem Stellplatz im Hangar und folgt dem Schiff
@@ -979,7 +998,12 @@ export function applyWalkCamera() {
     if (Math.abs(camera.fov - 62) > 0.05) { camera.fov = 62; camera.updateProjectionMatrix(); }
     return;
   }
-  group.localToWorld(_c.set(IN.x, 1.7 + IN.bob + IN.fy + IN.jy, IN.z));
+  if (VIEW.tp && me) {
+    // Außensicht: über der rechten Schulter, rückt vor Wänden und unter der Decke heran
+    const top = ceilY();
+    tpCamPos(_c, IN.x, IN.fy + IN.jy, IN.z, IN.yaw, IN.pitch, (x, y, z) => free(x, z) && y > IN.fy + 0.3 && y < top);
+    group.localToWorld(_c);
+  } else group.localToWorld(_c.set(IN.x, 1.7 + IN.bob + IN.fy + IN.jy, IN.z));
   camera.position.copy(_c);
   camera.rotation.order = 'YXZ';
   camera.rotation.set(IN.pitch, group.rotation.y + IN.yaw, 0);
