@@ -67,7 +67,17 @@ Wiederholte Module sind InstancedMeshes (ein Zeichenaufruf je Teil und Material)
 **Waffe in der Ich-Sicht:** eigene Szene und Kamera (`overlay` in `src/core/engine.ts`), nach dem Bild mit leerem Tiefenpuffer gezeichnet: Sie ragt
 nie in Wände und wird nicht von der Stirnlampe überstrahlt. Licht: ein ruhiges Führungslicht, Himmel/Boden-Licht und ein warmes Licht aus Richtung der
 nächsten Grubenlampe. Pendeln bei Drehungen, Gehbewegung, Rückstoß, Mündungsfeuer (Sprite + Licht in der Waffenszene + Licht in der Welt).
-Die Stirnlampe sitzt an der Waffenlampe rechts unten. Derzeit zeigt jede Pilotenwaffe den K-12.
+Die Stirnlampe sitzt an der Waffenlampe rechts unten.
+
+**Weitere Waffen (Alpha 0.78):** `asset-src/neu/mine/waffen_build.py` baut zwei eigene Entwürfe von Hammerwerk und nutzt dafür die Hilfsfunktionen aus `waffe_build.py`:
+- **IG-3 Weitblick** (Impulsgewehr): Graphitkern mit weißer Lackschale, Fugen und Lüftungsschlitzen, integriertes Zielfernrohr mit Entfernungsmesser,
+  Skelettschaft, Energiezellen-Magazin mit Ladeanzeige, Leuchtstreifen, orange Markierungen, untere Schiene. Rund 47.000 Dreiecke.
+- **EF-2 Brecher** (Enterflinte): kompakter Körper mit Energiekern und Leuchtring, geknickten Leuchtstreifen, Hülse im Auswurf, Patronenfenster im
+  Magazin, Reflexvisier, Gitterschaft, Kabel vom Kern. Rund 34.000 Dreiecke.
+- Ablauf je Waffe: `build_ig3()` bzw. `build_ef2()` → `prepare_w(key)` → `bake_w(key)` (wartet auf `tex_tmp/<key>_fertig.txt`) → `show_w(key)` → `export_w(key)`.
+  Beide teilen sich die Back-Materialien: immer eine Waffe fertig backen, bevor die nächste gebaut wird.
+- Im Spiel wählt `viewModelId()` in `src/game/mineArt.ts` das Modell nach der angelegten Waffe: Impulsgewehr → IG-3, Enterflinte → EF-2, sonst K-12.
+  Wechselt man die Waffe in der Mine, wird das Modell sofort getauscht. Die Leuchtteile pulsieren leicht.
 
 **Neu bauen:** `Mine.blend` öffnen, die Skripte mit `exec(open(...).read(), ns)` laden.
 - Felsen: `build()`, `export()`. Texturen: `node scripts/make-rock-textures.mjs` (Quelle `rocks_src/`, aus Textures.zip).
@@ -89,5 +99,5 @@ neben den Dateien vermerken (siehe `asset-src/neu/LIESMICH.md`).
 ## Noch offen
 - Nur ein Aussehen (Bergwerk). Geplant: je Planetentyp eigene Farben und Einbauten, weitere Arten (Bunker, Wrack), große Meteoriten im All.
 - Fallen, Rätsel über mehrere Schalter, Schlüssel, mehrere Ebenen.
-- Eigene Modelle für Pistole, Flinte und Impulswaffe in der Ich-Sicht; Hände/Handschuhe an der Waffe.
+- Eigene Modelle für Pistole und Splitterwerfer in der Ich-Sicht; Hände/Handschuhe an der Waffe.
 - Werte (Leben, Schaden, Beute) sind geschätzt und nicht eingespielt.

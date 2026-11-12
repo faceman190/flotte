@@ -167,7 +167,7 @@ def cut(ob, bms):
         me = bpy.data.meshes.new('tmp'); b.to_mesh(me); b.free(); bm.from_mesh(me); bpy.data.meshes.remove(me)
     me = bpy.data.meshes.new('schnitt'); bm.to_mesh(me); bm.free()
     cutter = bpy.data.objects.new('schnitt', me); COL.objects.link(cutter); cutter.hide_render = True
-    md = ob.modifiers.new('schnitt', 'BOOLEAN'); md.operation = 'DIFFERENCE'; md.solver = 'EXACT'; md.object = cutter
+    md = ob.modifiers.new('schnitt', 'BOOLEAN'); md.operation = 'DIFFERENCE'; md.solver = 'EXACT'; md.object = cutter; md.use_self = True; md.use_hole_tolerant = True      # Schneidkörper dürfen sich überschneiden
     # Boolean vor die Fase stellen
     while ob.modifiers.find('schnitt') > 0: ob.modifiers.move(ob.modifiers.find('schnitt'), ob.modifiers.find('schnitt') - 1)
     dg = bpy.context.evaluated_depsgraph_get()

@@ -110,35 +110,49 @@ export function buildDrone(boss: boolean): DroneVis | null {
 export interface ViewModel {
   scene: THREE.Scene; cam: THREE.PerspectiveCamera; gun: THREE.Group; flash: THREE.Sprite; flashLight: THREE.PointLight;
   key: THREE.DirectionalLight; fill: THREE.HemisphereLight; lampWarm: THREE.PointLight; lens: THREE.MeshBasicMaterial | null;
-  muzzle: THREE.Vector3; lightPos: THREE.Vector3;
+  muzzle: THREE.Vector3; lightPos: THREE.Vector3; id: string; pos: [number, number, number]; glow: THREE.MeshBasicMaterial | null;
+}
+// Modelle je Waffe (Blender: waffe_build.py für den K-12, waffen_build.py für IG-3 und EF-2). Knoten: Körper, Glas, Absehen, Leuchtteile.
+// muzzle: Mündung im Spiel-Raum (Blender x, z, −y); pos: Lage vor der Kamera (rechts, unten, vorn).
+interface WDef { tpl: string; body: string; glas: string; absehen: string; licht: string; tex: string; muzzle: [number, number, number]; pos: [number, number, number]; col: number; env?: number }   // env: Spiegelung der Umgebung (viel Metall → weniger)
+const WDEFS: Record<string, WDef> = {
+  k12: { tpl: 'Mine_Waffe', body: 'waffe', glas: 'glas', absehen: 'absehen', licht: 'lampenglas', tex: 'waffe', muzzle: [0, 0.04, -0.5585], pos: [0.118, -0.178, -0.30], col: 0xfff2dc },
+  ig3: { tpl: 'Mine_W_ig3', body: 'ig3', glas: 'ig3_glas', absehen: 'ig3_absehen', licht: 'ig3_licht', tex: 'waffe_ig3', muzzle: [0, 0.046, -0.724], pos: [0.128, -0.228, -0.42], col: 0x8fd0ff },
+  ef2: { tpl: 'Mine_W_ef2', body: 'ef2', glas: 'ef2_glas', absehen: 'ef2_absehen', licht: 'ef2_licht', tex: 'waffe_ef2', muzzle: [0, 0.046, -0.330], pos: [0.112, -0.168, -0.29], col: 0x6fc2ff, env: 0.07 },
+};
+// Welches Modell zur angelegten Waffe gehört (fehlt die Datei, nimmt das Spiel den K-12)
+export function viewModelId(gear?: string) {
+  const id = gear === 'waffe_impuls' ? 'ig3' : gear === 'waffe_flinte' ? 'ef2' : 'k12';
+  return stationTemplate(WDEFS[id].tpl) ? id : 'k12';
 }
 let ENV: THREE.Texture | null = null;
-export function buildViewModel(): ViewModel | null {
-  const t = stationTemplate('Mine_Waffe'); if (!t) return null;
+export function buildViewModel(id = 'k12'): ViewModel | null {
+  const W = WDEFS[id] || WDEFS.k12;
+  const t = stationTemplate(W.tpl); if (!t) return null;
   const sceneV = new THREE.Scene();
   if (!ENV) { const pm = new THREE.PMREMGenerator(renderer); ENV = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
   sceneV.environment = ENV;
   const cam = new THREE.PerspectiveCamera(52, 16 / 9, 0.01, 10);
   const gun = new THREE.Group(), inner = new THREE.Group(); gun.add(inner);
-  const gm = pbr('waffe'); gm.envMapIntensity = 0.22;
+  const gm = pbr(W.tex); gm.envMapIntensity = W.env ?? 0.22;
   let lens: THREE.MeshBasicMaterial | null = null;
-  for (const n of ['waffe', 'glas', 'absehen', 'lampenglas']) {
+  for (const n of [W.body, W.glas, W.absehen, W.licht]) {
     const node = t.getObjectByName(n); if (!node) continue;
     const c = node.clone(true); inner.add(c);
     const src = meshOf(c, n); if (!src) continue;
     const m = src; m.material = gm;
-    if (n === 'glas') m.material = new THREE.MeshPhysicalMaterial({ color: 0x0b1418, roughness: 0.04, metalness: 0, transmission: 0, transparent: true, opacity: 0.38, envMapIntensity: 1.4, clearcoat: 1 });
-    if (n === 'absehen') m.material = new THREE.MeshBasicMaterial({ color: 0xff2a14, toneMapped: false });
-    if (n === 'lampenglas') { lens = new THREE.MeshBasicMaterial({ color: 0xfff2dc, toneMapped: false }); m.material = lens; }
-    m.frustumCulled = false; m.renderOrder = n === 'glas' ? 2 : n === 'absehen' ? 3 : 0;
+    if (n === W.glas) m.material = new THREE.MeshPhysicalMaterial({ color: 0x0b1418, roughness: 0.04, metalness: 0, transmission: 0, transparent: true, opacity: 0.38, envMapIntensity: 1.4, clearcoat: 1 });
+    if (n === W.absehen) m.material = new THREE.MeshBasicMaterial({ color: 0xff2a14, toneMapped: false });
+    if (n === W.licht) { lens = new THREE.MeshBasicMaterial({ color: W.col, toneMapped: false }); m.material = lens; }
+    m.frustumCulled = false; m.renderOrder = n === W.glas ? 2 : n === W.absehen ? 3 : 0;
   }
   sceneV.add(gun);
-  const key = new THREE.DirectionalLight(0xfff2e4, 0.62); key.position.set(-0.6, 1.0, 0.4); sceneV.add(key); sceneV.add(key.target);
-  const fill = new THREE.HemisphereLight(0x8fa4c0, 0x241c14, 0.2); sceneV.add(fill);
+  const key = new THREE.DirectionalLight(0xfff2e4, 0.46); key.position.set(-0.6, 1.0, 0.4); sceneV.add(key); sceneV.add(key.target);
+  const fill = new THREE.HemisphereLight(0x8fa4c0, 0x241c14, 0.13); sceneV.add(fill);
   const lampWarm = new THREE.PointLight(0xffb070, 0, 3, 1.6); lampWarm.position.set(-0.4, 0.5, -0.6); sceneV.add(lampWarm);
-  const muzzle = new THREE.Vector3(0, 0.04, -0.5585), lightPos = new THREE.Vector3(0.0355, 0.04, -0.3835);
+  const muzzle = new THREE.Vector3(...W.muzzle), lightPos = new THREE.Vector3(0.0355, 0.04, -0.3835);
   const flash = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: 0xffc070, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true, toneMapped: false }));
   flash.scale.setScalar(0.16); flash.position.copy(muzzle); flash.visible = false; flash.renderOrder = 5; inner.add(flash);
   const flashLight = new THREE.PointLight(0xffb060, 0, 1.5, 1.4); flashLight.position.copy(muzzle).add(new THREE.Vector3(0, 0.05, 0.05)); inner.add(flashLight);
-  return { scene: sceneV, cam, gun, flash, flashLight, key, fill, lampWarm, lens, muzzle, lightPos };
+  return { scene: sceneV, cam, gun, flash, flashLight, key, fill, lampWarm, lens, muzzle, lightPos, id, pos: W.pos, glow: id === 'k12' ? null : lens };
 }

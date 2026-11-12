@@ -12,7 +12,7 @@ import { GEAR_IDS, RARITY, gearDef } from '../data/gear';
 import { addItem, canAdd, gearStat, gearFactor } from './inventory';
 import { SECTOR } from '../data/galaxy';
 import { PLANETS, PTYPE } from '../data/planets';
-import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, type DroneVis, type ViewModel } from './mineArt';
+import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
 
 // =====================================================================================
 // Dungeons auf Planeten: verlassene Minen als Labyrinth.
@@ -575,7 +575,7 @@ export function enterDungeon(e: Entrance) {
   for (let k = 0; k < 5; k++) { const l = new THREE.PointLight(0xffc890, 0, 13, 1.6); group.add(l); pool.push(l); }
   head = new THREE.SpotLight(0xe6eeff, 18, 38, 0.6, 0.55, 1.0); scene.add(head); scene.add(head.target);
   mflash = new THREE.PointLight(0xffb060, 0, 9, 1.6); scene.add(mflash);
-  vm = buildViewModel();
+  vm = buildViewModel(viewModelId(P.gear?.waffe));
   if (vm) { overlay.scene = vm.scene; overlay.camera = vm.cam; } else { gun = buildGun(); scene.add(gun); }
   tracer = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.9 })); tracer.frustumCulled = false; tracer.visible = false; scene.add(tracer);
   camera.near = 0.06; camera.far = 38; camera.updateProjectionMatrix();      // dahinter verschluckt der Nebel alles; ferne Felsbereiche fallen weg
@@ -664,6 +664,7 @@ export function dungeonKey(code: string) {
 export function updateDungeon(dt: number) {
   if (!DUN.active || !group) return;
   DUN.locked = document.pointerLockElement === gl;
+  if (vm && vm.id !== viewModelId(P.gear?.waffe)) { const n = buildViewModel(viewModelId(P.gear?.waffe)); if (n) { vm = n; overlay.scene = n.scene; overlay.camera = n.cam; } }
   if (!DUN.locked && (grabT -= dt) <= 0) { grabT = 0.4; const ua = (navigator as any).userActivation; if (!ua || ua.isActive) { try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* bleibt bei Zeigersteuerung */ } } }
   if (DUN.dead > 0) { DUN.dead -= dt; DUN.pitch += (-1.2 - DUN.pitch) * dt * 2; if (DUN.dead <= 0) leaveDungeon(true); return; }
   if (!DUN.locked) {
@@ -812,7 +813,8 @@ export function dungeonCamera() {
     const dyaw = DUN.yaw - sway.yaw, dp = DUN.pitch - sway.pitch; sway.yaw = DUN.yaw; sway.pitch = DUN.pitch;
     sway.x = clamp(sway.x * 0.86 + dyaw * 0.35, -0.03, 0.03); sway.y = clamp(sway.y * 0.86 - dp * 0.35, -0.03, 0.03);
     const run = Math.hypot(DUN.vx, DUN.vz) > 5 ? 1 : 0, b = DUN.bob;
-    vm.gun.position.set(0.118 + sway.x + Math.cos(DUN.walked * 2.1) * 0.006 * (1 + run), -0.178 + b * 0.55 + sway.y - run * 0.02, -0.30 + DUN.kick * 0.04);
+    vm.gun.position.set(vm.pos[0] + sway.x + Math.cos(DUN.walked * 2.1) * 0.006 * (1 + run), vm.pos[1] + b * 0.55 + sway.y - run * 0.02, vm.pos[2] + DUN.kick * 0.04);
+    if (vm.glow) { const k = 0.82 + 0.18 * Math.sin(performance.now() * 0.004); vm.glow.color.setHex(vm.id === 'ef2' ? 0x6fc2ff : 0x8fd0ff).multiplyScalar(k); }
     vm.gun.rotation.set(DUN.kick * 0.07 + sway.y * 1.5 - run * 0.12, 0.045 + sway.x * 2 + run * 0.25, -sway.x * 2.5 + run * 0.18);
     vm.gun.visible = DUN.dead <= 0;
     const f = DUN.flash > 0; vm.flash.visible = f; vm.flashLight.intensity = f ? 2.6 : 0;
