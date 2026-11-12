@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { glowMat } from '../core/engine';
-import { std, texMat, boxUV } from '../core/textures';
+import { std } from '../core/textures';
+import { applyKit, kitMeta, loadKitMeta, KIT_GLOW } from './kit';
 import type { StructureModel } from './structures';
 
 // KI-generierte Stationsmodelle als GLB-Dateien aus public/assets/station (scripts/build-stations.mjs → build-assets.mjs).
@@ -34,6 +35,7 @@ export async function loadStationModels() {
       TPL[name] = { group: wrap, size };
     } catch (e) { console.warn('Stationsmodell nicht geladen:', name, e); }
   }));
+  await loadKitMeta(Object.keys(TPL));     // Zusatzangaben der Baukasten-Modelle (Leuchtpunkte, Landefeld)
   return Object.keys(TPL).length > 0;
 }
 export const hasStationModel = (name: string) => !!TPL[name];
@@ -139,72 +141,33 @@ export function buildCarrierModel(): (StructureModel & { glows: THREE.Sprite[]; 
   };
 }
 
-// ---------- Außenposten auf den Planeten (Blender: asset-src/neu/aussenposten/Aussenposten.blend, Textblock posten_build → asset-src/glb/station/Aussenposten.glb) ----------
-// In echten Metern gebaut. Ursprung = Boden in der Mitte des Hauptgebäudes, das Tor zeigt nach +Z. Der Stationspunkt liegt 14 m über dem
-// Plateau (surface.ts), deshalb sitzt das Modell 14 m tiefer. Landefeld links vorne (Blender PAD = (-62, -38) → Spiel x -62, z 38, Oberkante 0,6 m).
-// Oberflächen aus den Hangarbildern; waagrechte Flächen bekommen Staub oder Schnee in der Bodenfarbe des Planeten (setOutpostDust).
-const OUTPOST_Y = -14, OUTPOST_PAD = { x: -62, z: 38, y: 0.6 };
-const DUST = { col: { value: new THREE.Color(0xffffff) }, k: { value: 0 } };
-export function setOutpostDust(c: THREE.ColorRepresentation, k: number) { DUST.col.value.set(c); DUST.k.value = k; }
-function dusty<T extends THREE.Material>(m: T) {
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.dustCol = DUST.col; sh.uniforms.dustK = DUST.k;
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vDustN;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvDustN = normalize(mat3(modelMatrix) * objectNormal);');
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 dustCol; uniform float dustK; varying vec3 vDustN;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, dustCol, dustK * smoothstep(0.5, 0.92, normalize(vDustN).y));');
-  };
-  m.customProgramCacheKey = () => 'dust';
-  return m;
-}
-let OUTPOST_MATS: Record<string, [THREE.Material, number]> | null = null;
-function outpostMats() {
-  if (OUTPOST_MATS) return OUTPOST_MATS;
-  const tm = (c: number, t: string, o: THREE.MeshStandardMaterialParameters) => dusty(texMat(c, t, o));
-  const glow = (c: number) => new THREE.MeshBasicMaterial({ color: c });
-  return (OUTPOST_MATS = {                          // Material und Kachelgröße in Metern
-    posten_metal: [tm(0x8a8e94, 'hangar_wall', { roughness: 0.6, metalness: 0.35 }), 7],
-    posten_dark: [tm(0x3c3f45, 'hangar_metal', { roughness: 0.55, metalness: 0.5 }), 4],
-    posten_yellow: [tm(0xd9a020, 'hangar_paint', { roughness: 0.55, metalness: 0.2 }), 4],
-    posten_red: [tm(0x8a2a1e, 'hangar_paint', { roughness: 0.6, metalness: 0.2 }), 3],
-    posten_white: [tm(0xd4d6da, 'hangar_paint', { roughness: 0.55, metalness: 0.1 }), 4],
-    posten_green: [tm(0x4a5a40, 'hangar_paint', { roughness: 0.6, metalness: 0.15 }), 3],
-    posten_concrete: [tm(0x6c6d70, 'hangar_floor', { roughness: 0.9, metalness: 0.05 }), 10],
-    posten_rubber: [dusty(std(0x151517, { roughness: 0.9, metalness: 0 })), 0],
-    posten_light: [glow(0xfff2dc), 0], posten_lamp: [glow(0xffa030), 0], posten_redlamp: [glow(0xff3a24), 0], posten_screen: [glow(0x3f9fd0), 0],
-  });
-}
+// ---------- Außenposten auf den Planeten: mit dem Baukasten gebaut (asset-src/neu/aussenposten/posten_kit.py → asset-src/glb/station/Aussenposten.glb) ----------
+// In echten Metern, Ursprung = Boden in der Mitte des Hauptgebäudes, das Tor zeigt nach +Z. Der Stationspunkt liegt 14 m über dem Plateau
+// (surface.ts), deshalb sitzt das Modell 14 m tiefer. Materialien kommen aus src/models/kit.ts; Leuchtpunkte und Landefeld aus data/kit_Aussenposten.json.
+const OUTPOST_Y = -14;
+export { setKitDust as setOutpostDust } from './kit';
 export function buildBaseModel(): StructureModel | null {
   const t = TPL.Aussenposten;
   if (!t) return null;
+  const meta = kitMeta('Aussenposten');
   const g = new THREE.Group(), body = t.group.clone(true);
   body.children[0].position.set(0, 0, 0);          // der Lader zentriert Modelle; hier gilt der Ursprung aus Blender
   body.position.y = OUTPOST_Y;
   g.add(body); g.updateMatrixWorld(true);
-  const M = outpostMats();
-  body.traverse((o: any) => {
-    if (!o.isMesh) return;
-    const e = M[o.material.name];
-    if (!e) return;
-    o.material = e[0];
-    if (e[1]) boxUV(o, 1 / e[1], body);             // Kachelung in Metern des Postens (gepackte Netze haben eigene Koordinaten)
-  });
-  const sph = collisionSpheres(g, 7, OUTPOST_Y + 1.0);   // Landefeld und flache Markierungen zählen nicht
-  // Lichter: Landefeld (Lauflichter), rote Lampe auf der Antenne, Glühen an den Lichtmasten
+  applyKit(body);
+  const sph = collisionSpheres(g, 7, OUTPOST_Y + (meta.collide_above ?? 1));   // Landefeld und flache Markierungen zählen nicht
+  // Leuchtpunkte aus Blender: Lampen am Landefeld laufen als Lauflicht, rote als Positionslichter, der Rest glüht ruhig
   const lights: THREE.Sprite[] = [], navs: THREE.Sprite[] = [];
-  const P = OUTPOST_PAD, py = OUTPOST_Y + P.y;
-  for (const [dx, dz] of [[-23, -23], [0, -23], [23, -23], [23, 0], [23, 23], [0, 23], [-23, 23], [-23, 0]]) {
-    const sp = new THREE.Sprite(glowMat(0xffa030, 1)); sp.position.set(P.x + dx, py + 0.8, P.z + dz); sp.scale.setScalar(3.5); g.add(sp); lights.push(sp);
-  }
-  const top = new THREE.Sprite(glowMat(0xff3030, 1)); top.position.set(2, OUTPOST_Y + 43.3, -11); top.scale.setScalar(4); g.add(top); navs.push(top);
-  for (const [x, y] of [[-30, -20], [30, -20], [-38, 24], [38, 24], [-89, -38], [-62, -65]]) for (const s of [-1, 1]) {
-    const sp = new THREE.Sprite(glowMat(0xfff0d8, 0.55)); sp.position.set(x + s * 1.5, OUTPOST_Y + 15.3, -y); sp.scale.setScalar(5); g.add(sp);
+  const P = meta.pad || { x: -62, z: 38, y: 0.6, r: 23 }, py = OUTPOST_Y + P.y;
+  for (const l of meta.lights || []) {
+    const sp = new THREE.Sprite(glowMat(KIT_GLOW[l.k] ?? 0xffffff, l.k === 'light' ? 0.5 : 0.9));
+    sp.position.set(l.p[0], OUTPOST_Y + l.p[1], l.p[2]); sp.scale.setScalar(l.s); g.add(sp);
+    const onPad = Math.abs(l.p[0] - P.x) < P.r + 1 && Math.abs(l.p[2] - P.z) < P.r + 1;
+    if (l.k === 'lamp' && onPad) lights.push(sp); else if (l.k === 'redlamp' && l.p[1] > 20) navs.push(sp);
   }
   sph.push([P.x, py - 2, P.z, 3]);
   return {
-    g, lights, navs, sph, R: 130,
+    g, lights, navs, sph, R: meta.R ?? 130,
     dock: { x: P.x, y: py + 12, z: P.z },
     launch: { x: P.x, y: py + 14, z: P.z + 30, yaw: Math.PI },
   };

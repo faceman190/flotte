@@ -16,8 +16,8 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import sharp from 'sharp';
 import { NodeIO } from '@gltf-transform/core';
-import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { dedup, prune, textureCompress, meshopt } from '@gltf-transform/functions';
+import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
+import { dedup, prune, textureCompress, meshopt, reorder, quantize } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -61,7 +61,14 @@ async function model(key, data, pack) {
   // Modelle mit zweitem Satz Texturkoordinaten (vorberechnetes Licht, das Bild dazu liegt in asset-src/tex) behalten ihn:
   // Sonst entfernt prune() ihn, weil kein Material der Datei darauf verweist.
   const uv2 = doc.getRoot().listMeshes().some(m => m.listPrimitives().some(p => p.getAttribute('TEXCOORD_1')));
-  await doc.transform(
+  // Baukasten-Modelle (Materialnamen kit_*, siehe src/models/kit.ts) tragen keine Bilder, aber Texturkoordinaten ins gemeinsame Texturblatt und
+  // Eckfarben. Beides muss erhalten bleiben; die Texturkoordinaten kacheln (Werte über 1) und werden deshalb nicht auf Ganzzahlen gepackt.
+  const kit = doc.getRoot().listMaterials().some(m => /^kit_/.test(m.getName()));
+  if (kit) {
+    await doc.transform(dedup({ keepUniqueNames: true }), prune({ keepAttributes: true }),
+      reorder({ encoder: MeshoptEncoder, target: 'size' }), quantize({ pattern: /^(POSITION|NORMAL|COLOR)(_\d+)?$/ }));
+    doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });
+  } else await doc.transform(
     dedup(), prune({ keepAttributes: uv2 }),
     textureCompress({ encoder: sharp, targetFormat: 'webp', quality: 85, resize: [1024, 1024] }),
     meshopt({ encoder: MeshoptEncoder, level: 'medium' }),

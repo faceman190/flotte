@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { scene, sun, renderer, GLOW, DEFAULT_ENV } from './engine';
+import { scene, sun, rim, renderer, GLOW, DEFAULT_ENV } from './engine';
 import { TEXT, envFor, nebulaTexture } from './textures';
 import { buildPlanet, updatePlanet, disposePlanet } from './planetVis';
 
@@ -208,6 +208,7 @@ atmDome.renderOrder = -1;
 atmDome.visible = false;
 sky.add(atmDome);
 const SPACE_FOG = { color: 0x05060a, density: 0.00005 };
+const RIM_SPACE = rim.color.getHex(), GREY = new THREE.Color(0x808080);
 export function setSurfaceSky(cfg: null | { horizon: number; zenith: number; fog: number; fogDensity: number }) {
   const fog = scene.fog as THREE.FogExp2;
   if (!cfg) {
@@ -217,8 +218,11 @@ export function setSurfaceSky(cfg: null | { horizon: number; zenith: number; fog
     for (const m of starUniforms) m.uniforms.fade.value = 1;
     fog.color.set(SPACE_FOG.color); fog.density = SPACE_FOG.density;
     sunCore.visible = sunHalo.visible = true;
+    rim.color.set(RIM_SPACE);
     return;
   }
+  // Gegenlicht auf dem Planeten: Farbe des Himmels am Horizont statt des blauen Raumlichts, etwas schwächer
+  rim.color.set(cfg.horizon).lerp(GREY, 0.35).multiplyScalar(0.6);
   atmMat.uniforms.horizon.value.set(cfg.horizon);
   atmMat.uniforms.zenith.value.set(cfg.zenith);
   atmMat.uniforms.sdir.value.copy(sunDir);

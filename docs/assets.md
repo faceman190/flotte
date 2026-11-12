@@ -198,3 +198,9 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
 - Im Spiel: `buildBaseModel()` in src/models/stationModels.ts ersetzt für alle Planetenbasen das frühere KI-Modell. Materialnamen `posten_*`
   bekommen die Hangarbilder (Metall, Lack, Boden); waagrechte Flächen tragen Staub bzw. Schnee in der Bodenfarbe des Planeten (`setOutpostDust` in surface.ts).
   Andockpunkt 12 m über dem Landefeld; Kollision nur für Teile über 1 m Höhe, damit das Landefeld frei bleibt.
+
+## Baukasten (Alpha 0.66)
+Gebäude und Umgebungen entstehen ab jetzt mit dem Baukasten: gemeinsames Texturblatt, Aufkleber-Atlas und eine Bibliothek von Bauteilen in Blender.
+Alles dazu steht in `docs/baukasten.md`. Der Außenposten der Planeten ist das erste Gebäude daraus (`asset-src/neu/aussenposten/posten_kit.py`);
+das frühere Skript `posten_build.py` bleibt nur als Vorgänger liegen. Auf Planeten nimmt das Gegenlicht jetzt die Farbe des Himmels am Horizont
+(src/core/sky.ts), statt des blauen Raumlichts.
