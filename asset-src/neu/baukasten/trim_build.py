@@ -13,6 +13,9 @@ ROOT = r'C:\Users\faceman\Desktop\CLAUDE\letzte-flotte'
 OUT = os.path.join(ROOT, 'asset-src', 'tex')
 HERE = os.path.join(ROOT, 'asset-src', 'neu', 'baukasten')
 TMP = os.path.join(HERE, '_tmp')
+# Einstellungen, die ein zweites Blatt (trim_int.py) überschreibt: Name der Bilder, Lagedatei, Stärke von Abnutzung und Schmutz
+NAME = 'kit_trim'; ATLAS = 'kit_atlas.json'
+CFG = {'chip': 1.0, 'flat': 1.0, 'scratch': 200, 'dirt': 1.0, 'streak': 1.0, 'walls': ('wall_a', 'wall_b'), 'long': ('wall_a', 'wall_b', 'roof')}
 
 STRIPS = {  # Name: (yt oben, yt unten)
     'wall_a': (0.0, 3.0), 'wall_b': (3.0, 5.0), 'roof': (5.0, 6.5), 'floor': (6.5, 7.5),
@@ -271,13 +274,15 @@ def tiles():
     P('K', 1.8, 0.9, 1.93, 1.15, 0.03, 0.02, bev=0.008); cylz('R', X + 1.865, Y + 0.96, 0.02, 0.006, 0.05, seg=10)
     for by in (0.3, 1.0, 1.7): bolt(X + 0.305, Y + by, 0.07, 0.016); bolt(X + 1.695, Y + by, 0.07, 0.016)
 
+BUILDERS = [wall_a, wall_b, roof, floor, beam, girder, small_strips, tiles]
+
 # ------------------------------------------------------------------ Szene
 def build():
     global R
     R = random.Random(7); G.clear()
     sc = bpy.context.scene
     for o in list(sc.objects): bpy.data.objects.remove(o, do_unlink=True)
-    wall_a(); wall_b(); roof(); floor(); beam(); girder(); small_strips(); tiles()
+    for f in BUILDERS: f()
     n = 0
     for (k, jit), bm in G.items():
         me = bpy.data.meshes.new(f'hp_{k}_{jit}'); bm.to_mesh(me); bm.free()
@@ -287,7 +292,7 @@ def build():
     cd = bpy.data.cameras.new('Kamera'); cd.type = 'ORTHO'; cd.ortho_scale = S; cd.clip_end = 20
     cam = bpy.data.objects.new('Kamera', cd); cam.location = (S / 2, S / 2, 5); sc.collection.objects.link(cam); sc.camera = cam
     os.makedirs(TMP, exist_ok=True)
-    json.dump({'size_m': S, 'px': N, 'strips': STRIPS, 'tiles': TILES}, open(os.path.join(HERE, 'kit_atlas.json'), 'w'), indent=1)
+    json.dump({'size_m': S, 'px': N, 'strips': STRIPS, 'tiles': TILES}, open(os.path.join(HERE, ATLAS), 'w'), indent=1)
     return n
 
 def _mat(name, kind):
@@ -322,11 +327,11 @@ def render():
     vl = sc.view_layers[0]; res = {}
     def go(name, mat, samples):
         vl.material_override = mat; sc.cycles.samples = samples
-        p = os.path.join(TMP, 'trim_' + name + '.exr'); sc.render.filepath = p
+        p = os.path.join(TMP, NAME + '_' + name + '.exr'); sc.render.filepath = p
         bpy.ops.render.render(write_still=True)
         img = bpy.data.images.load(p, check_existing=False)
         a = np.empty(N * N * 4, np.float32); img.pixels.foreach_get(a); bpy.data.images.remove(img)
-        np.save(os.path.join(TMP, 'trim_' + name + '.npy'), a.reshape(N, N, 4)[..., :3].copy())
+        np.save(os.path.join(TMP, NAME + '_' + name + '.npy'), a.reshape(N, N, 4)[..., :3].copy())
         res[name] = float(a.mean())
     mc = _mat('pass_col', 'col')
     for o in sc.objects:
@@ -363,15 +368,15 @@ def srgb(v):
     v = np.clip(v, 0, 1); return np.where(v <= 0.0031308, v * 12.92, 1.055 * np.power(np.maximum(v, 1e-8), 1 / 2.4) - 0.055)
 
 def compose(preview=True):
-    L = lambda n: np.load(os.path.join(TMP, 'trim_' + n + '.npy'))
+    L = lambda n: np.load(os.path.join(TMP, NAME + '_' + n + '.npy'))
     col, prm, nrm, hgt, ao = L('col'), L('prm'), L('nrm'), L('hgt')[..., 0] / HK, np.clip(L('ao')[..., 0], 0, 1)
     px = S / N
     X = (np.arange(N, dtype=np.float32)[None, :] + 0.5) * px; Y = (np.arange(N, dtype=np.float32)[:, None] + 0.5) * px
     metal, rough, wear = prm[..., 0].copy(), prm[..., 1].copy(), prm[..., 2].copy()
     # Warnstreifen: gelb/schwarz schräg
-    r0, r1 = rows(*STRIPS['hazard'])
+    r0, r1 = rows(*STRIPS['hazard']) if 'hazard' in STRIPS else (0, 0)
     hz = (((X + Y) % 0.5) < 0.25)[r0:r1]
-    col[r0:r1] = np.where(hz[..., None], np.array(PAINT['Y'], np.float32), np.array((0.035, 0.035, 0.04), np.float32)) * (col[r0:r1].mean(-1, keepdims=True) / 0.8)
+    if r1 > r0: col[r0:r1] = np.where(hz[..., None], np.array(PAINT['Y'], np.float32), np.array((0.035, 0.035, 0.04), np.float32)) * (col[r0:r1].mean(-1, keepdims=True) / 0.8)
     # Rauschen in mehreren Größen (kachelt)
     n_lo, n_mid, n_fine, n_hi = noise(2.2, 1), noise(1.6, 2), noise(0.9, 3), noise(0.3, 4)
     n_str = noise(1.4, 5, ax=6.0, ay=0.35)      # senkrechte Schlieren
@@ -381,22 +386,24 @@ def compose(preview=True):
     cvx = blur(np.maximum(div, 0), 1.3); cvx /= max(np.percentile(cvx, 99.3), 1e-6)
     ccv = blur(np.maximum(-div, 0), 2.2); ccv /= max(np.percentile(ccv, 99.3), 1e-6)
     # Lack platzt an Kanten ab; zusätzlich einzelne Macken in der Fläche
-    e0, e1 = rows(*STRIPS['edge'])
-    ec = np.zeros((N, 1), np.float32); ec[e0:e1, 0] = np.exp(-(((np.arange(e0, e1) + 0.5 - (e0 + e1) / 2) / ((e1 - e0) * 0.2)) ** 2))
+    e0, e1 = rows(*STRIPS['edge']) if 'edge' in STRIPS else (0, 0)
+    ec = np.zeros((N, 1), np.float32)
+    if e1 > e0: ec[e0:e1, 0] = np.exp(-(((np.arange(e0, e1) + 0.5 - (e0 + e1) / 2) / ((e1 - e0) * 0.2)) ** 2))
     drive = np.clip(cvx, 0, 1.4) * 1.1 + ec * 0.9
-    chip = sstep(0.6, 0.78, drive + (n_mid - 0.5) * 0.9 + (n_fine - 0.5) * 0.7) * wear
-    chip = np.maximum(chip, sstep(0.93, 0.99, n_mid * 0.6 + n_fine * 0.5 + n_hi * 0.15) * wear * 0.8)
+    chip = sstep(0.6, 0.78, drive * CFG['chip'] + (n_mid - 0.5) * 0.9 + (n_fine - 0.5) * 0.7) * wear
+    chip = np.maximum(chip, sstep(0.93, 0.99, n_mid * 0.6 + n_fine * 0.5 + n_hi * 0.15) * wear * 0.8 * CFG['flat'])
     core = sstep(0.55, 0.9, blur(chip, 1.0)) * chip     # blankes Metall in der Mitte, Grundierung am Rand
     # Kratzer
     sc_ = np.zeros((N, N), np.float32); rg = np.random.default_rng(11)
-    for _ in range(200):
+    for _ in range(CFG['scratch']):
         x, y, a, l = rg.uniform(0, N), rg.uniform(0, N), rg.uniform(0, math.pi), rg.uniform(8, 60)
         t = np.arange(0, l, 0.7); xs = (x + np.cos(a) * t).astype(int) % N; ys = (y + np.sin(a) * t).astype(int) % N
         sc_[ys, xs] = np.maximum(sc_[ys, xs], rg.uniform(0.4, 1.0))
     sc_ = blur(sc_, 0.6) * 1.0 * wear
     # Schmutz in Kehlen und Ablaufspuren nach unten
     dirt = np.clip((1 - ao) * 2.2 + np.clip(ccv, 0, 1.5) * 0.7, 0, 1) * (0.55 + 0.6 * n_lo)
-    for nm in ('wall_a', 'wall_b'):      # Wände sind unten schmutziger
+    dirt *= CFG['dirt']
+    for nm in CFG['walls']:      # Wände sind unten schmutziger
         a_, b_ = rows(*STRIPS[nm]); t = (1 - (np.arange(a_, b_) - a_) / (b_ - a_))[:, None].astype(np.float32)
         dirt[a_:b_] += t ** 4 * 0.4 * (0.3 + n_mid[a_:b_])
     src = sstep(0.3, 0.7, np.clip(ccv, 0, 1.5)) * sstep(0.45, 0.65, n_str) * sstep(0.3, 0.55, n_mid)
@@ -406,7 +413,10 @@ def compose(preview=True):
     for r in range(N - 1, -1, -1):
         if r in cuts: acc[:] = 0
         acc = np.maximum(src[r], acc * 0.9915); streak[r] = acc
-    f0 = rows(*STRIPS['floor']); streak[f0[0]:rows(*STRIPS['plain'])[1]] *= 0.25       # nur Wände, Dach und Kacheln bekommen lange Läufer
+    keep = np.full(N, 0.25, np.float32)       # nur Wände, Dach und Kacheln bekommen lange Läufer
+    for nm in CFG['long']: a_, b_ = rows(*STRIPS[nm]); keep[a_:b_] = 1.0
+    for t_ in TILES.values(): a_, b_ = rows(t_[1], t_[3]); keep[a_:b_] = 1.0
+    streak *= keep[:, None] * CFG['streak']
     streak = blur(streak, 1.2, 0.6) * (0.5 + 0.7 * n_fine)
     dirt = np.clip(dirt + streak * 0.85, 0, 1)
     # ---------- Farbe
@@ -439,5 +449,5 @@ def compose(preview=True):
         img.pixels.foreach_set(buf.ravel()); img.update()
         p = os.path.join(OUT, name + '@2048.png'); img.filepath_raw = p; img.file_format = 'PNG'; img.save()
         return p
-    out = [save('kit_trim_col', base, True), save('kit_trim_nrm', n3 * 0.5 + 0.5, False), save('kit_trim_orm', orm, False)]
+    out = [save(NAME + '_col', base, True), save(NAME + '_nrm', n3 * 0.5 + 0.5, False), save(NAME + '_orm', orm, False)]
     return {'files': out, 'chip': float(chip.mean()), 'dirt': float(dirt.mean()), 'albedo': float(base.mean())}

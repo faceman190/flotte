@@ -39,7 +39,7 @@ Mit `with K.at((x, y, z), drehung):` wird alles darin verschoben und um Z gedreh
   `ramp`, `stairs`, `walkway`, `platform`, `railing`, `ladder`, `pipe`, `cable`.
 - **Technik:** `panel` (Wandkasten mit Motiv), `vent_unit`, `generator`, `mast_light`, `antenna`, `dish`, `turret`, `tank`, `silo`.
 - **Fracht und Fahrzeuge:** `crate`, `container`, `barrel`, `cage`, `hauler`, `cart`, `wheel`.
-- **Gelände:** `pad` (Landefeld), `post`, `beacon`, `barrier`, `sign`.
+- **Gelände:** `pad` (Landefeld), `post`, `beacon`, `barrier`, `signpost` (Schild auf Pfosten), `sign` (Leuchtschild).
 - **Aufgesetztes:** `tile` (Kachelmotiv: vent, fan, hatch, ctrl, crate, door), `decal` (Aufkleber), `number` (Ziffernfolge),
   `glow`/`glowbox` (leuchtende Fläche), `glass`, `light` (Leuchtpunkt fürs Spiel).
 
@@ -64,3 +64,29 @@ Streifen (`side=`, `top=`): `wall` (Paneele, reihenweise), `siding` (Lamellen), 
 - Relief im Spiel: `normalScale = (1, -1)`, weil die Bilder nicht gespiegelt geladen werden.
 - Staub und Schnee auf waagrechten Flächen setzt das Spiel je Planet (`setKitDust`).
 - Lange Rechnungen in Blender (Rendern) laufen weiter, auch wenn die Verbindung die Antwort nicht abwartet: auf die Ausgabedatei warten.
+
+## Innenräume der Stationen (ab Alpha 0.67)
+
+Für begehbare Stationen gibt es ein zweites Texturblatt, Leuchtschilder und eigene Teile. Bilder: `docs/baukasten/innen_1_promenade.jpg`, `innen_2_laeden.jpg`.
+
+| Datei | Inhalt |
+|---|---|
+| `asset-src/neu/baukasten/trim_int.py` + `Trimsheet_Innen.blend` | Innenraum-Blatt `kit_int_*`: Wandpaneele, Technikband, Bodenplatten, Deckenplatten, Tragrippe, Rollladen, Stoff, Leiste; Motive Regal, Automat, Terminal, Spind, Schiebetür, Wandausstattung |
+| `scripts/make-kit-signs.mjs` | Leuchtschilder `kit_signs`: Wegweiser, Hallennummern, Piktogramme, Abflugtafel (weiß, im Spiel in der Akzentfarbe der Station) und vier farbige Werbetafeln |
+| `asset-src/neu/baukasten/kit_interior.py` | Innenraum-Teile; `install(lib)` hängt sie an `Kit` |
+| `asset-src/neu/station/promenade_kit.py` + `Promenade.blend` | Beispiel: Promenade und Korridor aller Stationen |
+
+- **Teile:** `wall`, `floor`, `ceiling` (Raumflächen), `portal` (Tragrahmen), `light_bar`, `hanging_sign`, `wall_sign`, `ad_screen`, `floor_strip`,
+  `floor_line`, `duct`, `shop_bay` (Ladennische; merkt Händlerplatz, Ansprechpunkt und Schildplatz in `K.slots`), `shutter`, `vending`, `kiosk`,
+  `lockers`, `sdoor`, `panel_i`, `bench`, `plant`, `planter`, `bin`, `stanchion`, `dais`. Dazu `sign` (Leuchtschild aus dem Atlas),
+  `lamp` (Lichtquelle nur für die Berechnung) und `block_rect` (Standfläche, landet als `blocks` in den Zusatzangaben).
+- **Streifen innen:** `iwalls`, `itech`, `ifloors`, `iceils`, `shutters` (reihenweise) sowie `rib`, `fabric`, `itrim`, `iplain`. Tönungen `i_*` in `TINT`.
+- **Licht:** Mit `K.lm = True` bekommen große Flächen ein Feld in der Lichtkarte (zweiter Satz Texturkoordinaten), alles Übrige trägt sein Licht
+  in den Eckfarben. `lib.bake_light(ob, 'name')` rechnet beides mit Cycles; Lichtquellen sind alle leuchtenden Flächen (Stärken in `EMIT`) und
+  `K.lamp(...)`. Das Bild heißt `asset-src/tex/<name>_lightmap@2048.png`. Die Berechnung dauert rund drei Minuten.
+- **Zusatzobjekte:** Teile, die das Spiel einzeln schalten soll (Rollläden leerer Läden), werden als eigene `Kit`-Objekte gebaut, mit
+  `lib.bake_vertex_light(ob, ref)` beleuchtet und über `export(..., extra=[...])` in dieselbe Datei geschrieben. Im Spiel findet man sie am Namen.
+- **Im Spiel:** `applyKit(body, { lightmap: 'promenade_lightmap', intensity, accent })` (src/models/kit.ts). Wegweiser und Lichtfugen (`kit_accent`,
+  `kit_sign`) nehmen die Akzentfarbe der Station. In Korridor und Halle nimmt `zoneLight()` (src/game/interior.ts) Grund- und Gegenlicht des
+  Spiels zurück, damit das vorberechnete Licht trägt. Ladenplätze, Standflächen und Maße liest das Spiel aus `data/kit_Promenade.json`.
+- **Nach einer Dateiöffnung in Blender** erst im nächsten Aufruf rechnen lassen: Direkt danach fehlt das Fenster, das die Berechnung braucht.

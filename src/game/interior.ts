@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { scene, camera, view, ux, gl, setExposure } from '../core/engine';
+import { scene, camera, view, ux, gl, setExposure, ambient, rim } from '../core/engine';
 import { texMat, std, boxUV, lightmapTex, WHITE_TEX } from '../core/textures';
 import { keys, mouse } from '../core/input';
 import { rng, hashStr, clamp, fmtN } from '../core/util';
@@ -22,6 +22,7 @@ import { world } from './world';
 import { saveGame } from './state';
 import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom, interiorEnv } from './meshRoom';
 import { stationTemplate } from '../models/stationModels';
+import { applyKit, kitMeta } from '../models/kit';
 import { HANGAR_BLOCKS } from '../data/hangarBlocks';
 
 // =====================================================================================
@@ -211,10 +212,40 @@ function addHangarModel(parent: THREE.Object3D, pal: { accent: number; wall: num
   return true;
 }
 
+// Promenade und Korridor als Baukasten-Modell (asset-src/neu/station/promenade_kit.py → asset-src/glb/station/Promenade.glb), in den Maßen des Spiels.
+// Licht ist vorberechnet (tex/promenade_lightmap); Wegweiser und Lichtfugen nehmen die Akzentfarbe der Station. Ladenplätze, Standflächen und Maße
+// kommen aus data/kit_Promenade.json. Fehlt das Modell, entstehen Korridor und Halle wie früher aus Grundformen.
+const PROM_LIGHT = 2.0;   // Stärke des vorberechneten Lichts
+let hasProm = false;
+// In Korridor und Promenade trägt das vorberechnete Licht: Grundlicht und Gegenlicht des Spiels werden dort zurückgenommen (0 = Hangar, 1 = Halle)
+const RIM_IN = new THREE.Color(0x4a4640), rimOut = new THREE.Color();
+let ambIn = 0, zoneT = -1, ambSet = -1;
+function zoneLight() {
+  if (!hasProm || room) return;
+  if (ambSet >= 0 && Math.abs(ambient.intensity - ambSet) > 1e-5) { ambIn = ambient.intensity; zoneT = -1; }   // die Belichtung wurde von außen neu gesetzt
+  const t = Math.min(1, Math.max(0, (HZ0 + 1 - IN.z) / (CL - 2)));
+  if (Math.abs(t - zoneT) < 0.002) return;
+  zoneT = t;
+  ambient.intensity = ambSet = ambIn * (1 - 0.8 * t);
+  rim.color.copy(rimOut).lerp(RIM_IN, t);
+  lamps[0].intensity = Math.PI * 0.5 * (1 - 0.7 * t);
+}
+function promMeta() { const m = kitMeta('Promenade'); return stationTemplate('Promenade') && m.slots && m.dims ? m : null; }
+function addPromModel(parent: THREE.Object3D, accent: number) {
+  const body = stationTemplate('Promenade')!.clone(true);
+  body.children[0].position.set(0, 0, 0);
+  applyKit(body, { lightmap: 'promenade_lightmap', intensity: PROM_LIGHT, accent });
+  body.traverse((o: any) => { if (o.isMesh) o.userData.shared = true; });      // Geometrie gehört der Vorlage und bleibt beim Verlassen erhalten
+  parent.add(body);
+  return body;
+}
+
 // ---------- Innenraum aufbauen ----------
 function build(st: Station) {
   kind = st.kind;
-  dims = PROM[kind];
+  const pm = promMeta();
+  hasProm = !!pm;
+  dims = pm ? pm.dims! : PROM[kind];
   const pal = PAL[kind], R = rng(hashStr(st.id + ':innen'));
   const { w: PW, d: PD, h: PH } = dims, PZ0 = PZ1 - PD;
   const g = new THREE.Group(), S = new THREE.Group(), deco = new THREE.Group();
@@ -230,6 +261,7 @@ function build(st: Station) {
   const mYellow = mat(new THREE.MeshBasicMaterial({ color: 0xc89a20 }));
   const mGlass = mat(new THREE.MeshStandardMaterial({ color: 0x9ac8e8, transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0.6, depthWrite: false }));
   const mGreen = mat(std(0x3a7a44, { roughness: 0.9, metalness: 0 }));
+
   rects = []; obstacles = []; inters = []; labels = []; persons = []; walkers = [];
   const block = (x0: number, x1: number, z0: number, z1: number) => obstacles.push([Math.min(x0, x1), Math.max(x0, x1), Math.min(z0, z1), Math.max(z0, z1)]);
 
@@ -301,6 +333,8 @@ function build(st: Station) {
 
   // ===== Korridor =====
   const CC = HZ0 - CL / 2;
+  const promBody = pm ? addPromModel(g, pal.accent) : null;
+  if (!pm) {
   box(S, mFloor, CW * 2, 0.5, CL + 1.2, 0, -0.25, CC);
   box(S, mCeil, CW * 2, 0.5, CL + 1.2, 0, CH + 0.25, CC);
   for (const s of [-1, 1]) {
@@ -308,10 +342,12 @@ function build(st: Station) {
     box(deco, mAccent, 0.08, 0.3, CL, s * (CW - 0.05), 1.2, CC);
   }
   box(deco, mLight, 0.5, 0.08, CL - 2, 0, CH - 0.05, CC);
+  }
   rects.push([-CW, CW, PZ1 - 2, HZ0 + 2]);
 
   // ===== Promenade =====
   const PC = (PZ0 + PZ1) / 2, WW = PW - 5, WY0 = 1.5, WY1 = PH - 1.4;
+  if (!pm) {
   box(S, mHall, PW * 2, 0.5, PD, 0, -0.25, PC);
   box(S, mCeil, PW * 2, 0.5, PD, 0, PH + 0.25, PC);
   for (const s of [-1, 1]) {
@@ -323,11 +359,14 @@ function build(st: Station) {
   box(S, mWall, CW * 2, PH - CH, 0.6, 0, (PH + CH) / 2, PZ1 + 0.3);
   box(S, mWall, WW * 2, WY0, 0.6, 0, WY0 / 2, PZ0 - 0.3);
   box(S, mWall, WW * 2, PH - WY1, 0.6, 0, (PH + WY1) / 2, PZ0 - 0.3);
+  }
   const glass = new THREE.Mesh(new THREE.PlaneGeometry(WW * 2, WY1 - WY0), mGlass); glass.position.set(0, (WY0 + WY1) / 2, PZ0 - 0.1); deco.add(glass);
+  if (!pm) {
   for (let x = -WW; x <= WW + 0.1; x += WW / 3) box(S, mDark, 0.35, WY1 - WY0, 0.5, x, (WY0 + WY1) / 2, PZ0 - 0.1);
   for (let z = PZ0 + 6; z < PZ1 - 2; z += 9) {
     box(deco, mLight, PW * 1.1, 0.1, 0.5, 0, PH - 0.06, z);
     box(S, mDark, PW * 2, 0.5, 0.6, 0, PH - 0.25, z + 4.5);
+  }
   }
   rects.push([-PW, PW, PZ0, PZ1]);
 
@@ -337,6 +376,29 @@ function build(st: Station) {
   const suits = [0x8a5a3a, 0x3a5a8a, 0x5a7a4a, 0x7a4a6a, 0x4a6a7a, 0x8a7a3a], skins = [0xe0b090, 0xc89070, 0x9a6a4a, 0xf0c8a8, 0x7a5238], hairs = [0x1a1410, 0x4a3020, 0x8a6a40, 0x909090, 0x2a2a30];
   const goods: Record<string, number[]> = { markt: [0xd9822b, 0xbfe6ff, 0xe8664a], raffinerie: [0xc4c8d0, 0xff9a6a, 0xc8dcff], auftraege: [0xe8e2d6], missionen: [0x7cc4ff, 0xffb347], lager: [0x8a8f9a, 0x5a6068], werft: [0x6a9ad8], werkstatt: [0xffb347, 0x9aa0a8], service: [0xff6b5b, 0xffd27a], info: [0x7cc4ff] };
   for (const [list, s] of [[left, -1], [right, 1]] as const) {
+    if (pm) {
+      // Modell: feste Ladennischen (fünf je Seite); belegt wird gleichmäßig verteilt, leere Nischen bleiben geschlossen
+      const sl = pm.slots!.filter(q => Math.sign(q.x) === s).sort((a, b) => b.z - a.z), used = new Set<number>();
+      list.forEach((tab, i) => {
+        const k = Math.min(sl.length - 1, Math.max(0, Math.round((i + 0.5) * sl.length / list.length - 0.5))), q = sl[k], name = nm.pop() || 'Kim';
+        used.add(k);
+        const sg = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 0.91), mat(new THREE.MeshBasicMaterial({ map: signTex(TAB_N[tab], pal.css) })));
+        sg.position.set(q.sx, q.sy, q.sz); sg.rotation.y = -s * Math.PI / 2; deco.add(sg);
+        const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent);
+        p.g.position.set(q.x, 0, q.z); p.g.rotation.y = -s * Math.PI / 2; deco.add(p.g);
+        persons.push({ p, x: q.x, z: q.z, face: -s * Math.PI / 2, name });
+        labels.push({ p: new THREE.Vector3(q.x, 2.0, q.z), text: `${name} · ${TAB_N[tab]}`, col: pal.css });
+        inters.push({ x: q.tx, z: q.tz, r: 3.2, label: () => `${name} ansprechen · ${TAB_N[tab]}`, act: () => talk(name, tab) });
+      });
+      // Rollläden des Modells (Shutter_L0 … Shutter_R4): nur vor leeren Nischen sichtbar
+      promBody!.traverse((o: any) => { const m = /^Shutter_([LR])(\d)/.exec(o.name || ''); if (m && (m[1] === 'L') === (s < 0)) o.visible = !used.has(+m[2]); });
+      sl.forEach((q, k) => {
+        if (used.has(k)) return;
+        const sg = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 0.91), mat(new THREE.MeshBasicMaterial({ map: signTex('Geschlossen', '#2a2e36', '#7a808a') })));
+        sg.position.set(q.sx, q.sy, q.sz); sg.rotation.y = -s * Math.PI / 2; deco.add(sg);
+      });
+      continue;
+    }
     list.forEach((tab, i) => {
       const z = list.length === 1 ? PC : PZ1 - 9 - i * ((PD - 18) / (list.length - 1));
       const wx = s * PW, name = nm.pop() || 'Kim';
@@ -378,8 +440,9 @@ function build(st: Station) {
     labels.push({ p: new THREE.Vector3(0, 2.6, hz), text: 'Galaxiekarte', col: '#7cc4ff' });
     inters.push({ x: 0, z: hz, r: 4, label: () => 'Galaxiekarte öffnen', act: () => interiorHooks.openMap() });
   }
+  if (pm) for (const b of pm.blocks || []) block(b[0], b[1], b[2], b[3]);   // Standflächen aus dem Modell (Läden, Bänke, Kübel, Automaten)
   // Bänke und Pflanzkübel
-  for (const s of [-1, 1]) {
+  if (!pm) for (const s of [-1, 1]) {
     const bz = PZ0 + 5;
     box(S, mDark, 4, 0.45, 1, s * (WW - 3.5), 0.225, bz); block(s * (WW - 3.5) - 2.1, s * (WW - 3.5) + 2.1, bz - 0.6, bz + 0.6);
     for (const pz of [PZ1 - 2.5, PZ0 + 2.2]) {
@@ -535,9 +598,10 @@ export function enterInterior(st: Station) {
   scene.add(group);
   st.mesh.visible = false;
   const PZ0 = PZ1 - dims.d, L = Math.PI;
-  const lp: [number, number, number, number, number][] = [[0, HH - 4, PADZ, 280, 0.5], [0, dims.h - 1, (PZ0 + PZ1) / 2, 75, 0.5], [0, CH - 0.5, HZ0 - CL / 2, 22, 0.36]];
+  const lp: [number, number, number, number, number][] = [[0, HH - 4, PADZ, 280, 0.5], [0, dims.h - 1.4, (PZ0 + PZ1) / 2, 75, hasProm ? 0.3 : 0.5], [0, CH - 0.5, HZ0 - CL / 2, 22, hasProm ? 0.16 : 0.36]];
   setExposure(0.2);
   lamps.forEach((l, i) => { group!.localToWorld(l.position.set(lp[i][0], lp[i][1], lp[i][2])); l.distance = lp[i][3]; l.intensity = lp[i][4] * L; });
+  ambIn = ambient.intensity; rimOut.copy(rim.color); zoneT = -1; ambSet = -1;
   refreshHangarShips();
   // Neben dem Schiff aussteigen, Blick zur Tür
   const hw = (shipObs[0][1] - shipObs[0][0]) / 2;
@@ -552,6 +616,7 @@ export function enterInterior(st: Station) {
 export function leaveInterior() {
   if (room) leaveShip();
   if (!IN.active) return;
+  if (hasProm && zoneT >= 0) rim.color.copy(rimOut);
   if (document.pointerLockElement === gl) document.exitPointerLock();
   disposeParked();
   clearOthers();
@@ -786,6 +851,7 @@ const walkV = { x: 0, z: 0 };   // Laufgeschwindigkeit (m/s) in Raumkoordinaten
 export function jump() { if (!IN.active || IN.jy > 0 || IN.jv !== 0) return; IN.jv = 4.6; snd(95, 0.05, 'triangle', 0.02, 40); }
 export function updateWalk(dt: number) {
   if (!IN.active || !group) return;
+  zoneLight();
   IN.say.t = Math.max(0, IN.say.t - dt);
   // Blick: Maus eingefangen → direkte Steuerung; sonst dreht die Zeigerposition wie beim Fliegen
   IN.locked = document.pointerLockElement === gl;

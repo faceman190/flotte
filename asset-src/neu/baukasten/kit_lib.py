@@ -20,21 +20,30 @@ ROOT = r'C:\Users\faceman\Desktop\CLAUDE\letzte-flotte'
 HERE = os.path.join(ROOT, 'asset-src', 'neu', 'baukasten')
 TEX = os.path.join(ROOT, 'asset-src', 'tex')
 _A = json.load(open(os.path.join(HERE, 'kit_atlas.json'))); _D = json.load(open(os.path.join(HERE, 'kit_decals.json')))
-SM, STRIPS, TILES, DECALS, DPX = _A['size_m'], _A['strips'], _A['tiles'], _D['cells'], _D['px']
+_A2 = json.load(open(os.path.join(HERE, 'kit_int_atlas.json'))); _S = json.load(open(os.path.join(HERE, 'kit_signs.json')))
+SM, DECALS, DPX, SIGNS, SPX = _A['size_m'], _D['cells'], _D['px'], _S['cells'], _S['px']
+# Zwei Texturblätter: außen (kit_trim) und innen (kit_int). Jeder Streifen und jede Kachel kennt ihr Material.
+SHEET = {n: ('kit_trim', a, b) for n, (a, b) in _A['strips'].items()}; SHEET.update({n: ('kit_int', a, b) for n, (a, b) in _A2['strips'].items()})
+TILES = {n: ('kit_trim', r) for n, r in _A['tiles'].items()}; TILES.update({n: ('kit_int', r) for n, r in _A2['tiles'].items()})
 X, Y, Z = Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1))
 TAU = math.tau
 TINT = {   # linear; im Bild wirken die Werte deutlich heller (0,06 ist ein dunkles Grau, 0,3 ein helles)
     'none': (1, 1, 1), 'white': (0.8, 0.8, 0.8), 'hull_light': (0.5, 0.52, 0.55), 'hull': (0.29, 0.31, 0.34), 'hull_mid': (0.14, 0.15, 0.17),
     'hull_dark': (0.055, 0.06, 0.07), 'black': (0.016, 0.016, 0.018), 'steel': (0.28, 0.29, 0.31), 'yellow': (0.9, 0.48, 0.03), 'orange': (0.8, 0.2, 0.02),
     'red': (0.42, 0.035, 0.022), 'blue': (0.045, 0.15, 0.4), 'green': (0.09, 0.19, 0.08), 'olive': (0.15, 0.17, 0.08), 'rust': (0.2, 0.07, 0.03), 'concrete': (0.36, 0.36, 0.35),
+    # Innenräume
+    'i_wall': (0.12, 0.125, 0.14), 'i_wall_light': (0.3, 0.31, 0.33), 'i_dark': (0.045, 0.048, 0.055), 'i_floor': (0.2, 0.205, 0.215), 'i_floor_dark': (0.085, 0.09, 0.1),
+    'i_ceil': (0.05, 0.053, 0.06), 'i_rib': (0.075, 0.08, 0.09), 'i_red': (0.3, 0.06, 0.04), 'i_fabric': (0.1, 0.16, 0.2), 'i_leaf': (0.05, 0.2, 0.06), 'i_soil': (0.05, 0.035, 0.025),
 }
-GLOW = {'kit_light': (1.0, 0.93, 0.8), 'kit_lamp': (1.0, 0.55, 0.12), 'kit_redlamp': (1.0, 0.1, 0.05), 'kit_screen': (0.2, 0.6, 0.9), 'kit_green': (0.2, 1.0, 0.4)}
+GLOW = {'kit_light': (1.0, 0.93, 0.8), 'kit_lamp': (1.0, 0.55, 0.12), 'kit_redlamp': (1.0, 0.1, 0.05), 'kit_screen': (0.2, 0.6, 0.9), 'kit_green': (0.2, 1.0, 0.4),
+        'kit_accent': (0.25, 0.85, 0.75), 'kit_cool': (0.75, 0.88, 1.0)}      # kit_accent: im Spiel die Akzentfarbe der Station
 
 def V(p): return p if isinstance(p, Vector) else Vector(p)
 def T(c): return TINT[c] if isinstance(c, str) else tuple(c)
 def vband(strip):
-    a, b = STRIPS[strip]; return 1 - b / SM, 1 - a / SM, b - a
-ROWS = {'wall': [('wall_a', 3.0)] + [('wall_b', 2.0)] * 200, 'siding': [('wall_b', 2.0)] * 200, 'roofing': [('roof', 1.5)] * 200, 'floor': [('floor', 1.0)] * 400}
+    m, a, b = SHEET[strip]; return 1 - b / SM, 1 - a / SM, b - a
+ROWS = {'wall': [('wall_a', 3.0)] + [('wall_b', 2.0)] * 200, 'siding': [('wall_b', 2.0)] * 200, 'roofing': [('roof', 1.5)] * 200, 'floor': [('floor', 1.0)] * 400,
+        'iwalls': [('iwall', 3.0)] + [('iwall2', 1.5)] * 200, 'itech': [('iwall2', 1.5)] * 200, 'ifloors': [('ifloor', 2.0)] * 400, 'iceils': [('iceil', 1.5)] * 400, 'shutters': [('shutter', 0.6)] * 400}
 def bands(strip, H):
     """Teilt eine Höhe in Reihen: [(Streifen, von, bis, strecken)]. Ein kleiner Rest wird der letzten Reihe zugeschlagen."""
     if strip not in ROWS: return [(strip, 0.0, H, True)]
@@ -53,6 +62,9 @@ class Kit:
         self.uv = self.bm.loops.layers.uv.new('UVMap'); self.col = self.bm.loops.layers.float_color.new('Tint')
         self.ovl = self.bm.faces.layers.int.new('overlay'); self._ov = 0      # aufgesetzte Flächen (Kacheln, Aufkleber, Markierungen): verdecken nichts
         self.mats = []; self.stack = [Matrix.Identity(4)]; self.R = random.Random(seed); self.lights = []
+        # Lichtkarte: große Flächen bekommen ein eigenes Feld (chart) im zweiten Satz Texturkoordinaten; alles Übrige trägt sein Licht in den Eckfarben
+        self.uv1 = self.bm.loops.layers.uv.new('Lightmap'); self.chl = self.bm.faces.layers.int.new('chart'); self.charts = []; self.lm = False
+        self.lamps = []; self.blocks = []       # zusätzliche Lichtquellen für die Berechnung; Standflächen (nicht begehbar) fürs Spiel
 
     # ------------------------------------------------------------ Grundlagen
     @property
@@ -73,14 +85,17 @@ class Kit:
     def _mi(self, name):
         if name not in self.mats: self.mats.append(name)
         return self.mats.index(name)
-    def poly(self, pts, uvs, tint=(1, 1, 1), mat='kit_trim'):
+    def poly(self, pts, uvs, tint=(1, 1, 1), mat='kit_trim', chart=0, st=None):
         vs = [self.bm.verts.new(self.M @ V(p)) for p in pts]
         try: f = self.bm.faces.new(vs)
         except ValueError: return None
-        f.material_index = self._mi(mat); f.smooth = True; f[self.ovl] = 1 if (self._ov or mat not in ('kit_trim', 'kit_concrete')) else 0
-        for l, uv in zip(f.loops, uvs): l[self.uv].uv = uv; l[self.col] = (tint[0], tint[1], tint[2], 1.0)
+        f.material_index = self._mi(mat); f.smooth = True; f[self.ovl] = 1 if (self._ov or mat not in ('kit_trim', 'kit_int', 'kit_concrete')) else 0
+        f[self.chl] = chart
+        for i, (l, uv) in enumerate(zip(f.loops, uvs)):
+            l[self.uv].uv = uv; l[self.col] = (tint[0], tint[1], tint[2], 1.0)
+            if chart: l[self.uv1].uv = st[i]
         return f
-    def face(self, bl, br, tr, tl, strip='plain', tint='hull', u0=None, fit=True):
+    def face(self, bl, br, tr, tl, strip='plain', tint='hull', u0=None, fit=True, chart=0, st=None):
         """Viereck mit Streifen: u läuft von bl nach br (in Metern, kachelt), v von bl nach tl quer über den Streifen."""
         bl, br, tr, tl = V(bl), V(br), V(tr), V(tl)
         L, H = (br - bl).length, (tl - bl).length
@@ -88,17 +103,21 @@ class Kit:
         if u0 is None: u0 = self.R.randrange(12)
         v1 = vt if fit else vb + min(1.0, H / sh) * (vt - vb)
         e = 0.002
-        self.poly((bl, br, tr, tl), ((u0 / SM, vb + e), ((u0 + L) / SM, vb + e), ((u0 + L) / SM, v1 - e), (u0 / SM, v1 - e)), T(tint))
+        self.poly((bl, br, tr, tl), ((u0 / SM, vb + e), ((u0 + L) / SM, vb + e), ((u0 + L) / SM, v1 - e), (u0 / SM, v1 - e)), T(tint), SHEET[strip][0], chart, st)
     def surf(self, bl, br, tl, strip='wall', tint='hull', seg=3.0):
         """Rechteckige Fläche (bl, br, tl), in Reihen und Spalten geteilt: Reihen nach Streifenart, Spalten höchstens seg Meter breit."""
         bl, br, tl = V(bl), V(br), V(tl); du, dv = br - bl, tl - bl; L, H = du.length, dv.length
         if L < 1e-5 or H < 1e-5: return
-        nu = max(1, math.ceil(L / seg - 1e-6))
+        nu = max(1, math.ceil(L / seg - 1e-6)); ch = 0
+        if self.lm and not self._ov and L * H >= 2.5 and min(L, H) >= 0.7:
+            sc = (self.M.to_3x3() @ du).length / L                      # Maßstab der aktuellen Verschiebung (fast immer 1)
+            self.charts.append((L * sc, H * sc)); ch = len(self.charts)
         for name, h0, h1, fit in bands(strip, H):
             u0 = self.R.randrange(12)
             for k in range(nu):
                 a = bl + du * (k / nu) + dv * (h0 / H); b = bl + du * ((k + 1) / nu) + dv * (h0 / H); up = dv * ((h1 - h0) / H)
-                self.face(a, b, b + up, a + up, name, tint, u0=u0 + L * k / nu, fit=fit)
+                st = ((k / nu, h0 / H), ((k + 1) / nu, h0 / H), ((k + 1) / nu, h1 / H), (k / nu, h1 / H))
+                self.face(a, b, b + up, a + up, name, tint, u0=u0 + L * k / nu, fit=fit, chart=ch, st=st)
     def ngon(self, pts, strip='plain', tint='hull'):
         pts = [V(p) for p in pts]; n = len(pts); c = sum(pts, Vector()) / n
         nn = Vector()
@@ -107,7 +126,7 @@ class Kit:
         nn.normalize(); ux = (pts[1] - pts[0]).normalized(); uy = nn.cross(ux)
         xs = [(p - c).dot(ux) for p in pts]; ys = [(p - c).dot(uy) for p in pts]
         x0, y0, y1 = min(xs), min(ys), max(ys); vb, vt, sh = vband(strip); u0 = self.R.randrange(12)
-        self.poly(pts, [((u0 + x - x0) / SM, vb + 0.001 + (y - y0) / max(y1 - y0, 1e-6) * (vt - vb - 0.002)) for x, y in zip(xs, ys)], T(tint))
+        self.poly(pts, [((u0 + x - x0) / SM, vb + 0.001 + (y - y0) / max(y1 - y0, 1e-6) * (vt - vb - 0.002)) for x, y in zip(xs, ys)], T(tint), SHEET[strip][0])
     def cap(self, prof, y, front=True, strip='wall', tint='hull'):
         """Stirnfläche eines Prismas (Punkte (x, z), von vorn gesehen gegen den Uhrzeigersinn), reihenweise mit Wandstreifen belegt."""
         zmin = min(p[1] for p in prof); zmax = max(p[1] for p in prof)
@@ -128,17 +147,30 @@ class Kit:
             uvs = [((u0 + px) / SM, vb + 0.001 + min(1.0, (pz - zmin - h0) / bh) * (vt - vb - 0.002)) for px, pz in poly]
             pts = [(px, y, pz) for px, pz in poly]
             if not front: pts.reverse(); uvs.reverse()
-            self.poly(pts, uvs, T(tint))
-    def tile(self, name, c, u, v, w, h, tint='hull_light', sub=None, off=0.0, cells=TILES, scale=SM, mat='kit_trim'):
+            self.poly(pts, uvs, T(tint), SHEET[name][0])
+    def tile(self, name, c, u, v, w, h, tint='hull_light', sub=None, off=0.0, cells=None, scale=SM, mat=None):
         """Einzelmotiv als Viereck: Mitte c, Richtungen u (rechts) und v (oben), Größe w × h."""
-        x0, y0, x1, y1 = cells[name] if cells is TILES else (cells[name]['x'], cells[name]['y'], cells[name]['x'] + cells[name]['w'], cells[name]['y'] + cells[name]['h'])
+        if cells is None: mat, (x0, y0, x1, y1) = TILES[name]
+        else: x0, y0, x1, y1 = cells[name]['x'], cells[name]['y'], cells[name]['x'] + cells[name]['w'], cells[name]['y'] + cells[name]['h']
         if sub: x0, y0, x1, y1 = x0 + sub[0], y0 + sub[1], x0 + sub[2], y0 + sub[3]
         c, u, v = V(c), V(u).normalized(), V(v).normalized(); c = c + u.cross(v) * off
         pts = (c - u * w / 2 - v * h / 2, c + u * w / 2 - v * h / 2, c + u * w / 2 + v * h / 2, c - u * w / 2 + v * h / 2)
         with self.overlay(): self.poly(pts, ((x0 / scale, 1 - y1 / scale), (x1 / scale, 1 - y1 / scale), (x1 / scale, 1 - y0 / scale), (x0 / scale, 1 - y0 / scale)), T(tint), mat)
+    def sign(self, name, c, u, v, w, h=None, off=0.02, poster=None):
+        """Leuchtschild oder Werbetafel aus dem Schilder-Atlas (kit_signs.json). Namen mit ad_ sind farbige Werbetafeln, alles andere nimmt im Spiel die Akzentfarbe."""
+        d = SIGNS[name]; h = w * d['h'] / d['w'] if h is None else h
+        poster = name.startswith('ad_') if poster is None else poster
+        self.tile(name, c, u, v, w, h, 'none', off=off, cells=SIGNS, scale=SPX, mat='kit_poster' if poster else 'kit_sign')
     def decal(self, name, c, u, v, w, h=None, tint='white', off=0.015):
         d = DECALS[name]; h = w * d['h'] / d['w'] if h is None else h
         self.tile(name, c, u, v, w, h, tint, off=off, cells=DECALS, scale=DPX, mat='kit_decal')
+    def lamp(self, pos, color=(1.0, 0.93, 0.8), power=400.0, radius=0.3):
+        """Zusätzliche Lichtquelle nur für die Lichtberechnung in Blender (Punktlicht in Watt)."""
+        p = self.M @ V(pos); self.lamps.append(((p.x, p.y, p.z), tuple(color), power, radius))
+    def block_rect(self, x0, y0, x1, y1):
+        """Merkt eine Standfläche (lokale x/y-Ecken): Dort kann man im Spiel nicht hindurchgehen. Landet in den Zusatzangaben als blocks [x0, x1, z0, z1]."""
+        a = self.M @ Vector((x0, y0, 0)); b = self.M @ Vector((x1, y1, 0))
+        self.blocks.append([round(min(a.x, b.x), 2), round(max(a.x, b.x), 2), round(min(-a.y, -b.y), 2), round(max(-a.y, -b.y), 2)])
     def number(self, text, c, u, v, h=1.0, tint='white', off=0.015):
         c, u = V(c), V(u).normalized(); w = h * 0.75
         for i, ch in enumerate(text): self.decal('d' + ch, c + u * ((i - (len(text) - 1) / 2) * w), u, v, w, h, tint, off)
@@ -214,12 +246,12 @@ class Kit:
                     p2 = Vector((cs[i + 1][0] * rb, cs[i + 1][1] * rb, h1)); p3 = Vector((cs[i][0] * rb, cs[i][1] * rb, h1))
                     if mode == 'along':
                         va, vc = vb + (vt - vb) * i / seg, vb + (vt - vb) * (i + 1) / seg
-                        self.poly((p0, p1, p2, p3), ((u0 / SM, va), (u0 / SM, vc), ((u0 + L) / SM, vc), ((u0 + L) / SM, va)), T(tint))
+                        self.poly((p0, p1, p2, p3), ((u0 / SM, va), (u0 / SM, vc), ((u0 + L) / SM, vc), ((u0 + L) / SM, va)), T(tint), SHEET[name][0])
                     else:
                         c = TAU * max(r, r2); ua, uc = (u0 + c * i / seg) / SM, (u0 + c * (i + 1) / seg) / SM
                         v1 = vt if fit else vb + min(1.0, (h1 - h0) / sh) * (vt - vb)
                         pp, uu = (p0, p1, p2, p3), ((ua, vb + 0.001), (uc, vb + 0.001), (uc, v1 - 0.001), (ua, v1 - 0.001))
-                        self.poly(pp[::-1] if flip else pp, uu[::-1] if flip else uu, T(tint))
+                        self.poly(pp[::-1] if flip else pp, uu[::-1] if flip else uu, T(tint), SHEET[name][0])
             if caps:
                 ct = cap_tint or tint
                 if r > 1e-4: self.ngon([(cs[i][0] * r, cs[i][1] * r, 0) for i in range(seg - 1, -1, -1)], 'plain', ct)
@@ -233,7 +265,7 @@ class Kit:
                 uvs = [((u0 + c * (i + k) / seg) / SM, vb + 0.002 + (vt - vb - 0.004) * (j + m) / rings) for k, m in ((0, 0), (1, 0), (1, 1), (0, 1))]
                 if j == 0: pts, uvs = pts[1:], uvs[1:]
                 elif j == rings - 1: pts, uvs = pts[:3], uvs[:3]
-                self.poly(pts, uvs, T(tint))
+                self.poly(pts, uvs, T(tint), SHEET[strip][0])
     def prism(self, prof, y0, y1, side='wall', top='roofing', tint='hull', tint_top=None, caps=(True, True), cap_strip='wall', seg=3.0):
         """Querschnitt in der X/Z-Ebene (von vorn gesehen gegen den Uhrzeigersinn), gezogen von y0 (vorn) bis y1 (hinten)."""
         n = len(prof)
@@ -551,7 +583,7 @@ class Kit:
     def barrier(self, length=4.0, loc=(0, 0, 0), rz=0.0):
         with self.at(loc, rz):
             self.prism([(-0.4, 0), (0.4, 0), (0.14, 1.0), (-0.14, 1.0)], -length / 2, length / 2, side='plain', top='hazard', tint='hull_light', tint_top='none', cap_strip='plain')
-    def sign(self, name, loc=(0, 0, 0), rz=0.0, w=2.0, h=1.0, z=1.6):
+    def signpost(self, name, loc=(0, 0, 0), rz=0.0, w=2.0, h=1.0, z=1.6):
         with self.at(loc, rz):
             for s in (-1, 1): self.tube((s * w * 0.4, 0, 0), (s * w * 0.4, 0, z + h), 0.05, 'plain', 'hull_dark', 6)
             self.box((w, 0.08, h), (0, -0.06, z), side='plain', tint='hull_dark', bevel=0.02, bottom=True); self.decal(name, (0, -0.1, z + h / 2), X, Z, w * 0.94, h * 0.94, off=0.012)
@@ -560,6 +592,11 @@ class Kit:
     def build(self, coll='Kit'):
         """Macht aus allem ein Objekt: Punkte verschmelzen, harte Kanten ab 60°, Normalen nach Flächengröße gewichtet."""
         bm = self.bm
+        self.lm_size = self._pack() if self.charts else 0
+        if self.lm and not self.charts:          # Teil ohne eigene Felder in einem Raum mit Lichtkarte: alles zeigt auf das Festfeld
+            self.lm_size = 2048
+            for f in bm.faces:
+                for l in f.loops: l[self.uv1].uv = (8 / 2048, 8 / 2048)
         bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0004)
         for e in bm.edges:
             e.smooth = len(e.link_faces) == 2 and e.calc_face_angle(0.0) < math.radians(60)
@@ -573,8 +610,45 @@ class Kit:
         if not c: c = bpy.data.collections.new(coll); bpy.context.scene.collection.children.link(c)
         ob = bpy.data.objects.new(self.name, me); c.objects.link(ob)
         mod = ob.modifiers.new('Normalen', 'WEIGHTED_NORMAL'); mod.keep_sharp = True; mod.weight = 60
-        ob['kit_lights'] = json.dumps(self.lights)
+        ob['kit_lights'] = json.dumps(self.lights); ob['kit_blocks'] = json.dumps(self.blocks); ob['kit_lm'] = self.lm_size
+        if self.lamps:
+            lc = bpy.data.collections.get(coll + '_Licht')
+            if not lc: lc = bpy.data.collections.new(coll + '_Licht'); bpy.context.scene.collection.children.link(lc)
+            for o in list(lc.objects): bpy.data.objects.remove(o, do_unlink=True)
+            for i, (pos, colr, power, radius) in enumerate(self.lamps):
+                ld = bpy.data.lights.new(self.name + '_L%d' % i, 'POINT'); ld.color = colr; ld.energy = power; ld.shadow_soft_size = radius
+                lo = bpy.data.objects.new(ld.name, ld); lo.location = pos; lc.objects.link(lo)
         return ob
+    def _pack(self, size=2048, pad=3, dmax=26.0):
+        """Verteilt die Felder der Lichtkarte (Regalverfahren) und schreibt den zweiten Satz Texturkoordinaten. Feld 0 (oben links, 16 px) bleibt weiß:
+        Dorthin zeigen alle Flächen ohne eigenes Feld; ihr Licht steckt in den Eckfarben."""
+        order = sorted(range(len(self.charts)), key=lambda i: -self.charts[i][1])
+        def place(d):
+            x, y, rowh, out = 24, 0, 24, {}
+            for i in order:
+                w = min(size - 2 * pad, max(4, math.ceil(self.charts[i][0] * d))); h = min(size - 2 * pad, max(4, math.ceil(self.charts[i][1] * d)))
+                if x + w + 2 * pad > size: x = 0; y += rowh; rowh = 0
+                if y + h + 2 * pad > size: return None
+                out[i] = (x + pad, y + pad, w, h); x += w + 2 * pad; rowh = max(rowh, h + 2 * pad)
+            return out
+        lo, hi, best = 1.0, dmax, None
+        if place(hi): best = place(hi)
+        else:
+            for _ in range(18):
+                mid = (lo + hi) / 2; r = place(mid)
+                if r: best = r; lo = mid
+                else: hi = mid
+        if best is None: raise RuntimeError('Lichtkarte: zu viele Flächen')
+        self.lm_density = lo if not place(dmax) else dmax
+        for f in self.bm.faces:
+            c = f[self.chl]
+            if c:
+                x, y, w, h = best[c - 1]
+                for l in f.loops: s_, t_ = l[self.uv1].uv; l[self.uv1].uv = ((x + s_ * w) / size, (y + t_ * h) / size)
+            else:
+                for l in f.loops: l[self.uv1].uv = (8 / size, 8 / size)
+        return size
+
 
 # ---------------------------------------------------------------- Materialien (Vorschau in Blender; das Spiel setzt eigene ein)
 def _img(name, data=False):
@@ -586,7 +660,15 @@ def kit_material(name):
     m = bpy.data.materials.get(name)
     if m: return m
     m = bpy.data.materials.new(name); m.use_nodes = True; nt = m.node_tree; P = nt.nodes['Principled BSDF']; L = nt.links.new
-    if name in ('kit_' + k for k in ('light', 'lamp', 'redlamp', 'screen', 'green')):
+    if name in ('kit_sign', 'kit_poster'):
+        tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img('kit_signs@2048.png')
+        if name == 'kit_sign':
+            mx = nt.nodes.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.blend_type = 'MULTIPLY'; mx.inputs[0].default_value = 1.0; mx.inputs[7].default_value = (*GLOW['kit_accent'], 1)
+            L(tc.outputs['Color'], mx.inputs[6]); src = mx.outputs[2]
+        else: src = tc.outputs['Color']
+        L(src, P.inputs['Base Color']); L(src, P.inputs['Emission Color']); P.inputs['Emission Strength'].default_value = 5.0 if name == 'kit_sign' else 2.5
+        return m
+    if name in GLOW:
         c = GLOW[name]; P.inputs['Base Color'].default_value = (*c, 1); P.inputs['Emission Color'].default_value = (*c, 1); P.inputs['Emission Strength'].default_value = 8.0
         return m
     if name == 'kit_glass':
@@ -595,10 +677,10 @@ def kit_material(name):
     va = nt.nodes.new('ShaderNodeVertexColor'); va.layer_name = 'Col'
     mix = nt.nodes.new('ShaderNodeMix'); mix.data_type = 'RGBA'; mix.blend_type = 'MULTIPLY'; mix.inputs[0].default_value = 1.0
     L(va.outputs['Color'], mix.inputs[7]); L(mix.outputs[2], P.inputs['Base Color'])
-    if name == 'kit_trim':
-        tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img('kit_trim_col@2048.png'); L(tc.outputs['Color'], mix.inputs[6])
-        tn = nt.nodes.new('ShaderNodeTexImage'); tn.image = _img('kit_trim_nrm@2048.png', True); nm = nt.nodes.new('ShaderNodeNormalMap'); L(tn.outputs['Color'], nm.inputs['Color']); L(nm.outputs['Normal'], P.inputs['Normal'])
-        to = nt.nodes.new('ShaderNodeTexImage'); to.image = _img('kit_trim_orm@2048.png', True); sp = nt.nodes.new('ShaderNodeSeparateColor'); L(to.outputs['Color'], sp.inputs[0])
+    if name in ('kit_trim', 'kit_int'):
+        tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img(name + '_col@2048.png'); L(tc.outputs['Color'], mix.inputs[6])
+        tn = nt.nodes.new('ShaderNodeTexImage'); tn.image = _img(name + '_nrm@2048.png', True); nm = nt.nodes.new('ShaderNodeNormalMap'); L(tn.outputs['Color'], nm.inputs['Color']); L(nm.outputs['Normal'], P.inputs['Normal'])
+        to = nt.nodes.new('ShaderNodeTexImage'); to.image = _img(name + '_orm@2048.png', True); sp = nt.nodes.new('ShaderNodeSeparateColor'); L(to.outputs['Color'], sp.inputs[0])
         L(sp.outputs[1], P.inputs['Roughness']); L(sp.outputs[2], P.inputs['Metallic'])
     elif name == 'kit_decal':
         tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img('kit_decals@2048.png'); L(tc.outputs['Color'], mix.inputs[6]); L(tc.outputs['Alpha'], P.inputs['Alpha'])
@@ -669,16 +751,133 @@ def bake_ao(ob, dist=5.0, samples=24, strength=0.75, ground=True):
     sc.render.bake.target = 'IMAGE_TEXTURES'
     return {'ao_mean': float(a[:, 0].mean()), 'zeros': float((a[:, 0] < 0.02).mean())}
 
-def export(ob, name, meta=None, kind='station'):
+def bake_vertex_light(ob, ref, samples=48):
+    """Licht eines Zusatzteils (ohne eigene Felder in der Lichtkarte) in die Eckfarben rechnen; ref = Bezugshelligkeit des Raums (aus bake_light)."""
+    import numpy as np
+    sc = bpy.context.scene; me = ob.data; nl = len(me.loops); set_emission()
+    if not me.color_attributes.get('Lv'): me.color_attributes.new('Lv', 'FLOAT_COLOR', 'CORNER')
+    me.color_attributes.active_color = me.color_attributes['Lv']
+    w = sc.world; bg = w.node_tree.nodes['Background'] if w and w.use_nodes else None; old = bg.inputs['Strength'].default_value if bg else None
+    if bg: bg.inputs['Strength'].default_value = 0.0
+    sc.render.engine = 'CYCLES'; sc.cycles.device = 'CPU'; sc.cycles.samples = samples; sc.render.bake.target = 'VERTEX_COLORS'
+    bpy.context.view_layer.update()
+    for q in sc.objects: q.select_set(False)
+    ob.select_set(True); bpy.context.view_layer.objects.active = ob
+    win = bpy.context.window; area = next(a for a in win.screen.areas if a.type == 'VIEW_3D'); region = next(r for r in area.regions if r.type == 'WINDOW')
+    with bpy.context.temp_override(window=win, area=area, region=region, object=ob, active_object=ob, selected_objects=[ob], selected_editable_objects=[ob]):
+        bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'}, use_clear=True)
+    sc.render.bake.target = 'IMAGE_TEXTURES'
+    if bg: bg.inputs['Strength'].default_value = old
+    lv = np.empty(nl * 4, np.float32); me.color_attributes['Lv'].data.foreach_get('color', lv); x = lv.reshape(nl, 4)[:, :3] / ref
+    t = np.empty(nl * 4, np.float32); me.color_attributes['Tint'].data.foreach_get('color', t); t = t.reshape(nl, 4); t[:, :3] *= np.clip(x / 4.0, 0.0, 1.0)
+    col = me.color_attributes['Col']; col.data.foreach_set('color', t.ravel())
+    me.color_attributes.active_color = col; me.color_attributes.render_color_index = list(me.color_attributes).index(col)
+    return float(x.mean())
+
+def export(ob, name, meta=None, kind='station', extra=()):
     """Schreibt asset-src/glb/<kind>/<name>.glb (ohne Bilder, mit Texturkoordinaten und Eckfarben) und asset-src/data/kit_<name>.json (Lichter, Zusatzangaben)."""
     sc = bpy.context.scene
     for q in sc.objects: q.select_set(False)
     ob.select_set(True); bpy.context.view_layer.objects.active = ob
+    for q in extra: q.select_set(True)                       # weitere Objekte in dieselbe Datei (eigene Knoten mit Namen, im Spiel einzeln schaltbar)
     path = os.path.join(ROOT, 'asset-src', 'glb', kind, name + '.glb')
     win = bpy.context.window; area = next(a for a in win.screen.areas if a.type == 'VIEW_3D'); region = next(r for r in area.regions if r.type == 'WINDOW')
-    with bpy.context.temp_override(window=win, area=area, region=region, object=ob, active_object=ob, selected_objects=[ob]):
+    with bpy.context.temp_override(window=win, area=area, region=region, object=ob, active_object=ob, selected_objects=[ob, *extra]):
         bpy.ops.export_scene.gltf(filepath=path, use_selection=True, export_format='GLB', export_apply=True, export_yup=True, export_texcoords=True, export_normals=True,
                                   export_image_format='NONE', export_vertex_color='NAME', export_vertex_color_name='Col', export_all_vertex_colors=False, export_active_vertex_color_when_no_material=True)
-    d = dict(meta or {}); d['lights'] = json.loads(ob.get('kit_lights', '[]'))
+    d = dict(meta or {}); d['lights'] = json.loads(ob.get('kit_lights', '[]')); d['blocks'] = json.loads(ob.get('kit_blocks', '[]'))
     json.dump(d, open(os.path.join(ROOT, 'asset-src', 'data', 'kit_' + name + '.json'), 'w'))
     return {'glb_kb': round(os.path.getsize(path) / 1024), 'verts': len(ob.data.vertices), 'faces': len(ob.data.polygons), 'lights': len(d['lights'])}
+
+# Leuchtstärken der selbstleuchtenden Materialien für die Lichtberechnung (Blender)
+EMIT = {'kit_light': 10.0, 'kit_cool': 5.0, 'kit_accent': 6.0, 'kit_screen': 4.0, 'kit_lamp': 6.0, 'kit_redlamp': 4.0, 'kit_green': 2.0, 'kit_sign': 4.0, 'kit_poster': 2.2}
+def set_emission(scale=1.0):
+    for n, v in EMIT.items():
+        m = bpy.data.materials.get(n)
+        if m and m.use_nodes and m.node_tree.nodes.get('Principled BSDF'): m.node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = v * scale
+
+def bake_light(ob, name, samples=64, bounces=4, ref=None, blur=1):
+    """Rechnet das Licht eines Innenraums vor (Cycles, alle leuchtenden Flächen und Lampen der Szene sind Lichtquellen):
+    - große Flächen: Bild asset-src/tex/<name>_lightmap@2048.png über den zweiten Satz Texturkoordinaten,
+    - alles Übrige: in die Eckfarben (Col = Tönung × Licht).
+    Kodierung: v = x / (1 + x) mit x = L / ref (ref: 2,2 × mittlere Helligkeit, wenn nicht vorgegeben), als sRGB gespeichert. Das Spiel rechnet
+    zurück (x = v / (1 - v)), damit helle Lichtinseln und dunkle Ecken ihren echten Abstand behalten. Eckfarben: Tönung × min(1, x / 4)."""
+    import numpy as np
+    sc = bpy.context.scene; me = ob.data; nl = len(me.loops); size = int(ob.get('kit_lm', 0)) or 2048
+    set_emission()
+    img = bpy.data.images.get('kit_lm_' + name)
+    if img and img.size[0] != size: bpy.data.images.remove(img); img = None
+    img = img or bpy.data.images.new('kit_lm_' + name, size, size, alpha=False, float_buffer=True)
+    for m in me.materials:
+        nt = m.node_tree; n = nt.nodes.get('BakeZiel') or nt.nodes.new('ShaderNodeTexImage'); n.name = 'BakeZiel'; n.image = img
+        for x in nt.nodes: x.select = False
+        n.select = True; nt.nodes.active = n
+    me.uv_layers.active = me.uv_layers['Lightmap']
+    hidden = [o for o in sc.objects if o.name in ('Boden', 'Sonne', 'ao_boden') and not o.hide_render]
+    for o in hidden: o.hide_render = True
+    w = sc.world; bg = w.node_tree.nodes['Background'] if w and w.use_nodes else None; old = bg.inputs['Strength'].default_value if bg else None
+    if bg: bg.inputs['Strength'].default_value = 0.0
+    sc.render.engine = 'CYCLES'; sc.cycles.device = 'CPU'; sc.cycles.samples = samples; sc.cycles.max_bounces = bounces; sc.cycles.diffuse_bounces = bounces
+    sc.render.bake.target = 'IMAGE_TEXTURES'; sc.render.bake.margin = 4
+    sc = bpy.context.scene; bpy.context.view_layer.update()
+    for q in sc.objects: q.select_set(False)
+    ob.select_set(True); bpy.context.view_layer.objects.active = ob
+    win = bpy.context.window; area = next(a for a in win.screen.areas if a.type == 'VIEW_3D'); region = next(r for r in area.regions if r.type == 'WINDOW')
+    ctx = dict(window=win, area=area, region=region, object=ob, active_object=ob, selected_objects=[ob], selected_editable_objects=[ob])
+    with bpy.context.temp_override(**ctx): bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'}, use_clear=True, margin=4)
+    if not me.color_attributes.get('Lv'): me.color_attributes.new('Lv', 'FLOAT_COLOR', 'CORNER')
+    me.color_attributes.active_color = me.color_attributes['Lv']; sc.render.bake.target = 'VERTEX_COLORS'
+    with bpy.context.temp_override(**ctx): bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'}, use_clear=True)
+    sc.render.bake.target = 'IMAGE_TEXTURES'
+    for o in hidden: o.hide_render = False
+    if bg: bg.inputs['Strength'].default_value = old
+    me.uv_layers.active = me.uv_layers['UVMap']
+    # ---- Bild
+    a = np.empty(size * size * 4, np.float32); img.pixels.foreach_get(a); a = a.reshape(size, size, 4)[..., :3].copy()
+    mask = a.mean(axis=2) > 1e-6
+    for _ in range(blur):
+        k = a.copy()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)): k += np.roll(a, (dy, dx), axis=(0, 1))
+        a = k / 5.0
+    known = mask.copy()
+    for _ in range(6):
+        acc = np.zeros_like(a); cnt = np.zeros(known.shape, np.float32)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            acc += np.roll(a * known[..., None], (dy, dx), axis=(0, 1)); cnt += np.roll(known, (dy, dx), axis=(0, 1)).astype(np.float32)
+        new = (~known) & (cnt > 0); a[new] = acc[new] / cnt[new][:, None]; known |= new
+    med = float(np.median(a.mean(axis=2)[mask])) if mask.any() else 0.1
+    ref = ref or 2.2 * med
+    v = (a / ref) / (1.0 + a / ref)
+    v[:24, :24] = 0.8                           # Festfeld (unten links): entspricht x = 4; dorthin zeigen alle Flächen ohne eigenes Feld
+    srgb = np.where(v <= 0.0031308, v * 12.92, 1.055 * np.power(np.clip(v, 1e-8, 1), 1 / 2.4) - 0.055)
+    out = bpy.data.images.get('kit_lm8_' + name)
+    if out and out.size[0] != size: bpy.data.images.remove(out); out = None
+    out = out or bpy.data.images.new('kit_lm8_' + name, size, size, alpha=False)
+    buf = np.ones((size, size, 4), np.float32); buf[..., :3] = srgb; out.pixels.foreach_set(buf.ravel()); out.update()
+    path = os.path.join(TEX, name + '_lightmap@2048.png'); out.filepath_raw = path; out.file_format = 'PNG'; out.save()
+    # ---- Eckfarben: Flächen ohne Feld bekommen Tönung × Licht, Aufkleber das Licht der nächsten festen Ecken
+    lv = np.empty(nl * 4, np.float32); me.color_attributes['Lv'].data.foreach_get('color', lv); lv = lv.reshape(nl, 4)[:, :3]
+    x = lv / ref; vv = x / (1.0 + x)
+    t = np.empty(nl * 4, np.float32); me.color_attributes['Tint'].data.foreach_get('color', t); t = t.reshape(nl, 4)
+    chart = np.zeros(len(me.polygons), np.int32); me.attributes['chart'].data.foreach_get('value', chart)
+    ls = np.empty(len(me.polygons), np.int32); lt = np.empty(len(me.polygons), np.int32); me.polygons.foreach_get('loop_start', ls); me.polygons.foreach_get('loop_total', lt)
+    mi = np.empty(len(me.polygons), np.int32); me.polygons.foreach_get('material_index', mi)
+    loop_chart = np.repeat(chart, lt); loop_mat = np.repeat(mi, lt)
+    di = [i for i, m in enumerate(me.materials) if m and m.name == 'kit_decal']
+    if di:
+        from mathutils import kdtree
+        lvert = np.empty(nl, np.int32); me.loops.foreach_get('vertex_index', lvert)
+        solid = ~np.isin(loop_mat, di) & (vv.mean(axis=1) > 0)
+        vsum = np.zeros((len(me.vertices), 3)); vcnt = np.zeros(len(me.vertices)); np.add.at(vsum, lvert[solid], vv[solid]); np.add.at(vcnt, lvert[solid], 1)
+        vi = np.nonzero(vcnt)[0]; va = vsum[vi] / vcnt[vi][:, None]; kd = kdtree.KDTree(len(vi))
+        for k, i in enumerate(vi): kd.insert(me.vertices[i].co, k)
+        kd.balance()
+        for li in np.nonzero(np.isin(loop_mat, di))[0]:
+            hits = kd.find_n(me.vertices[lvert[li]].co, 4); wts = [1.0 / (h[2] + 0.05) for h in hits]
+            vv[li] = sum(va[h[1]] * ww for h, ww in zip(hits, wts)) / sum(wts); x[li] = vv[li] / np.maximum(1 - vv[li], 0.02)
+    free = loop_chart == 0
+    t[free, :3] *= np.clip(x[free] / 4.0, 0.0, 1.0)      # linear bis zur vierfachen Bezugshelligkeit; das Festfeld der Lichtkarte liefert den Faktor 4
+    col = me.color_attributes['Col']; col.data.foreach_set('color', t.ravel())
+    me.color_attributes.active_color = col; me.color_attributes.render_color_index = list(me.color_attributes).index(col)
+    img.pack()
+    return {'ref': round(ref, 4), 'median': round(med, 4), 'covered': round(float(mask.mean()), 3), 'kb': round(os.path.getsize(path) / 1024), 'free_mean': round(float(vv[free].mean()), 3)}

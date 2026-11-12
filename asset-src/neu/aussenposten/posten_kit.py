@@ -76,7 +76,7 @@ def build(lib):
     K.silo(2.6, 9.5, (-41.5, 12, 0)); K.silo(2.0, 7.0, (-46.5, 15.5, 0), 'hull_mid')
     K.pipe([(-41.5, 9.2, 2.2), (-41.5, 6.0, 2.2), (-34.0, 6.0, 2.2)], 0.22, 'yellow')
     K.block(4.6, 4.6, 1.3, (-52, -6, 0), tint='hull_mid', plinth=0, cornice=0.25); K.turret((-52, -6, 1.3), 0.5)
-    K.sign('w_landezone', (-36, -34, 0), -0.5, 3.4, 1.0); K.sign('p_caution', (36, -22.5, 0), 0.4)
+    K.signpost('w_landezone', (-36, -34, 0), -0.5, 3.4, 1.0); K.signpost('p_caution', (36, -22.5, 0), 0.4)
     for i in range(3): K.barrier(4.0, (-36.5, -44 - i * 4.6, 0), 0.0)
     # ---------- Landefeld
     K.pad(46, (PAD[0], PAD[1], 0), 0.6, '1')

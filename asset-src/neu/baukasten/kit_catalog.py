@@ -22,7 +22,7 @@ def catalog(lib):
     K.container((8, -60, 0), 0.0, 'blue'); K.container((8, -60, 2.6), 0.06, 'orange', '14')
     for i, t in enumerate(('red', 'blue', 'yellow', 'hull_light')): K.barrel((14 + (i % 2) * 1.0, -60 + (i // 2) * 1.0, 0), t)
     K.cage((18.5, -60, 0)); K.hauler((25, -60, 0)); K.cart((31, -60, 0)); K.post((35, -60, 0)); K.beacon((40, -60, 0)); K.barrier(4, (46, -60, 0), math.pi / 2)
-    K.sign('p_caution', (51, -60, 0)); K.sign('w_kein_zutritt', (55, -60, 0), 0, 3.0, 0.9); K.ladder(4, (58, -60, 0))
+    K.signpost('p_caution', (51, -60, 0)); K.signpost('w_kein_zutritt', (55, -60, 0), 0, 3.0, 0.9); K.ladder(4, (58, -60, 0))
     K.cable((33.5, -58, 2.6), (36.5, -58, 2.6), 0.5)
     # Landefeld
     K.pad(30, (28, -92, 0), number='3')
