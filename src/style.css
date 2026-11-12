@@ -274,7 +274,7 @@ button.mini{padding:3px 8px;font-size:12px;letter-spacing:.5px}
 .islot.empty{cursor:default;border-style:dashed;opacity:.75}.islot.empty b{color:var(--dim);font-weight:500}
 .islot.on,.icell.on{border-color:var(--amb);box-shadow:0 0 10px rgba(255,179,71,.35);background:rgba(255,179,71,.08)}
 .islot .ico,.icell .ico{margin:0}
-.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:7px}
+.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:7px}
 .icell{position:relative;aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid rgba(95,208,255,.2);border-bottom:3px solid var(--rc,rgba(95,208,255,.2));background:rgba(8,20,30,.55);cursor:pointer;padding:0;min-width:0}
 .icell:hover,.islot:not(.empty):hover{background:rgba(95,208,255,.1)}
 .icell.empty{border-bottom-width:1px;border-color:rgba(95,208,255,.13);background:rgba(8,20,30,.4);cursor:default}
@@ -283,3 +283,9 @@ button.mini{padding:3px 8px;font-size:12px;letter-spacing:.5px}
 .iname{font-size:20px;font-weight:700;color:var(--rc);line-height:1.15}
 .isub{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--mut)}
 .bcard b.dim{color:var(--dim)}
+
+.itabs{display:flex;gap:6px;margin-bottom:12px}
+.itabs button{flex:1;padding:6px 8px;font-size:13px;letter-spacing:2px;text-transform:uppercase}
+.itabs button.on{border-color:var(--acc);color:#eafaff;background:rgba(40,140,190,.35)}
+.gico{display:inline-block;vertical-align:middle;background-repeat:no-repeat;flex:none}
+td .gico{margin-right:8px}

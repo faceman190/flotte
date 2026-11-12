@@ -1,6 +1,7 @@
-import { P, stats } from './state';
+import { P, stats, cargoUsed } from './state';
+import type { ShipMods } from '../data/ships';
 import { hashStr } from '../core/util';
-import { GEAR_IDS, GEAR_SLOTS, HANDEL_MAX, gearDef, slotKind, type GearSlot, type StatId } from '../data/gear';
+import { GEAR_IDS, GEAR_SLOTS, SHIP_SLOTS, HANDEL_MAX, gearDef, slotKind, shipSlotKind, isShipKind, type GearSlot, type ShipSlot, type StatId } from '../data/gear';
 import { serviceFactor } from './reputation';
 
 // =====================================================================================
@@ -18,6 +19,17 @@ export function gearStat(k: StatId): number {
   for (const s of GEAR_SLOTS) { const d = gearDef(P.gear?.[s] || ''); if (d?.st?.[k]) v += d.st[k]!; }
   return k === 'handel' ? Math.min(HANDEL_MAX, v) : v;
 }
+// Zuschläge der Module eines Schiffs als Anteil (für computeStats)
+const MOD_KEY: Partial<Record<StatId, keyof ShipMods>> = { s_dmg: 'dmg', s_rate: 'rate', s_hull: 'hull', s_shield: 'shield', s_speed: 'speed', s_turn: 'turn', s_cargo: 'cargo', s_laser: 'laser', s_scan: 'scan' };
+export function shipMods(gear?: Partial<Record<ShipSlot, string>>): ShipMods {
+  const m: ShipMods = {};
+  for (const s of SHIP_SLOTS) {
+    const d = gearDef(gear?.[s] || '');
+    if (d?.st) for (const [k, v] of Object.entries(d.st)) { const mk = MOD_KEY[k as StatId]; if (mk) m[mk] = (m[mk] || 0) + (v as number) / 100; }
+  }
+  return m;
+}
+export const shipStat = (k: StatId) => SHIP_SLOTS.reduce((a, s) => a + (gearDef(P.shipGear?.[s] || '')?.st?.[k] || 0), 0);
 // Faktor für Wirkungen in Prozent (Lauftempo, Abbau, Handel)
 export const gearFactor = (k: 'tempo' | 'abbau' | 'handel') => Math.max(0.5, 1 + gearStat(k) / 100);
 export const invCap = () => BASE_SLOTS + gearStat('plaetze');
@@ -59,6 +71,7 @@ export function equip(i: number): string {
   const it = P.inv[i], d = it && gearDef(it.id);
   if (!it || !d) return 'Gegenstand fehlt.';
   if (d.kind === 'verbrauch' || d.kind === 'fund') return 'Das lässt sich nicht anlegen.';
+  if (isShipKind(d.kind)) return equipShip(i);
   const slot: GearSlot = d.kind === 'modul' ? (!P.gear.modul1 ? 'modul1' : !P.gear.modul2 ? 'modul2' : 'modul1') : d.kind as GearSlot;
   const old = P.gear[slot];
   // Rucksack tauschen: der neue muss alles fassen, was gerade getragen wird (der alte kommt an die Stelle des neuen)
@@ -78,6 +91,31 @@ export function unequip(slot: GearSlot): string {
   invHooks.changed();
   return '';
 }
+// Schiffsmodul einbauen (ins aktive Schiff); das bisherige Modul des Platzes kommt in den Rucksack
+function equipShip(i: number): string {
+  const it = P.inv[i], d = gearDef(it.id)!;
+  const slot: ShipSlot = d.kind === 'schiffswaffe' ? 'waffe' : d.kind === 'schiffsabwehr' ? 'abwehr' : d.kind === 'schiffsantrieb' ? 'antrieb' : !P.shipGear.system1 ? 'system1' : !P.shipGear.system2 ? 'system2' : 'system1';
+  const old = P.shipGear[slot];
+  P.shipGear[slot] = it.id;
+  if (cargoUsed() > stats().cargo) { if (old) P.shipGear[slot] = old; else delete P.shipGear[slot]; return 'Dafür ist zu viel im Frachtraum.'; }
+  if (old) P.inv[i] = { id: old, n: 1 }; else P.inv.splice(i, 1);
+  clampShip();
+  invHooks.changed();
+  return '';
+}
+export function unequipShip(slot: ShipSlot): string {
+  const id = P.shipGear[slot];
+  if (!id) return 'Der Platz ist leer.';
+  if (P.inv.length + 1 > invCap()) return 'Kein Platz im Rucksack.';
+  delete P.shipGear[slot];
+  if (cargoUsed() > stats().cargo) { P.shipGear[slot] = id; return 'Dafür ist zu viel im Frachtraum.'; }
+  P.inv.push({ id, n: 1 });
+  clampShip();
+  invHooks.changed();
+  return '';
+}
+// Hülle und Schild auf die neuen Höchstwerte begrenzen
+function clampShip() { const S = stats(); P.hull = Math.min(P.hull, S.maxHull); P.shield = Math.min(P.shield, S.maxShield); }
 // Verbrauchsgut benutzen (wirkt auf das Schiff)
 export function useItem(i: number): string {
   const it = P.inv[i], d = it && gearDef(it.id);
@@ -145,10 +183,13 @@ export function rollKillLoot(type: string): string {
 }
 
 // Spielstand nach dem Laden in Ordnung bringen: unbekannte Gegenstände entfernen, Mengen begrenzen
-export function sanitizeInv(p: { inv?: any; gear?: any; locker?: any }) {
+export function sanitizeInv(p: { inv?: any; gear?: any; locker?: any; shipGear?: any; fleet?: any[] }) {
   const clean = (l: any): InvItem[] => (Array.isArray(l) ? l : []).filter((it: any) => it && gearDef(it.id) && it.n > 0).map((it: any) => ({ id: it.id, n: Math.min(Math.floor(it.n), gearDef(it.id)!.stack || 1) }));
   p.inv = clean(p.inv); p.locker = clean(p.locker).slice(0, LOCKER_SLOTS);
   const g: Record<string, string> = {};
   for (const s of GEAR_SLOTS) { const id = p.gear?.[s], d = gearDef(id || ''); if (d && d.kind === slotKind(s)) g[s] = id; }
   p.gear = g;
+  const ship = (sg: any) => { const o: Record<string, string> = {}; for (const s of SHIP_SLOTS) { const id = sg?.[s], d = gearDef(id || ''); if (d && d.kind === shipSlotKind(s)) o[s] = id; } return o; };
+  p.shipGear = ship(p.shipGear);
+  for (const r of p.fleet || []) r.gear = ship(r.gear);
 }

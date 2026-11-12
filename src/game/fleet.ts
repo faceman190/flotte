@@ -11,11 +11,11 @@ export const shipsAt = (station: string) => P.fleet.filter(r => r.loc.station ==
 export const sellPrice = (r: ShipRec) => Math.round(SHIPS[r.cls].price * 0.6);
 
 function activeRec(loc: Loc): ShipRec {
-  return { uid: P.uid, cls: P.cls, name: P.shipName, up: { ...P.up }, cargo: { ...P.cargo }, hull: P.hull, ammo: P.ammo, rockets: P.rockets, charges: P.charges, loc, paint: P.paint };
+  return { uid: P.uid, cls: P.cls, name: P.shipName, up: { ...P.up }, cargo: { ...P.cargo }, hull: P.hull, ammo: P.ammo, rockets: P.rockets, charges: P.charges, loc, paint: P.paint, gear: { ...P.shipGear } };
 }
 function load(r: ShipRec) {
   P.uid = r.uid; P.cls = r.cls; P.shipName = r.name; P.up = { ...r.up }; P.cargo = { ...r.cargo };
-  P.hull = r.hull; P.ammo = r.ammo; P.rockets = r.rockets; P.charges = r.charges; P.paint = r.paint || 'Orange';
+  P.hull = r.hull; P.ammo = r.ammo; P.rockets = r.rockets; P.charges = r.charges; P.paint = r.paint || 'Orange'; P.shipGear = { ...(r.gear || {}) };
   const st = stats();
   P.shield = st.maxShield;
   if (P.tool === 'laser' && !st.laser) P.tool = 'guns';
@@ -53,7 +53,8 @@ export function buyShip(cls: ShipId, loc: Loc) {
 export function sellShip(r: ShipRec) {
   const cr = sellPrice(r);
   P.credits += cr;
-  // Fracht des verkauften Schiffs wandert ins Stationslager
+  // eingebaute Module wandern in den Spind (auch wenn er dadurch überläuft), die Fracht ins Stationslager
+  for (const id of Object.values(r.gear || {})) if (id) P.locker.push({ id, n: 1 });
   for (const k of ITEM_IDS) if (r.cargo[k]) deposit(r.loc.station, k, r.cargo[k]);
   P.fleet = P.fleet.filter(x => x !== r);
   return cr;

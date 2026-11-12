@@ -1,4 +1,4 @@
-# Inventar und Ausrüstung des Piloten (Alpha 0.70)
+# Inventar und Ausrüstung (Alpha 0.70, Schiffsmodule und Bilder seit 0.72)
 
 Persönliche Gegenstände sind von den Handelsgütern im Frachtraum getrennt.
 
@@ -35,5 +35,26 @@ Verbrauchsgüter wirken auf das Schiff (Hülle, Schild).
 
 ## Noch offen
 - Gegenstände sind nicht am Körper sichtbar (Ego-Ansicht, Figur fehlt).
+- Fundorte fehlen noch: Legendäre Gegenstände gibt es in keinem Laden und bisher an keinem Fundort (außer zwei Fundstücken aus Abschüssen). Geplant: Belohnungen für Aufträge, Missionen und Geschichte, Kisten auf Planeten und in Wracks, Dungeons.
 - Kein Handel von Gegenständen zwischen Spielern.
 - Der Server prüft Gegenstände nicht; der Spielstand wird als Ganzes gespeichert.
+
+## Schiffsmodule (Alpha 0.72)
+- Vier Arten: Waffensystem, Abwehrsystem, Antrieb, Bordsystem. Jedes Schiff hat fünf Plätze (zwei Bordsysteme).
+- Module liegen wie alles andere im Rucksack und werden im Flottenband unter „Ausrüstung“, Reiter „Schiff“, ins aktive Schiff eingebaut.
+  Gespeichert in `P.shipGear` (aktives Schiff) und `ShipRec.gear` (geparkte Schiffe); beim Umsteigen bleiben sie im Schiff,
+  beim Verkauf eines Schiffs wandern sie in den Spind.
+- Wirkung: `shipMods()` (inventory.ts) summiert die Zuschläge, `computeStats(cls, up, mods)` (data/ships.ts) rechnet sie ein:
+  Waffenschaden, Feuerrate, Hülle, Schild, Höchsttempo, Wendigkeit, Frachtraum, Bergbaulaser, Scanner.
+- Ein Frachtmodul lässt sich nicht ausbauen, solange die Fracht sonst nicht mehr passt.
+
+## Bilder der Gegenstände (Alpha 0.72)
+- Quelle: `asset-src/neu/items/Items.blend`, gebaut aus `items_lib.py` (Grundformen, Materialien, Kamera, Licht, Rendern, Bildbogen)
+  und `items_build.py` (eine Bauvorschrift je Gegenstand, gleiche ID wie in gear.ts). Jeder Gegenstand ist eine eigene Sammlung `it_<id>`.
+- Die Farbe der Seltenheit steckt im Modell: Leuchten, Glas und Kristall tragen sie (grau, blau, violett, gold).
+- Neu rendern in Blender: beide Dateien mit `exec` in ein gemeinsames Verzeichnis laden, `build_item(id, index)` für jede ID,
+  `render_items(ordner, ids)` (204 px, Cycles, 64 Abtastungen, rund 2 s je Bild; in Teilen von etwa 20 aufrufen),
+  dann `make_atlas(ordner, 'asset-src/tex/items@2048.png', 'asset-src/neu/items/atlas.json')`.
+- Danach `node scripts/make-item-atlas.mjs` (schreibt `src/data/gearAtlas.ts` und meldet Gegenstände ohne Bild) und `npm run assets`.
+- Im Spiel: `gearIcon()` in src/ui/icons.ts zeigt den Ausschnitt aus dem Bogen; fehlt der Bogen, erscheint das gezeichnete Symbol.
+- Neuer Gegenstand: Eintrag in gear.ts, Bauvorschrift mit `@item('<id>', seltenheit)` in items_build.py, rendern, Bogen neu bauen.

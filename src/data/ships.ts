@@ -60,19 +60,22 @@ export const SHIP_IDS = Object.keys(SHIPS) as ShipId[];
 export type Up = Record<'guns' | 'rate' | 'hull' | 'shield' | 'mag' | 'engine' | 'laser' | 'cargo' | 'scanner', number>;
 
 // Alle abgeleiteten Werte eines Schiffs (rein rechnerisch, damit Werkstatt "jetzt → nächste Stufe" zeigen kann)
-export function computeStats(cls: ShipId, u: Up) {
+// Zuschläge der eingebauten Module als Anteil (0,1 = +10 %), siehe game/inventory.ts shipMods
+export interface ShipMods { dmg?: number; rate?: number; hull?: number; shield?: number; speed?: number; turn?: number; cargo?: number; laser?: number; scan?: number }
+export function computeStats(cls: ShipId, u: Up, m: ShipMods = {}) {
   const c: ShipClass = SHIPS[cls] || SHIPS.falke;
+  const f = (k: keyof ShipMods) => 1 + (m[k] || 0);
   return {
     cls: c,
-    dmg: Math.round((6 + 3 * u.guns) * c.dmg), rate: 0.09 * Math.pow(0.9, u.rate),
-    maxHull: Math.round(c.hull * (1 + 0.4 * u.hull)), maxShield: Math.round(c.shield * (1 + 0.6 * u.shield)),
+    dmg: Math.round((6 + 3 * u.guns) * c.dmg * f('dmg')), rate: 0.09 * Math.pow(0.9, u.rate) / f('rate'),
+    maxHull: Math.round(c.hull * (1 + 0.4 * u.hull) * f('hull')), maxShield: Math.round(c.shield * (1 + 0.6 * u.shield) * f('shield')),
     maxAmmo: c.ammo + 100 * u.mag, maxRockets: c.rockets ? c.rockets + u.mag : 0,
     maxCharges: c.charges ? c.charges + u.mag : 0,
-    max: Math.round(c.speed * (1 + 0.107 * u.engine)), acc: c.acc * (1 + 0.105 * u.engine), turn: c.turn,
-    cargo: Math.round(c.cargo * (1 + 0.33 * u.cargo)), magnet: 90 + 45 * u.cargo + c.radius * 4,
-    radar: 2500 + 400 * u.scanner, scan: c.scan + 250 * u.scanner,
+    max: Math.round(c.speed * (1 + 0.107 * u.engine) * f('speed')), acc: c.acc * (1 + 0.105 * u.engine) * f('speed'), turn: c.turn * f('turn'),
+    cargo: Math.round(c.cargo * (1 + 0.33 * u.cargo) * f('cargo')), magnet: 90 + 45 * u.cargo + c.radius * 4,
+    radar: Math.round((2500 + 400 * u.scanner) * f('scan')), scan: Math.round((c.scan + 250 * u.scanner) * f('scan')),
     laser: c.laser > 0, beams: c.beams,
-    laserRate: 1.4 * c.laser * (1 + 0.25 * u.laser), laserRange: c.laserRange + 25 * u.laser,
+    laserRate: 1.4 * c.laser * (1 + 0.25 * u.laser) * f('laser'), laserRange: c.laserRange + 25 * u.laser,
     laserHeat: 16 * c.heat * (1 - 0.07 * u.laser), laserCool: 26 + 3 * u.laser,
     drones: c.drones, droneRate: 0.45 * (1 + 0.2 * u.laser),
     radius: c.radius, camUp: c.camUp, camBack: c.camBack,

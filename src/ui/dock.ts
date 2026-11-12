@@ -16,8 +16,8 @@ import { itemIcon } from './icons';
 import { shipsAt, board, buyShip, sellShip, sellPrice, stored, storedTotal, storeFromCargo, takeToCargo, shipPrice } from '../game/fleet';
 import { REP, stationFaction, rankName, serviceFactor, repOf, level } from '../game/reputation';
 import { missionOffers, acceptMission, abandonMission, MAX_MISSIONS, missionTypeName, minRankName } from '../game/missions';
-import { RARITY, KIND_N, gearDef } from '../data/gear';
-import { gearStock, gearBuyPrice, gearSellPrice, buyGear, sellGear, toLocker, fromLocker, invCap, canAdd, LOCKER_SLOTS } from '../game/inventory';
+import { RARITY, KIND_N, gearDef, isShipKind } from '../data/gear';
+import { shipMods, gearStock, gearBuyPrice, gearSellPrice, buyGear, sellGear, toLocker, fromLocker, invCap, canAdd, LOCKER_SLOTS } from '../game/inventory';
 import { gearIcon } from './icons';
 import { statLine } from './invApp';
 
@@ -172,11 +172,13 @@ function render() {
     h += `</table><div class="btnRow"><span class="hint" style="margin-right:auto;align-self:center;max-width:430px">Waren von weit her bringen mehr. Stationen verkaufen, was in ihrer Zone gefördert wird. Große Mengen bewegen den Preis; der Markt erholt sich nach einigen Minuten. Frei im Frachtraum: ${room}</span>
       <button class="pri" data-a="sellall" ${total ? '' : 'disabled'}>Alles verkaufen (+${fmtN(total)} Cr)</button></div>`;
   } else if (tab === 'ausruester') {
-    const gname = (id: string) => { const d = gearDef(id)!; return `${gearIcon(id, 26)}<span style="color:${RARITY[d.rar].c}">${esc(d.n)}</span> <span class="hint" style="display:inline">· ${KIND_N[d.kind]}</span>`; };
+    const gname = (id: string) => { const d = gearDef(id)!; return `${gearIcon(id, 40)}<span style="color:${RARITY[d.rar].c}">${esc(d.n)}</span> <span class="hint" style="display:inline">· ${KIND_N[d.kind]}</span>`; };
     const stock = gearStock(s.id, def.danger);
-    h += `<p style="margin-top:0">Ausrüstung für dich selbst, nicht für das Schiff. Anlegen kannst du sie im Flottenband unter „Ausrüstung“ (Taste I). Rucksack: <b>${P.inv.length}/${invCap()}</b> Plätze belegt.</p>
-      <h3>ANGEBOT</h3><table><tr><th>Gegenstand</th><th>Werte</th><th class="num">Preis</th><th></th></tr>`;
-    for (const id of stock) {
+    h += `<p style="margin-top:0">Ausrüstung für dich und Module für dein Schiff. Anlegen und einbauen kannst du sie im Flottenband unter „Ausrüstung“ (Taste I). Rucksack: <b>${P.inv.length}/${invCap()}</b> Plätze belegt.</p>
+      <h3>FÜR DEN PILOTEN</h3><table><tr><th>Gegenstand</th><th>Werte</th><th class="num">Preis</th><th></th></tr>`;
+    const pilotN = stock.filter(id => !isShipKind(gearDef(id)!.kind)).length;
+    for (const [si, id] of [...stock.filter(id => !isShipKind(gearDef(id)!.kind)), ...stock.filter(id => isShipKind(gearDef(id)!.kind))].entries()) {
+      if (si === pilotN) h += `</table><h3>FÜR DAS SCHIFF</h3><table><tr><th>Modul</th><th>Werte</th><th class="num">Preis</th><th></th></tr>`;
       const d = gearDef(id)!, pr = gearBuyPrice(id), ok = P.credits >= pr && canAdd(id);
       h += `<tr><td>${gname(id)}<div class="hint">${esc(d.desc)}</div></td><td>${statLine(d) || '<span class="hint">—</span>'}</td><td class="num amb">${fmtN(pr)} Cr</td>
         <td class="num"><button class="pri" data-a="gbuy" data-k="${id}" ${ok ? '' : 'disabled'}>Kaufen</button></td></tr>`;
@@ -202,7 +204,7 @@ function render() {
       });
       h += `</table>`;
     }
-    h += `<p class="hint">Händler zahlen 45 % des Werts. Angelegte Ausrüstung musst du zum Verkaufen erst ablegen.</p>`;
+    h += `<p class="hint">Händler zahlen 45 % des Werts. Angelegte Ausrüstung und eingebaute Module musst du zum Verkaufen erst ablegen.</p>`;
   } else if (tab === 'raffinerie') {
     h += `<p style="margin-top:0">Die Raffinerie schmilzt je 2 Einheiten Erz oder Eis zu 1 Barren. Barren sind mehr wert als das Rohmaterial und sparen Frachtraum.</p>
       <table><tr><th>Rohstoff</th><th class="num">Fracht</th><th>→ Produkt</th><th class="num">Barren</th><th class="num">Gebühr</th><th class="num">Wertgewinn</th><th></th></tr>`;
@@ -281,7 +283,7 @@ function render() {
     h += `<table><tr><th>Schiff</th><th>Klasse</th><th class="num">Hülle</th><th class="num">Fracht</th><th></th></tr>
       <tr><td><b>${esc(P.shipName)}</b> <span class="good">● aktiv</span></td><td>${SHIPS[P.cls].role}</td><td class="num">${Math.ceil(P.hull)}/${S.maxHull}</td><td class="num">${cargoUsed()}/${S.cargo}</td><td></td></tr>`;
     for (const r of here) {
-      const rs = computeStats(r.cls, r.up as Up), cu = ITEM_IDS.reduce((a, k) => a + r.cargo[k], 0);
+      const rs = computeStats(r.cls, r.up as Up, shipMods(r.gear)), cu = ITEM_IDS.reduce((a, k) => a + r.cargo[k], 0);
       h += `<tr><td><b>${esc(r.name)}</b></td><td>${SHIPS[r.cls].role}</td><td class="num">${Math.ceil(r.hull)}/${rs.maxHull}</td><td class="num">${cu}/${rs.cargo}</td>
         <td class="num"><button class="pri" data-a="board" data-n="${r.uid}">Einsteigen</button> <button data-a="sellship" data-n="${r.uid}">Verkaufen (${fmtN(sellPrice(r))} Cr)</button></td></tr>`;
     }
@@ -310,7 +312,7 @@ function render() {
       <table><tr><th>System</th><th>Stufe</th><th>Aktuell → Nächste</th><th class="num">Credits</th><th></th></tr>`;
     for (const k of upgFor(P.cls)) {
       const u = UPG[k], l = P.up[k], c = upCost(l, P.cls), mx = l >= MAXLV;
-      const nowS = computeStats(P.cls, P.up as Up), next = computeStats(P.cls, { ...P.up, [k]: l + 1 } as Up);
+      const nowS = computeStats(P.cls, P.up as Up, shipMods(P.shipGear)), next = computeStats(P.cls, { ...P.up, [k]: l + 1 } as Up, shipMods(P.shipGear));
       h += `<tr><td>${u.n}</td><td><span class="lv">${Array.from({ length: MAXLV }, (_, i) => `<i class="${i < l ? 'f' : ''}"></i>`).join('')}</span></td>
         <td class="hint">${u.d(nowS)}${mx ? '' : ' → <span class="good">' + u.d(next) + '</span>'}</td>
         <td class="num amb">${mx ? '—' : fmtN(c)}</td><td><button data-a="up" data-k="${k}" ${mx || P.credits < c ? 'disabled' : ''}>${mx ? 'Max' : 'Bauen'}</button></td></tr>`;

@@ -20,6 +20,7 @@ import { REP, REP_IDS, RANKS, TRUST_LV, level, nextRank, rankName, repOf, repHoo
 import { abandonMission, missionLines, missionTypeName, missionHooks } from '../game/missions';
 import { storyObjective } from '../game/story';
 import { invApp, invAct } from './invApp';
+import { shipMods } from '../game/inventory';
 
 // =====================================================================================
 // Flottenband: der Armbandrechner, den die Flotte jedem Piloten mitgibt.
@@ -229,15 +230,15 @@ function jobsApp() {
 }
 
 // ---------- Fuhrpark ----------
-interface FleetEntry { cls: ShipId; name: string; up: Record<string, number>; hull: number; cargo: Record<ItemId, number>; loc: string; sector: string; active: boolean }
+interface FleetEntry { cls: ShipId; name: string; up: Record<string, number>; hull: number; cargo: Record<ItemId, number>; loc: string; sector: string; active: boolean; gear?: Record<string, string | undefined> }
 function fleetList(): FleetEntry[] {
   const here = G.dockedAt ? G.dockedAt.name : where();
-  return [{ cls: P.cls, name: P.shipName, up: P.up, hull: P.hull, cargo: P.cargo, loc: here, sector: P.sector, active: true },
-    ...P.fleet.map((r: ShipRec) => { const s = stationName(r.loc.station); return { cls: r.cls, name: r.name, up: r.up, hull: r.hull, cargo: r.cargo, loc: s.name, sector: r.loc.sector, active: false }; })];
+  return [{ cls: P.cls, name: P.shipName, up: P.up, hull: P.hull, cargo: P.cargo, loc: here, sector: P.sector, active: true, gear: P.shipGear },
+    ...P.fleet.map((r: ShipRec) => { const s = stationName(r.loc.station); return { cls: r.cls, name: r.name, up: r.up, hull: r.hull, cargo: r.cargo, loc: s.name, sector: r.loc.sector, active: false, gear: r.gear }; })];
 }
 function fleetApp() {
   const L = fleetList(); if (fleetSel >= L.length) fleetSel = 0;
-  const e = L[fleetSel], S = computeStats(e.cls, e.up as Up), used = ITEM_IDS.reduce((a, k) => a + (e.cargo[k] || 0), 0), ups = upgFor(e.cls);
+  const e = L[fleetSel], S = computeStats(e.cls, e.up as Up, shipMods(e.gear)), used = ITEM_IDS.reduce((a, k) => a + (e.cargo[k] || 0), 0), ups = upgFor(e.cls);
   return `<div class="split">
     <div class="blist">${L.map((x, i) => `<div class="bitem${i === fleetSel ? ' on' : ''}" data-a="ship" data-k="${i}"><div><div class="nm">${esc(x.name)}</div><div class="sm">${esc(SHIPS[x.cls].role)} · ${esc(x.loc)}</div></div>${x.active ? '<span class="lock">● AKTIV</span>' : ''}</div>`).join('')}
       <p class="hint" style="margin-top:6px">Schiffe kaufst und wechselst du in der Werft und im Hangar einer Station.</p></div>

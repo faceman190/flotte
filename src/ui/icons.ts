@@ -44,7 +44,15 @@ function gearBody(kind: GearKind, c: string) {
   }
 }
 // id = Gegenstand; ghost = stattdessen die blasse Form eines leeren Platzes (id ist dann der Platz, z. B. 'modul1')
+import { GEAR_ATLAS } from '../data/gearAtlas';
 export function gearIcon(id: string, size = 24, ghost = false) {
+  // gerendertes Bild aus dem Bogen (Blender), sonst das gezeichnete Symbol
+  const ATLAS_URL: string = ((window as any).TEXDATA || {}).items || '';   // erst beim Zeichnen nachsehen: die Liste entsteht beim Laden der Spieldaten
+  const ai = ghost || !ATLAS_URL ? -1 : GEAR_ATLAS.ids.indexOf(id);
+  if (ai >= 0) {
+    const k = size / GEAR_ATLAS.cell, col = ai % GEAR_ATLAS.cols, row = Math.floor(ai / GEAR_ATLAS.cols);
+    return `<span class="gico" style="width:${size}px;height:${size}px;background-image:url(${ATLAS_URL});background-size:${(GEAR_ATLAS.dim * k).toFixed(1)}px;background-position:${(-col * size).toFixed(1)}px ${(-row * size).toFixed(1)}px"></span>`;
+  }
   const d = gearDef(id), kind = (ghost ? id.replace(/\d$/, '') : d?.kind || 'fund') as GearKind;
   return `<svg class="ico" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"${ghost ? ' style="opacity:.22"' : ''}>${gearBody(kind, ghost ? '#8fa0b0' : RARITY[d?.rar || 0].c)}</svg>`;
 }

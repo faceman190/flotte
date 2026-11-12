@@ -1,8 +1,8 @@
 import { ITEM_IDS, type ItemId } from '../data/items';
 import { UPG_IDS, type UpgId } from '../data/upgrades';
 import { SHIPS, computeStats, type ShipId, type Up } from '../data/ships';
-import type { GearSlot } from '../data/gear';
-import { sanitizeInv, type InvItem } from './inventory';
+import type { GearSlot, ShipSlot } from '../data/gear';
+import { sanitizeInv, shipMods, type InvItem } from './inventory';
 
 // ---------------- Einstellungen ----------------
 const SETTINGS_KEY = 'lf_settings_v1';
@@ -52,12 +52,14 @@ export interface Player {
   inv: InvItem[];                               // Rucksack: ein Eintrag je belegtem Platz
   gear: Partial<Record<GearSlot, string>>;      // angelegte Ausrüstung
   locker: InvItem[];                            // Spind, von jeder Station aus erreichbar
+  shipGear: Partial<Record<ShipSlot, string>>;  // Module des aktiven Schiffs
 }
 export type Tool = 'guns' | 'laser' | 'charge';
 export interface Contract { id: string; station: string; sector: string; stName: string; item: ItemId; amount: number; reward: number; trust?: boolean }
 export interface ShipRec {
   uid: number; cls: ShipId; name: string; up: Record<UpgId, number>; cargo: Record<ItemId, number>;
   hull: number; ammo: number; rockets: number; charges: number; loc: { sector: string; station: string }; paint?: string;
+  gear?: Partial<Record<ShipSlot, string>>;   // eingebaute Module
 }
 export const P = {} as Player;
 
@@ -72,7 +74,7 @@ export function newPlayer(name: string): Player {
     tool: 'guns', mined: 0, market: {}, contracts: [], cctr: {},
     // Startschiff: Venom
     cls: 'venom', shipName: 'Venom', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2, rep: {}, missions: [], story: { prolog: 'done' },
-    inv: [], gear: { anzug: 'anzug_overall' }, locker: [],
+    inv: [], gear: { anzug: 'anzug_overall' }, locker: [], shipGear: {},
   };
 }
 export function setPlayer(p: Player) {
@@ -80,7 +82,7 @@ export function setPlayer(p: Player) {
   Object.assign(P, p);
 }
 
-export function stats() { return computeStats(P.cls, P.up as Up); }
+export function stats() { return computeStats(P.cls, P.up as Up, shipMods(P.shipGear)); }
 export const cargoUsed = () => ITEM_IDS.reduce((a, k) => a + P.cargo[k], 0);
 
 // ---------------- Speichern ----------------

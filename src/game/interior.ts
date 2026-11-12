@@ -121,7 +121,7 @@ function signTex(text: string, bg: string, fg = '#0c0d10') {
 }
 function mat<T extends THREE.Material>(m: T) { disposables.push(m); if ((m as any).isMeshStandardMaterial) (m as any).envMapIntensity = 0.3; return m; }
 
-import { gearFactor } from './inventory';
+import { gearFactor, shipMods } from './inventory';
 const WALK_V = 1.5;   // Gehtempo der Leute in den Stationen (m/s)
 // KI-Figur mit Skelett, falls geladen (Händler stehen, Arbeiter laufen); sonst die einfache Figur aus Grundformen
 function buildPerson(suit: number, skin: number, hair: number, badge: number, role: 'idle' | 'walk' = 'idle', model?: string): Person {
@@ -660,7 +660,7 @@ export function enterShip(info: ShipInfo, m: ShipModel) {
   const planet = info.ctx === 'planet', active = info.uid === P.uid;
   const rec = active ? null : P.fleet.find(f => f.uid === info.uid) || null;
   const cargo = active ? P.cargo : rec ? rec.cargo : {};
-  const cap = active ? stats().cargo : rec ? computeStats(rec.cls, rec.up as Up).cargo : 0;
+  const cap = active ? stats().cargo : rec ? computeStats(rec.cls, rec.up as Up, shipMods(rec.gear)).cargo : 0;
   // Innenraum aus dem Modell: noch nicht geladen → laden und Bescheid geben (meist längst im Hintergrund geladen)
   // Danach geht es von selbst an Bord (wenn man noch am Schiff steht); scheitert das Laden, gibt es den Standardraum.
   if (hasMeshRoom(info.cls) && !meshRoomReady(info.cls)) {
