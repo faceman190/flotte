@@ -72,6 +72,27 @@ add('sauerstoff', 0, 1408, 512, 128, `<rect x="4" y="4" width="504" height="120"
 add('notgriff', 0, 1536, 512, 128, `<rect width="512" height="128" rx="10" fill="#b3261a"/><text x="256" y="88" ${F} font-size="60" font-weight="700" text-anchor="middle" fill="#f2f4f6">NOTENTRIEGELUNG</text>`.replace('font-size="60"', 'font-size="48"'));
 add('groesse', 512, 1536, 384, 128, `<text x="6" y="84" ${F} font-size="64" font-weight="700" fill="#f2f4f6">GR. L · 58</text>`);
 
+// ---------- weitere eigene Marken: Hammerwerk (Waffen), Schildwall (Abwehr), Vortrieb (Antrieb), Lotse (Instrumente), Grenzland (Ausrüstung) ----------
+const W = '#f2f4f6';
+const glyph = {
+  hw: (c, r) => { let b = `<circle cx="${c}" cy="${c}" r="${r * 0.62}" fill="none" stroke="${W}" stroke-width="${r * 0.16}"/>`; for (let i = 0; i < 8; i++) { const a = Math.PI / 4 * i; b += `<rect x="${c - r * 0.12}" y="${c - r}" width="${r * 0.24}" height="${r * 0.3}" fill="${W}" transform="rotate(${i * 45} ${c} ${c})"/>`; } return b + `<rect x="${c - r * 0.3}" y="${c - r * 0.32}" width="${r * 0.14}" height="${r * 0.64}" fill="${W}"/><rect x="${c + r * 0.16}" y="${c - r * 0.32}" width="${r * 0.14}" height="${r * 0.64}" fill="${W}"/><rect x="${c - r * 0.3}" y="${c - r * 0.07}" width="${r * 0.6}" height="${r * 0.14}" fill="${W}"/>`; },
+  sw: (c, r) => `<path d="M${c} ${c - r} L${c + r * 0.85} ${c - r * 0.62} V${c + r * 0.05} C${c + r * 0.85} ${c + r * 0.6} ${c + r * 0.4} ${c + r * 0.85} ${c} ${c + r} C${c - r * 0.4} ${c + r * 0.85} ${c - r * 0.85} ${c + r * 0.6} ${c - r * 0.85} ${c + r * 0.05} V${c - r * 0.62} Z" fill="none" stroke="${W}" stroke-width="${r * 0.15}" stroke-linejoin="round"/><rect x="${c - r * 0.5}" y="${c - r * 0.2}" width="${r}" height="${r * 0.22}" fill="${W}"/><rect x="${c - r * 0.11}" y="${c - r * 0.55}" width="${r * 0.22}" height="${r * 1.1}" fill="${W}"/>`,
+  vt: (c, r) => `<circle cx="${c}" cy="${c}" r="${r * 0.9}" fill="none" stroke="${W}" stroke-width="${r * 0.13}"/>` + [-0.38, 0, 0.38].map(o => `<polyline points="${c + (o - 0.18) * r},${c - r * 0.42} ${c + (o + 0.18) * r},${c} ${c + (o - 0.18) * r},${c + r * 0.42}" fill="none" stroke="${W}" stroke-width="${r * 0.16}"/>`).join(''),
+  lotse: (c, r) => `<polygon points="${c},${c - r} ${c + r * 0.2},${c - r * 0.2} ${c + r},${c} ${c + r * 0.2},${c + r * 0.2} ${c},${c + r} ${c - r * 0.2},${c + r * 0.2} ${c - r},${c} ${c - r * 0.2},${c - r * 0.2}" fill="${W}"/><circle cx="${c}" cy="${c}" r="${r * 0.62}" fill="none" stroke="${W}" stroke-width="${r * 0.08}"/>`,
+  gl: (c, r) => `<polygon points="${c - r},${c + r * 0.7} ${c - r * 0.3},${c - r * 0.6} ${c + r * 0.05},${c + r * 0.05} ${c + r * 0.4},${c - r * 0.3} ${c + r},${c + r * 0.7}" fill="none" stroke="${W}" stroke-width="${r * 0.16}" stroke-linejoin="round"/><rect x="${c - r}" y="${c + r * 0.82}" width="${r * 2}" height="${r * 0.14}" fill="${W}"/>`,
+};
+Object.keys(glyph).forEach((k, i) => add('g_' + k, 1024 + 192 * i, 1280, 192, 192, glyph[k](96, 78)));
+const word = (name, x, y, w, k, text, fs2) => add(name, x, y, w, 128, glyph[k](64, 50) + `<text x="136" y="94" ${F} font-size="${fs2}" font-weight="700" letter-spacing="6" fill="${W}">${text}</text>`);
+word('hw', 0, 1664, 1024, 'hw', 'HAMMERWERK', 96); word('sw', 1024, 1664, 1024, 'sw', 'SCHILDWALL', 96);
+word('vt', 0, 1792, 768, 'vt', 'VORTRIEB', 96); word('lotse', 768, 1792, 640, 'lotse', 'LOTSE', 96); word('gl', 1408, 1792, 640, 'gl', 'GRENZLAND', 66);
+const tagbox = (name, x, y, w, h, text, fs2, bg, fg) => add(name, x, y, w, h, (bg ? `<rect width="${w}" height="${h}" rx="10" fill="${bg}"/>` : `<rect x="4" y="4" width="${w - 8}" height="${h - 8}" rx="10" fill="none" stroke="${fg || W}" stroke-width="8"/>`) + `<text x="${w / 2}" y="${h / 2 + fs2 * 0.36}" ${F} font-size="${fs2}" font-weight="700" text-anchor="middle" fill="${fg || W}">${text}</text>`);
+tagbox('munition', 0, 1920, 512, 128, 'MUNITION 20 MM', 50, '#e0a20a', '#15171a'); tagbox('spannung', 512, 1920, 512, 128, 'HOCHSPANNUNG', 54, '#b3261a');
+tagbox('laser', 1024, 1920, 512, 128, 'LASER KLASSE 4', 52, '#e0a20a', '#15171a'); tagbox('schub', 1536, 1920, 256, 128, 'SCHUB', 60);
+add('sn1', 1792, 1920, 256, 64, `<text x="4" y="46" ${F} font-size="38" font-weight="700" fill="${W}">SN 4471-08</text>`);
+add('sn2', 1792, 1984, 256, 64, `<text x="4" y="46" ${F} font-size="38" font-weight="700" fill="${W}">SN 0932-K7</text>`);
+tagbox('treibstoff', 1024, 1472, 512, 96, 'TREIBSTOFF HE-3', 46); tagbox('nichtoeffnen', 1536, 1472, 512, 96, 'NICHT ÖFFNEN', 50, '#b3261a');
+tagbox('inhalt', 1024, 1568, 384, 96, 'INHALT 12 l', 48); add('werk', 1408, 1568, 640, 96, `<text x="6" y="64" ${F} font-size="46" font-weight="700" letter-spacing="3" fill="${W}">WERK BASTION · GEPRÜFT</text>`.replace('font-size="46"', 'font-size="40"'));
+
 await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}">${svg}</svg>`)).png().toFile(out + '/decals.png');
 fs.writeFileSync(out + '/decals.json', JSON.stringify({ size: S, rects: R }));
 console.log(Object.keys(R).length + ' Felder → ' + out + '/decals.png');

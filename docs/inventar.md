@@ -76,3 +76,16 @@ Verbrauchsgüter wirken auf das Schiff (Hülle, Schild).
 - Große Bilder: `render_items(ordner, ids, size=900, samples=72)`; das dauert länger als eine Anfrage, deshalb über `bpy.app.timers` starten
   und auf `_fertig.txt` warten. Übersicht: `docs/inventar/test-kuehler-helm-ruestung.jpg`.
 - Beim Laden in Blender `ITEM_DIR` (Ordner asset-src/neu/items) ins Verzeichnis legen, bevor items_lib.py ausgeführt wird.
+
+## Hohe Detailstufe für alle Gegenstände (Alpha 0.75)
+- `asset-src/neu/items/items_hd.py` wird als letzte Datei geladen (Reihenfolge: items_lib, items_build, items_pilot, items_test, items_hd).
+- `@extend('<id>')` führt die vorhandene Bauvorschrift aus und ergänzt Details. `tag(name, breite, von_wo, richtung)` setzt ein Schild dorthin,
+  wo ein Strahl das Modell trifft; `put(teil, von_wo, richtung, ...)` setzt ein Bauteil auf die getroffene Fläche (`hatch`, `perf`, `port`, `plug`,
+  `rivets`, `gauge`, `switches`, `strip`, `clasp`). Richtungen: FRONT, TOP, RIGHT, LEFT, BACK. Trifft der Strahl nichts, entsteht nichts.
+- Helme: `helm_base(...)` (Schale, Rahmen, Kinnschutz, Streifen, Platten, Ohrmodule, Halsring) mit Farben, Sichtöffnung und Zeichen je Helm.
+- Anzüge: `suit(A, unterzeug, m1, m2, teile)` auf dem Körpernetz `char1`; `teile` wählt Brust, Rippen, Bauch, Rücken, Flanke, Gürtel, Schulter,
+  Oberarm, Unterarm, Hüfte, Schenkel, Knie, Schiene, Riemen, Gerät, Kragen, Tornister, Taschen, Ringe (Druckanzug), Rahmen (Exo).
+- Eigene Marken auf den Schildern: Frostwerk (Kühlung), Hammerwerk (Waffen), Schildwall (Abwehr), Vortrieb (Antrieb), Lotse (Instrumente),
+  Grenzland (Ausrüstung), dazu das Flottenzeichen. Alle in `scripts/make-item-decals.mjs`.
+- Aufbau in Blender dauert rund 2 s je Gegenstand (jeder Strahl wertet die Szene aus): in Teilen von etwa 20 bauen. Rendern aller 71 Bilder
+  über `bpy.app.timers` starten (rund 5 Minuten) und auf `bilder/_atlas_fertig.txt` warten.
