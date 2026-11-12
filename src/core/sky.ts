@@ -186,21 +186,63 @@ export function setSky(d: SkyDef) {
 
 // ---------- Atmosphäre einer Planetenoberfläche ----------
 const ATM_FS = `
-uniform vec3 horizon; uniform vec3 zenith; uniform vec3 sdir; uniform vec3 scol;
+uniform vec3 horizon; uniform vec3 zenith; uniform vec3 fogc; uniform vec3 sdir; uniform vec3 scol; uniform vec3 cloudCol; uniform vec3 bdir; uniform vec3 bcol;
+uniform float time; uniform float cloud; uniform float stars; uniform float brad; uniform float ring;
 varying vec3 vDir;
+float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
+float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ s += a * vn(p); p = p * 2.03 + 11.7; a *= 0.5; } return s; }
 void main() {
-  vec3 d = normalize(vDir);
-  float h = max(d.y, 0.0);
-  vec3 col = mix(horizon, zenith, pow(h, 0.55));
-  if (d.y < 0.0) col = horizon * (0.75 + 0.25 * (1.0 + d.y));
-  float s = max(dot(d, normalize(sdir)), 0.0);
-  col += scol * (pow(s, 280.0) * 2.5 + pow(s, 12.0) * 0.35);
+  vec3 d = normalize(vDir), sd = normalize(sdir);
+  float h = max(d.y, 0.0), sun = max(dot(d, sd), 0.0);
+  // Grundverlauf, Dunst am Horizont, warmer Schein um die Sonne
+  vec3 col = mix(horizon, zenith, pow(h, 0.5));
+  col = mix(col, fogc, pow(1.0 - h, 7.0));
+  col += scol * (pow(sun, 8.0) * 0.2 + pow(sun, 48.0) * 0.32) * (0.4 + 0.6 * pow(1.0 - h, 2.0));
+  // Sterne: bei dünner Luft schon am Tag im Zenit zu sehen
+  if (stars > 0.0) {
+    vec3 q = d * 190.0, c = floor(q), f = fract(q) - 0.5;
+    float r = h21(c.xy + c.z * 17.3);
+    col += vec3(step(0.9962, r) * smoothstep(0.24, 0.0, length(f))) * stars * smoothstep(0.08, 0.6, h) * (0.5 + 0.5 * h21(c.yz + 3.1));
+  }
+  // Nachbarplanet am Himmel: beleuchtete Sichel, bei manchen mit Ring
+  if (brad > 0.0 && dot(d, bdir) > 0.0) {
+    vec3 bd = normalize(bdir), bx = normalize(cross(vec3(0.0, 1.0, 0.0), bd)), by = cross(bd, bx);
+    vec2 p = vec2(dot(d, bx), dot(d, by)) / brad; float rr = length(p);
+    vec2 pr = vec2(p.x * 0.94 + p.y * 0.34, (-p.x * 0.34 + p.y * 0.94) / 0.3); float rl = length(pr);
+    float ringA = ring * smoothstep(1.38, 1.46, rl) * (1.0 - smoothstep(2.3, 2.38, rl)) * (0.5 + 0.5 * sin(rl * 30.0) * sin(rl * 11.0 + 1.0));
+    float haze = 0.35 + 0.65 * smoothstep(0.0, 0.5, h);                       // tief am Horizont blasser
+    if (rr < 1.0) {
+      vec3 n = bx * p.x + by * p.y - bd * sqrt(1.0 - rr * rr);
+      float lit = smoothstep(-0.08, 0.3, dot(n, sd));
+      float bands = 0.82 + 0.18 * sin(p.y * 10.0 + sin(p.x * 3.0) * 1.3);
+      col += bcol * lit * bands * 0.62 * smoothstep(1.0, 0.95, rr) * haze;
+      if (pr.y < 0.0) col += bcol * ringA * 0.5 * haze;                       // vordere Ringhälfte liegt vor dem Planeten
+    } else col += bcol * ringA * 0.5 * haze;
+  }
+  // Wolken: Rauschen auf einer gedachten Ebene, zur Sonne hin hell, Unterseiten dunkler, zum Horizont im Dunst
+  if (cloud > 0.0 && d.y > 0.015) {
+    vec2 uv = d.xz / (d.y + 0.12) * 1.5 + vec2(time * 0.0035, time * 0.0012);
+    float n = fbm(uv), n2 = fbm(uv * 2.9 + 5.0);
+    float cov = smoothstep(0.93 - cloud, 1.2 - cloud, n * 0.75 + n2 * 0.25 + 0.12);
+    float shade = clamp(0.66 + (n - fbm(uv + sd.xz * 0.14)) * 1.3 + 0.28 * pow(sun, 3.0), 0.4, 1.25);
+    vec3 cc = cloudCol * shade + scol * pow(sun, 6.0) * 0.22;
+    cc = mix(cc, fogc, pow(1.0 - h, 3.0) * 0.85);
+    col = mix(col, cc, cov * smoothstep(0.015, 0.13, d.y) * 0.93);
+  }
+  col += scol * (pow(sun, 1400.0) * 5.0 + pow(sun, 240.0) * 0.7);
+  if (d.y < 0.0) col = mix(fogc, fogc * 0.72, clamp(-d.y * 3.0, 0.0, 1.0));
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
 const atmMat = new THREE.ShaderMaterial({
-  uniforms: { horizon: { value: new THREE.Color() }, zenith: { value: new THREE.Color() }, sdir: { value: new THREE.Vector3(0, 1, 0) }, scol: { value: new THREE.Color(0xfff0d0) } },
+  uniforms: {
+    horizon: { value: new THREE.Color() }, zenith: { value: new THREE.Color() }, fogc: { value: new THREE.Color() }, sdir: { value: new THREE.Vector3(0, 1, 0) }, scol: { value: new THREE.Color(0xfff0d0) },
+    cloudCol: { value: new THREE.Color(0xffffff) }, bdir: { value: new THREE.Vector3(0, 1, 0) }, bcol: { value: new THREE.Color(0xffffff) },
+    time: { value: 0 }, cloud: { value: 0 }, stars: { value: 0 }, brad: { value: 0 }, ring: { value: 0 },
+  },
   vertexShader: SKY_VS, fragmentShader: ATM_FS, side: THREE.BackSide, depthWrite: false, fog: false,
 });
 const atmDome = new THREE.Mesh(new THREE.SphereGeometry(17500, 48, 24), atmMat);
@@ -209,7 +251,12 @@ atmDome.visible = false;
 sky.add(atmDome);
 const SPACE_FOG = { color: 0x05060a, density: 0.00005 };
 const RIM_SPACE = rim.color.getHex(), GREY = new THREE.Color(0x808080);
-export function setSurfaceSky(cfg: null | { horizon: number; zenith: number; fog: number; fogDensity: number }) {
+export interface SurfaceSky {
+  horizon: number; zenith: number; fog: number; fogDensity: number;
+  clouds?: number; cloudCol?: number; stars?: number;                                   // Wolkenmenge (0–1), Wolkenfarbe, Sterne am Tag (0–1)
+  body?: { dir: [number, number, number]; rad: number; col: number; ring: number };       // Nachbarplanet am Himmel (Richtung, Winkelradius, Farbe, Ring 0/1)
+}
+export function setSurfaceSky(cfg: null | SurfaceSky) {
   const fog = scene.fog as THREE.FogExp2;
   if (!cfg) {
     atmDome.visible = false;
@@ -226,6 +273,10 @@ export function setSurfaceSky(cfg: null | { horizon: number; zenith: number; fog
   atmMat.uniforms.horizon.value.set(cfg.horizon);
   atmMat.uniforms.zenith.value.set(cfg.zenith);
   atmMat.uniforms.sdir.value.copy(sunDir);
+  atmMat.uniforms.fogc.value.set(cfg.fog);
+  atmMat.uniforms.cloud.value = cfg.clouds ?? 0; atmMat.uniforms.cloudCol.value.set(cfg.cloudCol ?? 0xffffff); atmMat.uniforms.stars.value = cfg.stars ?? 0;
+  atmMat.uniforms.brad.value = cfg.body ? cfg.body.rad : 0;
+  if (cfg.body) { atmMat.uniforms.bdir.value.set(...cfg.body.dir).normalize(); atmMat.uniforms.bcol.value.set(cfg.body.col); atmMat.uniforms.ring.value = cfg.body.ring; }
   atmDome.visible = true;
   skySphere.visible = false;
   if (planet) planet.visible = false;
@@ -239,6 +290,7 @@ export const onSurfaceSky = () => atmDome.visible;
 let t0 = performance.now();
 export function updateSky(camPos: THREE.Vector3) {
   sky.position.copy(camPos);
+  atmMat.uniforms.time.value = performance.now() / 1000;
   const t = (performance.now() - t0) / 1000, pr = renderer.getPixelRatio();
   for (const m of starUniforms) { m.uniforms.time.value = t; m.uniforms.pr.value = pr; }
   if (planet && planet.visible) updatePlanet(planet as THREE.Group, t);

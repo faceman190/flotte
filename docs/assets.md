@@ -204,3 +204,13 @@ Gebäude und Umgebungen entstehen ab jetzt mit dem Baukasten: gemeinsames Textur
 Alles dazu steht in `docs/baukasten.md`. Der Außenposten der Planeten ist das erste Gebäude daraus (`asset-src/neu/aussenposten/posten_kit.py`);
 das frühere Skript `posten_build.py` bleibt nur als Vorgänger liegen. Auf Planeten nimmt das Gegenlicht jetzt die Farbe des Himmels am Horizont
 (src/core/sky.ts), statt des blauen Raumlichts.
+
+## Planetenoberflächen: Gelände, Himmel, Bewuchs (Alpha 0.69)
+
+Alles entsteht im Spiel, ohne neue Dateien.
+
+- **Gelände bis zum Horizont** (`src/game/surface.ts`): Die Höhenformel `hfun` gilt für die bespielbare Karte (8 × 8 km) und für ein grobes Netz drumherum (34 km, 125 m je Feld). Außerhalb der Karte läuft das Gelände als Bergland weiter; unter der Karte liegt das ferne Netz 70 m tiefer, am Rand schließt es an. Die Flüssigkeitsfläche reicht ebenso weit.
+- **Bodenauflage** (im Bodenmaterial): Schnee, Sand, Asche, blankes Eis oder Reif liegen in Flecken auf flachen Stellen, mit der Höhe zunehmend. Auf dem Felsplaneten färbt eine Wiesenschicht die tiefen, flachen Lagen. Dunst sammelt sich in den Tälern und wächst mit der Entfernung. Die Werte je Planetentyp stehen in `SKYLOOK`.
+- **Himmel** (`src/core/sky.ts`, `ATM_FS`): Verlauf mit Dunst am Horizont, Sonnenschein, ziehende Wolken aus Rauschen, Sterne im Zenit und ein Nachbarplanet als beleuchtete Sichel, bei manchen Sektoren mit Ring (Richtung, Größe und Farbe stehen je Sektor fest: `skyBody`). Aufruf über `setSurfaceSky` mit `clouds`, `cloudCol`, `stars`, `body`.
+- **Bewuchs und Felsen** (`src/game/flora.ts`): Felsbrocken und Felsnadeln stehen fest über die Karte verteilt. Gras, Büsche und Bäume entstehen nur rund um die Kamera und ziehen mit; eine feste Zufallszahl je Zelle entscheidet über Ort und Größe, so steht jede Pflanze immer an derselben Stelle. Die Bilder für Gras, Busch und Nadelbaum werden einmal auf eine Zeichenfläche gemalt. Was wächst, steht je Planetentyp in `FLORA`.
+- Seen spiegeln die Himmelsfarbe statt des Weltraums.

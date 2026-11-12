@@ -148,7 +148,7 @@ function skin<T extends THREE.Material>(mat: T) {
   if (RK_GEO && RK_TEX && mm.map !== RK_TEX) { mm.map = RK_TEX; mm.normalMap = RK_NRM; mm.needsUpdate = true; }
   return mat;
 }
-function rockGeo(r: number) {
+export function rockGeo(r: number) {
   if (RK_GEO) { const g0 = RK_GEO.clone(); g0.scale(r * 1.15, r * 0.95, r * 1.1); return g0; }
   const g = new THREE.IcosahedronGeometry(r, 1), p = g.attributes.position, m = new Map<string, number>();
   for (let i = 0; i < p.count; i++) {

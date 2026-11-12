@@ -11,6 +11,7 @@ import { SECTOR, type StationDef } from '../data/galaxy';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { PLANETS, PTYPE, planetBaseId, type PlanetDef } from '../data/planets';
 import { buildGate } from '../models/structures';
+import { buildFlora, updateFlora } from './flora';
 import { setOutpostDust } from '../models/stationModels';
 import { mesh, alongZ } from '../models/helpers';
 import { world, clearSector, addStation, makeAst, removeAst, type Asteroid, type Ore } from './world';
@@ -78,17 +79,25 @@ export function buildSurface(sector: string) {
   const half = SURF.size / 2, cell = SURF.size / (N - 1);
   const craters = Array.from({ length: T.craters }, () => ({ x: R.range(-3000, 3000), z: R.range(-3000, 3000), r: R.range(250, 700), d: R.range(80, 200) }));
   let mn = 1e9, mx = -1e9;
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const x = -half + i * cell, z = -half + j * cell;
+  // Höhenformel: gilt für die Karte und für das ferne Gelände drumherum
+  const hfun = (x: number, z: number) => {
     let h = T.amp * (0.6 * nz.fbm(x / 1700, z / 1700) + 0.55 * Math.pow(nz.ridge(x / 950 + 3.1, z / 950 - 1.7), 1.6) - 0.42);
+    h += T.amp * 0.03 * (nz.fbm(x / 130 + 7.7, z / 130 - 2.3, 4) - 0.5);          // feine Unruhe
     for (const c of craters) {
       const d = Math.hypot(x - c.x, z - c.z) / c.r;
       if (d < 1) h -= c.d * (1 - d * d);
       h += c.d * 0.45 * Math.exp(-Math.pow((d - 1) * 5, 2));
     }
-    // zum Rand hin Gebirge (natürliche Grenze)
+    // zum Rand hin Gebirge (natürliche Grenze); draußen läuft es als Bergland bis zum Horizont weiter
     const edge = Math.max(Math.abs(x), Math.abs(z));
-    if (edge > SURF.limit - 200) h += Math.pow((edge - SURF.limit + 200) / 600, 2) * 260;
+    if (edge > SURF.limit - 200) {
+      const t = (edge - SURF.limit + 200) / 600;
+      h += t <= 1 ? t * t * 260 : 260 + Math.min(t - 1, 3) * 300 * (nz.ridge(x / 2600 - 1.3, z / 2600 + 4.2) * 1.7 - 0.3) + Math.min(t - 1, 1) * 150 * (nz.ridge(x / 480 + 9.1, z / 480 - 6.4) - 0.45);
+    }
+    return h;
+  };
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const h = hfun(-half + i * cell, -half + j * cell);
     HM[j * N + i] = h;
     mn = Math.min(mn, h); mx = Math.max(mx, h);
   }
@@ -131,14 +140,37 @@ export function buildSurface(sector: string) {
   geo.setAttribute('slope', new THREE.BufferAttribute(slp, 1));
   const tm = texMat(0xffffff, 'rock', { vertexColors: true, roughness: 0.95, metalness: 0.05, flatShading: false }, 1.4);
   tm.envMapIntensity = 0.25;
-  if (gTex) groundShader(tm, gTex, c1, pd.type);
+  if (gTex) groundShader(tm, gTex, c1, pd.type, T.fog, liquidLevel > -1e8 ? liquidLevel : mn);
   const terrain = new THREE.Mesh(geo, tm);
   scene.add(terrain);
   world.extras.push(terrain);
+  // Fernes Gelände bis zum Horizont: grobes Netz um die Karte herum (gleiche Höhenformel, gleiche Oberfläche). Unter der Karte liegt es tiefer,
+  // am Kartenrand schließt es an; so sieht man aus der Luft keine Kante mehr.
+  {
+    const FS = 34000, FN = 272, fg = new THREE.PlaneGeometry(FS, FS, FN, FN); fg.rotateX(-Math.PI / 2);
+    const fp = fg.attributes.position as THREE.BufferAttribute;
+    for (let k = 0; k < fp.count; k++) {
+      const x = fp.getX(k), z = fp.getZ(k), e = Math.max(Math.abs(x), Math.abs(z));
+      fp.setY(k, hfun(x, z) - (e < half - 1 ? 70 : e < half + 1 ? 5 : 0));
+    }
+    fg.computeVertexNormals();
+    const fn = fg.attributes.normal as THREE.BufferAttribute, fc = new Float32Array(fp.count * 3), fsl = new Float32Array(fp.count), fuv = fg.attributes.uv as THREE.BufferAttribute;
+    for (let k = 0; k < fp.count; k++) {
+      const t = clamp((fp.getY(k) - mn) / (mx - mn + 1), 0, 1);
+      if (t < 0.5) c.copy(c0).lerp(c1, t * 2); else c.copy(c1).lerp(c2, (t - 0.5) * 2);
+      fsl[k] = Math.min(1, (1 - fn.getY(k)) * 3.2);
+      if (gTex) { const f = clamp(lum(c) / l1, 0.6, 1.5); fc[k * 3] = (f * 0.7 + 0.3 * c.r / c1.r) * f; fc[k * 3 + 1] = (f * 0.7 + 0.3 * c.g / c1.g) * f; fc[k * 3 + 2] = (f * 0.7 + 0.3 * c.b / c1.b) * f; }
+      else { fc[k * 3] = c.r; fc[k * 3 + 1] = c.g; fc[k * 3 + 2] = c.b; }
+      fuv.setXY(k, fp.getX(k) / 28, fp.getZ(k) / 28);
+    }
+    fg.setAttribute('color', new THREE.BufferAttribute(fc, 3)); fg.setAttribute('slope', new THREE.BufferAttribute(fsl, 1));
+    const far = new THREE.Mesh(fg, tm); far.userData.sh = false;            // weder Schatten werfen noch empfangen (liegt außerhalb des Schattenbereichs)
+    scene.add(far); world.extras.push(far);
+  }
   if (T.liquid) {
     const L = T.liquid;
-    const lm = L.glow ? new THREE.MeshBasicMaterial({ color: L.color }) : new THREE.MeshStandardMaterial({ color: L.color, roughness: 0.12, metalness: 0.6, transparent: true, opacity: 0.88 });
-    const lq = new THREE.Mesh(new THREE.PlaneGeometry(SURF.size, SURF.size), lm);
+    const lm = L.glow ? new THREE.MeshBasicMaterial({ color: L.color }) : new THREE.MeshStandardMaterial({ color: new THREE.Color(L.color).lerp(new THREE.Color(T.sky[1]), 0.35), roughness: 0.1, metalness: 0, envMapIntensity: 0.15, transparent: true, opacity: 0.9 });   // spiegelt den Himmel, nicht das All
+    const lq = new THREE.Mesh(new THREE.PlaneGeometry(34000, 34000), lm);
     lq.rotation.x = -Math.PI / 2; lq.position.y = L.level;
     scene.add(lq); world.extras.push(lq);
     if (L.glow) { const gl2 = new THREE.PointLight(0xff6a20, 2.5, 900, 1.5); gl2.position.set(0, L.level + 80, 0); lq.add(gl2); }
@@ -149,7 +181,8 @@ export function buildSurface(sector: string) {
   const sd: [number, number, number] = [SR.range(-1, 1), SR.range(0.2, 1), SR.range(-1, 1)];
   sd[1] = Math.max(0.45, sd[1]);
   setSky({ neb: sec.neb, tint: sec.tint, rot, sunDir: sd });
-  setSurfaceSky({ horizon: T.sky[0], zenith: T.sky[1], fog: T.fog, fogDensity: T.fogDensity });
+  const SL = SKYLOOK[pd.type];
+  setSurfaceSky({ horizon: T.sky[0], zenith: T.sky[1], fog: T.fog, fogDensity: T.fogDensity, clouds: SL.clouds, cloudCol: SL.cloudCol, stars: SL.stars, body: skyBody(sector) });
   setAmbience({ id: sector + ':oberflaeche', neb: sec.neb, faction: sec.faction, fields: [] }, 0);
   // Bodenstation
   // Staub bzw. Schnee auf waagrechten Flächen des Außenpostens in der Bodenfarbe des Planeten
@@ -173,7 +206,7 @@ export function buildSurface(sector: string) {
       a.max = a.yld = r >= 16 ? 60 : r >= 12 ? 40 : 24;
     }
   }
-  scatterRocks(pd.type, T, R);
+  buildFlora(pd.type, R, heightAt, liquidLevel, hashStr(sector) % 1000);      // Felsbrocken, Felsnadeln, Pflanzen (src/game/flora.ts)
   world.surface = { planet: sector, limit: SURF.limit };
   world.ground = groundAt;
   world.regrowT = 1e9;
@@ -191,7 +224,21 @@ const GROUND: Record<string, { m: number; tint: number; nrm: number }> = {
 // nicht zu Streifen gezogen wird. Nah liegt es in echter Größe, mit der Entfernung gröber (7,3- und 41-fach); ein grobes Muster bricht die
 // Wiederholung. Relief und Rauheit kommen aus eigenen Bildern; die Farbe wird über den Mittelwert des Bilds (kleinste Mip-Stufe) zur Planetenfarbe gezogen.
 // Gewichte nahe null werden übersprungen: So liest jeder Bildpunkt meist nur ein bis zwei Maßstäbe und eine Richtung.
-function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: THREE.Color, type: string) {
+// Himmel und Bodenauflage je Planetentyp: Wolkenmenge und -farbe, Sterne am Tag, Auflage (Farbe, Stärke, Höhe ab der sie zunimmt), Dunst in den Tälern
+const SKYLOOK: Record<string, { clouds: number; cloudCol: number; stars: number; snow: [number, number, number]; mist: number; veg?: [number, number] }> = {
+  fels: { clouds: 0.4, cloudCol: 0xffffff, stars: 0.25, snow: [0xdde3ea, 0.9, 240], mist: 0.7, veg: [0x6a6c38, 0.7] },          // Schnee in Flecken, oben mehr
+  wueste: { clouds: 0.3, cloudCol: 0xffe8cc, stars: 0.1, snow: [0xd2b488, 0.45, -200], mist: 0.4 },      // helle Sandverwehungen
+  eis: { clouds: 0.32, cloudCol: 0xf4f8ff, stars: 0.2, snow: [0x7fb0d4, 0.7, -200], mist: 0.3 },          // blankes blaues Eis zwischen dem Schnee
+  vulkan: { clouds: 0.55, cloudCol: 0x3c2822, stars: 0, snow: [0x6a625c, 0.45, -200], mist: 0.6 },       // graue Asche
+  asche: { clouds: 0.35, cloudCol: 0x8a70a0, stars: 0.5, snow: [0x9a8a98, 0.55, -200], mist: 0.6 },
+  kristall: { clouds: 0.12, cloudCol: 0xc8a0ff, stars: 0.9, snow: [0x8a70c8, 0.4, -200], mist: 0.45 },   // violetter Reif
+};
+// Nachbarplanet am Himmel: Richtung, Größe, Farbe und Ring stehen je Sektor fest
+function skyBody(sector: string) {
+  const h = hashStr(sector + ':himmel'), a = (h % 628) / 100, el = 0.3 + ((h >> 4) % 30) / 100, cols = [0xe8d8b8, 0xc8d0e8, 0xe0b090, 0xb8c8b0, 0xd8b8d8];
+  return { dir: [Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)] as [number, number, number], rad: 0.07 + ((h >> 8) % 60) / 1000, col: cols[h % cols.length], ring: (h >> 3) % 5 < 3 ? 1 : 0 };
+}
+function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: THREE.Color, type: string, fogCol: number, lowY: number) {
   const gn = groundNormal(type), gr = groundRough(type), P = GROUND[type] || { m: 24, tint: 0, nrm: 0 };
   if (gn && !m.normalMap) m.normalMap = gn;          // sorgt für Relief im Shader, auch bevor das Felsrelief fertig ist
   m.onBeforeCompile = (sh) => {
@@ -205,13 +252,17 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
     sh.uniforms.gHasR = { value: gr ? 1 : 0 };
     sh.uniforms.gCol = { value: cliff.clone() };
     sh.uniforms.cliffCol = { value: cliff.clone() };
+    const SL = SKYLOOK[type] || SKYLOOK.fels;
+    sh.uniforms.snowCol = { value: new THREE.Color(SL.snow[0]) }; sh.uniforms.snowK = { value: SL.snow[1] }; sh.uniforms.snowY = { value: SL.snow[2] };
+    sh.uniforms.vegCol = { value: new THREE.Color(SL.veg ? SL.veg[0] : 0) }; sh.uniforms.vegK = { value: SL.veg ? SL.veg[1] : 0 };
+    sh.uniforms.mistK = { value: SL.mist }; sh.uniforms.mistY = { value: lowY + 25 };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float slope; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlope = slope; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz; vWNrm = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
         uniform sampler2D groundMap; uniform sampler2D groundNrm; uniform sampler2D groundRgh; uniform vec3 cliffCol; uniform vec3 gCol;
-        uniform float gScale; uniform float gTint; uniform float gNrmK; uniform float gHasR; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;
+        uniform float gScale; uniform float gTint; uniform float gNrmK; uniform float gHasR; uniform vec3 snowCol; uniform float snowK; uniform float snowY; uniform float mistK; uniform float mistY; uniform vec3 vegCol; uniform float vegK; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;
         // ein Bild in drei Maßstäben, nach Entfernung überblendet (B.x: nah → mittel, B.y: mittel → fern)
         vec3 gS(sampler2D t, vec2 p, vec2 B){
           float wa = (1.0 - B.x) * (1.0 - B.y), wb = B.x * (1.0 - B.y), wc = B.y, n = 0.0; vec3 r = vec3(0.0);
@@ -243,7 +294,14 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
         gC *= mix(1.0, gL, 0.4) * mix(1.0, gL2, 0.3);                   // grobe Flecken in zwei Größen gegen sichtbare Wiederholung
         gC = gC / gMean * mix(gMean, gCol, gTint);                       // Farbe zur Planetenfarbe ziehen, Muster bleibt
         float sm = smoothstep(0.2, 0.4, vSlope);
-        diffuseColor.rgb *= mix(gC, rockC.rgb * cliffCol * 2.4, sm);`)
+        diffuseColor.rgb *= mix(gC, rockC.rgb * cliffCol * 2.4, sm);
+        // Auflage in Flecken (Schnee, Sand, Asche): auf flachen Stellen, nach grobem Muster, mit der Höhe zunehmend
+        float gPat = gL2 * 0.3 + gL * 0.22;
+        // Wiese: flache, tiefe Lagen bekommen die Farbe des Bewuchses (aus der Ferne wirkt das Gras so geschlossen)
+        float vg = vegK * smoothstep(0.36, 0.5, gPat) * (1.0 - smoothstep(0.1, 0.24, vSlope)) * (1.0 - smoothstep(snowY - 60.0, snowY + 160.0, vWPos.y));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vegCol * (0.55 + 0.5 * gL) * (0.6 + 0.4 * dot(gC, vec3(0.34))), vg);
+        float sn = snowK * smoothstep(0.5, 0.64, gPat + clamp((vWPos.y - snowY) * 0.0009, -0.4, 0.2)) * (1.0 - smoothstep(0.14, 0.32, vSlope));
+        diffuseColor.rgb = mix(diffuseColor.rgb, snowCol * (0.5 + 0.16 * gL), sn);`)
       .replace('#include <roughnessmap_fragment>', `
         float roughnessFactor = roughness;
         if (gHasR > 0.5) roughnessFactor = mix(mix(0.6, 1.0, gT(groundRgh, gP, gw, gB).r), roughness, sm);   // matt halten: glatte Stellen spiegelten sonst den Himmel`)
@@ -262,35 +320,17 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
           }
           normal = nView;
         #endif`);
+    // Dunst sammelt sich in tiefen Lagen und wächst mit der Entfernung
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <fog_fragment>', `
+        #ifdef USE_FOG
+          float fogFactor = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
+          float mist = mistK * (1.0 - exp(-vFogDepth / 1500.0)) * exp(-max(vWPos.y - mistY, 0.0) / 130.0);
+          fogFactor = clamp(fogFactor + mist * (1.0 - fogFactor), 0.0, 1.0);
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
+        #endif`);
   };
   m.customProgramCacheKey = () => 'ground';
-}
-
-// Streuobjekte: Hunderte kleine Felsen, Eisbrocken oder Kristalle (eine Instanz-Gruppe, kaum Kosten)
-function scatterRocks(type: string, T: typeof PTYPE[keyof typeof PTYPE], R: ReturnType<typeof rng>) {
-  const cry = type === 'kristall', ice = type === 'eis';
-  const geo = cry ? new THREE.OctahedronGeometry(1, 0) : new THREE.DodecahedronGeometry(1, 0);
-  if (cry) geo.scale(0.45, 1.6, 0.45);
-  const mat = cry ? std(0x8a60d0, { emissive: 0x6a30c0, emissiveIntensity: 0.9, roughness: 0.25, metalness: 0.3 })
-    : ice ? std(0xd8ecff, { roughness: 0.3, metalness: 0.05 })
-    : texMat(new THREE.Color(T.ground[1]).multiplyScalar(1.5), 'rock', { roughness: 0.9, metalness: 0.1 }, 1.2);
-  const n = 900, im = new THREE.InstancedMesh(geo, mat, n), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), ps = new THREE.Vector3();
-  let k = 0;
-  for (let i = 0; i < n * 3 && k < n; i++) {
-    // in Haufen verteilt: Mittelpunkt + Streuung
-    const x = R.range(-3400, 3400), z = R.range(-3400, 3400), h = heightAt(x, z);
-    if (h < liquidLevel + 2 || Math.hypot(x, z) < 620) continue;
-    const big = R.next() < 0.08, s = big ? R.range(5, 11) : R.range(0.8, 3.2);
-    sc.set(s * R.range(0.8, 1.4), s * R.range(0.5, 1.0), s * R.range(0.8, 1.4));
-    if (cry) sc.set(s * 0.8, s * R.range(0.9, 1.8), s * 0.8);
-    e.set(cry ? R.range(-0.4, 0.4) : R.range(0, 6.28), R.range(0, 6.28), cry ? R.range(-0.4, 0.4) : R.range(0, 6.28));
-    ps.set(x, h + (cry ? s * 0.5 : -s * 0.25), z);
-    im.setMatrixAt(k++, m.compose(ps, q.setFromEuler(e), sc));
-  }
-  im.count = k;
-  im.instanceMatrix.needsUpdate = true;
-  im.computeBoundingSphere();
-  scene.add(im); world.extras.push(im);
 }
 
 // ---------------- Anflugzone im Orbit ----------------
@@ -315,6 +355,7 @@ export const orbitExit = () => {
 // ---------------- Fliegen über der Oberfläche ----------------
 let liquidWarn = 0;
 export function updateSurfaceFlight(dt: number) {
+  updateFlora(camera.position);
   if (!world.surface || !curType) return;
   liquidWarn -= dt;
   const L = curType.liquid;
@@ -418,6 +459,7 @@ export function boardShip() {
 
 const _f = new THREE.Vector3();
 export function updateRover(dt: number) {
+  updateFlora(camera.position);
   if (!ROVER.active || !ROVER.model) return;
   const m = ROVER.model, R = ROVER;
   R.warn -= dt;
