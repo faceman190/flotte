@@ -63,7 +63,8 @@ async function model(key, data, pack) {
   const uv2 = doc.getRoot().listMeshes().some(m => m.listPrimitives().some(p => p.getAttribute('TEXCOORD_1')));
   // Baukasten-Modelle (Materialnamen kit_*, siehe src/models/kit.ts) tragen keine Bilder, aber Texturkoordinaten ins gemeinsame Texturblatt und
   // Eckfarben. Beides muss erhalten bleiben; die Texturkoordinaten kacheln (Werte über 1) und werden deshalb nicht auf Ganzzahlen gepackt.
-  const kit = doc.getRoot().listMaterials().some(m => /^kit_/.test(m.getName()));
+  // Dasselbe gilt für ext_*: Modelle, deren Bilder in asset-src/tex liegen und im Spiel zugewiesen werden (Minenfelsen, Waffe im Bild).
+  const kit = doc.getRoot().listMaterials().some(m => /^(kit|ext)_/.test(m.getName()));
   if (kit) {
     await doc.transform(dedup({ keepUniqueNames: true }), prune({ keepAttributes: true }),
       reorder({ encoder: MeshoptEncoder, target: 'size' }), quantize({ pattern: /^(POSITION|NORMAL|COLOR)(_\d+)?$/ }));

@@ -1,9 +1,9 @@
 # Minen (Dungeons)
 
-Stand Alpha 0.76. Code: `src/game/dungeon.ts`, eingehängt in `src/main.ts`, `src/game/surface.ts`, `src/ui/controls.ts`.
+Stand Alpha 0.77 (Modelle aus Blender seit 0.77). Code: `src/game/dungeon.ts`, eingehängt in `src/main.ts`, `src/game/surface.ts`, `src/ui/controls.ts`.
 
 ## Was der Spieler erlebt
-- Auf jedem Planeten liegen drei Stolleneingänge (Betonportal mit Mast). Der Rover zeigt sie ab rund 1,4 km als Wegweiser an
+- Auf jedem Planeten liegen drei Stolleneingänge (Betonportal mit Förderturm). Der Rover zeigt sie ab rund 1,4 km als Wegweiser an
   (ein Scanner-Werkzeug mit Abbau-Wert vergrößert die Reichweite). Am Tor: `[E] <Name> betreten`.
 - Unten läuft man zu Fuß in Ich-Sicht: WASD, Umschalt rennt, Klick schießt, `E` benutzt, `I` Ausrüstung, Esc Pausenmenü.
   Die Maus wird eingefangen; gibt der Browser sie frei (Esc), öffnet sich das Pausenmenü.
@@ -43,8 +43,51 @@ Stand Alpha 0.76. Code: `src/game/dungeon.ts`, eingehängt in `src/main.ts`, `sr
 - Dazu Credits (Tresorkiste rund das Zehnfache) und in der Tresorkiste ein Fundstück (Relikt oder Datenkern) zum Verkaufen.
 - Ist der Rucksack voll, bleibt die Kiste zu.
 
+## Modelle (Alpha 0.77)
+
+Alles liegt in `asset-src/neu/mine/` (Blender-Datei `Mine.blend`), die fertigen Dateien in `asset-src/glb/station/Mine_*.glb` und `asset-src/tex/`.
+Im Spiel lädt `src/game/mineArt.ts` sie; fehlt eine Datei, baut `dungeon.ts` die alten Ersatzformen.
+
+| Datei | Inhalt | Skript |
+|---|---|---|
+| `Mine_Felsen.glb` + `tex/fels_col/_nrm/_orm` | 10 Felsen (F01–F10) aus CliffRocks01, gröbste Detailstufe, Material `ext_fels` | `mine_rocks.py`, `scripts/make-rock-textures.mjs` |
+| `Mine_Kit.glb` | Baukasten-Module: stuetze, gleis, leitung, lampe, tor (+tor_blatt), schalter (+hebel), korb, wagen, kiste/tresorkiste/sanikiste (+_deckel), portal, deko | `mine_kit.py` (nutzt `baukasten/kit_lib.py`) |
+| `Mine_Drohne.glb` | Wachdrohne mit Animationen idle/attack/turn/landing (MilitaryDroneCG, Texturen auf 1024 verkleinert, Normalen ins OpenGL-Format gedreht) | in Blender importiert, siehe unten |
+| `Mine_Waffe.glb` + `tex/waffe_col/_nrm/_orm` | Karabiner K-12 (Hammerwerk) für die Ich-Sicht, rund 47.000 Dreiecke, gebackene Abnutzung | `waffe_build.py` |
+
+**Höhle:** `buildCaveRocks()` setzt an jede Wandkante drei Felsen unten und zwei oben, an jede Bodenkachel einen Deckenfels und Geröll. Die Felsen
+stecken großteils im Gestein und ragen 0,1–0,4 m in den Gang; die Kollision hält deshalb 0,58 m Abstand zur Wandlinie. Gleiche Felsen eines Bereichs
+von 4 × 4 Kacheln sind ein InstancedMesh. Bereiche, die über den Weg weiter als 13 Kacheln entfernt sind oder hinter dem geschlossenen Tor liegen,
+werden ausgeblendet (Labyrinth: was hinter einer Wand liegt, sieht man nie). Sichtweite 38 m, Nebel 0,048. Unter Tage rechnet die Sonne keine Schatten.
+
+**Einbauten:** Ausbau (Türstock) in jedem zweiten geraden Gangstück, auf die Deckenhöhe gestreckt; Gleise in allen geraden Stücken; Leitungen
+(Wetterlutte, Kabelpritsche, Wasserrohr) in etwa jedem vierten; Grubenlampen an den Lampenplätzen; zwei Förderwagen; Kram in Kavernen.
+Wiederholte Module sind InstancedMeshes (ein Zeichenaufruf je Teil und Material).
+
+**Waffe in der Ich-Sicht:** eigene Szene und Kamera (`overlay` in `src/core/engine.ts`), nach dem Bild mit leerem Tiefenpuffer gezeichnet: Sie ragt
+nie in Wände und wird nicht von der Stirnlampe überstrahlt. Licht: ein ruhiges Führungslicht, Himmel/Boden-Licht und ein warmes Licht aus Richtung der
+nächsten Grubenlampe. Pendeln bei Drehungen, Gehbewegung, Rückstoß, Mündungsfeuer (Sprite + Licht in der Waffenszene + Licht in der Welt).
+Die Stirnlampe sitzt an der Waffenlampe rechts unten. Derzeit zeigt jede Pilotenwaffe den K-12.
+
+**Neu bauen:** `Mine.blend` öffnen, die Skripte mit `exec(open(...).read(), ns)` laden.
+- Felsen: `build()`, `export()`. Texturen: `node scripts/make-rock-textures.mjs` (Quelle `rocks_src/`, aus Textures.zip).
+- Module: `build(lib)`, `bake(lib)` (blendet beim Backen alle anderen Objekte aus), `export(lib)`.
+- Waffe: `build()` → Vorschau (`waffe_fp.py`, `mine_preview.py`) → `prepare()` → `bake_start()` (rund 5 Minuten, wartet auf
+  `tex_tmp/waffe_fertig.txt`) → `show_baked()` → `export()`.
+- Danach `npm run assets`.
+
+**Fallstricke:**
+- Die Asset-Pipeline speichert Punkte quantisiert; Größe und Lage stecken dann in der Knoten-Transformation. Knoten deshalb samt Transformation klonen
+  (`kitPart()`), nie nur die Geometrie nehmen.
+- Leere Knoten (Leerobjekte) entfernt die Pipeline. Mündung und Lampenkopf der Waffe stehen deshalb als Zahlen in `mineArt.ts`.
+- Blender exportiert nichts aus ausgeblendeten Sammlungen.
+- Materialien mit `ext_` behalten wie `kit_` ihre Texturkoordinaten ohne eigene Bilder (`scripts/build-assets.mjs`).
+
+**Rechte:** Felsen (CliffRocks01, Textures.zip) und Drohne (MilitaryDroneCG) hat der Spieleentwickler bereitgestellt; Quelle und Lizenz bitte
+neben den Dateien vermerken (siehe `asset-src/neu/LIESMICH.md`).
+
 ## Noch offen
 - Nur ein Aussehen (Bergwerk). Geplant: je Planetentyp eigene Farben und Einbauten, weitere Arten (Bunker, Wrack), große Meteoriten im All.
 - Fallen, Rätsel über mehrere Schalter, Schlüssel, mehrere Ebenen.
-- Die Waffe im Bild ist ein einfaches Modell, nicht das Blender-Modell des Gegenstands. Wächter und Kisten sind einfache Formen.
+- Eigene Modelle für Pistole, Flinte und Impulswaffe in der Ich-Sicht; Hände/Handschuhe an der Waffe.
 - Werte (Leben, Schaden, Beute) sind geschätzt und nicht eingespielt.

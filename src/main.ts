@@ -543,7 +543,8 @@ function loop(now: number, manual = false) {
     updateCamera(dt);
     shadowSweep -= dt;
     if (shadowSweep <= 0) { shadowSweep = 0.4; markShadows(scene, sky); }
-    if (ROVER.active) aimShadows(ROVER.x, ROVER.y, ROVER.z, sunDir, 110, true);
+    if (DUN.active) aimShadows(camera.position.x, camera.position.y, camera.position.z, sunDir, 240, false);   // unter Tage kein Sonnenschatten
+    else if (ROVER.active) aimShadows(ROVER.x, ROVER.y, ROVER.z, sunDir, 110, true);
     else if (!IN.active && G.mode !== 'menu' && G.mode !== 'intro') aimShadows(P.x, P.y, P.z, sunDir, world.surface ? 320 : 240, true);
     else aimShadows(camera.position.x, camera.position.y, camera.position.z, sunDir, 240, false);
     updateSky(camera.position);

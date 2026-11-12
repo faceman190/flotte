@@ -10,7 +10,7 @@ import type { StructureModel } from './structures';
 // Das Modell bildet den Rumpf; Landeplattform, Lauflichter und Positionslichter kommen weiterhin aus dem Spiel,
 // damit Andocken überall gleich funktioniert. Kollision: Kugeln aus einem Raster über die Modellpunkte.
 
-interface Tpl { group: THREE.Group; size: THREE.Vector3 }
+interface Tpl { group: THREE.Group; size: THREE.Vector3; clips: THREE.AnimationClip[] }
 const TPL: Record<string, Tpl> = {};
 
 export async function loadStationModels() {
@@ -32,7 +32,7 @@ export async function loadStationModels() {
       const wrap = new THREE.Group(); wrap.add(inner); wrap.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(wrap), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
       inner.position.sub(c);
-      TPL[name] = { group: wrap, size };
+      TPL[name] = { group: wrap, size, clips: g.animations || [] };
     } catch (e) { console.warn('Stationsmodell nicht geladen:', name, e); }
   }));
   await loadKitMeta(Object.keys(TPL));     // Zusatzangaben der Baukasten-Modelle (Leuchtpunkte, Landefeld)
@@ -41,6 +41,7 @@ export async function loadStationModels() {
 export const hasStationModel = (name: string) => !!TPL[name];
 // Vorlage eines geladenen Modells (zentriert; das erste Kind trägt die Verschiebung zum Ursprung der Datei)
 export const stationTemplate = (name: string) => TPL[name]?.group || null;
+export const stationClips = (name: string) => TPL[name]?.clips || [];
 
 // Kollisionskugeln: belegte Rasterzellen (lokale Koordinaten nach Skalierung); minY: Punkte darunter zählen nicht (flache Bodenteile)
 function collisionSpheres(obj: THREE.Object3D, cell: number, minY = -Infinity) {

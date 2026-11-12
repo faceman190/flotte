@@ -108,3 +108,8 @@ Lichtkarte `asset-src/tex/hangar_lightmap@2048.png`. Maße wie im Spiel (184 × 
   (`holes`) oder mindestens 2 bis 3 cm Abstand lassen (Bodenlinien liegen deshalb bei 2 cm).
 - **Im Spiel:** `addHangarModel()` in src/game/interior.ts erkennt das Baukasten-Modell an `data/kit_Hangar.json` und nimmt Standflächen von dort.
   Im ganzen Innenraum sind dann Grund-, Sonnen- und Gegenlicht des Spiels zurückgenommen (`zoneLight`), damit das berechnete Licht trägt.
+
+## Minen (ab Alpha 0.77)
+
+`asset-src/neu/mine/mine_kit.py` baut mit dem Baukasten die Module der Minen (Ausbau, Gleis, Leitungen, Grubenlampe, Tresortor, Schaltkasten,
+Förderkorb, Förderwagen, drei Kisten mit Deckel, Stolleneingang mit Förderturm). Details und Ablauf: `docs/dungeons.md`.

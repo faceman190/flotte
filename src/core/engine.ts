@@ -123,10 +123,18 @@ export function setQuality(hi: boolean) {
   resize();
 }
 
+// Zweite Ebene über dem Bild (eigene Szene, eigene Kamera, eigenes Licht): die Waffe in der Ich-Sicht. Sie wird nach dem Bild mit leerem
+// Tiefenpuffer gezeichnet und kann deshalb nie in Wände ragen; ihr Licht hängt nicht an den Lampen der Welt.
+export const overlay: { scene: THREE.Scene | null; camera: THREE.Camera | null } = { scene: null, camera: null };
 export function render() {
   if (vignettePass) vignettePass.uniforms.time.value = (performance.now() % 10000) / 1000;
   if (view.hiQ && composer) composer.render();
   else renderer.render(scene, camera);
+  if (overlay.scene && overlay.camera) {
+    renderer.autoClear = false; renderer.setRenderTarget(null); renderer.clearDepth();
+    renderer.render(overlay.scene, overlay.camera);
+    renderer.autoClear = true;
+  }
 }
 
 // Weiches Leuchten für Triebwerke, Lichter, Explosionen

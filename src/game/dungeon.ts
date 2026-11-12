@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { scene, camera, ambient, rim, sun, view, ux, gl } from '../core/engine';
+import { scene, camera, ambient, rim, sun, view, ux, gl, overlay } from '../core/engine';
 import { keys, mouse, releaseAll } from '../core/input';
 import { clamp, rng, hashStr } from '../core/util';
 import { snd, sfx } from '../core/audio';
@@ -12,6 +12,7 @@ import { GEAR_IDS, RARITY, gearDef } from '../data/gear';
 import { addItem, canAdd, gearStat, gearFactor } from './inventory';
 import { SECTOR } from '../data/galaxy';
 import { PLANETS, PTYPE } from '../data/planets';
+import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, type DroneVis, type ViewModel } from './mineArt';
 
 // =====================================================================================
 // Dungeons auf Planeten: verlassene Minen als Labyrinth.
@@ -26,7 +27,7 @@ const TS = 3.2, EYE = 1.62, BASE = new THREE.Vector3(0, -60000, 0);
 type Vec2 = [number, number];
 interface Entrance { id: string; x: number; y: number; z: number; yaw: number; size: number; name: string }
 interface Crate { tx: number; tz: number; g: THREE.Group; lid: THREE.Object3D; open: boolean; big: boolean; idx: number; a: number; med?: boolean }
-interface Foe { x: number; z: number; y: number; hp: number; max: number; g: THREE.Group; eye: THREE.MeshBasicMaterial; boss: boolean; cool: number; aim: number; alert: boolean; tx: number; tz: number; ph: number; hit: number }
+interface Foe { x: number; z: number; y: number; hp: number; max: number; g: THREE.Group; eye: THREE.MeshBasicMaterial; boss: boolean; cool: number; aim: number; alert: boolean; tx: number; tz: number; ph: number; hit: number; vis?: DroneVis | null; atk?: number }
 interface Bolt { m: THREE.Mesh; x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; dmg: number }
 
 export const DUN = {
@@ -43,6 +44,9 @@ export const DUN = {
 let ENTR: Entrance[] = [];
 let group: THREE.Group | null = null, lamps: THREE.Vector3[] = [], pool: THREE.PointLight[] = [], head: THREE.SpotLight | null = null, gun: THREE.Group | null = null;
 let tracer: THREE.Line | null = null, tracerT = 0, lampT = 0, pathT = 0, stepT = 0, grabT = 0;
+let vm: ViewModel | null = null, mflash: THREE.PointLight | null = null, WALL_R = 0.42;     // Waffe im Bild (eigene Ebene), Mündungslicht in der Welt, Abstand zur Wand
+const sway = { x: 0, y: 0, yaw: 0, pitch: 0 };
+let chunks: { x: number; z: number; meshes: THREE.Object3D[] }[] = [];      // Felsbereiche (4 × 4 Kacheln), nach Wegstrecke ein- und ausgeblendet
 const saved = { amb: 0, sun: 0, rim: 0, fogC: 0, fogD: 0, near: 0.5, far: 30000 };
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 
@@ -52,7 +56,7 @@ const inb = (x: number, z: number) => x >= 0 && z >= 0 && x < DUN.W && z < DUN.H
 const tile = (x: number, z: number) => (inb(x, z) ? DUN.t[I(x, z)] : 0);
 const solidT = (x: number, z: number) => { const v = tile(x, z); return v === 0 || (v === 2 && !(DUN.door && DUN.door.open && DUN.door.k > 0.9)); };
 const solidAt = (wx: number, wz: number) => solidT(Math.round(wx / TS), Math.round(wz / TS));
-const free = (wx: number, wz: number, r = 0.42) => !solidAt(wx - r, wz - r) && !solidAt(wx + r, wz - r) && !solidAt(wx - r, wz + r) && !solidAt(wx + r, wz + r);
+const free = (wx: number, wz: number, r = WALL_R) => !solidAt(wx - r, wz - r) && !solidAt(wx + r, wz - r) && !solidAt(wx - r, wz + r) && !solidAt(wx + r, wz + r);
 // freie Sicht zwischen zwei Punkten (Schritte von 0,4 m)
 function los(ax: number, az: number, bx: number, bz: number) {
   const d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / 0.4);
@@ -207,7 +211,113 @@ function buildRock(seed: number, tint: THREE.Color) {
   return mesh;
 }
 
-// ---------- Einbauten ----------
+// ---------- Höhle aus Felsen (Mine_Felsen, src/game/mineArt.ts) ----------
+// Jede Wandkante bekommt unten zwei Felsen und oben einen, jede Bodenkachel einen Deckenfels und etwas Geröll. Die Felsen stecken zum größten
+// Teil im Gestein und ragen 0,1–0,4 m in den Gang (die Kollision hält deshalb 0,58 m Abstand zur Wandlinie). Gleiche Felsen eines 4 × 4-Kachel-
+// Bereichs werden zu einem InstancedMesh zusammengefasst; so bleibt die Zahl der Zeichenaufrufe klein und entfernte Bereiche fallen weg.
+function buildCaveRocks(seed: number, tint: THREE.Color) {
+  const set = rockSet(); if (!set) return false;
+  const R = rng(seed + 31), mat = rockMaterial(tint);
+  const WALL = [1, 2, 3, 4, 5, 6, 2, 3, 4], BIG = [0, 8, 9, 7], SMALL = [1, 2, 4], CEIL = [3, 5, 6, 4, 0];      // Indizes (F01 = 0)
+  const pick = (a: number[]) => a[Math.floor(R.next() * a.length)];
+  const buckets = new Map<string, { k: number; cx: number; cz: number; m: THREE.Matrix4[]; c: THREE.Color[] }>();
+  let tx0 = 0, tz0 = 0;                    // Kachel, zu der die nächsten Felsen gehören (bestimmt den Bereich, nicht die Lage des Felsens)
+  const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _qq = new THREE.Quaternion(), _ee = new THREE.Euler(0, 0, 0, 'YXZ');
+  const put = (k: number, x: number, y: number, z: number, ry: number, rx: number, rz: number, sx: number, sy: number, sz: number) => {
+    const key = (tx0 >> 2) + ',' + (tz0 >> 2) + ',' + k;
+    let b = buckets.get(key); if (!b) buckets.set(key, b = { k, cx: tx0 >> 2, cz: tz0 >> 2, m: [], c: [] });
+    _ee.set(rx, ry, rz); b.m.push(new THREE.Matrix4().compose(_p.set(x, y, z), _qq.setFromEuler(_ee), _s.set(sx, sy, sz)));
+    const v = 0.8 + R.next() * 0.38; b.c.push(new THREE.Color(v, v * (0.95 + R.next() * 0.07), v * (0.9 + R.next() * 0.1)));
+  };
+  // Fels an einer Wand: Breite Wt entlang der Wand, Höhe Ht, Tiefe Dt in den Fels, ragt p in den Gang
+  const wallRock = (k: number, cx: number, cz: number, nx: number, nz: number, u: number, y: number, Wt: number, Ht: number, Dt: number, p: number) => {
+    const r = set[k], q = Math.floor(R.next() * 4), even = q % 2 === 0, ry = q * Math.PI / 2 + (nx !== 0 ? Math.PI / 2 : 0) + R.range(-0.28, 0.28);
+    const tx = nx !== 0 ? 0 : 1, tz = nx !== 0 ? 1 : 0, wx = cx + nx * TS / 2 + tx * u, wz = cz + nz * TS / 2 + tz * u;
+    put(k, wx + nx * (Dt / 2 - p), y, wz + nz * (Dt / 2 - p), ry, R.range(-0.12, 0.12), R.range(-0.12, 0.12), (even ? Wt : Dt) / r.w, Ht / r.h, (even ? Dt : Wt) / r.d);
+  };
+  for (let z = 0; z < DUN.H; z++) for (let x = 0; x < DUN.W; x++) {
+    const v = DUN.t[I(x, z)]; if (!v) continue;
+    tx0 = x; tz0 = z;
+    const cx = x * TS, cz = z * TS, h = DUN.ceil[I(x, z)], cave = h > 3.6;
+    if (v === 1) for (const [nx, nz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) {
+      if (tile(x + nx, z + nz) !== 0) continue;
+      for (const u of [-1.05, 0, 1.05]) {
+        const Ht = R.range(1.9, 2.8) * (cave ? 1.35 : 1), k = cave && R.next() < 0.5 ? pick(BIG) : pick(WALL);
+        wallRock(k, cx, cz, nx, nz, u + R.range(-0.2, 0.2), Ht / 2 - 0.3, R.range(1.8, 2.4), Ht, R.range(1.8, 2.4), R.range(0.14, 0.36));
+      }
+      for (const u of [-0.75, 0.75]) {
+        const Hu = R.range(1.6, 2.3) * (cave ? 1.45 : 1);
+        wallRock(cave ? pick(BIG) : pick(WALL), cx, cz, nx, nz, u + R.range(-0.3, 0.3), h - Hu * 0.32, R.range(2.0, 2.8), Hu, R.range(1.6, 2.2), R.range(0.06, 0.24));
+      }
+    }
+    if (v === 1) { const k = cave ? pick(BIG) : pick(CEIL), r = set[k], th = R.range(1.2, 1.8), fw = R.range(3.0, 3.8);      // über dem Tor kein Deckenfels (verdeckt das Schild)
+      put(k, cx + R.range(-0.3, 0.3), h + th / 2 - 0.32, cz + R.range(-0.3, 0.3), R.next() * 6.28, R.range(-0.15, 0.15), R.range(-0.15, 0.15), fw / r.w, th / r.h, fw / r.d); }
+    if (v === 1) for (let i = 0, n = 1 + Math.floor(R.next() * (cave ? 5 : 3)); i < n; i++) {
+      const k = pick(SMALL), r = set[k], sc = R.range(0.16, cave ? 0.7 : 0.5), a = R.next() * 6.28, rad = R.range(0.95, 1.4);
+      const px = cx + Math.cos(a) * rad, pz = cz + Math.sin(a) * rad;
+      put(k, px, sc * r.h * 0.28, pz, R.next() * 6.28, R.range(-0.6, 0.6), R.range(-0.6, 0.6), sc, sc * R.range(0.6, 1), sc);
+    }
+  }
+  chunks = [];
+  const byChunk = new Map<string, { x: number; z: number; meshes: THREE.Object3D[] }>();
+  for (const b of buckets.values()) {
+    const im = new THREE.InstancedMesh(set[b.k].geo, mat, b.m.length);
+    b.m.forEach((m, i) => { im.setMatrixAt(i, m); im.setColorAt(i, b.c[i]); });
+    im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    im.computeBoundingSphere(); im.userData.sh = false; group!.add(im);
+    const ck = b.cx + ',' + b.cz; let c = byChunk.get(ck); if (!c) { byChunk.set(ck, c = { x: b.cx, z: b.cz, meshes: [] }); chunks.push(c); }
+    c.meshes.push(im);
+  }
+  return true;
+}
+
+// ---------- Einbauten aus dem Baukasten (Mine_Kit) ----------
+const _m4 = new THREE.Matrix4();
+function instKit(name: string, list: THREE.Matrix4[]) {
+  const part = kitPart(name); if (!part || !list.length) return;
+  part.updateMatrixWorld(true);
+  part.traverse((o: any) => {
+    if (!o.isMesh) return;
+    const im = new THREE.InstancedMesh(o.geometry, o.material, list.length);
+    list.forEach((m, i) => im.setMatrixAt(i, _m4.multiplyMatrices(m, o.matrixWorld)));
+    im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.renderOrder = o.renderOrder; im.userData.sh = false; group!.add(im);
+  });
+}
+function buildKitProps(plan: Plan, R: ReturnType<typeof rng>) {
+  if (!hasMineKit()) return false;
+  lamps = [];
+  const place: Record<string, THREE.Matrix4[]> = {}, _e2 = new THREE.Euler();
+  const add = (name: string, x: number, y: number, z: number, ry: number, sy = 1) =>
+    (place[name] = place[name] || []).push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(_e2.set(0, ry, 0)), new THREE.Vector3(1, sy, 1)));
+  const rails: [number, number, number][] = [];
+  for (let z = 1; z < DUN.H - 1; z++) for (let x = 1; x < DUN.W - 1; x++) {
+    if (DUN.t[I(x, z)] !== 1) continue;
+    const e = tile(x + 1, z) > 0, w = tile(x - 1, z) > 0, s2 = tile(x, z + 1) > 0, n = tile(x, z - 1) > 0, h = DUN.ceil[I(x, z)], wx = x * TS, wz = z * TS;
+    const alongX = e && w && !s2 && !n, alongZ = s2 && n && !e && !w;
+    if (!(alongX || alongZ) || h > 3.6) continue;
+    const ry = alongX ? 0 : Math.PI / 2;
+    if ((x + z) % 2 === 0) add('stuetze', wx, 0, wz, ry, (h - 0.42) / 2.89);
+    add('gleis', wx, 0, wz, ry); rails.push([wx, wz, ry]);
+    if ((x * 3 + z * 5) % 4 === 0) add('leitung', wx, -0.15, wz, ry + (((x + z) >> 1) % 2 ? Math.PI : 0));
+  }
+  for (const [x, z] of plan.lampsAt) {
+    const h = DUN.ceil[I(x, z)], wx = x * TS, wz = z * TS;
+    add('lampe', wx, h - 0.28, wz, R.next() * 6.28); lamps.push(new THREE.Vector3(wx, h - 0.28 - 0.48, wz));
+  }
+  // Förderwagen auf zwei Gleisstücken, weit weg vom Eingang
+  const far = rails.filter(r => Math.hypot(r[0] - TS, r[1] - TS) > 4 * TS);
+  for (let k = 0; k < 2 && far.length; k++) { const r = far.splice(Math.floor(R.next() * far.length), 1)[0]; add('wagen', r[0], 0.1, r[1], r[2] + (R.next() < 0.5 ? 0 : Math.PI)); }
+  // Kram in Kavernen (an einer Wand)
+  let deko = 0;
+  for (let z = 1; z < DUN.H - 1 && deko < 4; z++) for (let x = 1; x < DUN.W - 1 && deko < 4; x++) {
+    if (DUN.t[I(x, z)] !== 1 || DUN.ceil[I(x, z)] < 3.6 || R.next() > 0.12) continue;
+    for (const [nx, nz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) if (tile(x + nx, z + nz) === 0) { add('deko', x * TS + nx * 0.7, 0, z * TS + nz * 0.7, Math.atan2(-nx, -nz)); deko++; break; }
+  }
+  for (const [name, list] of Object.entries(place)) instKit(name, list);
+  return true;
+}
+
+// ---------- Einbauten (Ersatz ohne Modelle) ----------
 const M = {
   steel: null as THREE.Material | null, dark: null as THREE.Material | null, lamp: null as THREE.Material | null, ore: null as THREE.Material | null,
 };
@@ -261,6 +371,13 @@ function buildProps(plan: Plan, R: ReturnType<typeof rng>) {
 }
 const TIERC = ['#aab4c0', '#5fd0ff', '#c070ff', '#ffb347'];
 function buildCrate(tx: number, tz: number, big: boolean, idx: number, a: number, med = false): Crate {
+  const kn = med ? 'sanikiste' : big ? 'tresorkiste' : 'kiste', kbody = kitPart(kn), lm0 = kitPart(kn + '_deckel');
+  if (kbody && lm0) {
+    const g = new THREE.Group(), lid = new THREE.Group(), hg = LID_HINGE[kn];
+    g.add(kbody); lid.position.set(hg[0], hg[1], hg[2]); lid.add(lm0); g.add(lid);
+    g.position.set(tx * TS, 0, tz * TS); g.rotation.y = a; group!.add(g);
+    return { tx, tz, g, lid, open: false, big, idx, a, med };
+  }
   const g = new THREE.Group(), s = big ? 1.5 : 1, col = med ? 0x3ad06a : big ? 0xffb347 : 0x5fd0ff;
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.9 * s, 0.5 * s, 0.6 * s), texMat(med ? 0x5a7460 : big ? 0x6a5a44 : 0x55606a, 'hangar_metal', { roughness: 0.7, metalness: 0.4, flatShading: false }, 1)); body.position.y = 0.25 * s; g.add(body);
   const lid = new THREE.Group(); lid.position.set(0, 0.5 * s, -0.3 * s);
@@ -272,6 +389,12 @@ function buildCrate(tx: number, tz: number, big: boolean, idx: number, a: number
   return { tx, tz, g, lid, open: false, big, idx, a, med };
 }
 function buildFoe(tx: number, tz: number, boss: boolean): Foe {
+  const vis = buildDrone(boss);
+  if (vis) {
+    group!.add(vis.g);
+    const hp = (boss ? 260 : 34) * (1 + 0.3 * (DUN.danger - 1));
+    return { x: tx * TS, z: tz * TS, y: boss ? 1.95 : 1.5, hp, max: hp, g: vis.g, eye: new THREE.MeshBasicMaterial(), boss, cool: 1 + Math.random() * 2, aim: 0, alert: false, tx: tx * TS, tz: tz * TS, ph: Math.random() * 6, hit: 0, vis, atk: 0 };
+  }
   const g = new THREE.Group(), s = boss ? 1.9 : 1, eye = new THREE.MeshBasicMaterial({ color: 0xff3020 });
   const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.36 * s, 1), std(boss ? 0x2a2030 : 0x23262b, { roughness: 0.45, metalness: 0.85, flatShading: true })); g.add(shell);
   const e = new THREE.Mesh(new THREE.SphereGeometry(0.13 * s, 12, 8), eye); e.position.z = 0.3 * s; g.add(e);
@@ -321,7 +444,9 @@ export function buildDungeonEntrances(sector: string, heightAt: (x: number, z: n
     if (ENTR.some(e => Math.hypot(e.x - x, e.z - z) < 500)) continue;
     const yaw = Math.atan2(-x, -z);
     ENTR.push({ id: sector + ':' + k, x, y: h, z, yaw, size: 7 + k * 2, name: names[Math.floor(R.next() * names.length)] });
-    // Stolleneingang: Betonrahmen mit Tor, Warnstreifen, Lampe und Mast
+    // Stolleneingang: Portal mit Förderturm aus dem Baukasten (Mine_Kit), sonst einfacher Betonrahmen
+    const kp = kitPart('portal');
+    if (kp) { kp.position.set(x, h, z); kp.rotation.y = yaw; scene.add(kp); world.extras.push(kp); k++; continue; }
     const g = new THREE.Group(), con = texMat(0x8a8c8e, 'hangar_wall', { roughness: 0.92, metalness: 0.05, flatShading: false }, 1), dk = texMat(0x3a3c40, 'hangar_metal', { roughness: 0.75, metalness: 0.4, flatShading: false }, 1), amb = std(0xb8862c, { roughness: 0.7, metalness: 0.2 });
     const add = (m: THREE.Material, sx: number, sy: number, sz: number, px: number, py: number, pz: number, rx = 0) => { const o = new THREE.Mesh(uvBox(new THREE.BoxGeometry(sx, sy, sz), sx, sy, sz, 3.2), m); o.position.set(px, py, pz); o.rotation.x = rx; g.add(o); return o; };
     add(con, 1.6, 6.5, 5, -4.2, 2.6, -1); add(con, 1.6, 6.5, 5, 4.2, 2.6, -1); add(con, 10, 1.6, 5.6, 0, 6.4, -1); add(con, 10, 7, 1.2, 0, 2.8, -3.6); add(con, 11, 0.5, 9, 0, -0.15, 1.5);
@@ -377,10 +502,13 @@ export function enterDungeon(e: Entrance) {
   const seed = hashStr(e.id + ':plan'), plan = generate(seed, e.size), R = rng(seed + 7);
   group = new THREE.Group(); group.position.copy(BASE); scene.add(group);
   const tint = new THREE.Color(T ? T.ground[1] : 0x8a8270).lerp(new THREE.Color(0x777777), 0.45).multiplyScalar(1.5);
-  group.add(buildRock(seed % 1000, tint));
+  const rock = buildRock(seed % 1000, tint);
+  const rocksOn = buildCaveRocks(seed, new THREE.Color(0.7, 0.67, 0.62).lerp(tint.clone().multiplyScalar(1 / 1.5), 0.4));
+  if (rocksOn) (rock.material as THREE.MeshStandardMaterial).color.setScalar(0.85);     // Hintergrund hinter den Felsen
+  group.add(rock); WALL_R = rocksOn ? 0.58 : 0.42;
   const ORE: Record<string, number> = { fels: 0x40c0ff, wueste: 0xffb040, eis: 0x9fe8ff, vulkan: 0xff6030, asche: 0xb070ff, kristall: 0xd080ff };
   mats(ORE[pl?.type || 'fels'] || 0x40c0ff);
-  buildProps(plan, R);
+  if (!buildKitProps(plan, R)) buildProps(plan, R);
   // Kisten (schon geöffnete bleiben offen), dazu ein Verbandskasten auf halbem Weg
   DUN.crates = plan.crates.map((c, i) => buildCrate(c[0], c[1], false, i, R.next() * 6.28, i === 1));
   DUN.crates.push(buildCrate(plan.vault[0], plan.vault[1] + 1, true, 99, Math.PI));
@@ -388,23 +516,47 @@ export function enterDungeon(e: Entrance) {
   // Tor und Schalter
   {
     const g = new THREE.Group(), fr = std(0x4a4f57, { roughness: 0.5, metalness: 0.85 }), dk = std(0x23262b, { roughness: 0.6, metalness: 0.7 });
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(TS - 0.3, 2.9, 0.3), dk); slab.position.y = 1.45; slab.name = 'blatt'; g.add(slab);
-    for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.2, 0.5), fr); p.position.set(sx * (TS / 2 - 0.1), 1.6, 0); g.add(p); }
-    const top = new THREE.Mesh(new THREE.BoxGeometry(TS, 0.3, 0.5), fr); top.position.y = 3.05; g.add(top);
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(TS - 0.6, 0.12, 0.34), new THREE.MeshBasicMaterial({ color: 0xff3020 })); bar.position.y = 1.5; bar.name = 'riegel'; g.add(bar);
-    g.position.set(plan.door[0] * TS, 0, plan.door[1] * TS); g.rotation.y = plan.doorAx ? Math.PI / 2 : 0; g.traverse((o: any) => { o.userData.sh = false; }); group.add(g);
+    const kf = kitPart('tor'), kb = kitPart('tor_blatt');
+    // Schild und Lampen nach außen (weg vom Tresor)
+    const ox = plan.doorAx ? Math.sign(plan.door[0] - plan.vault[0]) : 0, oz = plan.doorAx ? 0 : Math.sign(plan.door[1] - plan.vault[1]);
+    if (kf && kb) {
+      g.add(kf); const wrap = new THREE.Group(); wrap.name = 'blatt'; wrap.position.y = 1.45; kb.position.y = -1.45; wrap.add(kb); g.add(wrap);
+    } else {
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(TS - 0.3, 2.9, 0.3), dk); slab.position.y = 1.45; slab.name = 'blatt'; g.add(slab);
+      for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.2, 0.5), fr); p.position.set(sx * (TS / 2 - 0.1), 1.6, 0); g.add(p); }
+      const top = new THREE.Mesh(new THREE.BoxGeometry(TS, 0.3, 0.5), fr); top.position.y = 3.05; g.add(top);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(TS - 0.6, 0.12, 0.34), new THREE.MeshBasicMaterial({ color: 0xff3020 })); bar.position.y = 1.5; bar.name = 'riegel'; g.add(bar);
+    }
+    g.position.set(plan.door[0] * TS, 0, plan.door[1] * TS); g.rotation.y = kf ? Math.atan2(ox, oz) : plan.doorAx ? Math.PI / 2 : 0; g.traverse((o: any) => { o.userData.sh = false; }); group.add(g);
     DUN.door = { tx: plan.door[0], tz: plan.door[1], open: !!st.sw, k: st.sw ? 1 : 0, g, ax: plan.doorAx };
     const scr = new THREE.MeshBasicMaterial({ color: st.sw ? 0x3ad06a : 0xff3020 }), sg = new THREE.Group();
-    const box = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.1, 0.4), dk); box.position.y = 0.55; sg.add(box);
-    const pane = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.05), scr); pane.position.set(0, 0.9, 0.2); pane.rotation.x = -0.4; sg.add(pane);
-    const lever = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), fr); lever.position.set(0.2, 1.2, 0.1); lever.rotation.x = st.sw ? 0.7 : -0.7; lever.name = 'hebel'; sg.add(lever);
-    sg.position.set(plan.sw[0] * TS, 0, plan.sw[1] * TS); sg.traverse((o: any) => { o.userData.sh = false; }); group.add(sg);
+    const ks = kitPart('schalter'), kh = kitPart('hebel');
+    if (ks && kh) {
+      // an die Rückwand der Sackgasse, Vorderseite zum offenen Gang
+      let ox = 0, oz = 1;
+      for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) if (tile(plan.sw[0] + ax, plan.sw[1] + az) > 0) { ox = ax; oz = az; break; }
+      sg.add(ks); const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.14), scr); pane.position.set(-0.12, 1.42, 0.262); sg.add(pane);
+      const lw = new THREE.Group(); lw.name = 'hebel'; lw.position.set(0, 0.8, 0.36); lw.rotation.x = st.sw ? 0.7 : -0.5; lw.add(kh); sg.add(lw);
+      sg.position.set(plan.sw[0] * TS - ox * (TS / 2 - 0.5), 0, plan.sw[1] * TS - oz * (TS / 2 - 0.5)); sg.rotation.y = Math.atan2(ox, oz);
+    } else {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.1, 0.4), dk); box.position.y = 0.55; sg.add(box);
+      const pane = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.05), scr); pane.position.set(0, 0.9, 0.2); pane.rotation.x = -0.4; sg.add(pane);
+      const lever = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), fr); lever.position.set(0.2, 1.2, 0.1); lever.rotation.x = st.sw ? 0.7 : -0.7; lever.name = 'hebel'; sg.add(lever);
+      sg.position.set(plan.sw[0] * TS, 0, plan.sw[1] * TS);
+    } sg.traverse((o: any) => { o.userData.sh = false; }); group.add(sg);
     DUN.sw = { tx: plan.sw[0], tz: plan.sw[1], on: !!st.sw, scr };
     (DUN.sw as any).g = sg;
   }
   // Förderkorb am Eingang
   {
+    const kk = kitPart('korb');
+    if (kk) {
+      let ox = 1, oz = 0;
+      for (const [ax, az] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as Vec2[]) if (tile(plan.start[0] + ax, plan.start[1] + az) > 0) { ox = ax; oz = az; break; }
+      kk.scale.setScalar(0.88); kk.position.set(plan.start[0] * TS, 0, plan.start[1] * TS); kk.rotation.y = Math.atan2(ox, oz); group.add(kk);
+    }
     const g = new THREE.Group(), fr = std(0x4a4f57, { roughness: 0.5, metalness: 0.85 });
+    if (kk) g.visible = false;
     const pl2 = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.12, 20), fr); pl2.position.y = 0.06; g.add(pl2);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.05, 6, 24), new THREE.MeshBasicMaterial({ color: 0x3ad06a })); ring.rotation.x = Math.PI / 2; ring.position.y = 0.14; g.add(ring);
     for (let k = 0; k < 4; k++) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.8, 0.08), fr); p.position.set(Math.cos(k * 1.571 + 0.78) * 1.0, 1.4, Math.sin(k * 1.571 + 0.78) * 1.0); g.add(p); }
@@ -418,13 +570,15 @@ export function enterDungeon(e: Entrance) {
   // Licht: Welt aus, Stirnlampe und ein kleiner Vorrat an Lampenlichtern, die den nächsten Lampen folgen
   saved.amb = ambient.intensity; saved.sun = sun.intensity; saved.rim = rim.intensity; saved.near = camera.near; saved.far = camera.far;
   const fog = scene.fog as THREE.FogExp2 | null;
-  if (fog) { saved.fogC = fog.color.getHex(); saved.fogD = fog.density; fog.color.set(0x030405); fog.density = 0.028; }
+  if (fog) { saved.fogC = fog.color.getHex(); saved.fogD = fog.density; fog.color.set(0x030405); fog.density = 0.048; }
   pool = [];
   for (let k = 0; k < 5; k++) { const l = new THREE.PointLight(0xffc890, 0, 13, 1.6); group.add(l); pool.push(l); }
-  head = new THREE.SpotLight(0xdfe8ff, 16, 36, 0.66, 0.6, 1.0); scene.add(head); scene.add(head.target);
-  gun = buildGun(); scene.add(gun);
+  head = new THREE.SpotLight(0xe6eeff, 18, 38, 0.6, 0.55, 1.0); scene.add(head); scene.add(head.target);
+  mflash = new THREE.PointLight(0xffb060, 0, 9, 1.6); scene.add(mflash);
+  vm = buildViewModel();
+  if (vm) { overlay.scene = vm.scene; overlay.camera = vm.cam; } else { gun = buildGun(); scene.add(gun); }
   tracer = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.9 })); tracer.frustumCulled = false; tracer.visible = false; scene.add(tracer);
-  camera.near = 0.06; camera.far = 260; camera.updateProjectionMatrix();
+  camera.near = 0.06; camera.far = 38; camera.updateProjectionMatrix();      // dahinter verschluckt der Nebel alles; ferne Felsbereiche fallen weg
   // Spieler
   DUN.x = plan.start[0] * TS; DUN.z = plan.start[1] * TS + 0.2; DUN.yaw = Math.PI; DUN.pitch = 0; DUN.vx = DUN.vz = 0;
   DUN.maxHp = 100 + gearStat('schutz') * 2; DUN.hp = DUN.maxHp; DUN.dead = 0; DUN.hurt = 0; DUN.kills = 0; DUN.msg = [];
@@ -441,9 +595,11 @@ export function leaveDungeon(died = false) {
   if (group) { scene.remove(group); group.traverse((o: any) => { if (o.geometry) o.geometry.dispose(); }); group = null; }
   if (head) { scene.remove(head); scene.remove(head.target); head.dispose(); head = null; }
   if (gun) { scene.remove(gun); gun = null; }
+  if (mflash) { scene.remove(mflash); mflash.dispose(); mflash = null; }
+  overlay.scene = null; overlay.camera = null; vm = null;
   if (tracer) { scene.remove(tracer); tracer.geometry.dispose(); tracer = null; }
   for (const b of DUN.bolts) scene.remove(b.m);
-  DUN.bolts = []; DUN.foes = []; DUN.crates = []; pool = [];
+  DUN.bolts = []; DUN.foes = []; DUN.crates = []; pool = []; chunks = [];
   ambient.intensity = saved.amb; sun.intensity = saved.sun; rim.intensity = saved.rim;
   const fog = scene.fog as THREE.FogExp2 | null; if (fog) { fog.color.setHex(saved.fogC); fog.density = saved.fogD; }
   camera.near = saved.near; camera.far = saved.far; camera.updateProjectionMatrix();
@@ -481,7 +637,7 @@ function shoot() {
     let tw = 60;
     for (let t = 0.3; t < 60; t += 0.25) {
       const lx = DUN.x + d.x * t, ly = EYE + d.y * t, lz = DUN.z + d.z * t;
-      if (ly < 0 || ly > 5.4 || solidAt(lx, lz)) { tw = t; break; }
+      if (ly < 0 || ly > 5.4 || solidAt(lx, lz)) { tw = Math.max(0.3, t - (WALL_R > 0.5 ? 0.32 : 0)); break; }
     }
     // Wächter: Kugeltest entlang des Strahls
     let best: Foe | null = null, bt = tw;
@@ -495,8 +651,8 @@ function shoot() {
     if (best) { best.hp -= w.dmg; best.hit = 0.12; best.alert = true; burst(hp.x, hp.y, hp.z, '#ffb060', 6, 2.2, 0.25); G.hitMark = 0.12; }
     else burst(hp.x, hp.y, hp.z, w.col, 3, 2, 0.2);
   }
-  if (tracer && end && gun) {
-    const a = gun.localToWorld(_w.set(0, 0.008, -0.6)).clone();
+  if (tracer && end && (gun || vm)) {
+    const a = vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : gun!.localToWorld(_w.set(0, 0.008, -0.6)).clone();
     (tracer.geometry as THREE.BufferGeometry).setFromPoints([a, end]); tracer.visible = true; tracerT = 0.05;
     (tracer.material as THREE.LineBasicMaterial).color.set(w.col);
   }
@@ -547,7 +703,15 @@ export function updateDungeon(dt: number) {
   }
   // Wächter
   pathT -= dt;
-  if (pathT <= 0) { pathT = 0.4; flood(Math.round(DUN.x / TS), Math.round(DUN.z / TS), DUN.dist); }
+  if (pathT <= 0) {
+    pathT = 0.4; flood(Math.round(DUN.x / TS), Math.round(DUN.z / TS), DUN.dist);
+    // Felsbereiche, die über den Weg weiter als 13 Kacheln entfernt sind (oder hinter dem geschlossenen Tor liegen), sieht man nicht
+    for (const c of chunks) {
+      let best = 9999;
+      for (let z = c.z * 4; z < c.z * 4 + 4; z++) for (let x = c.x * 4; x < c.x * 4 + 4; x++) { const d = inb(x, z) ? DUN.dist[I(x, z)] : -1; if (d >= 0 && d < best) best = d; }
+      const on = best <= 13; for (const m of c.meshes) m.visible = on;
+    }
+  }
   for (let i = DUN.foes.length - 1; i >= 0; i--) {
     const fo = DUN.foes[i];
     if (fo.hp <= 0) {
@@ -598,7 +762,13 @@ export function updateDungeon(dt: number) {
         }
       }
     }
-    fo.eye.color.setHex(fo.hit > 0 ? 0xffffff : fo.aim > 0 ? 0xffd040 : fo.alert ? 0xff3020 : 0x802018);
+    const ec = fo.hit > 0 ? 0xffffff : fo.aim > 0 ? 0xffd040 : fo.alert ? 0xff3020 : 0x802018;
+    if (fo.vis) {
+      fo.atk = (fo.atk || 0) + ((fo.alert ? 1 : 0) - (fo.atk || 0)) * Math.min(1, dt * 3);
+      if (fo.vis.attack) fo.vis.attack.setEffectiveWeight(fo.atk); if (fo.vis.idle) fo.vis.idle.setEffectiveWeight(1 - fo.atk * 0.8);
+      fo.vis.mixer?.update(dt);
+      fo.vis.mat.forEach((m, k) => { m.emissive.setHex(ec); m.color.copy(fo.vis!.base[k]).multiplyScalar(fo.hit > 0 ? 2.4 : 1); });
+    } else fo.eye.color.setHex(ec);
   }
   // Bolzen der Wächter
   for (let i = DUN.bolts.length - 1; i >= 0; i--) {
@@ -614,6 +784,11 @@ export function updateDungeon(dt: number) {
     lampT = 0.3; _v.set(DUN.x, EYE, DUN.z);
     const srt = lamps.map(l => ({ l, d: l.distanceToSquared(_v) })).sort((a, b) => a.d - b.d);
     pool.forEach((p, k) => { const o = srt[k]; if (o && o.d < 900) { p.position.copy(o.l); p.intensity = 26; } else p.intensity = 0; });
+    if (vm && srt[0]) {
+      // nächste Lampe beleuchtet die Waffe warm von ihrer Seite; Richtung im Kamerabild
+      const d0 = Math.sqrt(srt[0].d); vm.lampWarm.intensity = 3.2 * clamp(1 - d0 / 11, 0, 1) ** 2;
+      _w.copy(srt[0].l).sub(_v); _w.applyQuaternion(_q.copy(camera.quaternion).invert()).normalize().multiplyScalar(0.9); vm.lampWarm.position.copy(_w);
+    }
   }
   for (const m of DUN.msg) m.life -= dt;
   DUN.msg = DUN.msg.filter(m => m.life > 0);
@@ -625,7 +800,24 @@ export function dungeonCamera() {
   camera.rotation.order = 'YXZ'; camera.rotation.set(DUN.pitch + DUN.kick * 0.012, DUN.yaw, 0);
   if (Math.abs(camera.fov - 74) > 0.05) { camera.fov = 74; camera.updateProjectionMatrix(); }
   camera.updateMatrixWorld();
-  if (head) { head.position.copy(camera.position); head.target.position.copy(camera.position).add(_v.set(0, -0.05, -1).applyQuaternion(camera.quaternion)); head.target.updateMatrixWorld(); }
+  if (head) {
+    // Licht sitzt an der Waffenlampe (rechts unten) und leuchtet geradeaus
+    head.position.copy(camera.localToWorld(_w.set(0.09, -0.11, -0.25)));
+    head.target.position.copy(camera.position).add(_v.set(0, -0.04, -1).applyQuaternion(camera.quaternion).multiplyScalar(8)); head.target.updateMatrixWorld();
+  }
+  if (mflash) { mflash.position.copy(camera.localToWorld(_w.set(0.1, -0.08, -0.7))); mflash.intensity = DUN.flash > 0 ? 34 : 0; }
+  if (vm) {
+    vm.cam.aspect = view.W / view.H; vm.cam.updateProjectionMatrix();
+    // Pendeln: die Waffe bleibt bei schnellen Drehungen kurz zurück
+    const dyaw = DUN.yaw - sway.yaw, dp = DUN.pitch - sway.pitch; sway.yaw = DUN.yaw; sway.pitch = DUN.pitch;
+    sway.x = clamp(sway.x * 0.86 + dyaw * 0.35, -0.03, 0.03); sway.y = clamp(sway.y * 0.86 - dp * 0.35, -0.03, 0.03);
+    const run = Math.hypot(DUN.vx, DUN.vz) > 5 ? 1 : 0, b = DUN.bob;
+    vm.gun.position.set(0.118 + sway.x + Math.cos(DUN.walked * 2.1) * 0.006 * (1 + run), -0.178 + b * 0.55 + sway.y - run * 0.02, -0.30 + DUN.kick * 0.04);
+    vm.gun.rotation.set(DUN.kick * 0.07 + sway.y * 1.5 - run * 0.12, 0.045 + sway.x * 2 + run * 0.25, -sway.x * 2.5 + run * 0.18);
+    vm.gun.visible = DUN.dead <= 0;
+    const f = DUN.flash > 0; vm.flash.visible = f; vm.flashLight.intensity = f ? 2.6 : 0;
+    if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(0.11 + Math.random() * 0.08); }
+  }
   if (gun) {
     gun.position.copy(camera.localToWorld(_w.set(0.13, -0.12 + DUN.bob * 0.4, -0.26 + DUN.kick * 0.04)));
     gun.quaternion.copy(camera.quaternion).multiply(_q.setFromEuler(_e.set(DUN.kick * 0.12, 0.03, 0)));
