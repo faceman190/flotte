@@ -176,3 +176,14 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   Texturkoordinaten behalten ihn beim Packen (scripts/build-assets.mjs), sonst ginge die Zuordnung zur Lichtkarte verloren.
 - Nach Änderungen am Hangar in Blender: beide Netze neu erzeugen, Licht und Verdeckung neu rechnen, Bild und GLB neu schreiben, `npm run assets`.
   Das Spiel leuchtet den Hangar dann nicht mehr selbst aus; fehlt die Lichtkarte, bekommen die Flächen wieder ein schwaches Eigenleuchten.
+
+## Planetenböden von Poly Haven (Alpha 0.64)
+- Quelle: polyhaven.com, Lizenz CC0. Rohdateien in `asset-src/tex-src/polyhaven/<Name>/` (col.jpg, nor.jpg in OpenGL-Ausrichtung, rough.jpg; je 2k).
+  Welche Textur zu welchem Planetentyp gehört, steht in `asset-src/tex-src/polyhaven/ground.json`:
+  Fels `rocks_ground_02`, Wüste `sand_01`, Eis `snow_02`, Vulkan `dark_rock`, Asche `moon_01`, Kristall `dark_rock_02`.
+- `npm run assets` macht daraus `planet/ground/<Typ>` (Farbe), `planet/groundn/<Typ>` (Relief) und `planet/groundr/<Typ>` (Rauheit), je 1024 px WebP.
+  Sie ersetzen die früheren KI-Bodenbilder gleichen Namens.
+- Im Spiel (`groundShader` in src/game/surface.ts, Tabelle `GROUND`): Das Bild liegt in der eingescannten Größe (m), aus drei Richtungen projiziert,
+  damit es an Hängen nicht verzerrt. Mit der Entfernung gröbere Stufen (7,3- und 41-fach) mit weniger Kontrast, dazu grobe Flecken gegen Wiederholung;
+  bei flachem Blickwinkel weniger Kontrast (sonst Streifen). `tint` zieht die Fotofarbe zur Bodenfarbe des Planetentyps (planets.ts, ground[1]).
+- Neue Textur: Ordner mit den drei Bildern anlegen, in ground.json eintragen, in `GROUND` Größe und Färbung setzen, `npm run assets`.

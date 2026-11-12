@@ -9,7 +9,8 @@ import { renderer } from './engine';
 
 const loader = new THREE.TextureLoader();
 const ANISO = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-const MAPS: Record<string, THREE.Texture> = {}, GROUNDS: Record<string, THREE.Texture> = {};
+const ANISO_G = Math.min(16, renderer.capabilities.getMaxAnisotropy());   // Böden: feine Bilder in echter Größe, flacher Blickwinkel
+const MAPS: Record<string, THREE.Texture> = {}, GROUNDS: Record<string, THREE.Texture> = {}, GROUNDN: Record<string, THREE.Texture> = {}, GROUNDR: Record<string, THREE.Texture> = {};
 function lru(cache: Record<string, THREE.Texture>, max: number) {
   const k = Object.keys(cache);
   if (k.length >= max) { cache[k[0]].dispose(); delete cache[k[0]]; }
@@ -23,13 +24,24 @@ export function planetMap(type: string) {
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO; t.wrapS = THREE.RepeatWrapping;
   return (MAPS[type] = t);
 }
+// Relief (Normal-Map, OpenGL) und Rauheit des Bodens: lineare Werte, kachelnd
+function groundExtra(cache: Record<string, THREE.Texture>, uri: string | undefined, type: string) {
+  if (cache[type]) return cache[type];
+  if (!uri) return null;
+  lru(cache, 2);
+  const t = loader.load(uri);
+  t.colorSpace = THREE.NoColorSpace; t.anisotropy = ANISO_G; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return (cache[type] = t);
+}
+export const groundNormal = (type: string) => groundExtra(GROUNDN, window.PLANETDATA?.groundn?.[type], type);
+export const groundRough = (type: string) => groundExtra(GROUNDR, window.PLANETDATA?.groundr?.[type], type);
 export function groundTexture(type: string) {
   if (GROUNDS[type]) return GROUNDS[type];
   const uri = window.PLANETDATA?.ground[type];
   if (!uri) return null;
   lru(GROUNDS, 2);
   const t = loader.load(uri);
-  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO_G; t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return (GROUNDS[type] = t);
 }
 

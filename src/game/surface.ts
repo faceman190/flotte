@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { scene, camera, view, ux, glowMat } from '../core/engine';
 import { texMat, std, boxUV } from '../core/textures';
 import { setSky, setSurfaceSky } from '../core/sky';
-import { groundTexture } from '../core/planetVis';
+import { groundTexture, groundNormal, groundRough } from '../core/planetVis';
 import { setAmbience } from '../core/ambience';
 import { keys, mouse } from '../core/input';
 import { rng, hashStr, clamp, d3, rand, fmtN } from '../core/util';
@@ -130,7 +130,7 @@ export function buildSurface(sector: string) {
   geo.setAttribute('slope', new THREE.BufferAttribute(slp, 1));
   const tm = texMat(0xffffff, 'rock', { vertexColors: true, roughness: 0.95, metalness: 0.05, flatShading: false }, 1.4);
   tm.envMapIntensity = 0.25;
-  if (gTex) groundShader(tm, gTex, c1);
+  if (gTex) groundShader(tm, gTex, c1, pd.type);
   const terrain = new THREE.Mesh(geo, tm);
   scene.add(terrain);
   world.extras.push(terrain);
@@ -177,22 +177,88 @@ export function buildSurface(sector: string) {
   return { plateau, arrive: { x: -2300, y: plateau + 1300, z: 2300 } };
 }
 
-// Gelände-Shader: flache Stellen mit Bodentextur (zwei Maßstäbe gegen sichtbare Wiederholung), Steilhänge mit Fels
-function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: THREE.Color) {
+// Bodenbilder (Poly Haven, siehe asset-src/tex-src/polyhaven/ground.json): Kachelgröße in Metern wie eingescannt und wie stark
+// die Farbe zur Bodenfarbe des Planetentyps (planets.ts, ground[1]) gezogen wird (0 = Foto, 1 = ganz Planetenfarbe).
+const GROUND: Record<string, { m: number; tint: number; nrm: number }> = {
+  fels: { m: 2, tint: 0.45, nrm: 1 }, wueste: { m: 1.5, tint: 0.55, nrm: 0.8 }, eis: { m: 2, tint: 0.35, nrm: 0.7 },
+  vulkan: { m: 2.4, tint: 0.75, nrm: 1 }, asche: { m: 3.1, tint: 0.85, nrm: 1 }, kristall: { m: 2, tint: 0.9, nrm: 1 },
+};
+// Gelände-Shader: flache Stellen mit Bodenbild, Steilhänge mit Fels.
+// Das Bodenbild wird aus drei Richtungen projiziert (von oben und von zwei Seiten, gewichtet nach der Flächenneigung), damit es an Hängen
+// nicht zu Streifen gezogen wird. Nah liegt es in echter Größe, mit der Entfernung gröber (7,3- und 41-fach); ein grobes Muster bricht die
+// Wiederholung. Relief und Rauheit kommen aus eigenen Bildern; die Farbe wird über den Mittelwert des Bilds (kleinste Mip-Stufe) zur Planetenfarbe gezogen.
+// Gewichte nahe null werden übersprungen: So liest jeder Bildpunkt meist nur ein bis zwei Maßstäbe und eine Richtung.
+function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: THREE.Color, type: string) {
+  const gn = groundNormal(type), gr = groundRough(type), P = GROUND[type] || { m: 24, tint: 0, nrm: 0 };
+  if (gn && !m.normalMap) m.normalMap = gn;          // sorgt für Relief im Shader, auch bevor das Felsrelief fertig ist
   m.onBeforeCompile = (sh) => {
+    m.userData.sh = sh;                               // Uniforms zum Nachstellen im Spiel erreichbar
     sh.uniforms.groundMap = { value: g };
+    sh.uniforms.groundNrm = { value: gn };
+    sh.uniforms.groundRgh = { value: gr };
+    sh.uniforms.gScale = { value: 1 / P.m };
+    sh.uniforms.gTint = { value: P.tint };
+    sh.uniforms.gNrmK = { value: gn ? P.nrm : 0 };
+    sh.uniforms.gHasR = { value: gr ? 1 : 0 };
+    sh.uniforms.gCol = { value: cliff.clone() };
     sh.uniforms.cliffCol = { value: cliff.clone() };
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float slope; varying float vSlope; varying vec3 vWPos;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlope = slope; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      .replace('#include <common>', '#include <common>\nattribute float slope; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlope = slope; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz; vWNrm = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D groundMap; uniform vec3 cliffCol; varying float vSlope; varying vec3 vWPos;')
+      .replace('#include <common>', `#include <common>
+        uniform sampler2D groundMap; uniform sampler2D groundNrm; uniform sampler2D groundRgh; uniform vec3 cliffCol; uniform vec3 gCol;
+        uniform float gScale; uniform float gTint; uniform float gNrmK; uniform float gHasR; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;
+        // ein Bild in drei Maßstäben, nach Entfernung überblendet (B.x: nah → mittel, B.y: mittel → fern)
+        vec3 gS(sampler2D t, vec2 p, vec2 B){
+          float wa = (1.0 - B.x) * (1.0 - B.y), wb = B.x * (1.0 - B.y), wc = B.y, n = 0.0; vec3 r = vec3(0.0);
+          if (wa > 0.002) { r += wa * texture2D(t, p).rgb; n += wa; }
+          if (wb > 0.002) { r += wb * texture2D(t, p / 7.3 + 0.37).rgb; n += wb; }
+          if (wc > 0.002) { r += wc * texture2D(t, p / 41.0 + 0.71).rgb; n += wc; }
+          return r / max(n, 1e-4); }
+        // dasselbe aus drei Richtungen: w = Gewichte (x: Seite von x, y: von oben, z: Seite von z)
+        vec3 gT(sampler2D t, vec3 P, vec3 w, vec2 B){
+          vec3 r = vec3(0.0); float n = 0.0;
+          if (w.y > 0.01) { r += w.y * gS(t, P.xz, B); n += w.y; }
+          if (w.x > 0.01) { r += w.x * gS(t, P.zy + 0.19, B); n += w.x; }
+          if (w.z > 0.01) { r += w.z * gS(t, P.xy + 0.53, B); n += w.z; }
+          return r / max(n, 1e-4); }`)
       .replace('#include <map_fragment>', `
         vec4 rockC = texture2D(map, vMapUv);
-        vec3 g1 = texture2D(groundMap, vWPos.xz / 24.0).rgb, g2 = texture2D(groundMap, vWPos.xz / 110.0 + 0.37).rgb;
-        vec3 gC = mix(g1, g2, 0.42);
+        vec3 gP = vWPos * gScale;
+        float gD = length(vWPos - cameraPosition);
+        vec2 gB = vec2(smoothstep(12.0, 70.0, gD), smoothstep(140.0, 900.0, gD));
+        vec3 gw = pow(abs(normalize(vWNrm)), vec3(4.0)); gw /= (gw.x + gw.y + gw.z);
+        vec3 gC = gT(groundMap, gP, gw, gB);
+        vec3 gMean = max(textureLod(groundMap, vec2(0.5), 12.0).rgb, vec3(0.02));
+        // flacher Blickwinkel: Dort kann die Filterung das feine Bild nicht mehr sauber verkleinern, es verwischt zu Streifen → weniger Kontrast
+        float gGraz = smoothstep(0.06, 0.4, abs(dot(normalize(cameraPosition - vWPos), normalize(vWNrm))));
+        gC = mix(gMean, gC, mix(1.0, 0.5, gB.x) * mix(1.0, 0.55, gB.y) * mix(0.4, 1.0, gGraz));   // gröbere Stufen mit weniger Kontrast: sonst sieht man das Kachelraster
+        float gLum = dot(gMean, vec3(0.3, 0.59, 0.11));
+        float gL = dot(texture2D(groundMap, gP.xz / 97.0 + 0.13).rgb, vec3(0.3, 0.59, 0.11)) / gLum;
+        float gL2 = dot(texture2D(groundMap, gP.xz / 523.0 + 0.61).rgb, vec3(0.3, 0.59, 0.11)) / gLum;
+        gC *= mix(1.0, gL, 0.4) * mix(1.0, gL2, 0.3);                   // grobe Flecken in zwei Größen gegen sichtbare Wiederholung
+        gC = gC / gMean * mix(gMean, gCol, gTint);                       // Farbe zur Planetenfarbe ziehen, Muster bleibt
         float sm = smoothstep(0.2, 0.4, vSlope);
-        diffuseColor.rgb *= mix(gC, rockC.rgb * cliffCol * 2.4, sm);`);
+        diffuseColor.rgb *= mix(gC, rockC.rgb * cliffCol * 2.4, sm);`)
+      .replace('#include <roughnessmap_fragment>', `
+        float roughnessFactor = roughness;
+        if (gHasR > 0.5) roughnessFactor = mix(mix(0.6, 1.0, gT(groundRgh, gP, gw, gB).r), roughness, sm);   // matt halten: glatte Stellen spiegelten sonst den Himmel`)
+      .replace('#include <normal_fragment_maps>', `
+        #ifdef USE_NORMALMAP_TANGENTSPACE
+          vec3 nRock = texture2D(normalMap, vNormalMapUv).xyz * 2.0 - 1.0; nRock.xy *= normalScale;
+          vec3 nView = normalize(tbn * nRock);
+          if (gNrmK > 0.0) {
+            // je Richtung ein eigener Tangentenrahmen; oben gilt der Rahmen der Geländekoordinaten (gleiche Ausrichtung wie x/z)
+            mat3 fX = getTangentFrame(- vViewPosition, normal, gP.zy), fZ = getTangentFrame(- vViewPosition, normal, gP.xy);
+            float k = gNrmK * (1.0 - 0.45 * gB.x) * (1.0 - 0.5 * gB.y) * mix(0.5, 1.0, gGraz); vec3 acc = vec3(0.0), q;
+            if (gw.y > 0.01) { q = gS(groundNrm, gP.xz, gB) * 2.0 - 1.0; q.xy *= k; acc += gw.y * normalize(tbn * q); }
+            if (gw.x > 0.01) { q = gS(groundNrm, gP.zy + 0.19, gB) * 2.0 - 1.0; q.xy *= k; acc += gw.x * normalize(fX * q); }
+            if (gw.z > 0.01) { q = gS(groundNrm, gP.xy + 0.53, gB) * 2.0 - 1.0; q.xy *= k; acc += gw.z * normalize(fZ * q); }
+            nView = normalize(mix(normalize(acc), nView, sm));
+          }
+          normal = nView;
+        #endif`);
   };
   m.customProgramCacheKey = () => 'ground';
 }

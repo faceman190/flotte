@@ -75,6 +75,23 @@ for (const [k, v] of Object.entries(TEXDATA)) await image('tex/' + k, v, 'core')
 for (const [k, v] of Object.entries(NEBDATA)) await image('neb/' + k, v, k === 'heimat' ? 'core' : 'world', k === 'heimat' ? 86 : 82);   // heimat: Heimstatt und Hauptmenü
 for (const [k, v] of Object.entries(PLANETDATA.map || {})) await image('planet/map/' + k, v, 'world');
 for (const [k, v] of Object.entries(PLANETDATA.ground || {})) await image('planet/ground/' + k, v, 'world');
+// Planetenböden von Poly Haven (asset-src/tex-src/polyhaven/ground.json: Planetentyp → Ordner mit col.jpg, nor.jpg, rough.jpg).
+// Ersetzen die früheren Bodenbilder gleichen Namens; Relief (OpenGL-Ausrichtung) und Rauheit kommen als eigene Bilder dazu.
+const PH = path.join(ROOT, 'asset-src', 'tex-src', 'polyhaven');
+if (fs.existsSync(path.join(PH, 'ground.json'))) {
+  const map = JSON.parse(fs.readFileSync(path.join(PH, 'ground.json'), 'utf8'));
+  for (const [typ, id] of Object.entries(map)) {
+    if (typ.startsWith('_')) continue;
+    for (const [part, key, q, grey] of [['col', 'ground', 86, false], ['nor', 'groundn', 92, false], ['rough', 'groundr', 82, true]]) {
+      const f = path.join(PH, id, part + '.jpg');
+      if (!fs.existsSync(f)) { console.warn('Bodenbild fehlt:', f); continue; }
+      const src = fs.readFileSync(f);
+      let img = sharp(src).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true });
+      if (grey) img = img.greyscale();
+      put(`planet/${key}/${typ}`, 'webp', await img.webp({ quality: q, effort: 5 }).toBuffer(), 'world', src.length);
+    }
+  }
+}
 // ---- Modelle ----
 const { SHIPDATA = { models: {}, paints: {} } } = bundle('ships.js'), { STATIONDATA = {} } = bundle('stations.js'), { CHARDATA = {} } = bundle('chars.js');
 for (const [k, v] of Object.entries(SHIPDATA.models)) await model('ship/' + k, v, 'core');

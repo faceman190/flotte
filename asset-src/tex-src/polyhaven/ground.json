@@ -1,0 +1,9 @@
+{
+  "_info": "Planetenböden von Poly Haven (polyhaven.com, CC0). Je Planetentyp der Ordnername unter asset-src/tex-src/polyhaven/ mit col.jpg, nor.jpg (OpenGL), rough.jpg in 2k. Daraus macht scripts/build-assets.mjs planet/ground, planet/groundn und planet/groundr. Die Kachelgröße in Metern steht in src/game/surface.ts (GROUND).",
+  "fels": "rocks_ground_02",
+  "wueste": "sand_01",
+  "eis": "snow_02",
+  "vulkan": "dark_rock",
+  "asche": "moon_01",
+  "kristall": "dark_rock_02"
+}

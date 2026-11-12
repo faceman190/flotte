@@ -14,7 +14,7 @@ export interface Manifest { v: string; packs: Record<string, { files: number; si
 declare global {
   interface Window {
     TEXDATA?: Record<string, string>; NEBDATA?: Record<string, string>;
-    PLANETDATA?: { map: Record<string, string>; ground: Record<string, string> };
+    PLANETDATA?: { map: Record<string, string>; ground: Record<string, string>; groundn?: Record<string, string>; groundr?: Record<string, string> };
     SHIPDATA?: { models: Record<string, string>; paints: Record<string, string> };
     STATIONDATA?: Record<string, string>; CHARDATA?: Record<string, string>;
     SOUNDDATA?: Record<string, string>;
@@ -63,7 +63,7 @@ async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
 function setGlobals(m: Manifest) {
   const g = (p: string) => Object.fromEntries(Object.entries(m.files).filter(([k]) => k.startsWith(p)).map(([k, f]) => [k.slice(p.length), f.url]));
   window.TEXDATA = g('tex/'); window.NEBDATA = g('neb/');
-  window.PLANETDATA = { map: g('planet/map/'), ground: g('planet/ground/') };
+  window.PLANETDATA = { map: g('planet/map/'), ground: g('planet/ground/'), groundn: g('planet/groundn/'), groundr: g('planet/groundr/') };
   window.SHIPDATA = { models: g('ship/'), paints: g('paint/') };
   window.STATIONDATA = g('station/'); window.CHARDATA = g('char/'); window.SOUNDDATA = g('sound/');
   window.SHIPINT = g('shipint/'); (window as any).DECODATA = g('deco/'); (window as any).DATAFILES = g('data/'); window.WALKMAP = g('walk/');   // begehbare Innenräume (meshRoom.ts)
