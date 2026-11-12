@@ -11,6 +11,7 @@ import { SECTOR, type StationDef } from '../data/galaxy';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { PLANETS, PTYPE, planetBaseId, type PlanetDef } from '../data/planets';
 import { buildGate } from '../models/structures';
+import { setOutpostDust } from '../models/stationModels';
 import { mesh, alongZ } from '../models/helpers';
 import { world, clearSector, addStation, makeAst, removeAst, type Asteroid, type Ore } from './world';
 import { P, G, stats, cargoUsed, settings } from './state';
@@ -151,6 +152,8 @@ export function buildSurface(sector: string) {
   setSurfaceSky({ horizon: T.sky[0], zenith: T.sky[1], fog: T.fog, fogDensity: T.fogDensity });
   setAmbience({ id: sector + ':oberflaeche', neb: sec.neb, faction: sec.faction, fields: [] }, 0);
   // Bodenstation
+  // Staub bzw. Schnee auf waagrechten Flächen des Außenpostens in der Bodenfarbe des Planeten
+  setOutpostDust(T.ground[2], pd.type === 'eis' ? 0.45 : pd.type === 'wueste' ? 0.35 : 0.25);
   if (base) { base.pos = [0, plateau + 14, 0]; addStation(base, R.range(0, Math.PI * 2)); }
   // Lagerstätten in Gruppen
   for (let g = 0; g < 6; g++) {

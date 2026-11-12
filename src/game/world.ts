@@ -12,7 +12,7 @@ import { buildStation, buildOutpost, buildGate } from '../models/structures';
 import { burst, clearParticles } from './fx';
 import { snd } from '../core/audio';
 import { planetLook } from '../data/planets';
-import { buildModelStation, buildCarrierModel } from '../models/stationModels';
+import { buildModelStation, buildCarrierModel, buildBaseModel } from '../models/stationModels';
 import { SHARED } from './shared';
 
 // ---------------- Typen der Sektor-Objekte ----------------
@@ -358,7 +358,7 @@ export function addStation(sd: StationDef, yaw: number) {
   } else {
     // KI-Modelle, falls geladen; sonst die eingebauten Grundformen
     const isBase = sd.id.endsWith('_base');
-    model = (isBase ? buildModelStation('base', 170, { ground: 14, cell: 26, R: 130 })
+    model = (isBase ? buildBaseModel() || buildModelStation('base', 170, { ground: 14, cell: 26, R: 130 })
       : sd.kind === 'station' ? buildModelStation('station', 380, { cell: 40, R: 230 })
       : buildModelStation('outpost', 210, { cell: 30, R: 130 }))
       || (sd.kind === 'station' ? buildStation() : buildOutpost());

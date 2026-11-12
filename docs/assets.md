@@ -187,3 +187,14 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   damit es an Hängen nicht verzerrt. Mit der Entfernung gröbere Stufen (7,3- und 41-fach) mit weniger Kontrast, dazu grobe Flecken gegen Wiederholung;
   bei flachem Blickwinkel weniger Kontrast (sonst Streifen). `tint` zieht die Fotofarbe zur Bodenfarbe des Planetentyps (planets.ts, ground[1]).
 - Neue Textur: Ordner mit den drei Bildern anlegen, in ground.json eintragen, in `GROUND` Größe und Färbung setzen, `npm run assets`.
+
+## Außenposten auf den Planeten (Alpha 0.65)
+- Quelle: `asset-src/neu/aussenposten/Aussenposten.blend`, gebaut per Skript `asset-src/neu/aussenposten/posten_build.py` (in der Datei als Textblock `posten_build`,
+  Aufruf `build_all()`). Maße in Metern, Vorderseite nach −Y, Ursprung = Boden in der Mitte des Hauptgebäudes.
+  Hauptgebäude mit Tor und Rampe, schräge Flügel mit gelben Trägern, Turm mit Antenne und Schüssel, Geschütz; drumherum Lichtmasten, Fässer in Käfigen,
+  Lader, Wagen, zwei Ladeplattformen, Tanks, Funkbake, Markierungspfosten, Abwehrgeschütz und ein Landefeld (PAD = (−62, −38)).
+- Export: Kopien aller Teile der Sammlung „Posten“ zu einem Netz verbunden (Sammlung „Posten_Export“, ein Teilnetz je Material) →
+  `asset-src/glb/station/Aussenposten.glb`, dann `npm run assets`.
+- Im Spiel: `buildBaseModel()` in src/models/stationModels.ts ersetzt für alle Planetenbasen das frühere KI-Modell. Materialnamen `posten_*`
+  bekommen die Hangarbilder (Metall, Lack, Boden); waagrechte Flächen tragen Staub bzw. Schnee in der Bodenfarbe des Planeten (`setOutpostDust` in surface.ts).
+  Andockpunkt 12 m über dem Landefeld; Kollision nur für Teile über 1 m Höhe, damit das Landefeld frei bleibt.
