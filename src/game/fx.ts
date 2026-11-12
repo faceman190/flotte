@@ -28,6 +28,8 @@ export function puff(x: number, y: number, z: number, vx: number, vy: number, vz
   parts.push({ x, y, z, vx, vy, vz, life, max: life, r: _c.r, g: _c.g, b: _c.b });
 }
 export function clearParticles() { parts = []; }
+// Größe der Funken in Metern: im All 3,4, zu Fuß in einer Mine viel kleiner
+export function particleSize(s = 3.4) { (pts.material as THREE.PointsMaterial).size = s; }
 
 export function updateParticles(dt: number) {
   const k = Math.pow(0.4, dt);

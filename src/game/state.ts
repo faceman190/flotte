@@ -53,6 +53,7 @@ export interface Player {
   gear: Partial<Record<GearSlot, string>>;      // angelegte Ausrüstung
   locker: InvItem[];                            // Spind, von jeder Station aus erreichbar
   shipGear: Partial<Record<ShipSlot, string>>;  // Module des aktiven Schiffs
+  dungeons?: Record<string, { t: number; open: number[]; sw?: boolean }>;   // je Mine: Zeitpunkt des letzten frischen Besuchs, geöffnete Kisten, Schalter
 }
 export type Tool = 'guns' | 'laser' | 'charge';
 export interface Contract { id: string; station: string; sector: string; stName: string; item: ItemId; amount: number; reward: number; trust?: boolean }
@@ -118,7 +119,7 @@ export function loadGame(): Player | null {
 }
 
 // ---------------- Laufzeitzustand (nicht gespeichert) ----------------
-export type Mode = 'menu' | 'play' | 'pause' | 'dock' | 'map' | 'jump' | 'walk' | 'rover' | 'entry' | 'intro' | 'scene' | 'launch';   // launch: Start- oder Landeablauf im Hangar
+export type Mode = 'menu' | 'play' | 'pause' | 'dock' | 'map' | 'jump' | 'walk' | 'rover' | 'entry' | 'intro' | 'scene' | 'launch' | 'dungeon';   // dungeon: zu Fuß in einer Mine (game/dungeon.ts)   // launch: Start- oder Landeablauf im Hangar
 export const G = {
   mode: 'menu' as Mode,
   dead: 0,            // Sekunden bis zum Neustart (0 = lebt)

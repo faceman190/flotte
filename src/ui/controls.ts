@@ -8,6 +8,7 @@ import { IN, nearestOther } from '../game/interior';
 import { TRADE } from '../game/trade';
 import { isOnline } from '../game/net';
 import { MINE } from '../game/mining';
+import { DUN } from '../game/dungeon';
 
 // Steuerungsleiste links unten: zeigt nur die Tasten, die gerade Sinn ergeben.
 // Hervorgehoben (hi) ist, was jetzt möglich ist, z. B. Andocken oder Landen.
@@ -28,6 +29,12 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (IN.station && !IN.ship) r.push(['Tab', 'Stationsmenü']);
     r.push(['I', 'Ausrüstung'], ['B', 'Flottenband'], ['M', 'Karte'], ['Esc', 'Menü']);
     return { title: IN.ship ? `An Bord · ${IN.area}` : `Zu Fuß · ${IN.area}`, rows: r };
+  }
+  if ((m as string) === 'dungeon') {
+    const r: Row[] = [];
+    if (DUN.prompt) r.push(['E', DUN.prompt, true]);
+    r.push(['Klick', 'Schießen'], ['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['I', 'Ausrüstung'], ['Esc', 'Menü']);
+    return { title: DUN.e ? DUN.e.name : 'Mine', rows: r };
   }
   if (m === 'rover') {
     const r: Row[] = [];

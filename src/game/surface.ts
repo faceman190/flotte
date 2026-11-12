@@ -13,6 +13,7 @@ import { PLANETS, PTYPE, planetBaseId, type PlanetDef } from '../data/planets';
 import { buildGate } from '../models/structures';
 import { buildFlora, updateFlora } from './flora';
 import { gearFactor } from './inventory';
+import { buildDungeonEntrances } from './dungeon';
 import { setOutpostDust } from '../models/stationModels';
 import { mesh, alongZ } from '../models/helpers';
 import { world, clearSector, addStation, makeAst, removeAst, type Asteroid, type Ore } from './world';
@@ -207,7 +208,9 @@ export function buildSurface(sector: string) {
       a.max = a.yld = r >= 16 ? 60 : r >= 12 ? 40 : 24;
     }
   }
-  buildFlora(pd.type, R, heightAt, liquidLevel, hashStr(sector) % 1000);      // Felsbrocken, Felsnadeln, Pflanzen (src/game/flora.ts)
+  buildFlora(pd.type, R, heightAt, liquidLevel, hashStr(sector) % 1000);
+  buildDungeonEntrances(sector, heightAt, liquidLevel);                         // Stolleneingänge (src/game/dungeon.ts)
+  void 0;      // Felsbrocken, Felsnadeln, Pflanzen (src/game/flora.ts)
   world.surface = { planet: sector, limit: SURF.limit };
   world.ground = groundAt;
   world.regrowT = 1e9;
