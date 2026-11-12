@@ -62,7 +62,7 @@ def install(lib):
     def floor_strip(self, a, b, w=0.1, kind='accent', z=0.004):
         """Leuchtstreifen im Boden von a nach b (x, y)."""
         a = Vector((a[0], a[1], z)); b = Vector((b[0], b[1], z)); u = (b - a).normalized(); self.glow(kind, (a + b) / 2, u, Z.cross(u), (b - a).length, w, off=0.0)
-    def floor_line(self, a, b, w=0.2, tint='white', z=0.006):
+    def floor_line(self, a, b, w=0.2, tint='white', z=0.02):
         """Gemalte Bodenlinie von a nach b (x, y)."""
         a = Vector((a[0], a[1], z)); b = Vector((b[0], b[1], z)); u = (b - a).normalized(); v = Z.cross(u) * (w / 2)
         with self.overlay(): self.face(a - v, b - v, b + v, a + v, 'iplain', tint)
@@ -197,7 +197,92 @@ def install(lib):
                 a0, a1 = i / n * TAU, (i + 0.8) / n * TAU; rr = r - 0.25
                 self.floor_strip((math.cos(a0) * rr, math.sin(a0) * rr), (math.cos(a1) * rr, math.sin(a1) * rr), 0.07, 'accent', h + 0.004)
 
-    for f in (wall, floor, ceiling, portal, light_bar, hanging_sign, wall_sign, ad_screen, floor_strip, floor_line, duct, shop_bay, shutter, vending, kiosk, lockers, sdoor, panel_i,
+    # ------------------------------------------------------------ Große Hallen (Hangar)
+    def wall_open(self, a, b, h, openings=(), z0=0.0, strip='iwalls', tint='i_wall', seg=3.0):
+        """Wand von a nach b mit Öffnungen ab Boden: openings = [(von, bis, Höhe)] in Metern entlang der Wand."""
+        a2 = Vector((a[0], a[1], 0)); b2 = Vector((b[0], b[1], 0)); L = (b2 - a2).length; d = (b2 - a2) / L; pos = 0.0
+        P = lambda u: (a2.x + d.x * u, a2.y + d.y * u)
+        for u0, u1, ho in sorted(openings):
+            if u0 > pos + 1e-4: self.wall(P(pos), P(u0), h, z0, strip, tint, seg)
+            if z0 + h > ho + 1e-4: self.wall(P(u0), P(u1), z0 + h - max(ho, z0), max(ho, z0), strip, tint, seg)
+            pos = u1
+        if pos < L - 1e-4: self.wall(P(pos), P(L), h, z0, strip, tint, seg)
+    def buttress(self, h, loc=(0, 0, 0), rz=0.0, w=3.0, d0=5.0, d1=2.0, tint='i_rib', accent='orange', lamps=(7.0, 21.0)):
+        """Wandpfeiler: steht an der Wand (y = 0), ragt nach -Y in den Raum und verjüngt sich nach oben. Mit Warnsockel, Bändern und Lampen."""
+        with self.at(loc, rz):
+            with self.push(Matrix.Rotation(-math.pi / 2, 4, 'Z')):
+                self.prism([(0, 0), (d0, 0), (d1, h), (0, h)], -w / 2, w / 2, side='siding', top='rib', tint=tint, cap_strip='wall', seg=6.0)
+            D = lambda z: d0 - (d0 - d1) / h * z
+            self.box((w + 0.4, D(0) + 0.3, 1.2), (0, -D(0) / 2, 0), side='hazard', top='iplain', tint='none', tint_top='i_dark', bevel=0.05)
+            for z in (3.6, h * 0.42, h * 0.7):
+                self.box((w + 0.24, 0.5, 0.8), (0, -D(z) + 0.1, z), side='beam', tint=accent, bevel=0.04, bottom=True)
+            for z in lamps:
+                self.box((1.1, 0.5, 0.5), (0, -D(z) - 0.2, z), side='iplain', tint='i_dark', bevel=0.05, bottom=True)
+                self.glow('lamp', (0, -D(z) - 0.455, z + 0.25), X, Z, 0.9, 0.3); self.lamp((0, -D(z) - 1.8, z + 0.2), (1.0, 0.55, 0.2), 1100, 0.4)
+            self.block_rect(-w / 2 - 0.3, -D(0) - 0.3, w / 2 + 0.3, 0)
+    def alcove(self, w, d, h, loc=(0, 0, 0), rz=0.0, tint='i_wall', warm=True):
+        """Nische hinter einer Wandöffnung (Öffnung bei y = 0, der Raum liegt in +Y): Boden, Wände, Decke, Rahmen, Warnkante, Licht."""
+        with self.at(loc, rz):
+            self.floor(-w / 2, 0, w / 2, d, 0.0, 'ifloors', 'i_floor_dark', 'x'); self.ceiling(-w / 2, 0, w / 2, d, h)
+            self.wall((-w / 2, d), (w / 2, d), h, 0, 'iwalls', tint); self.wall((-w / 2, 0), (-w / 2, d), h, 0, 'iwalls', tint); self.wall((w / 2, d), (w / 2, 0), h, 0, 'iwalls', tint)
+            for s in (-1, 1): self.box((0.9, 1.1, h + 0.7), (s * (w / 2 + 0.25), -0.35, 0), side='rib', tint='i_rib', bevel=0.06, along='z')
+            self.box((w + 1.4, 1.1, 1.0), (0, -0.35, h - 0.2), side='rib', tint='i_rib', bevel=0.06, bottom=True)
+            self.box((w - 0.8, 0.14, 0.5), (0, -0.94, h + 0.05), side='hazard', tint='none', bevel=0.01, bottom=True)
+            for k in (-1, 1): self.light_bar((k * w * 0.25, d * 0.2, h), (k * w * 0.25, d * 0.8, h), 0.4, 'light')
+            self.lamp((0, d * 0.5, h - 1.6), (1.0, 0.76, 0.48) if warm else (0.8, 0.9, 1.0), 650, 0.8)
+            self.floor_line((-w / 2 + 0.3, 0.25), (w / 2 - 0.3, 0.25), 0.3, 'yellow')
+    def wall_lamp(self, loc, rz=0.0, kind='lamp', power=500.0):
+        """Kleine Wandleuchte mit eigener Lichtquelle für die Berechnung (Ursprung an der Wand, zeigt nach -Y)."""
+        col = {'lamp': (1.0, 0.55, 0.2), 'light': (1.0, 0.92, 0.8), 'cool': (0.75, 0.88, 1.0), 'redlamp': (1.0, 0.15, 0.08)}[kind]
+        with self.at(loc, rz):
+            self.box((0.7, 0.3, 0.36), (0, -0.15, -0.18), side='iplain', tint='i_dark', bevel=0.04, bottom=True)
+            self.glow(kind, (0, -0.305, 0), X, Z, 0.56, 0.2); self.lamp((0, -2.2, -0.6), col, power, 0.5)
+    def pad_mark(self, r=16.0, loc=(0, 0, 0), number='1', tint='i_wall_light'):
+        """Stellplatz am Boden: Doppelkreis, Fadenkreuz, Nummer, Bodenlichter, Gebrauchsspuren. Die Nummer liest man von +Y aus."""
+        with self.at(loc):
+            n = 40
+            for i in range(n):
+                a0, a1 = (i + 0.1) / n * TAU, (i + 0.9) / n * TAU
+                self.floor_line((math.cos(a0) * r, math.sin(a0) * r), (math.cos(a1) * r, math.sin(a1) * r), 0.4, tint)
+                if i % 2 == 0: self.floor_line((math.cos(a0) * r * 0.42, math.sin(a0) * r * 0.42), (math.cos(a1) * r * 0.42, math.sin(a1) * r * 0.42), 0.2, 'yellow')
+            for q in range(4):
+                c, s = math.cos(q * TAU / 4 + TAU / 8), math.sin(q * TAU / 4 + TAU / 8)
+                self.floor_line((c * r * 0.5, s * r * 0.5), (c * r * 0.94, s * r * 0.94), 0.25, tint)
+            self.number(number, (0, r * 0.7, 0.012), -X, -Y, 3.4, 'yellow', 0.0)
+            self.decal('soot', (0.5, -0.4, 0.014), X, Y, r * 0.5, r * 0.5, off=0.0); self.decal('stain1', (r * 0.5, r * 0.3, 0.014), X, Y, 6, 6, off=0.0)
+            self.decal('tyre', (-r * 0.4, r * 0.2, 0.014), Y, -X, 5, 12, off=0.0)
+            for i in range(8):
+                a = (i + 0.5) / 8 * TAU; px, py = math.cos(a) * (r + 1.3), math.sin(a) * (r + 1.3)
+                self.tube((px, py, 0), (px, py, 0.06), 0.32, 'iplain', 'i_dark', 10); self.glowbox('cool', (0.3, 0.3, 0.04), (px, py, 0.08))
+    def crane(self, span, loc=(0, 0, 0), trolley=0.2, drop=10.0, tint='orange'):
+        """Brückenkran quer durch die Halle (Brücke entlang x, Oberkante bei z = 0): Träger, Kopfträger, Laufkatze, Seile, Haken."""
+        with self.at(loc):
+            for s in (-1, 1): self.box((span, 0.9, 2.4), (0, s * 1.6, -2.4), side='girder', tint=tint, bevel=0.06, bottom=True)
+            for s in (-1, 1): self.box((2.4, 5.2, 3.0), (s * (span / 2 - 1.2), 0, -3.0), side='siding', tint='i_dark', bevel=0.1, bottom=True)
+            x = trolley * span / 2
+            self.box((4.0, 4.4, 1.6), (x, 0, -3.4), side='itech', tint='i_dark', bevel=0.08, bottom=True); self.box((4.2, 0.2, 0.5), (x, -2.25, -2.9), side='hazard', tint='none', bevel=0.01, bottom=True)
+            for s in (-1, 1): self.tube((x + s * 0.5, 0, -3.4), (x + s * 0.5, 0, -3.4 - drop), 0.05, 'hose', 'black', 6, caps=False)
+            self.box((1.8, 1.0, 1.4), (x, 0, -3.4 - drop - 1.4), side='hazard', tint='none', bevel=0.08, bottom=True)
+            self.glowbox('lamp', (0.3, 0.3, 0.2), (x, 0, -3.55)); self.lamp((x, 0, -5.5), (1.0, 0.6, 0.2), 700, 0.3)
+    def booth(self, w, d, h, loc=(0, 0, 0), rz=0.0, tint='i_wall'):
+        """Leitstand an der Wand (Rückseite bei y = 0, ragt nach -Y vor, Unterkante bei z = 0): Kasten mit Fensterband, Unterlicht, Streben."""
+        with self.at(loc, rz):
+            self.box((w, d, h), (0, -d / 2, 0), side='siding', top='roofing', tint=tint, bevel=0.1, bottom=True)
+            self.box((w - 1.2, 0.2, h * 0.38), (0, -d - 0.02, h * 0.4), side='itrim', tint='i_dark', bevel=0.03, bottom=True)
+            n = max(2, round((w - 1.6) / 2.2)); cw = (w - 1.6) / n
+            for i in range(n): self.glow('screen' if i % 3 == 1 else 'light', (-(w - 1.6) / 2 + cw * (i + 0.5), -d - 0.125, h * 0.59), X, Z, cw - 0.2, h * 0.3)
+            for s in (-1, 1): self.beam((s * (w / 2 - 0.6), -d + 0.3, 0), (s * (w / 2 - 0.6), 0, -d * 0.8), 0.4, 0.4, 'beam', 'i_rib')
+            self.light_bar((-w / 2 + 1, -d * 0.5, 0), (w / 2 - 1, -d * 0.5, 0), 0.3, 'cool'); self.lamp((0, -d - 1.5, h * 0.5), (0.8, 0.9, 1.0), 900, 0.4)
+    def console(self, w=3.0, loc=(0, 0, 0), rz=0.0):
+        """Bedienpult (z. B. Hangar-Terminal): Kasten mit Aufsatz und Bildschirmen (Bedienseite nach -Y)."""
+        with self.at(loc, rz):
+            self.box((w, 0.9, 1.0), side='itech', top='iplain', tint='i_dark', bevel=0.05)
+            self.box((w, 0.5, 0.5), (0, 0.2, 1.0), side='iplain', tint='i_dark', bevel=0.05, bottom=True)
+            for i in range(3): self.glow('screen', ((i - 1) * w / 3, -0.055, 1.25), X, Z, w / 3 - 0.2, 0.34)
+            self.glow('accent', (0, -0.455, 0.2), X, Z, w - 0.4, 0.05)
+            self.block_rect(-w / 2 - 0.1, -0.6, w / 2 + 0.1, 0.6)
+
+    for f in (wall_open, buttress, alcove, wall_lamp, pad_mark, crane, booth, console, wall, floor, ceiling, portal, light_bar, hanging_sign, wall_sign, ad_screen, floor_strip, floor_line, duct, shop_bay, shutter, vending, kiosk, lockers, sdoor, panel_i,
               bench, plant, planter, bin, stanchion, dais):
         setattr(K, f.__name__, f)
     # Ladenplätze sammeln

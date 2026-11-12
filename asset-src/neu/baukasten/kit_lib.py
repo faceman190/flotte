@@ -34,6 +34,8 @@ TINT = {   # linear; im Bild wirken die Werte deutlich heller (0,06 ist ein dunk
     # Innenräume
     'i_wall': (0.12, 0.125, 0.14), 'i_wall_light': (0.3, 0.31, 0.33), 'i_dark': (0.045, 0.048, 0.055), 'i_floor': (0.2, 0.205, 0.215), 'i_floor_dark': (0.085, 0.09, 0.1),
     'i_ceil': (0.05, 0.053, 0.06), 'i_rib': (0.075, 0.08, 0.09), 'i_red': (0.3, 0.06, 0.04), 'i_fabric': (0.1, 0.16, 0.2), 'i_leaf': (0.05, 0.2, 0.06), 'i_soil': (0.05, 0.035, 0.025),
+    # Hangar
+    'h_sand': (0.2, 0.17, 0.12), 'h_wall': (0.1, 0.105, 0.1), 'h_dark': (0.05, 0.053, 0.058), 'h_floor': (0.06, 0.063, 0.068), 'h_olive': (0.11, 0.12, 0.08),
 }
 GLOW = {'kit_light': (1.0, 0.93, 0.8), 'kit_lamp': (1.0, 0.55, 0.12), 'kit_redlamp': (1.0, 0.1, 0.05), 'kit_screen': (0.2, 0.6, 0.9), 'kit_green': (0.2, 1.0, 0.4),
         'kit_accent': (0.25, 0.85, 0.75), 'kit_cool': (0.75, 0.88, 1.0)}      # kit_accent: im Spiel die Akzentfarbe der Station
@@ -63,7 +65,7 @@ class Kit:
         self.ovl = self.bm.faces.layers.int.new('overlay'); self._ov = 0      # aufgesetzte Flächen (Kacheln, Aufkleber, Markierungen): verdecken nichts
         self.mats = []; self.stack = [Matrix.Identity(4)]; self.R = random.Random(seed); self.lights = []
         # Lichtkarte: große Flächen bekommen ein eigenes Feld (chart) im zweiten Satz Texturkoordinaten; alles Übrige trägt sein Licht in den Eckfarben
-        self.uv1 = self.bm.loops.layers.uv.new('Lightmap'); self.chl = self.bm.faces.layers.int.new('chart'); self.charts = []; self.lm = False
+        self.uv1 = self.bm.loops.layers.uv.new('Lightmap'); self.chl = self.bm.faces.layers.int.new('chart'); self.charts = []; self.lm = False; self.lm_min = 2.5      # lm_min: Flächen ab so vielen m² bekommen ein eigenes Feld
         self.lamps = []; self.blocks = []       # zusätzliche Lichtquellen für die Berechnung; Standflächen (nicht begehbar) fürs Spiel
 
     # ------------------------------------------------------------ Grundlagen
@@ -109,7 +111,7 @@ class Kit:
         bl, br, tl = V(bl), V(br), V(tl); du, dv = br - bl, tl - bl; L, H = du.length, dv.length
         if L < 1e-5 or H < 1e-5: return
         nu = max(1, math.ceil(L / seg - 1e-6)); ch = 0
-        if self.lm and not self._ov and L * H >= 2.5 and min(L, H) >= 0.7:
+        if self.lm and not self._ov and L * H >= self.lm_min and min(L, H) >= 0.7:
             sc = (self.M.to_3x3() @ du).length / L                      # Maßstab der aktuellen Verschiebung (fast immer 1)
             self.charts.append((L * sc, H * sc)); ch = len(self.charts)
         for name, h0, h1, fit in bands(strip, H):
@@ -277,14 +279,17 @@ class Kit:
             self.surf((xa, y0, za), (xa, y1, za), (xb, y0, zb), top if up > 0.3 else side, (tint_top or tint) if up > 0.3 else tint, seg)
         if caps[0]: self.cap(prof, y0, True, cap_strip, tint)
         if caps[1]: self.cap(prof, y1, False, cap_strip, tint)
-    def slab(self, sx, sy, h, loc=(0, 0, 0), tint='concrete', cell=4.0, mat='kit_concrete', uvm=4.0):
+    def slab(self, sx, sy, h, loc=(0, 0, 0), tint='concrete', cell=4.0, mat='kit_concrete', uvm=4.0, holes=()):
         """Bodenplatte mit eigenem Kachelmaterial (Beton): Texturkoordinaten in Metern / uvm, Oberseite in Felder geteilt."""
-        loc = V(loc); nx, ny = max(1, round(sx / cell)), max(1, round(sy / cell)); t = T(tint)
+        loc = V(loc); nx, ny = max(1, round(sx / cell)), max(1, round(sy / cell)); t = T(tint); ch = 0
+        if self.lm and not self._ov: self.charts.append((sx, sy)); ch = len(self.charts)      # die ganze Oberseite ist ein Feld der Lichtkarte
         with self.at(loc):
             for i in range(nx):
                 for j in range(ny):
                     x0, x1, y0, y1 = -sx / 2 + sx * i / nx, -sx / 2 + sx * (i + 1) / nx, -sy / 2 + sy * j / ny, -sy / 2 + sy * (j + 1) / ny
-                    self.poly(((x0, y0, h), (x1, y0, h), (x1, y1, h), (x0, y1, h)), ((x0 / uvm, y0 / uvm), (x1 / uvm, y0 / uvm), (x1 / uvm, y1 / uvm), (x0 / uvm, y1 / uvm)), t, mat)
+                    if any(q[0] < (x0 + x1) / 2 < q[2] and q[1] < (y0 + y1) / 2 < q[3] for q in holes): continue      # Aussparung (dort liegt ein anderer Belag)
+                    st = ((i / nx, j / ny), ((i + 1) / nx, j / ny), ((i + 1) / nx, (j + 1) / ny), (i / nx, (j + 1) / ny)) if ch else None
+                    self.poly(((x0, y0, h), (x1, y0, h), (x1, y1, h), (x0, y1, h)), ((x0 / uvm, y0 / uvm), (x1 / uvm, y0 / uvm), (x1 / uvm, y1 / uvm), (x0 / uvm, y1 / uvm)), t, mat, ch, st)
             for (ax, ay), (bx, by) in (((-sx / 2, -sy / 2), (sx / 2, -sy / 2)), ((sx / 2, -sy / 2), (sx / 2, sy / 2)), ((sx / 2, sy / 2), (-sx / 2, sy / 2)), ((-sx / 2, sy / 2), (-sx / 2, -sy / 2))):
                 L = math.hypot(bx - ax, by - ay)
                 self.poly(((ax, ay, -0.3), (bx, by, -0.3), (bx, by, h), (ax, ay, h)), ((0, 0), (L / uvm, 0), (L / uvm, (h + 0.3) / uvm), (0, (h + 0.3) / uvm)), t, mat)

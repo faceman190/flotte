@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { scene, camera, view, ux, gl, setExposure, ambient, rim } from '../core/engine';
+import { scene, camera, view, ux, gl, setExposure, ambient, rim, sun } from '../core/engine';
 import { texMat, std, boxUV, lightmapTex, WHITE_TEX } from '../core/textures';
 import { keys, mouse } from '../core/input';
 import { rng, hashStr, clamp, fmtN } from '../core/util';
@@ -160,11 +160,23 @@ function buildPerson(suit: number, skin: number, hair: number, badge: number, ro
 // Boden und Wände nehmen die Farbe der Station, die Akzentfarbe folgt dem Stationstyp, Leuchtflächen strahlen von selbst.
 // Oberflächen: tex/hangar_floor, hangar_wall, hangar_metal, hangar_paint (scripts/make-hangar-tex.mjs). Fehlt das Modell, entsteht der frühere Hangar.
 const HANGAR_LIGHT = 5;   // Stärke des vorberechneten Lichts
+// Seit Alpha 0.68 ist der Hangar ein Baukasten-Modell (asset-src/neu/station/hangar_kit.py): Materialien und Licht kommen dann aus src/models/kit.ts,
+// Standflächen aus data/kit_Hangar.json. Der Zweig darunter gilt nur noch für das frühere Modell ohne Baukasten-Angaben.
+const HANGAR_KIT_LIGHT = 3.4;
+let kitHangar = false;
 function addHangarModel(parent: THREE.Object3D, pal: { accent: number; wall: number; floor: number }) {
   const tpl = stationTemplate('Hangar');
+  kitHangar = false;
   if (!tpl) return false;
   const body = tpl.clone(true);
   body.children[0].position.set(0, 0, 0);
+  if (kitMeta('Hangar').blocks) {
+    applyKit(body, { lightmap: 'hangar_lightmap', intensity: HANGAR_KIT_LIGHT, accent: pal.accent });
+    body.traverse((o: any) => { if (o.isMesh) o.userData.shared = true; });
+    parent.add(body);
+    kitHangar = true;
+    return true;
+  }
   const LM = lightmapTex('hangar_lightmap');
   // ohne Lichtbild (Datei fehlt) bekommen die Flächen ein schwaches Eigenleuchten, damit die Halle nicht schwarz bleibt
   const fill = (c: number) => (LM ? 0x000000 : new THREE.Color(c).multiplyScalar(0.3).getHex());
@@ -219,16 +231,17 @@ const PROM_LIGHT = 2.0;   // Stärke des vorberechneten Lichts
 let hasProm = false;
 // In Korridor und Promenade trägt das vorberechnete Licht: Grundlicht und Gegenlicht des Spiels werden dort zurückgenommen (0 = Hangar, 1 = Halle)
 const RIM_IN = new THREE.Color(0x4a4640), rimOut = new THREE.Color();
-let ambIn = 0, zoneT = -1, ambSet = -1;
+let ambIn = 0, sunIn = 0, zoneT = -1, ambSet = -1;
 function zoneLight() {
-  if (!hasProm || room) return;
-  if (ambSet >= 0 && Math.abs(ambient.intensity - ambSet) > 1e-5) { ambIn = ambient.intensity; zoneT = -1; }   // die Belichtung wurde von außen neu gesetzt
-  const t = Math.min(1, Math.max(0, (HZ0 + 1 - IN.z) / (CL - 2)));
+  if (!(hasProm || kitHangar) || room) return;
+  if (ambSet >= 0 && Math.abs(ambient.intensity - ambSet) > 1e-5) { ambIn = ambient.intensity; sunIn = sun.intensity; zoneT = -1; }   // die Belichtung wurde von außen neu gesetzt
+  const t = kitHangar ? 1 : Math.min(1, Math.max(0, (HZ0 + 1 - IN.z) / (CL - 2)));      // Baukasten-Hangar: überall vorberechnetes Licht
   if (Math.abs(t - zoneT) < 0.002) return;
   zoneT = t;
   ambient.intensity = ambSet = ambIn * (1 - 0.8 * t);
+  sun.intensity = sunIn * (1 - 0.62 * t);
   rim.color.copy(rimOut).lerp(RIM_IN, t);
-  lamps[0].intensity = Math.PI * 0.5 * (1 - 0.7 * t);
+  lamps[0].intensity = kitHangar ? Math.PI * 0.1 : Math.PI * 0.5 * (1 - 0.7 * t);      // im Hangar beleuchtet diese Lampe vor allem die Schiffe
 }
 function promMeta() { const m = kitMeta('Promenade'); return stationTemplate('Promenade') && m.slots && m.dims ? m : null; }
 function addPromModel(parent: THREE.Object3D, accent: number) {
@@ -313,7 +326,7 @@ function build(st: Station) {
       block(x - 1.5, x + 1.5, z + 4.5, z + 7.5);
     }
   }
-  } else for (const b of HANGAR_BLOCKS) block(b[0], b[1], b[2], b[3]);   // Requisiten des Modells
+  } else for (const b of (kitHangar ? kitMeta('Hangar').blocks! : HANGAR_BLOCKS)) block(b[0], b[1], b[2], b[3]);   // Requisiten des Modells
   // Hangar-Terminal mit Deckmeister
   const nm = [...NAMES].sort(() => R.next() - 0.5);
   {
@@ -601,7 +614,7 @@ export function enterInterior(st: Station) {
   const lp: [number, number, number, number, number][] = [[0, HH - 4, PADZ, 280, 0.5], [0, dims.h - 1.4, (PZ0 + PZ1) / 2, 75, hasProm ? 0.3 : 0.5], [0, CH - 0.5, HZ0 - CL / 2, 22, hasProm ? 0.16 : 0.36]];
   setExposure(0.2);
   lamps.forEach((l, i) => { group!.localToWorld(l.position.set(lp[i][0], lp[i][1], lp[i][2])); l.distance = lp[i][3]; l.intensity = lp[i][4] * L; });
-  ambIn = ambient.intensity; rimOut.copy(rim.color); zoneT = -1; ambSet = -1;
+  ambIn = ambient.intensity; sunIn = sun.intensity; rimOut.copy(rim.color); zoneT = -1; ambSet = -1;
   refreshHangarShips();
   // Neben dem Schiff aussteigen, Blick zur Tür
   const hw = (shipObs[0][1] - shipObs[0][0]) / 2;
@@ -616,7 +629,7 @@ export function enterInterior(st: Station) {
 export function leaveInterior() {
   if (room) leaveShip();
   if (!IN.active) return;
-  if (hasProm && zoneT >= 0) rim.color.copy(rimOut);
+  if ((hasProm || kitHangar) && zoneT >= 0) rim.color.copy(rimOut);
   if (document.pointerLockElement === gl) document.exitPointerLock();
   disposeParked();
   clearOthers();

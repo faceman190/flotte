@@ -90,3 +90,21 @@ Für begehbare Stationen gibt es ein zweites Texturblatt, Leuchtschilder und eig
   `kit_sign`) nehmen die Akzentfarbe der Station. In Korridor und Halle nimmt `zoneLight()` (src/game/interior.ts) Grund- und Gegenlicht des
   Spiels zurück, damit das vorberechnete Licht trägt. Ladenplätze, Standflächen und Maße liest das Spiel aus `data/kit_Promenade.json`.
 - **Nach einer Dateiöffnung in Blender** erst im nächsten Aufruf rechnen lassen: Direkt danach fehlt das Fenster, das die Berechnung braucht.
+
+## Hangar (ab Alpha 0.68)
+
+Der Hangar aller Stationen ist ebenfalls ein Baukasten-Modell: `asset-src/neu/station/hangar_kit.py` + `Hangar_Kit.blend` → `asset-src/glb/station/Hangar.glb`,
+Lichtkarte `asset-src/tex/hangar_lightmap@2048.png`. Maße wie im Spiel (184 × 162 × 42 m, Tor 124 × 32 m, drei Stellplätze).
+
+- **Neue Teile für große Hallen** (kit_interior.py): `wall_open` (Wand mit Öffnungen), `buttress` (Wandpfeiler mit Lampen), `alcove` (Frachtnische hinter der
+  Wand), `wall_lamp`, `pad_mark` (Stellplatz), `crane` (Brückenkran), `booth` (Leitstand), `console` (Bedienpult). `slab(..., holes=[...])` spart Felder
+  der Bodenplatte aus, wenn dort ein anderer Belag liegt.
+- **Aufbau:** Wände in fünf Zonen (Sockel, Trägerband, Lamellen, Farbband, obere Paneele), sieben Pfeiler je Seite, drei Frachtnischen je Seite,
+  Laufstege, Rohre, Deckenträger mit Brückenkran, Leitstand über der Tür, Torwand mit Warnlicht.
+- **Frei bleiben müssen** (steht auch im Kopf des Skripts): die Stellplätze, die Flugbahn zum Tor, der Streifen hinter dem mittleren Stellplatz
+  (Story-Figuren) und die Laufwege der Passanten bei x = ±86, y = 40, y = 42 und y = −90.
+- **Lichtkarte:** Die Halle ist groß, deshalb bekommen nur Flächen ab 14 m² ein eigenes Feld (`K.lm_min`); es bleiben knapp 5 Bildpunkte je Meter.
+- **Flächen nie fast deckungsgleich legen:** Zwei Beläge mit wenigen Millimetern Abstand flimmern aus der Ferne. Entweder die untere Fläche aussparen
+  (`holes`) oder mindestens 2 bis 3 cm Abstand lassen (Bodenlinien liegen deshalb bei 2 cm).
+- **Im Spiel:** `addHangarModel()` in src/game/interior.ts erkennt das Baukasten-Modell an `data/kit_Hangar.json` und nimmt Standflächen von dort.
+  Im ganzen Innenraum sind dann Grund-, Sonnen- und Gegenlicht des Spiels zurückgenommen (`zoneLight`), damit das berechnete Licht trägt.
