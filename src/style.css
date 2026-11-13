@@ -21,6 +21,12 @@ canvas{display:block;position:fixed;inset:0}
    skalierten Bildschirmen (Windows 125 %, 150 %) größer als das Fenster: Anzeige versetzt, Ränder abgeschnitten. */
 #gl,#ui{width:100%;height:100%}
 #ui{pointer-events:none}
+/* Leistungsanzeige (F3) */
+#perf{position:fixed;left:8px;top:96px;z-index:9000;pointer-events:none;width:min(560px,calc(100% - 16px));padding:8px 10px;background:rgba(2,6,10,.84);border:1px solid rgba(95,208,255,.45);border-radius:6px;font:13px/1.45 Consolas,'Courier New',monospace;color:#d8e6f0}
+#perf .pfT{color:#5fd0ff;letter-spacing:.06em;margin-bottom:4px}
+#perf .pfR{display:flex;gap:10px}
+#perf .pfR>span:first-child{flex:0 0 118px;color:#8aa0b0}
+#perf i{color:#ffd27a;font-style:normal}
 body.playing #gl{cursor:none}
 .hidden{display:none!important}
 .amb{color:var(--amb)}.good{color:var(--grn)}.bad{color:var(--bad)}.vio{color:var(--vio)}.acc{color:var(--acc)}

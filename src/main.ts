@@ -5,6 +5,7 @@ import { camera, render, scene, aimShadows, markShadows, gl } from './core/engin
 import { updateSky, sunDir, sky } from './core/sky';
 import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience';
 import { ux } from './core/engine';
+import { perfFrameStart, perfFrameEnd, perfHooks } from './core/perf';
 import { onKey, centerMouse, releaseAll, keys, look } from './core/input';
 import { ambience, preloadSfx, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode, sfx, sfxHeld, loopVol } from './core/audio';
 import { rand, clamp, $ } from './core/util';
@@ -580,6 +581,7 @@ function loop(now: number, manual = false) {
   if (!manual) requestAnimationFrame(t => loop(t));      // zuerst das nächste Bild anmelden: Ein Fehler weiter unten beendet die Schleife nicht
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
+  perfFrameStart();
   simulate(dt);
   hook('Vorspann', () => updateIntro(dt));
   hook('Geschichte', () => updateStory(dt));
@@ -651,7 +653,14 @@ function loop(now: number, manual = false) {
   if (G.mode === 'map') drawBand();
   updateControls(dt, settings.hud);
   netUpdate(dt);
+  perfFrameEnd();
 }
+// Leistungsanzeige (F3): wo der Spieler gerade ist
+perfHooks.where = () => {
+  const sec = world.def ? (world.def as any).name || (world.def as any).id : 'kein Sektor';
+  const at = DUN.active ? 'unter Tage/Wrack' : IN.active ? (IN.ship ? 'im Schiff · ' : 'Station · ') + (IN.station ? IN.station.name + ' · ' : '') + IN.area : CITY.walk ? 'Stadt zu Fuß · ' + CITY.name : CITY.st ? 'Stadt im Flug · ' + CITY.name : world.surface ? 'Oberfläche' : 'Weltraum';
+  return `${sec} · ${at} · ${G.mode}`;
+};
 
 // Nur im Entwicklungsmodus: Zugriff für Tests über die Browser-Konsole
 if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterShip, SHIP, enterSector, startJump, openDock, undock, openMap, closeMap, gateTo, stationById, placePlayer, audioDebug, sunDir, IN, showMenu, closeMenu, interact, enterSurface, startEntry, ROVER, sim: (sec: number) => { for (let i = 0; i < sec * 60; i++) simulate(1 / 60); },
