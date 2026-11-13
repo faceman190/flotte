@@ -26,7 +26,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     const ask = tradeAsk(), near = isOnline() ? nearestOther() : null;
     if (ask) r.push(['T', `Handelsanfrage von ${ask}`, true]);
     else if (near) r.push(['T', `Handel mit ${near.name} anbieten`, true]);
-    r.push(['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['Leertaste', 'Springen'], ['V', 'Ich-Sicht / Außensicht']);
+    r.push(['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['Leertaste', 'Springen'], ['C', 'Ducken'], ['V', 'Ich-Sicht / Außensicht']);
     if (IN.station && !IN.ship) r.push(['Tab', 'Stationsmenü']);
     r.push(['I', 'Ausrüstung'], ['B', 'Flottenband'], ['M', 'Karte'], ['Esc', 'Menü']);
     return { title: IN.ship ? `An Bord · ${IN.area}` : `Zu Fuß · ${IN.area}`, rows: r };
@@ -34,14 +34,14 @@ function rowsFor(): { title: string; rows: Row[] } | null {
   if ((m as string) === 'dungeon') {
     const r: Row[] = [];
     if (DUN.prompt) r.push(['E', DUN.prompt, true]);
-    r.push(['Klick', 'Schießen'], ['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['V', 'Ich-Sicht / Außensicht'], ['I', 'Ausrüstung'], ['Esc', 'Menü']);
+    r.push(['Klick', 'Schießen'], ['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['C', 'Ducken'], ['V', 'Ich-Sicht / Außensicht'], ['I', 'Ausrüstung'], ['Esc', 'Menü']);
     return { title: DUN.e ? DUN.e.name : 'Mine', rows: r };
   }
   if (m === 'rover' && FOOT.active) {
     const r: Row[] = [];
     if (FOOT.prompt) r.push(['E', FOOT.prompt, true]);
     if (FOOT.act === 'rover') r.push(['F', 'In den Rover steigen', true]);
-    r.push(['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['Leertaste', 'Springen'], ['V', 'Ich-Sicht / Außensicht'], ['I', 'Ausrüstung'], ['B', 'Flottenband'], ['Esc', 'Menü']);
+    r.push(['W A S D', 'Laufen'], ['Umschalt', 'Rennen'], ['Leertaste', 'Springen'], ['C', 'Ducken'], ['V', 'Ich-Sicht / Außensicht'], ['I', 'Ausrüstung'], ['B', 'Flottenband'], ['Esc', 'Menü']);
     return { title: 'Zu Fuß', rows: r };
   }
   if (m === 'rover') {

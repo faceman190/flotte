@@ -10,7 +10,7 @@ import { updateFlora, treeNear } from './flora';
 import { gearFactor } from './inventory';
 import { radio } from '../ui/radio';
 import { nearEntrance } from './dungeon';
-import { VIEW, syncAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
+import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
 import { viewModelId } from './mineArt';
 
 // =====================================================================================
@@ -24,7 +24,6 @@ export const FOOT = {
   locked: false, act: '' as '' | 'rover' | 'ship' | 'mine', prompt: '', warn: 0,
 };
 export const footHooks = { unlock: () => {} };
-const EYE = 1.7;
 let me: Avatar | null = null, stepT = 0, grabT = 0;
 
 const shipR = () => stats().radius * 0.75 + 0.8;
@@ -86,7 +85,7 @@ export function updateFoot(dt: number) {
   if (keys.ArrowRight) FOOT.yaw -= 2 * dt;
   // Laufen (wie in der Mine): weich anlaufen, an Hindernissen entlanggleiten
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
-  const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run ? 6.4 : 4.2) * gearFactor('tempo') / Math.hypot(f, s) : 0;
+  const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run && !STANCE.crouch ? 6.4 : 4.2) * crouchK() * gearFactor('tempo') / Math.hypot(f, s) : 0;
   const sy = Math.sin(FOOT.yaw), cy = Math.cos(FOOT.yaw), k = Math.min(1, dt * (f || s ? (FOOT.jy > 0 ? 2 : 10) : (FOOT.jy > 0 ? 1 : 13)));
   FOOT.vx += ((-sy * f + cy * s) * sp - FOOT.vx) * k; FOOT.vz += ((-cy * f - sy * s) * sp - FOOT.vz) * k;
   const ox = FOOT.x, oz = FOOT.z, dx = FOOT.vx * dt, dzz = FOOT.vz * dt;
@@ -117,14 +116,14 @@ export function updateFoot(dt: number) {
   if (VIEW.tp) me = syncAvatar(scene, me, P.gear || {});
   if (me) {
     me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe) });
+    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05 });
   }
 }
 
 const _c = new THREE.Vector3();
 export function footCamera(dt: number) {
   if (VIEW.tp && me) tpCamPos(_c, FOOT.x, FOOT.y + FOOT.jy, FOOT.z, FOOT.yaw, FOOT.pitch, (x, y, z) => y > terrainAt(x, z) + 0.3 && !(ROVER.model && Math.hypot(x - ROVER.x, z - ROVER.z) < 2.2) && !treeNear(x, z, 1.1), dt);
-  else _c.set(FOOT.x, FOOT.y + FOOT.jy + EYE + FOOT.bob, FOOT.z);
+  else _c.set(FOOT.x, FOOT.y + FOOT.jy + eyeH() + FOOT.bob, FOOT.z);
   camera.position.copy(_c);
   camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch, FOOT.yaw, 0);
   if (Math.abs(camera.fov - 72) > 0.05) { camera.fov = 72; camera.updateProjectionMatrix(); }

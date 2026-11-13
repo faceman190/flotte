@@ -8,31 +8,37 @@ import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, type SoldierV
 //  - Laufen: Überblendung nach Laufrichtung relativ zum Körper (vor, vor-links, links, …, zurück). Alle Laufclips laufen
 //    im selben Schrittzyklus (Phase), die Phase rückt nach Tempo ÷ Schrittlänge vor: die Füße rutschen nicht.
 //  - Stehen: Gewehr gesenkt (idle); nach einem Schuss einige Sekunden im Anschlag (aim).
-//  - Schießen: Oberkörper-Ebene aus dem Clip fire. Tod: death_f / death_b.
+//  - Gangarten walk / run / sprint (je 8 Richtungen) nach Tempo, geduckt crouch_* (Taste C, STANCE.crouch), Sprung: jump.
+//  - Schießen: Oberkörper-Ebene aus dem Clip fire. Tod: death_* (geduckt death_c).
 //  - Drehen im Stand: der Körper folgt dem Blick erst ab einem Winkel, dann mit kleinen Seitschritten; bis dahin dreht der Oberkörper.
 //  - Neigung: Oberkörper neigt sich mit dem Blick nach oben/unten.
 // =====================================================================================
 
 export const VIEW = { tp: false, dist: 2.3 };                 // tp: Außensicht (Taste V, überall zu Fuß)
 try { VIEW.tp = localStorage.getItem('lf_tp') === '1'; } catch (e) { /* ohne Speicher: Ich-Sicht */ }
+// Haltung zu Fuß: geduckt (Taste C) – langsamer, niedrigere Augenhöhe, eigene Clips
+export const STANCE = { crouch: false };
+export const crouchK = () => (STANCE.crouch ? 0.45 : 1);
+export const eyeH = () => (STANCE.crouch ? 1.12 : 1.7);
+export function toggleCrouch() { STANCE.crouch = !STANCE.crouch; }
 export function toggleView() { VIEW.tp = !VIEW.tp; try { localStorage.setItem('lf_tp', VIEW.tp ? '1' : '0'); } catch (e) { /* egal */ } }
 
 const UPPER = /^(spine_02|spine_03|neck_01|head|clavicle_|upperarm_|lowerarm_|hand_|thumb_|index_|middle_|ring_|pinky_)/;
-const MAX_CAD = 1.9;                                           // höchstens so viele Schrittzyklen je Sekunde (darüber würde es hektisch)
+const MAX_CAD = 2.3;                                           // höchstens so viele Schrittzyklen je Sekunde (darüber würde es hektisch)
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const wrap2 = (a: number) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
 type A = THREE.AnimationAction;
 interface Loco { a: A; ang: number; stride: number; ph: number; dur: number; speed: number }
 interface Gait { L: Loco[]; speed: number }                     // Gangart: walk_* oder run_* (Clipnamen), mittleres Tempo
 export interface Avatar {
-  s: SoldierVis; ready: boolean; gaits: Gait[]; idle?: A; aim?: A; upAim?: A; upFire?: A; death: A[]; dying: A | null;
+  s: SoldierVis; ready: boolean; gaits: Gait[]; cgait: Gait | null; idle?: A; aim?: A; cidle?: A; caim?: A; jump?: A; upAim?: A; upFire?: A; death: A[]; cdeath?: A; dying: A | null; cw: number; airW: number;
   body: number; phase: number; aimW: number; fireW: number; fireT: number; aimT: number; turning: number; first: boolean;
 }
-export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean }
+export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean }
 
 export function makeAvatar(gear: { helm?: string; anzug?: string; rucksack?: string }): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
-  return { s, ready: false, gaits: [], death: [], dying: null, body: 0, phase: 0, aimW: 0, fireW: 0, fireT: 0, aimT: 0, turning: 0, first: true };
+  return { s, ready: false, gaits: [], cgait: null, death: [], dying: null, cw: 0, airW: 0, body: 0, phase: 0, aimW: 0, fireW: 0, fireT: 0, aimT: 0, turning: 0, first: true };
 }
 // Figur im Halter halten; bei geänderter Ausrüstung (Helm, Anzug, Rucksack) neu bauen
 export function syncAvatar(holder: THREE.Object3D, a: Avatar | null, gear: { helm?: string; anzug?: string; rucksack?: string }) {
@@ -54,16 +60,23 @@ function setup(a: Avatar) {
     x.timeScale = 0;                                          // Zeit setzt driveAvatar selbst (gemeinsame Phase)
     (by[n.split('_')[0]] ||= []).push({ a: x, ang: Math.atan2(cm.dir[1], cm.dir[0]), stride: cm.stride || 1, ph: cm.phase || 0, dur: x.getClip().duration, speed: cm.speed });
   }
-  for (const L of Object.values(by)) { L.sort((p, q) => p.ang - q.ang); a.gaits.push({ L, speed: L.reduce((t, l) => t + l.speed, 0) / L.length }); }
+  for (const [k, L] of Object.entries(by)) {
+    L.sort((p, q) => p.ang - q.ang);
+    const g = { L, speed: L.reduce((t, l) => t + l.speed, 0) / L.length };
+    if (k === 'crouch') a.cgait = g; else a.gaits.push(g);
+  }
   a.gaits.sort((p, q) => p.speed - q.speed);
-  a.idle = act('idle', 1); a.aim = act('aim');
+  a.idle = act('idle', 1); a.aim = act('aim'); a.cidle = act('cidle'); a.caim = act('caim'); a.jump = act('jump');
   const sub = (n: string) => {
     const c = find(n); if (!c) return undefined;
     const x = m.clipAction(new THREE.AnimationClip(n + '_oben', c.duration, c.tracks.filter(t => UPPER.test(t.name))));
     x.play(); x.setEffectiveWeight(0); return x;
   };
   a.upAim = sub('aim'); a.upFire = sub('fire');
-  for (const n of ['death_f', 'death_b']) { const c = find(n); if (!c) continue; const x = m.clipAction(c); x.setLoop(THREE.LoopOnce, 1); x.clampWhenFinished = true; a.death.push(x); }
+  for (const n of ['death_f', 'death_b', 'death_r', 'death_h', 'death_c']) {
+    const c = find(n); if (!c) continue; const x = m.clipAction(c); x.setLoop(THREE.LoopOnce, 1); x.clampWhenFinished = true;
+    if (n === 'death_c') a.cdeath = x; else a.death.push(x);
+  }
   a.ready = true;
 }
 
@@ -95,36 +108,44 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
     const fw = -sy * d.vx - cy * d.vz, rt = cy * d.vx - sy * d.vz;
     let move = clamp(spd / 0.5, 0, 1), ang = Math.atan2(rt, fw), cad = spd;
     if (a.turning && spd < 0.4) { move = Math.max(move, 0.55); ang = a.turning > 0 ? -Math.PI / 2 : Math.PI / 2; cad = 1.1; }
-    // Gangarten (Gehen, später Rennen) nach Tempo überblenden; je Gangart die zwei Richtungsclips neben der Laufrichtung
+    // Stehend: Gangarten (Gehen, Rennen, Sprinten) nach Tempo; geduckt: crouch. Je Gangart die zwei Richtungsclips neben der Laufrichtung.
+    a.cw += ((d.crouch && a.cgait ? 1 : 0) - a.cw) * Math.min(1, dt * 7);
+    a.airW += ((d.air && a.jump ? 1 : 0) - a.airW) * Math.min(1, dt * (d.air ? 9 : 6));
     const G = a.gaits, gw = G.map(() => 0);
     if (G.length === 1) gw[0] = 1;
     else if (G.length > 1) {
       let j = 0; while (j < G.length - 2 && cad > G[j + 1].speed) j++;
       const u = clamp((cad - G[j].speed) / Math.max(0.1, G[j + 1].speed - G[j].speed), 0, 1); gw[j] = 1 - u; gw[j + 1] = u;
     }
+    const sets: [Gait, number][] = G.map((g, i) => [g, gw[i] * (1 - a.cw)] as [Gait, number]);
+    if (a.cgait) sets.push([a.cgait, a.cw]);
     const W = new Map<Loco, number>();
     let stride = 0;
-    G.forEach((g, gi) => {
+    for (const [g, gwt] of sets) {
       const L = g.L, n = L.length; let i0 = 0, i1 = 0, t = 0;
       if (n > 1) for (let i = 0; i < n; i++) {
         const p = L[i], q = L[(i + 1) % n], span = wrap2(q.ang - p.ang) || Math.PI * 2, off = wrap2(ang - p.ang);
         if (off <= span) { i0 = i; i1 = (i + 1) % n; t = off / span; break; }
       }
-      L.forEach((l, k) => W.set(l, ((k === i0 ? 1 - t : 0) + (k === i1 ? t : 0)) * gw[gi]));
-      if (n) stride += (L[i0].stride * (1 - t) + L[i1].stride * t) * gw[gi];
-    });
+      L.forEach((l, k) => W.set(l, ((k === i0 ? 1 - t : 0) + (k === i1 ? t : 0)) * gwt));
+      if (n) stride += (L[i0].stride * (1 - t) + L[i1].stride * t) * gwt;
+    }
     a.phase = (a.phase + dt * Math.min(cad / Math.max(0.3, stride || 1), MAX_CAD)) % 1;
-    const live = d.dead ? 0 : 1;
-    for (const [l, w] of W) { l.a.setEffectiveWeight(move * w * live); l.a.time = ((a.phase + l.ph) % 1) * l.dur; }
+    const live = d.dead ? 0 : 1, ground = 1 - a.airW;
+    for (const [l, w] of W) { l.a.setEffectiveWeight(move * w * live * ground); l.a.time = ((a.phase + l.ph) % 1) * l.dur; }
+    a.jump?.setEffectiveWeight(a.airW * live);
     // Stehen und Anschlag
     a.aimW += ((combat ? 1 : 0) - a.aimW) * Math.min(1, dt * 5);
-    a.idle?.setEffectiveWeight((1 - move) * (1 - a.aimW) * live);
-    a.aim?.setEffectiveWeight((1 - move) * a.aimW * live);
+    const st = (1 - move) * live * ground, cs = a.cidle ? a.cw : 0;
+    a.idle?.setEffectiveWeight(st * (1 - a.aimW) * (1 - cs));
+    a.aim?.setEffectiveWeight(st * a.aimW * (1 - cs));
+    a.cidle?.setEffectiveWeight(st * (1 - a.aimW) * cs);
+    a.caim?.setEffectiveWeight(st * a.aimW * cs);
     a.upAim?.setEffectiveWeight(move * a.aimW * 2.5 * live);
     a.fireW += ((a.fireT > 0 ? 1 : 0) - a.fireW) * Math.min(1, dt * 14);
     a.upFire?.setEffectiveWeight(a.fireW * 3 * live);
     // Tod
-    if (d.dead && !a.dying && a.death.length) { a.dying = a.death[Math.floor(Math.random() * a.death.length)]; a.dying.reset().setEffectiveWeight(1).play(); }
+    if (d.dead && !a.dying && a.death.length) { a.dying = d.crouch && a.cdeath ? a.cdeath : a.death[Math.floor(Math.random() * a.death.length)]; a.dying.reset().setEffectiveWeight(1).play(); }
     if (!d.dead && a.dying) { a.dying.stop(); a.dying = null; }
   }
   s.mixer.update(dt);
@@ -150,7 +171,7 @@ export function tpCamPos(out: THREE.Vector3, x: number, y: number, z: number, ya
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
   const fx = -sy * cp, fy = sp, fz = -cy * cp;
   let side = 0.45, px = x + cy * side, pz = z - sy * side;
-  const py = y + 1.7;
+  const py = y + (STANCE.crouch ? 1.25 : 1.7);
   if (!clear(px, py, pz)) { side = 0; px = x; pz = z; }
   let want = VIEW.dist;
   for (let t = 0.2; t <= VIEW.dist; t += 0.1) if (!clear(px - fx * t, py - fy * t, pz - fz * t)) { want = Math.max(0.3, t - 0.15); break; }

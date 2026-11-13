@@ -68,7 +68,13 @@ def _hips_track(src, f0, f1):
         sc.frame_set(f); out.append(mw @ hb.head)
     return out
 
-def retarget_full(src, name, loop=True, step=1):
+def set_prefix(src):
+    global PF
+    n = src.data.bones[0].name; PF = n.split(':')[0] + ':' if ':' in n else ''
+
+def retarget_full(src, name, loop=True, step=1, hips='abs'):
+    """hips: 'abs' Hüfthöhe absolut (Ducken, Tod), 'feet' relativ zu den Füßen (Sprung: Flughöhe macht das Spiel)."""
+    set_prefix(src)
     arm, _ = rig(); sc = bpy.context.scene
     act_src = src.animation_data.action; f0, f1 = map(int, act_src.frame_range)
     for pb in arm.pose.bones:
@@ -79,9 +85,11 @@ def retarget_full(src, name, loop=True, step=1):
     act = bpy.data.actions.new(name); arm.animation_data_create(); arm.animation_data.action = act
     sm3 = src.matrix_world.to_3x3().normalized(); tm3 = arm.matrix_world.to_3x3().normalized()
     A = alignments(src); sb = src.data.bones; order = list(arm.data.bones)
+    hips_mode = hips
     hips = _hips_track(src, f0, f1); n = len(hips) - 1
     mw = src.matrix_world
     h_rest = (mw @ sb[PF + 'Hips'].head_local).z
+    fz0 = min((mw @ sb[PF + 'LeftFoot'].head_local).z, (mw @ sb[PF + 'RightFoot'].head_local).z)
     tb = arm.data.bones
     hscale = (tb['pelvis'].head_local.z - min(tb['foot_l'].head_local.z, tb['foot_r'].head_local.z)) / max(1e-6, h_rest - min((mw @ sb[PF + 'LeftFoot'].head_local).z, (mw @ sb[PF + 'RightFoot'].head_local).z))
     drift = (hips[-1] - hips[0]); drift.z = 0
@@ -108,7 +116,11 @@ def retarget_full(src, name, loop=True, step=1):
             if b.name == 'pelvis':
                 d = hips[i] - hips[0]
                 if loop: d = d - drift * (i / max(1, n))
-                d = Vector((d.x, d.y, hips[i].z - h_rest)) * hscale
+                if hips_mode == 'feet':
+                    fz = min((mw @ src.pose.bones[PF + 'LeftFoot'].head).z, (mw @ src.pose.bones[PF + 'RightFoot'].head).z)
+                    d = Vector((d.x, d.y, (hips[i].z - fz) - (h_rest - fz0))) * hscale
+                else:
+                    d = Vector((d.x, d.y, hips[i].z - h_rest)) * hscale
                 pb.location = b.matrix_local.to_3x3().inverted() @ (tm3.inverted() @ d)
                 pb.keyframe_insert('location', frame=i + 1)
     act.use_fake_user = True

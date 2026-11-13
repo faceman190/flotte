@@ -121,6 +121,10 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
   Seitschritten nach, bis dahin dreht der Oberkörper; er neigt sich mit dem Blick. Nach einem Schuss (oder mit wachen Wächtern in der Nähe) bleibt die
   Figur im Anschlag; Schießen legt eine Oberkörper-Ebene darüber; in der Mine spielt beim Tod eine Sterbeanimation.
   Helm → einer der 8 Köpfe, Anzug → Rüstungsplatten und Uniformfarbe, Rucksack → Taschen (Figur wird bei Wechsel neu gebaut).
+- **Pro Rifle Pack (Alpha 0.82):** 49 Mixamo-Clips in `asset-src/neu/mixamo/pro_rifle/` (Sammlung `mx_pack`, Armaturen `px_<Name>`). Übertragen:
+  idle, aim, cidle, caim (geduckt), jump (Hüfte relativ zu den Füßen, die Flughöhe macht das Spiel), walk_/run_/sprint_/crouch_ je 8 Richtungen (f, fl, fr, l, r, b, bl, br),
+  death_f/b/r/h, death_c (geduckt); fire weiter aus Firing Rifle. Tempo nach Übertragung: Gehen 1,8, Rennen 4,5, Sprinten 6,75, geduckt 1,9 m/s.
+  Im Spiel: Gangarten nach Tempo überblendet, **Taste C** = ducken (überall zu Fuß: langsamer, Augenhöhe 1,12 m, eigene Clips), Sprung-Clip in der Luft.
 - **Mitspieler (Alpha 0.81):** andere Piloten zu Fuß in derselben Station erscheinen als Soldaten mit denselben Clips. Das Netz schickt im Feld `g`
   ihr Aussehen mit (Helm, Anzug, Rucksack, Waffe; Server bereinigt es), die Laufrichtung ergibt sich aus der nachgeführten Bewegung relativ zu ihrer Blickrichtung.
 - **Taste V** schaltet überall zu Fuß Ich-Sicht ↔ Außensicht (wird im Browser gemerkt). Kamera über der rechten Schulter; sie rückt vor Wänden,
@@ -128,7 +132,7 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
 - **Zu Fuß auf dem Planeten (`src/game/onfoot.ts`):** im Rover **F** = aussteigen (Rover muss stehen), am Rover F oder E = einsteigen.
   Über die Rampe aus dem Schiff steht man zu Fuß hinter dem Schiff. [E] am Schiff = an Bord, an einem Stolleneingang = Mine betreten
   (danach steht man wieder am Eingang). Gelände folgt dem Boden, zu steile Hänge, Wasser/Lava, Lagerstätten, Schiff, Rover und Bäume halten auf.
-- **Noch offen:** Renn-Clips (Rifle Run vor/zurück/seitlich/schräg) – bis dahin rutschen die Füße bei schnellem Tempo (Laufen 4,2–6 m/s, Clips ~1–1,8 m/s);
+- **Noch offen:** in Station/Hangar ist Rennen (10 m/s) schneller als der Sprint-Clip (6,75 m/s), dort rutschen die Füße noch;
   Nachladen, Treffer, Springen als Clip; Hände an der Waffe korrigieren (linke Hand per IK an den Handschutz).
 
 ## Noch offen

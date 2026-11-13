@@ -13,7 +13,7 @@ import { addItem, canAdd, gearStat, gearFactor } from './inventory';
 import { SECTOR } from '../data/galaxy';
 import { PLANETS, PTYPE } from '../data/planets';
 import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
-import { VIEW, makeAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
+import { VIEW, STANCE, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
 
 // =====================================================================================
 // Dungeons auf Planeten: verlassene Minen als Labyrinth.
@@ -24,7 +24,8 @@ import { VIEW, makeAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from
 //    Wächterdrohnen, Kisten mit Beute, Karte, die sich beim Erkunden aufdeckt.
 // Der Dungeon liegt weit unter der Welt (y = -60000), damit von der Oberfläche nichts ins Bild ragt.
 // =====================================================================================
-const TS = 3.2, EYE = 1.62, BASE = new THREE.Vector3(0, -60000, 0);
+const EYE = () => (STANCE.crouch ? 1.08 : 1.62);                       // Augenhöhe (geduckt tiefer)
+const TS = 3.2, BASE = new THREE.Vector3(0, -60000, 0);
 type Vec2 = [number, number];
 interface Entrance { id: string; x: number; y: number; z: number; yaw: number; size: number; name: string }
 interface Crate { tx: number; tz: number; g: THREE.Group; lid: THREE.Object3D; open: boolean; big: boolean; idx: number; a: number; med?: boolean }
@@ -641,13 +642,13 @@ function shoot() {
     // Wand: in kleinen Schritten vorwärts, bis Fels, Boden oder Decke erreicht ist
     let tw = 60;
     for (let t = 0.3; t < 60; t += 0.25) {
-      const lx = DUN.x + d.x * t, ly = EYE + d.y * t, lz = DUN.z + d.z * t;
+      const lx = DUN.x + d.x * t, ly = EYE() + d.y * t, lz = DUN.z + d.z * t;
       if (ly < 0 || ly > 5.4 || solidAt(lx, lz)) { tw = Math.max(0.3, t - (WALL_R > 0.5 ? 0.32 : 0)); break; }
     }
     // Wächter: Kugeltest entlang des Strahls
     let best: Foe | null = null, bt = tw;
     for (const f of DUN.foes) {
-      const ox = f.x - DUN.x, oy = f.y - EYE, oz = f.z - DUN.z, t = ox * d.x + oy * d.y + oz * d.z;
+      const ox = f.x - DUN.x, oy = f.y - EYE(), oz = f.z - DUN.z, t = ox * d.x + oy * d.y + oz * d.z;
       if (t < 0 || t > bt) continue;
       const r = (f.boss ? 0.8 : 0.48), px = ox - d.x * t, py = oy - d.y * t, pz = oz - d.z * t;
       if (px * px + py * py + pz * pz < r * r) { bt = t; best = f; }
@@ -673,7 +674,7 @@ export function updateDungeon(dt: number) {
   if (!DUN.locked && (grabT -= dt) <= 0) { grabT = 0.4; const ua = (navigator as any).userActivation; if (!ua || ua.isActive) { try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* bleibt bei Zeigersteuerung */ } } }
   if (DUN.dead > 0) {
     DUN.dead -= dt;
-    if (VIEW.tp && me) { DUN.pitch += (-0.35 - DUN.pitch) * dt * 2; driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: 0, vx: 0, vz: 0, dead: true }); }
+    if (VIEW.tp && me) { DUN.pitch += (-0.35 - DUN.pitch) * dt * 2; driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: 0, vx: 0, vz: 0, dead: true, crouch: STANCE.crouch }); }
     else DUN.pitch += (-1.2 - DUN.pitch) * dt * 2;
     if (DUN.dead <= 0) leaveDungeon(true);
     return;
@@ -684,7 +685,7 @@ export function updateDungeon(dt: number) {
   }
   // Laufen
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
-  const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run ? 6.4 : 4.2) * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(DUN.yaw), cy = Math.cos(DUN.yaw), k = Math.min(1, dt * (f || s ? 10 : 13));
+  const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run && !STANCE.crouch ? 6.4 : 4.2) * crouchK() * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(DUN.yaw), cy = Math.cos(DUN.yaw), k = Math.min(1, dt * (f || s ? 10 : 13));
   DUN.vx += ((-sy * f + cy * s) * sp - DUN.vx) * k; DUN.vz += ((-cy * f - sy * s) * sp - DUN.vz) * k;
   const dx = DUN.vx * dt, dzz = DUN.vz * dt, ox = DUN.x, oz = DUN.z;
   if (free(DUN.x + dx, DUN.z + dzz)) { DUN.x += dx; DUN.z += dzz; } else if (free(DUN.x + dx, DUN.z)) { DUN.x += dx; DUN.vz = 0; } else if (free(DUN.x, DUN.z + dzz)) { DUN.z += dzz; DUN.vx = 0; } else DUN.vx = DUN.vz = 0;
@@ -768,7 +769,7 @@ export function updateDungeon(dt: number) {
         fo.aim = 0; fo.cool = (fo.boss ? 0.9 : 1.7) + Math.random() * 0.6;
         if (sees) for (let b = 0; b < (fo.boss ? 3 : 1); b++) {
           const m = new THREE.Mesh(new THREE.SphereGeometry(fo.boss ? 0.13 : 0.09, 8, 6), new THREE.MeshBasicMaterial({ color: fo.boss ? 0xc070ff : 0xff5030 })); m.userData.sh = false; scene.add(m);
-          const tx = ddx + (b - (fo.boss ? 1 : 0)) * 0.9 * (-ddz / d), tz = ddz + (b - (fo.boss ? 1 : 0)) * 0.9 * (ddx / d), ty = EYE - 0.15 - fo.y, tl = Math.hypot(tx, ty, tz), v0 = fo.boss ? 15 : 12;
+          const tx = ddx + (b - (fo.boss ? 1 : 0)) * 0.9 * (-ddz / d), tz = ddz + (b - (fo.boss ? 1 : 0)) * 0.9 * (ddx / d), ty = EYE() - 0.15 - fo.y, tl = Math.hypot(tx, ty, tz), v0 = fo.boss ? 15 : 12;
           DUN.bolts.push({ m, x: fo.x, y: fo.y, z: fo.z, vx: tx / tl * v0, vy: ty / tl * v0, vz: tz / tl * v0, life: 4, dmg: (fo.boss ? 13 : 8) * (1 + 0.25 * (DUN.danger - 1)) });
           sfx('laser', 0.2, fo.boss ? 0.7 : 1.4, () => snd(300, 0.15, 'sawtooth', 0.04, -200));
         }
@@ -786,14 +787,14 @@ export function updateDungeon(dt: number) {
   for (let i = DUN.bolts.length - 1; i >= 0; i--) {
     const b = DUN.bolts[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.life -= dt;
     b.m.position.set(BASE.x + b.x, BASE.y + b.y, BASE.z + b.z);
-    const hitP = Math.hypot(b.x - DUN.x, b.z - DUN.z) < 0.45 && Math.abs(b.y - (EYE - 0.5)) < 1.0;
+    const hitP = Math.hypot(b.x - DUN.x, b.z - DUN.z) < 0.45 && Math.abs(b.y - (EYE() - 0.5)) < 1.0;
     if (hitP) hurtPlayer(b.dmg);
     if (hitP || b.life <= 0 || b.y < 0 || solidAt(b.x, b.z)) { burst(BASE.x + b.x, BASE.y + b.y, BASE.z + b.z, '#ff7040', 5, 3, 0.25); scene.remove(b.m); b.m.geometry.dispose(); DUN.bolts.splice(i, 1); }
   }
   // Lampenlichter den nächsten Lampen zuteilen, Stirnlampe mitführen
   lampT -= dt;
   if (lampT <= 0) {
-    lampT = 0.3; _v.set(DUN.x, EYE, DUN.z);
+    lampT = 0.3; _v.set(DUN.x, EYE(), DUN.z);
     const srt = lamps.map(l => ({ l, d: l.distanceToSquared(_v) })).sort((a, b) => a.d - b.d);
     pool.forEach((p, k) => { const o = srt[k]; if (o && o.d < 900) { p.position.copy(o.l); p.intensity = 26; } else p.intensity = 0; });
     if (vm && srt[0]) {
@@ -805,7 +806,7 @@ export function updateDungeon(dt: number) {
   // eigene Figur (Außensicht): Laufen nach Richtung, Anschlag nach Schüssen, Neigung mit dem Blick
   if (me) {
     me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14) });
+    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14) });
   }
   for (const m of DUN.msg) m.life -= dt;
   DUN.msg = DUN.msg.filter(m => m.life > 0);
@@ -813,7 +814,7 @@ export function updateDungeon(dt: number) {
 }
 // Kamera, Stirnlampe und Waffe im Bild
 export function dungeonCamera() {
-  camera.position.set(BASE.x + DUN.x, BASE.y + EYE + DUN.bob - (DUN.dead > 0 ? (2.2 - DUN.dead) * 0.5 : 0), BASE.z + DUN.z);
+  camera.position.set(BASE.x + DUN.x, BASE.y + EYE() + DUN.bob - (DUN.dead > 0 ? (2.2 - DUN.dead) * 0.5 : 0), BASE.z + DUN.z);
   camera.rotation.order = 'YXZ'; camera.rotation.set(DUN.pitch + DUN.kick * 0.012, DUN.yaw, 0);
   if (VIEW.tp && me) {
     // Außensicht: über der rechten Schulter; hält Abstand zu Felswänden

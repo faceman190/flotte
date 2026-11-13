@@ -24,7 +24,7 @@ import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom, interiorEnv } 
 import { stationTemplate } from '../models/stationModels';
 import { applyKit, kitMeta } from '../models/kit';
 import { HANGAR_BLOCKS } from '../data/hangarBlocks';
-import { VIEW, syncAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
+import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
 import { viewModelId } from './mineArt';
 
 // =====================================================================================
@@ -889,7 +889,7 @@ export function updateWalk(dt: number) {
   // Bewegung: weich anlaufen und abbremsen (Geschwindigkeit folgt der Eingabe), an Wänden entlanggleiten
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   {
-    const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run ? 10 : 6) * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
+    const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run && !STANCE.crouch ? 10 : 6) * crouchK() * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
     const k = Math.min(1, dt * (f || s ? 9 : 12));
     walkV.x += ((-sy * f + cy * s) * sp - walkV.x) * k; walkV.z += ((-cy * f - sy * s) * sp - walkV.z) * k;
     if (Math.hypot(walkV.x, walkV.z) < 0.05) walkV.x = walkV.z = 0;
@@ -930,7 +930,7 @@ export function updateWalk(dt: number) {
   meHolder.visible = tpOn && !!me;
   if (me && tpOn) {
     meHolder.matrix.copy(group.matrixWorld); meHolder.matrixWorldNeedsUpdate = true;
-    driveAvatar(me, dt, { x: IN.x, y: IN.fy + IN.jy, z: IN.z, yaw: IN.yaw, pitch: IN.pitch, vx: walkV.x, vz: walkV.z, wid: viewModelId(P.gear?.waffe) });
+    driveAvatar(me, dt, { x: IN.x, y: IN.fy + IN.jy, z: IN.z, yaw: IN.yaw, pitch: IN.pitch, vx: walkV.x, vz: walkV.z, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: IN.jy > 0.05 });
   }
   if (IN.panel && Math.hypot(IN.x - IN.panel.x, IN.z - IN.panel.z) > 2.5) IN.panel = null;
   // Was liegt vor mir?
@@ -1003,7 +1003,7 @@ export function applyWalkCamera() {
     const top = ceilY();
     tpCamPos(_c, IN.x, IN.fy + IN.jy, IN.z, IN.yaw, IN.pitch, (x, y, z) => free(x, z) && y > IN.fy + 0.3 && y < top);
     group.localToWorld(_c);
-  } else group.localToWorld(_c.set(IN.x, 1.7 + IN.bob + IN.fy + IN.jy, IN.z));
+  } else group.localToWorld(_c.set(IN.x, eyeH() + IN.bob + IN.fy + IN.jy, IN.z));
   camera.position.copy(_c);
   camera.rotation.order = 'YXZ';
   camera.rotation.set(IN.pitch, group.rotation.y + IN.yaw, 0);

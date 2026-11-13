@@ -45,7 +45,7 @@ import { loadCharModels } from './models/charModels';
 import type { Gate } from './game/world';
 import { DUN, enterDungeon, updateDungeon, dungeonCamera, drawDungeonHUD, dungeonKey, nearEntrance, dunHooks } from './game/dungeon';
 import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover } from './game/onfoot';
-import { toggleView } from './game/avatar';
+import { toggleView, toggleCrouch } from './game/avatar';
 
 loadSettings();
 applySettings();
@@ -243,6 +243,7 @@ onKey(code => {
   // Ich-Sicht / Außensicht: überall zu Fuß (Station, Hangar, Schiff, Mine, Planetenboden)
   if (code === 'KeyV' && (G.mode === 'walk' || G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { toggleView(); return; }
   if (G.mode === 'rover' && FOOT.active && code === 'Space') { footJump(); return; }
+  if (code === 'KeyC' && (G.mode === 'walk' || G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { toggleCrouch(); return; }
   // F: aus dem Rover aussteigen / wieder einsteigen
   if (code === 'KeyF' && G.mode === 'rover' && !G.dead) { if (FOOT.active) { if (footNearRover()) enterRover(); } else leaveRover(); return; }
   if (code === 'KeyV' && G.mode === 'play') { CAM.lock = !CAM.lock; radio('SYSTEM', CAM.lock ? 'Freie Kamera: Maus schaut um das Schiff, Pfeiltasten lenken. V beendet sie.' : 'Kamera wieder hinter dem Schiff.'); return; }
