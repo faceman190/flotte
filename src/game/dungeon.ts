@@ -13,6 +13,7 @@ import { addItem, canAdd, gearStat, gearFactor } from './inventory';
 import { SECTOR } from '../data/galaxy';
 import { PLANETS, PTYPE } from '../data/planets';
 import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
+import { droneBark } from './barks';
 import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
@@ -740,7 +741,7 @@ function shoot() {
       if (px * px + py * py + pz * pz < r * r) { bt = t; best = f; }
     }
     const hp = cp.clone().addScaledVector(d, bt); end = hp;
-    if (best) { best.hp -= w.dmg; best.hit = 0.12; best.alert = true; burst(hp.x, hp.y, hp.z, '#ffb060', 6, 2.2, 0.25); G.hitMark = 0.12; }
+    if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; burst(hp.x, hp.y, hp.z, '#ffb060', 6, 2.2, 0.25); G.hitMark = 0.12; }
     else burst(hp.x, hp.y, hp.z, w.col, 3, 2, 0.2);
   }
   if (tracer && end && (gun || vm)) {
@@ -836,12 +837,12 @@ export function updateDungeon(dt: number) {
     const fo = DUN.foes[i];
     if (fo.hp <= 0) {
       burst(BASE.x + fo.x, BASE.y + fo.y, BASE.z + fo.z, '#ffb060', fo.boss ? 60 : 22, fo.boss ? 5 : 3.5, 0.6); sfx('explosion0', fo.boss ? 0.7 : 0.4, fo.boss ? 0.8 : 1.5, () => snd(90, 0.4, 'sawtooth', 0.07, -40));
-      group.remove(fo.g); DUN.foes.splice(i, 1); DUN.kills++;
+      group.remove(fo.g); DUN.foes.splice(i, 1); DUN.kills++; droneBark('tot', Math.hypot(DUN.x - fo.x, DUN.z - fo.z));
       if (fo.boss) say('Wächterkern zerstört. Der Tresor ist frei.', '#ffb347');
       continue;
     }
     const ddx = DUN.x - fo.x, ddz = DUN.z - fo.z, d = Math.hypot(ddx, ddz), sees = d < 26 && los(fo.x, fo.z, DUN.x, DUN.z);
-    if (sees && d < (fo.boss ? 20 : 16)) fo.alert = true;
+    if (sees && d < (fo.boss ? 20 : 16)) { if (!fo.alert) droneBark('alarm', d); fo.alert = true; }
     fo.ph += dt; fo.hit = Math.max(0, fo.hit - dt);
     const spd = fo.boss ? 1.6 : 2.6;
     let mx = 0, mz = 0;

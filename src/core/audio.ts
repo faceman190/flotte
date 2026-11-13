@@ -133,7 +133,7 @@ export function stopVoice() {
 export async function voice(id: string, radioFx = false): Promise<number> {
   const key = 'v_' + id;
   if (!window.SOUNDDATA?.[key]) return 0;
-  stopVoice();
+  stopVoice(); stopBark();
   const seq = voSeq;
   if (!BUF[key]) await loadBuf(key);
   const b = BUF[key];
@@ -154,6 +154,49 @@ export async function voice(id: string, radioFx = false): Promise<number> {
   s.onended = () => { if (vo && vo.src === s) { vo = null; duckMusic(1); } };
   vo = { src: s, g };
   return b.duration - t0;
+}
+
+// ---------- Rufe von Figuren (Personal, Drohnen, Andockkontrolle) ----------
+// Eigener Kanal neben der Geschichte: spricht gerade eine Geschichtsstimme, entfällt der Ruf; beginnt eine, verstummt er.
+// Es läuft höchstens ein Ruf zur Zeit. fx: 'funk' = Bordfunk, 'robo' = metallisch (Ringmodulation und kurzer Kammhall).
+// vol: 0..1 (etwa nach Entfernung). Liefert true, wenn der Ruf startet.
+let bk: { src: AudioBufferSourceNode; g: GainNode; osc?: OscillatorNode } | null = null;
+export function stopBark() {
+  if (!bk || !AC) { bk = null; return; }
+  const b = bk; bk = null;
+  b.g.gain.setTargetAtTime(0, AC.currentTime, 0.03);
+  setTimeout(() => { try { b.src.stop(); b.osc?.stop(); } catch (e) { /* schon aus */ } }, 200);
+}
+export async function bark(id: string, fx: '' | 'funk' | 'robo' = '', vol = 1): Promise<boolean> {
+  const key = 'v_' + id;
+  if (!window.SOUNDDATA?.[key] || vo || bk || vol < 0.05) return false;
+  const A = ctx();
+  if (!BUF[key]) await loadBuf(key);
+  const b = BUF[key];
+  if (!b || vo || bk) return false;
+  const s = A.createBufferSource(), g = A.createGain();
+  s.buffer = b; g.gain.value = audio.voice * Math.min(1, audio.volume * 1.4) * Math.min(1, vol) * (fx === 'funk' ? 1.25 : 1);
+  let node: AudioNode = s, osc: OscillatorNode | undefined;
+  if (fx === 'funk') {
+    const hp = A.createBiquadFilter(), lp = A.createBiquadFilter(), sh = A.createWaveShaper(), curve = new Float32Array(257);
+    hp.type = 'highpass'; hp.frequency.value = 500; lp.type = 'lowpass'; lp.frequency.value = 3000;
+    for (let i = 0; i < 257; i++) { const x = i / 128 - 1; curve[i] = Math.tanh(x * 2.6) / Math.tanh(2.6); }
+    sh.curve = curve; s.connect(hp); hp.connect(lp); lp.connect(sh); node = sh;
+  } else if (fx === 'robo') {
+    // Ringmodulation (Stimme × 60-Hz-Sinus) halb beigemischt, dazu ein kurzer Kammfilter für den Blechklang
+    const mix = A.createGain(), ring = A.createGain(), dry = A.createGain(), dl = A.createDelay(0.05), fb = A.createGain(), hp = A.createBiquadFilter();
+    osc = A.createOscillator(); osc.frequency.value = 60; ring.gain.value = 0; osc.connect(ring.gain); osc.start();
+    dry.gain.value = 0.55; s.connect(dry); s.connect(ring);
+    dry.connect(mix); ring.connect(mix);
+    dl.delayTime.value = 0.007; fb.gain.value = 0.45; mix.connect(dl); dl.connect(fb); fb.connect(dl);
+    hp.type = 'highpass'; hp.frequency.value = 220;
+    const sum = A.createGain(); mix.connect(sum); dl.connect(sum); sum.connect(hp); node = hp;
+  }
+  node.connect(g); g.connect(A.destination);
+  s.start(0, TRIM[key]?.[0] || 0);
+  s.onended = () => { if (bk && bk.src === s) { bk = null; } try { osc?.stop(); } catch (e) { /* schon aus */ } };
+  bk = { src: s, g, osc };
+  return true;
 }
 
 // Grundgeräusch (Schleife) mit weichem Wechsel; key null = aus

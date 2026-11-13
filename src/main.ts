@@ -1,4 +1,5 @@
 import './core/boot';   // zuerst: Spieldaten laden (Ladebalken), alles Weitere wartet darauf
+import { dockBark } from './game/barks';
 import * as THREE from 'three';
 import { camera, render, scene, aimShadows, markShadows, gl } from './core/engine';
 import { updateSky, sunDir, sky } from './core/sky';
@@ -192,7 +193,7 @@ dockHooks.launch = startLaunch;
 // Planetenbasis zu Fuß: hinein durch die Tür, hinaus wieder vor die Tür (das Schiff steht auf dem Landefeld)
 function enterBase(st: Station) {
   footOff(); ROVER.active = false; laserSound(false);
-  G.baseWalk = true; G.dockedAt = st; P.shield = stats().maxShield; G.heat = 0; G.overheat = false;
+  dockBark('land', 1400); G.baseWalk = true; G.dockedAt = st; P.shield = stats().maxShield; G.heat = 0; G.overheat = false;
   $('hud').classList.add('hidden'); releaseAll();
   enterInterior(st, true);
   saveGame();

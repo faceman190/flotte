@@ -132,3 +132,12 @@ Neue Stimmen: Kessler „Leonard Berger – Rough & Resonant“ (`Lpl4mdZ3QP3R1V
 | c27_roth | jXUBF0br4YE1R2oASiIX |
 | c28_brummer | NFYhJtwmemQXFowEeu3Y |
 | c29_brummer | LP5wJ5qErgeSdNzUDtD0 |
+
+
+## NPC-Rufe (eingebaut in Alpha 0.90, 2026-11-13)
+
+Flow `VZhyu9OiozOx850XHeHN`, Modell `eleven_v4`, je Zeile eine Fassung, zusammen **1.609 Credits**
+(Drohnen 222, Andockkontrolle 267, Personal Maks 560, Personal Corinna 560). Texte, Stimmen und Anlässe: docs/voice/npc.md,
+Dateien: asset-src/voice/npc/<Kennung>.mp3 (29 Stück). Im Spiel: `bark()` in src/core/audio.ts, Auslöser in src/game/barks.ts.
+Eine Zeile neu erzeugen: `creative_generate_speech` mit diesem Flow, Text und Stimme aus docs/voice/npc.md, `generations_count` 1.
+Herunterladen: `creative_get_generations` → `full_res_url` unverändert laden (die Signatur nicht URL-kodieren, sonst 403).

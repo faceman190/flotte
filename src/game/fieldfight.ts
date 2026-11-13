@@ -9,6 +9,7 @@ import { terrainAt } from './surface';
 import { buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
 import { weapon } from './dungeon';
 import { flinch, noteShot } from './avatar';
+import { droneBark } from './barks';
 import { gearStat, addItem, canAdd } from './inventory';
 import { GEAR_IDS, gearDef } from '../data/gear';
 import { SECTOR } from '../data/galaxy';
@@ -106,7 +107,7 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
     }
     end = new THREE.Vector3(px + d.x * bt, py + d.y * bt, pz + d.z * bt);
     if (best) {
-      best.hp -= w.dmg; best.hit = 0.12; best.alert = true; burst(end.x, end.y, end.z, '#ffb060', 6, 2.2, 0.25);
+      if (!best.alert) droneBark('alarm', Math.hypot(best.x - px, best.z - pz)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; burst(end.x, end.y, end.z, '#ffb060', 6, 2.2, 0.25);
       if (best.hp <= 0) kill(best);
     } else if (bt < tw + 0.01 && tw < 120) burst(end.x, end.y, end.z, '#8a7a66', 3, 1.5, 0.2);
   }
@@ -118,6 +119,7 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
 }
 function kill(f: Foe) {
   f.dead = true; f.g.visible = false;
+  droneBark('tot', camera.position.distanceTo(f.g.position));
   burst(f.x, f.y, f.z, '#b070ff', 40, 6, 0.9); burst(f.x, f.y, f.z, '#ffb060', 20, 4, 0.5);
   sfx('ferrox_death', 0.6, 1, () => snd(160, 0.4, 'sawtooth', 0.05, -120));
   const cr = Math.round((40 + Math.random() * 50) * (1 + 0.4 * (danger() - 1)));
@@ -152,7 +154,7 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
   for (const f of FIGHT.foes) {
     if (f.dead) continue;
     const dx = px - f.x, dz = pz - f.z, d = Math.hypot(dx, dz);
-    if (me.active && FIGHT.down <= 0 && d < 34 && los(f.x, f.y, f.z, px, py, pz)) f.alert = true;
+    if (me.active && FIGHT.down <= 0 && d < 34 && los(f.x, f.y, f.z, px, py, pz)) { if (!f.alert) droneBark('alarm', d); f.alert = true; }
     if (f.alert && (d > 70 || !me.active || FIGHT.down > 0)) f.alert = false;
     f.ph += dt * (f.alert ? 0.9 : 0.25);
     let tx: number, tz: number;

@@ -1,4 +1,5 @@
 import { $, fmtN, esc } from '../core/util';
+import { dockBark } from '../game/barks';
 import { snd, sfx, boom } from '../core/audio';
 import { releaseAll, centerMouse } from '../core/input';
 import { P, G, stats, cargoUsed, saveGame, emptyUp, settings } from '../game/state';
@@ -49,7 +50,7 @@ export function openDock(s: Station) {
   note = `Angedockt an ${s.name}. Schild aufgeladen.${newHome ? ' Neuer Heimathafen gesetzt.' : ''}${due ? ` ${due} Auftrag kann abgeliefert werden!` : ''}`;
   tab = due ? 'auftraege' : cargoUsed() ? 'markt' : 'service';
   releaseAll();
-  snd(520, 0.2, 'sine', 0.05, 300);
+  snd(520, 0.2, 'sine', 0.05, 300); dockBark('an');
   $('hud').classList.add('hidden');
   if (settings.walk) dockHooks.enter(s);   // zu Fuß aussteigen (Modus 'walk')
   else showMenu();
@@ -90,7 +91,7 @@ export function undock() {
   const r = stats().radius;
   placePlayer(s.launch.x - Math.sin(s.launch.yaw) * r * 2, s.launch.y, s.launch.z - Math.cos(s.launch.yaw) * r * 2, s.launch.yaw, 140);
   centerMouse();
-  snd(300, 0.6, 'sawtooth', 0.05, 500);
+  snd(300, 0.6, 'sawtooth', 0.05, 500); dockBark('ab', 1600);
   saveGame();
 }
 

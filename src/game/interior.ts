@@ -26,6 +26,7 @@ import { applyKit, kitMeta } from '../models/kit';
 import { HANGAR_BLOCKS } from '../data/hangarBlocks';
 import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, type Avatar, type NetAct } from './avatar';
 import { viewModelId } from './mineArt';
+import { staffBark } from './barks';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -854,7 +855,7 @@ export function npcSpeak(who: string, seconds: number) {
   for (const q of persons) if (q.name && q.p.anim && q.name.toUpperCase().includes(k)) animTalk(q.p.anim, seconds);
 }
 function talk(name: string, tab: string) {
-  npcSpeak(name, 3.2);
+  npcSpeak(name, 3.2); staffBark(name, tab);
   say(name, GREET[tab] || '');
   snd(660, 0.08, 'sine', 0.04, 120);
   interiorHooks.openTab(tab, `${name}: „${GREET[tab] || ''}“`);
