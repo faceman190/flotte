@@ -188,7 +188,7 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
 - Betreten aus dem All, zurück ins Schiff: `leaveDungeon` setzt den Modus `play` und ruft `dunHooks.left(died, id)`. Statt Förderkorb eine Schleusenplatte.
 - `Entrance.danger` gibt eine eigene Gefahrenstufe vor (sonst die des Sektors). `Entrance.goal` legt einen Gegenstand der Geschichte in den Tresorraum
   (leuchtender Kasten auf einem Pult); er ist bergbar, sobald der Wächterkern zerstört ist.
-- Erster Einsatz: das Wrack der „Eidwacht“ in Kapitel 3 (`src/game/chapter3.ts`), Größe 7, Gefahr 3.
+- Erster Einsatz: das Wrack der „Eidwacht“ in Kapitel 3 (`src/game/chapter3.ts`), Größe 7, Gefahr 2 (9 Wächter, Wächterkern, 5 Fallen, 2 Schalter).
 - Achtung: Das Texturblatt hat viel Metall. Ohne Umgebungslicht bleiben solche Wände schwarz, deshalb läuft die Kopie für das Wrack mit wenig Metall.
 
 ## Noch offen

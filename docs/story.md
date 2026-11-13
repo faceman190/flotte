@@ -155,6 +155,12 @@ Jedes Kapitel verbindet Hauptmissionen mit dem, was das Spiel schon kann: Bergba
 Belohnung: 3.500 Credits, +60 Ruf bei der gewählten Seite, −15 bei der anderen, +10 Bergbaugilde. Das Wrackfeld bleibt in der Narbe stehen.
 Vertonung: 41 Zeilen (docs/voice/kapitel3.md), alle eingebaut.
 
+Regeln, die beim Prüfen entstanden sind (Alpha 0.99d):
+- Figuren und Gespräche in Stationen erst, wenn der Landeablauf vorbei ist (`settled()`); beim Andocken selbst steht der Pilot noch im Schiff.
+- Schritte, die mit einem Gespräch enden, warten auf dessen Ende (`dialogBusy()` aus story.ts). Ein neuer Schritt verwirft offene Zeilen.
+- Ansprechpunkte der Geschichte in Städten gehören in `footTargets` (haben Vorrang vor den Zielen der Stadt).
+- Nach dem Verlassen des Wracks führt die Bresche erst wieder hinein, wenn man 260 m weg war.
+
 Technik: Das Wrackfeld (`buildField`) nutzt das Modell der Bastion, verkleinert und ausgebrannt, dazu zwei Schiffswracks, Trümmer und Ferrit, das an der Rumpfoberfläche sitzt (Strahltests). Die Bresche wird am Rumpf gemessen. Das Innere ist die neue Dungeon-Art „Wrack“ (`docs/dungeons.md`). Brandt ist eine Figur der Stadt mit eigenem Ansprechpunkt (`cityTargets`).
 
 ---

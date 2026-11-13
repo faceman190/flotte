@@ -169,7 +169,10 @@ export function initCity(st: Station) {
   // Ansprechpunkte zu Fuß (Weltkoordinaten)
   cityTargets.length = 0;
   const tgt = (p: [number, number] | undefined, r: number, label: string, act: () => void) => { if (!p) return; const w = toWorld(st, p[0], 0, p[1]); cityTargets.push({ x: w.x, z: w.z, r, label, act }); };
-  (m.stalls || []).forEach((p, i) => tgt(p, 2.6, i === 1 ? 'Imbiss · Händler ansprechen' : i === 6 ? 'Ersatzteile · Händler ansprechen' : 'Marktstand · Händler ansprechen', () => {
+  // Steht ein Stand genau an der Stelle der Kneipe (Neonhafen: die Garküche ist der Stand am Platz), gilt dort nur die Kneipe;
+  // sonst läge der Markt über dem Tresen und die Aufträge wären nie erreichbar.
+  const atBar = (p: [number, number]) => !!m.bar && Math.hypot(p[0] - m.bar[0], p[1] - m.bar[1]) < 1;
+  (m.stalls || []).forEach((p, i) => atBar(p) ? undefined : tgt(p, 2.6, i === 1 ? 'Imbiss · Händler ansprechen' : i === 6 ? 'Ersatzteile · Händler ansprechen' : 'Marktstand · Händler ansprechen', () => {
     const v = vendors[i]; if (v) animTalk(v.c.anim, 3.2);
     staffBark(i % 2 ? 'Mira' : 'Corvin', 'markt'); cityHooks.tab('markt', 'Händlerin am Markt: „Zeig her, was du im Frachtraum hast.“');
   }));

@@ -56,6 +56,9 @@ function nextLine() {
   speak(who, text).then(d => { if (d && tok === lineTok && lineT > 0) lineT = Math.max(lineT, d + 0.6); });
 }
 $('dlg').addEventListener('click', () => { lineT = 0.01; });
+// Läuft gerade ein Gespräch (Zeile sichtbar oder weitere in der Warteschlange)? Ein neuer Schritt verwirft offene Zeilen;
+// Schritte, die mit einem Gespräch enden, warten deshalb darauf (siehe chapter3.ts).
+export const dialogBusy = () => lineT > 0 || queue.length > 0;
 function updateDialog(dt: number) { if (lineT > 0) { lineT -= dt; if (lineT <= 0) nextLine(); } }
 
 // ---------- Szene (Kinobalken, Spiel steht, Zeilen nacheinander) ----------

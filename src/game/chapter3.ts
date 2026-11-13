@@ -10,8 +10,9 @@ import { SHARED } from './shared';
 import { IN, storyNpc } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
-import { talk, playScene, registerChain, st, endChain, storyCtx, storyHooks, type Step, type Obj, type Marker } from './story';
-import { CITY, cityTargets, cityWorld } from './city';
+import { talk, playScene, registerChain, st, endChain, storyCtx, storyHooks, dialogBusy, type Step, type Obj, type Marker } from './story';
+import { CITY, cityWorld } from './city';
+import { footTargets } from './onfoot';
 import { charInstance, animInit, animStep, animTalk, hasChar } from '../models/charModels';
 import { probeLit, kitMeta } from '../models/kit';
 import { buildCarrierModel } from '../models/stationModels';
@@ -49,10 +50,13 @@ const lineSpace = (id: string, name: string): Obj => [`Springe nach <b>${name}</
 const pts = () => [...WRECKS.map(w => [FIELD[0] + w.off[0], FIELD[1] + w.off[1], FIELD[2] + w.off[2]]), FIELD];
 const breach = () => [FIELD[0] + BREACH[0], FIELD[1] + BREACH[1], FIELD[2] + BREACH[2]];
 const inCity = () => !!world.surface && CITY.name === 'Neonhafen' && !!CITY.st;
-const S = { foes: [] as any[] };
+const S = { foes: [] as any[], met: false, away: true };
+// Der Landeablauf im Hangar ist vorbei (zu Fuß oder im Stationsmenü). Beim Andocken selbst läuft noch die Landung; Figuren, die dann
+// „vor den Piloten“ gestellt würden, stünden am Platz des Schiffs statt im Gang.
+const settled = () => G.mode === 'walk' || G.mode === 'dock';
 
 const ENTRANCE: DungeonEntrance = {
-  id: WRECK_ID, x: 0, y: 0, z: 0, yaw: 0, size: 7, name: 'Wrack der Eidwacht', kind: 'wrack', danger: 3,
+  id: WRECK_ID, x: 0, y: 0, z: 0, yaw: 0, size: 7, name: 'Wrack der Eidwacht', kind: 'wrack', danger: 2,      // eine Stufe unter dem Sektor: Die Geschichte soll auch mit einfacher Ausrüstung zu schaffen sein
   goal: {
     label: 'Flugschreiber bergen', got: () => !!c3().rec,
     take: () => {
@@ -88,7 +92,10 @@ const STEPS: Step[] = [
   },
   { // 2: Roth erzählt die Fassung, die jeder kennt
     title: 'Kapitel 3 · Was jeder weiß',
-    enter: () => {
+    enter: () => { S.met = false; },
+    tick: () => {
+      if (S.met || !settled()) return;
+      S.met = true;
       if (IN.active && !IN.ship) storyNpc('Roth', 'Grenzwacht', 'Wachtmeisterin Roth', () => talk(['ROTH', 'Neonhafen, die Garküche Schleusenbräu. Frag nach Ilvar Brandt.']), '#f2d36b', undefined, { model: 'merchant', tint: [0.6, 0.85, 0.55] });
       talk(['ROTH', 'Jahr einunddreißig. Wir hatten die Ferrox zurückgedrängt bis in die Narbe. Kommandantin Hollweg führte selbst, von der Eidwacht aus. Dem einzigen Träger, den wir je selbst gebaut haben.'],
         ['ROTH', 'Dann kamen sie von allen Seiten. Die Linie brach, die Eidwacht blieb zurück. So steht es in jedem Schulbuch, und so hab ich es mit sechzehn geglaubt.'],
@@ -102,15 +109,15 @@ const STEPS: Step[] = [
     title: 'Kapitel 3 · Der Funker',
     enter: () => { route(CITYSEC); },
     lines: () => {
-      if (inCity()) { const p = brandtWorld(); return [['In <b>Neonhafen</b> gelandet', true, false], [`Zu Fuß zur Garküche „Schleusenbräu“${p && CITY.walk ? '' : ' · aus dem Hangar auf den Platz'}`, false, false], ['Mit <b>Ilvar Brandt</b> sprechen · E', false, false]]; }
+      if (inCity()) { const p = brandtWorld(); return [['In <b>Neonhafen</b> gelandet', true, false], [`Zu Fuß zur Garküche „Schleusenbräu“${p && CITY.walk ? '' : ' · aus dem Hangar auf den Platz'}`, false, false], ['Mit <b>Ilvar Brandt</b> sprechen · E', !!c3().brandt, false]]; }
       return [P.sector === CITYSEC ? ['Auf <b>Neuhafen IV</b> landen und in die Stadt Neonhafen fliegen', false, false] : lineSpace(CITYSEC, 'Neuhafen')];
     },
     tick: () => {
       if (!inCity()) return;
-      const p = brandtWorld(); if (!p) return;
-      if (!cityTargets.some(t => t.label === 'Mit Ilvar Brandt sprechen')) cityTargets.push({ x: p.x, z: p.z, r: 3.2, label: 'Mit Ilvar Brandt sprechen', act: () => {
+      const p = talkSpot(); if (!p) return;
+      if (!footTargets.some(t => t.label === 'Mit Ilvar Brandt sprechen')) footTargets.push({ x: p.x, z: p.z, r: 3.8, label: 'Mit Ilvar Brandt sprechen', act: () => {
         if (c3().brandt) return;
-        c3().brandt = true; if (brandt) animTalk(brandt.c.anim, 22);
+        c3().brandt = true; footTargets.length = 0; if (brandt) animTalk(brandt.c.anim, 22);
         talk(['BRANDT', 'Roth schickt dich? Dann setz dich nicht, es dauert nicht lang.'],
           ['BRANDT', 'Ich saß am Funk der Eidwacht. Ich hab jeden Befehl dieses Tages gehört, und einen davon werd ich nicht mehr los.'],
           ['BRANDT', 'Was wirklich war, steht im Flugschreiber. Der sitzt noch auf der Brücke, im Wrack. Niemand hat ihn je geholt, weil niemand ihn hören wollte.'],
@@ -118,19 +125,22 @@ const STEPS: Step[] = [
         saveGame();
       } });
     },
-    done: () => !!c3().brandt,
+    done: () => !!c3().brandt && !dialogBusy(),      // erst weiter, wenn Brandt ausgeredet hat (ein neuer Schritt verwirft offene Zeilen)
     markers: () => { const p = inCity() ? brandtWorld() : null; return p ? [{ x: p.x, y: p.y + 2.6, z: p.z, label: 'ILVAR BRANDT', col: '#e8a0c0', big: true }] : []; },
   },
   { // 4: zur Bastion
     title: 'Kapitel 3 · Die Ausbilderin',
-    enter: () => { route('heimstatt'); },
+    enter: () => { footTargets.length = 0; route('heimstatt'); },
     lines: () => [inSpace('heimstatt') ? ['An der <b>Bastion</b> andocken · E', false, false] : lineSpace('heimstatt', 'Heimstatt'), ['Mit <b>Hauptfrau Achterberg</b> sprechen', false, true]],
     done: () => docked('bastion'),
     markers: () => { const b = world.stations.find(s => s.id === 'bastion'); return b && inSpace('heimstatt') ? [{ x: b.dock.x, y: b.dock.y, z: b.dock.z, label: 'BASTION · ANDOCKEN', col: '#ffb347', big: true }] : []; },
   },
   { // 5: Achterberg weicht aus
     title: 'Kapitel 3 · Die Ausbilderin',
-    enter: () => {
+    enter: () => { S.met = false; },
+    tick: () => {
+      if (S.met || !settled()) return;
+      S.met = true;
       if (G.mode === 'dock' && G.inside) closeMenu();
       if (IN.active && !IN.ship) storyNpc('Achterberg', 'Ausbildung', 'Hauptfrau Achterberg', () => talk(['ACHTERBERG', 'Vier Kupferbarren, Schmelzwerk Zwölf. Dann die Narbe.']), '#ffb347', undefined, { model: 'achterberg' });
       talk(['ACHTERBERG', 'Brandt redet also wieder. Hätte ich mir denken können.'],
@@ -158,7 +168,7 @@ const STEPS: Step[] = [
         ['WERK', 'Der Dämpfer sitzt. Solange du nicht scannst, bist du für den Schwarm ein Stück Schrott. Viel Glück da draußen.']);
       storyHooks.banner('SIGNALDÄMPFER EINGEBAUT', 'Vier Kupferbarren verbraucht · Kurs: Die Narbe', '#ffb347');
     },
-    done: () => !!c3().damp,
+    done: () => !!c3().damp && !dialogBusy(),
   },
   { // 7: in die Narbe
     title: 'Kapitel 3 · In die Narbe',
@@ -191,7 +201,7 @@ const STEPS: Step[] = [
       if (d.pi === 3) talk(['BRUMMER', 'Das ist sie. Trägerschiff Eidwacht. An der Flanke klafft eine Bresche, da kommst du rein.']);
       saveGame();
     },
-    done: () => (c3().pi || 0) >= 3,
+    done: () => (c3().pi || 0) >= 3 && !dialogBusy(),
     markers: () => { if (!inSpace(SEC)) return []; const pi = c3().pi || 0, p = pts()[pi]; return p ? [{ x: p[0], y: p[1], z: p[2], label: `WRACK ${pi + 1} · KENNUNG SCANNEN`, col: '#ffb060', big: true }] : []; },
   },
   { // 9: an der Bresche anlegen und das Wrack betreten
@@ -208,16 +218,15 @@ const STEPS: Step[] = [
       if (d3(b[0], b[1], b[2], P.x, P.y, P.z) > 130 || Math.hypot(P.vx, P.vy, P.vz) > 60) return;
       P.vx = P.vy = P.vz = 0;
       enterDungeon(ENTRANCE);
-      talk(['ROTH', 'Du gehst allein rein. Leg die Notstromschalter um, dann fährt das Schott zur Brücke auf. Und rechne mit Wächtern.']);
     },
     done: () => DUN.active && DUN.e?.id === WRECK_ID,
     markers: () => { if (!inSpace(SEC)) return []; const b = breach(); return [{ x: b[0], y: b[1], z: b[2], label: 'BRESCHE · LANGSAM ANLEGEN', col: '#ffb060', big: true }]; },
   },
   { // 10: im Wrack: Schalter, Wächterkern, Flugschreiber
     title: 'Kapitel 3 · Die Brücke',
-    enter: () => {},
+    enter: () => { if (DUN.active) talk(['ROTH', 'Du gehst allein rein. Leg die Notstromschalter um, dann fährt das Schott zur Brücke auf. Und rechne mit Wächtern.']); },
     lines: () => {
-      if (!DUN.active) return [['Zurück zur Bresche der <b>Eidwacht</b>', false, false], ['Der Flugschreiber liegt noch auf der Brücke', false, true]];
+      if (!DUN.active) return [[S.away ? 'Zurück zur Bresche der <b>Eidwacht</b>' : 'Erst von der Bresche wegfliegen (260 m), dann wieder langsam heran', false, false], ['Der Flugschreiber liegt noch auf der Brücke', false, true]];
       const left = DUN.sws.filter(q => !q.on).length, boss = DUN.foes.some(f => f.boss);
       return [[`Notstromschalter umlegen${left ? ` · <b>${left}</b> übrig` : ''}`, left === 0, false], ['Den Wächterkern auf der Brücke zerstören', !boss, false], ['Flugschreiber bergen · <b>E</b>', !!c3().rec, false]];
     },
@@ -225,9 +234,11 @@ const STEPS: Step[] = [
       // wer das Wrack ohne Schreiber verlässt (oder zusammenbricht), kann an der Bresche wieder hinein
       if (DUN.active || !inSpace(SEC) || G.mode !== 'play') return;
       const b = breach();
-      if (d3(b[0], b[1], b[2], P.x, P.y, P.z) < 130 && Math.hypot(P.vx, P.vy, P.vz) < 60 && G.time > reenterAt) { P.vx = P.vy = P.vz = 0; enterDungeon(ENTRANCE); }
+      const dist = d3(b[0], b[1], b[2], P.x, P.y, P.z);
+      if (dist > 260) S.away = true;
+      if (S.away && dist < 130 && Math.hypot(P.vx, P.vy, P.vz) < 60) { P.vx = P.vy = P.vz = 0; enterDungeon(ENTRANCE); }
     },
-    done: () => !!c3().rec,
+    done: () => !!c3().rec && !dialogBusy(),
     markers: () => { if (DUN.active || !inSpace(SEC)) return []; const b = breach(); return [{ x: b[0], y: b[1], z: b[2], label: 'BRESCHE · LANGSAM ANLEGEN', col: '#ffb060', big: true }]; },
   },
   { // 11: zurück zum Schiff und raus aus der Narbe
@@ -259,7 +270,10 @@ const STEPS: Step[] = [
   },
   { // 13: die Aufnahme
     title: 'Kapitel 3 · Die Aufnahme',
-    enter: () => {
+    enter: () => { S.met = false; },
+    tick: () => {
+      if (S.met || !settled()) return;
+      S.met = true;
       if (G.mode === 'dock' && G.inside) closeMenu();
       const wacht = c3().choice === 'wacht';
       if (IN.active && !IN.ship) {
@@ -305,9 +319,12 @@ function finish() {
   setTimeout(() => talk(['BRUMMER', 'Bastion an Pilot: Die Geschichte geht weiter. Kapitel 4 ist in Arbeit.']), 5000);
 }
 
-// Nach dem Verlassen des Wracks kurz warten, bevor die Bresche wieder hineinführt (sonst stünde man sofort wieder drin)
-let reenterAt = 0;
-dunHooks.left = (_died, id) => { if (id === WRECK_ID) reenterAt = G.time + 8; };
+// Nach dem Verlassen des Wracks führt die Bresche erst wieder hinein, wenn man sich entfernt hat. Wer im Wrack zusammenbricht, erfährt, wo er ist.
+dunHooks.left = (died, id) => {
+  if (id !== WRECK_ID) return;
+  S.away = false;
+  if (died) storyHooks.banner('ZURÜCK IM SCHIFF', 'Du bist im Wrack zusammengebrochen. Die Wächter stehen wieder; umgelegte Schalter bleiben.', '#ff6b5b');
+};
 
 // ---------- Ilvar Brandt an der Garküche in Neonhafen ----------
 let brandt: { c: ReturnType<typeof charInstance>; lc: THREE.Color; at: THREE.Object3D } | null = null;
@@ -316,6 +333,8 @@ function brandtLocal(): [number, number] | null {
   const bar = (kitMeta('Neonhafen') as any).bar as [number, number] | undefined;      // Lage der Garküche aus den Angaben der Stadt
   return bar ? [bar[0] + BRANDT_OFF[0], bar[1] + BRANDT_OFF[1]] : null;
 }
+// Ansprechpunkt: der Tresen selbst, etwas weiter gefasst als das Ziel der Garküche. Brandt steht dahinter; vom Platz aus kommt man nur bis an den Tresen.
+function talkSpot() { const l = CITY.st ? brandtLocal() : null; return l && CITY.st ? cityWorld(CITY.st, l[0] - BRANDT_OFF[0], 0.18, l[1] - BRANDT_OFF[1]) : null; }
 function brandtWorld() { const l = CITY.st ? brandtLocal() : null; return l && CITY.st ? cityWorld(CITY.st, l[0], 0.18, l[1]) : null; }
 function updateBrandt(dt: number) {
   const v = step(), want = inCity() && (typeof v === 'number' && v >= 3);
