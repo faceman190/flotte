@@ -134,7 +134,8 @@ wss.on('connection', ws => {
     } else if (m.t === 'st') {
       if (!c.room) return;
       const n = v => (typeof v === 'number' && isFinite(v) ? Math.round(v * 100) / 100 : 0);
-      c.st = { p: (m.p || []).slice(0, 3).map(n), q: (m.q || []).slice(0, 4).map(n), s: n(m.s), cls: clean(m.cls, 12), paint: clean(m.paint, 10), m: clean(m.m, 8), w: Array.isArray(m.w) && m.w.length === 4 ? [clean(m.w[0], 40), n(m.w[1]), n(m.w[2]), n(m.w[3])] : null, d: clean(m.d, 40) };
+      c.st = { p: (m.p || []).slice(0, 3).map(n), q: (m.q || []).slice(0, 4).map(n), s: n(m.s), cls: clean(m.cls, 12), paint: clean(m.paint, 10), m: clean(m.m, 8), w: Array.isArray(m.w) && m.w.length === 4 ? [clean(m.w[0], 40), n(m.w[1]), n(m.w[2]), n(m.w[3])] : null, d: clean(m.d, 40),
+        g: Array.isArray(m.g) ? m.g.slice(0, 4).map(v => clean(v, 32)) : null };   // g: Aussehen zu Fuß [Helm, Anzug, Rucksack, Waffe]
       // wer beim Handeln die Station verlässt, bricht den Handel ab
       if (c.trade && c.st.d !== c.trade.station) endTrade(c.trade, `${c.name} hat die Station verlassen.`);
       toRoom(c.room, { t: 'st', id: c.id, name: c.name, ...c.st }, ws);

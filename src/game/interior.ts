@@ -1100,30 +1100,33 @@ document.addEventListener('pointerlockchange', () => {
 // Sie stehen im Stationsraum (auch wenn man selbst gerade im eigenen Schiff ist: dann sieht man sie durch die Kanzel).
 // Positionen kommen vom Netzcode in Raum-Koordinaten (x, z, Blickrichtung) und werden weich nachgeführt.
 // =====================================================================================
-interface Other { p: Person; x: number; z: number; ry: number; tx: number; tz: number; tyaw: number; name: string; speed: number }
+interface Other { p: Person | null; av: Avatar | null; x: number; z: number; ry: number; tx: number; tz: number; tyaw: number; name: string; speed: number; vx: number; vz: number; gear: { helm?: string; anzug?: string; rucksack?: string }; wid: string }
 const others = new Map<number, Other>();
-export function syncOtherPilots(list: { id: number; name: string; st: string; x: number; z: number; yaw: number }[]) {
+export function syncOtherPilots(list: { id: number; name: string; st: string; x: number; z: number; yaw: number; g?: string[] | null }[]) {
   if (!IN.active || !IN.station || !stationGroup) { if (others.size) clearOthers(); return; }
   const here = IN.station.id, seen = new Set<number>();
   for (const o of list) {
     if (o.st !== here) continue;
     seen.add(o.id);
     let r = others.get(o.id);
+    const gear = { helm: o.g?.[0] || undefined, anzug: o.g?.[1] || undefined, rucksack: o.g?.[2] || undefined }, wid = o.g?.[3] || 'k12';
     if (!r) {
-      const p = buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, PAL[kind].accent, 'walk');
-      p.g.position.set(o.x, 0, o.z); p.g.rotation.y = o.yaw + Math.PI;
-      stationGroup.add(p.g);
-      r = { p, x: o.x, z: o.z, ry: o.yaw + Math.PI, tx: o.x, tz: o.z, tyaw: o.yaw, name: o.name, speed: 0 };
+      // Soldat wie die eigene Figur (src/game/avatar.ts); fehlt das Modell, die einfache Figur
+      const av = syncAvatar(stationGroup, null, gear);
+      const p = av ? null : buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, PAL[kind].accent, 'walk');
+      if (p) { p.g.position.set(o.x, 0, o.z); p.g.rotation.y = o.yaw + Math.PI; stationGroup.add(p.g); }
+      r = { p, av, x: o.x, z: o.z, ry: o.yaw + Math.PI, tx: o.x, tz: o.z, tyaw: o.yaw, name: o.name, speed: 0, vx: 0, vz: 0, gear, wid };
       others.set(o.id, r);
     }
-    r.tx = o.x; r.tz = o.z; r.tyaw = o.yaw; r.name = o.name;
+    r.tx = o.x; r.tz = o.z; r.tyaw = o.yaw; r.name = o.name; r.wid = wid;
+    if (r.av) { r.gear = gear; r.av = syncAvatar(stationGroup, r.av, gear); }
   }
   for (const id of [...others.keys()]) if (!seen.has(id)) removeOther(id);
 }
 function removeOther(id: number) {
   const r = others.get(id); if (!r) return;
-  r.p.g.parent?.remove(r.p.g);
-  r.p.g.traverse((c: any) => { if (c.isMesh && !c.userData.shared) c.geometry?.dispose(); });
+  if (r.p) { r.p.g.parent?.remove(r.p.g); r.p.g.traverse((c: any) => { if (c.isMesh && !c.userData.shared) c.geometry?.dispose(); }); }
+  if (r.av) r.av.s.g.removeFromParent();
   others.delete(id);
 }
 function clearOthers() { for (const id of [...others.keys()]) removeOther(id); }
@@ -1132,8 +1135,15 @@ function updateOthers(dt: number) {
   for (const r of others.values()) {
     const ox = r.x, oz = r.z;
     r.x += (r.tx - r.x) * k; r.z += (r.tz - r.z) * k;
-    const v = Math.hypot(r.x - ox, r.z - oz) / Math.max(dt, 1e-3);
+    const ivx = (r.x - ox) / Math.max(dt, 1e-3), ivz = (r.z - oz) / Math.max(dt, 1e-3), v = Math.hypot(ivx, ivz);
     r.speed += (v - r.speed) * Math.min(1, dt * 6);
+    r.vx += (ivx - r.vx) * Math.min(1, dt * 6); r.vz += (ivz - r.vz) * Math.min(1, dt * 6);
+    if (r.av) {
+      // Laufrichtung relativ zur Blickrichtung des Piloten ergibt die Richtungsclips (vor, seitlich, zurück)
+      driveAvatar(r.av, dt, { x: r.x, y: 0, z: r.z, yaw: r.tyaw, pitch: 0, vx: Math.abs(r.vx) < 0.05 ? 0 : r.vx, vz: Math.abs(r.vz) < 0.05 ? 0 : r.vz, wid: r.wid });
+      continue;
+    }
+    if (!r.p) continue;
     r.p.g.position.set(r.x, 0, r.z);
     // Figur schaut in Blickrichtung des Piloten (+Z des Modells → Blickrichtung)
     const want = r.tyaw + Math.PI, da = Math.atan2(Math.sin(want - r.ry), Math.cos(want - r.ry));

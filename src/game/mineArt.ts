@@ -194,7 +194,7 @@ export function buildSoldier(gear: { helm?: string; anzug?: string; rucksack?: s
   const kh = pbr('kopf_h'); kh.envMapIntensity = 0.35;
   const head = gear.helm ? 1 + (hashS(gear.helm) % 8) : 6;
   root.traverse((o: any) => {
-    o.userData.sh = false;
+    o.userData.sh = false; o.userData.shared = true;
     if (!o.isMesh) return;
     o.frustumCulled = false;
     const mn = o.material?.name || '';
@@ -217,7 +217,7 @@ export function soldierWeapon(s: SoldierVis, id: string) {
   const node = t?.getObjectByName(W.body); if (!node || !rel) return;
   const w = new THREE.Group(), c = node.clone(true); w.add(c);
   const gm = pbr(W.tex); gm.envMapIntensity = W.env ?? 0.22;
-  c.traverse((o: any) => { if (o.isMesh) { o.material = gm; o.frustumCulled = false; } o.userData.sh = false; });
+  c.traverse((o: any) => { if (o.isMesh) { o.material = gm; o.frustumCulled = false; } o.userData.sh = false; o.userData.shared = true; });
   const R = new THREE.Matrix4(); R.set(...(rel.flat() as [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]));
   w.matrixAutoUpdate = false; w.matrix.copy(C).multiply(R).multiply(CI);
   s.hand.add(w); s.weapon = w; s.wid = id; s.muzzle.set(...W.muzzle);

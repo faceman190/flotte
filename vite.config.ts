@@ -7,4 +7,6 @@ export default defineConfig({
   base: './',
   plugins: [viteSingleFile()],
   build: { target: 'es2022', chunkSizeWarningLimit: 4000, assetsDir: '_app' },   // assets/ gehört den Spieldaten
+  // Build-Ausgaben und Rohdaten nicht beobachten: beim Packen sperrt Windows dort kurz Dateien, das brachte den Dev-Server zum Absturz
+  server: { watch: { ignored: ['**/dist/**', '**/dist-artifact/**', '**/asset-src/**', '**/server/data/**'] } },
 });

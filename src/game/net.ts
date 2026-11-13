@@ -11,6 +11,7 @@ import type { ItemId, RockKind } from '../data/items';
 import { SHIP } from './player';
 import { ROVER, buildRover } from './surface';
 import { IN, syncOtherPilots } from './interior';
+import { viewModelId } from './mineArt';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { SHIPS, type ShipId } from '../data/ships';
 import type { Paint } from '../models/gltfShips';
@@ -27,7 +28,7 @@ export const NET = {
 };
 export const netHooks = { changed: () => {}, trade: (_m: any) => {}, lost: () => {} };   // Status oder Online-Liste geändert (Menüs neu zeichnen)
 export interface Remote {
-  id: number; name: string; cls: string; paint: string; m: string; s: number; w: any[] | null; d: string;   // d: Station, an der er angedockt ist   // w: zu Fuß in einer Station [Station, x, z, Blick]
+  id: number; name: string; cls: string; paint: string; m: string; s: number; w: any[] | null; d: string; g: string[] | null;   // g: Aussehen zu Fuß [Helm, Anzug, Rucksack, Waffe]   // d: Station, an der er angedockt ist   // w: zu Fuß in einer Station [Station, x, z, Blick]
   ship: ShipModel | null; rover: THREE.Group | null; tp: THREE.Vector3; tq: THREE.Quaternion; seen: number;
 }
 export const remotes = new Map<number, Remote>();
@@ -92,8 +93,8 @@ function onMsg(m: any) {
   } else if (m.t === 'st') {
     if (m.id === NET.id) return;
     let r = remotes.get(m.id);
-    if (!r) { r = { id: m.id, name: m.name, cls: '', paint: '', m: '', s: 0, w: null, d: '', ship: null, rover: null, tp: new THREE.Vector3(), tq: new THREE.Quaternion(), seen: 0 }; remotes.set(m.id, r); }
-    r.name = m.name; r.s = m.s || 0; r.m = m.m; r.w = Array.isArray(m.w) ? m.w : null; r.d = m.d || '';
+    if (!r) { r = { id: m.id, name: m.name, cls: '', paint: '', m: '', s: 0, w: null, d: '', g: null, ship: null, rover: null, tp: new THREE.Vector3(), tq: new THREE.Quaternion(), seen: 0 }; remotes.set(m.id, r); }
+    r.name = m.name; r.s = m.s || 0; r.m = m.m; r.w = Array.isArray(m.w) ? m.w : null; r.d = m.d || ''; r.g = Array.isArray(m.g) ? m.g.map(String) : null;
     if (m.p?.length === 3) r.tp.set(m.p[0], m.p[1], m.p[2]);
     if (m.q?.length === 4) r.tq.set(m.q[0], m.q[1], m.q[2], m.q[3]).normalize();
     const cls = SHIPS[m.cls as ShipId] ? m.cls : 'falke';
@@ -159,7 +160,8 @@ function sendState() {
   const s = myState(), p = s.m === 'schiff' ? P : s.o.position, q = s.o.quaternion;
   // zu Fuß in einer Station (nicht im eigenen Schiff): Position im Stationsraum mitschicken
   const w = IN.active && IN.station && !IN.ship ? [IN.station.id, IN.x, IN.z, IN.yaw] : null;
-  sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation() });
+  const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe)];
+  sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g });
 }
 setInterval(sendState, 100);
 export function netUpdate(dt: number) {
@@ -167,7 +169,7 @@ export function netUpdate(dt: number) {
   SHARED.pilots = [...remotes.values()].filter(r => r.m === 'schiff' && r.ship).map(r => ({ id: r.id, x: r.ship!.g.position.x, y: r.ship!.g.position.y, z: r.ship!.g.position.z, vx: 0, vy: 0, vz: 0 }));
   if (SHARED.client) moveFoes(dt);
   // andere Piloten zu Fuß in derselben Station
-  syncOtherPilots([...remotes.values()].filter(r => r.m === 'innen' && r.w).map(r => ({ id: r.id, name: r.name, st: String(r.w![0]), x: +r.w![1], z: +r.w![2], yaw: +r.w![3] })));
+  syncOtherPilots([...remotes.values()].filter(r => r.m === 'innen' && r.w).map(r => ({ id: r.id, name: r.name, st: String(r.w![0]), x: +r.w![1], z: +r.w![2], yaw: +r.w![3], g: r.g })));
   // andere Piloten weich nachführen
   const k = Math.min(1, dt * 8), now = performance.now();
   for (const r of [...remotes.values()]) {

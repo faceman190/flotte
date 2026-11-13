@@ -121,6 +121,8 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
   Seitschritten nach, bis dahin dreht der Oberkörper; er neigt sich mit dem Blick. Nach einem Schuss (oder mit wachen Wächtern in der Nähe) bleibt die
   Figur im Anschlag; Schießen legt eine Oberkörper-Ebene darüber; in der Mine spielt beim Tod eine Sterbeanimation.
   Helm → einer der 8 Köpfe, Anzug → Rüstungsplatten und Uniformfarbe, Rucksack → Taschen (Figur wird bei Wechsel neu gebaut).
+- **Mitspieler (Alpha 0.81):** andere Piloten zu Fuß in derselben Station erscheinen als Soldaten mit denselben Clips. Das Netz schickt im Feld `g`
+  ihr Aussehen mit (Helm, Anzug, Rucksack, Waffe; Server bereinigt es), die Laufrichtung ergibt sich aus der nachgeführten Bewegung relativ zu ihrer Blickrichtung.
 - **Taste V** schaltet überall zu Fuß Ich-Sicht ↔ Außensicht (wird im Browser gemerkt). Kamera über der rechten Schulter; sie rückt vor Wänden,
   Decken, Felsen, Bäumen und dem Rover heran.
 - **Zu Fuß auf dem Planeten (`src/game/onfoot.ts`):** im Rover **F** = aussteigen (Rover muss stehen), am Rover F oder E = einsteigen.
