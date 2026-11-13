@@ -130,7 +130,8 @@ export const SHIPDEF = {
   tanker: { n: 'Tanker', hp: 550, sph: [[0, 0, -38, 22], [0, 0, 0, 22], [0, 0, 38, 22]], R: 75, spd: 60 },
 };
 export type CivType = keyof typeof SHIPDEF;
-export const SHIPNAMES = ['Morgenrot', 'Hoffnung', 'Nordlicht', 'Weiße Taube', 'Eisenherz', 'Sternwanderer', 'Aurora', 'Kompass', 'Lichtblick', 'Ceres-Fähre', 'Zuflucht', 'Ankerplatz', 'Abendstern', 'Seidenweg', 'Polaris', 'Treue', 'Weitblick', 'Kranich', 'Erzvater', 'Glücksbote'];
+// Namen der Frachter und Fähren im Verkehr: schlichte, übliche Schiffsnamen (Vornamen, Vögel, Sterne). Auf Wunsch des Nutzers keine erfundenen Wortbildungen.
+export const SHIPNAMES = ['Morgenrot', 'Hoffnung', 'Nordlicht', 'Aurora', 'Kompass', 'Abendstern', 'Polaris', 'Kranich', 'Albatros', 'Möwe', 'Seeadler', 'Sturmvogel', 'Nordstern', 'Greta', 'Hanna', 'Frieda', 'Lotte', 'Paula', 'Anton', 'Heimat'];
 
 export function buildCivilian(type: CivType) {
   const g = new THREE.Group(), glows: THREE.Sprite[] = [];

@@ -31,8 +31,9 @@ const EYE = () => (STANCE.crouch ? 1.08 : 1.62);                       // Augenh
 const TS = 3.2, BASE = new THREE.Vector3(0, -60000, 0);
 type Vec2 = [number, number];
 // kind 'wrack': Schiffswrack statt Bergwerk (Metallgänge, Notlicht, Ferrit-Bewuchs; betreten aus dem All, zurück ins Schiff).
+// kind 'archiv': Anlage der Erbauer (Kapitel 4): gebaut wie das Wrack, kaltes Licht, betreten von der Oberfläche und dorthin zurück.
 // goal: ein Gegenstand der Geschichte auf der Brücke (im Tresorraum), bergbar, sobald der Wächterkern zerstört ist.
-interface Entrance { id: string; x: number; y: number; z: number; yaw: number; size: number; name: string; kind?: 'wrack'; danger?: number; goal?: { label: string; got: () => boolean; take: () => void } }
+interface Entrance { id: string; x: number; y: number; z: number; yaw: number; size: number; name: string; kind?: 'wrack' | 'archiv'; danger?: number; goal?: { label: string; got: () => boolean; take: () => void } }
 export type DungeonEntrance = Entrance;
 interface Crate { tx: number; tz: number; g: THREE.Group; lid: THREE.Object3D; open: boolean; big: boolean; idx: number; a: number; med?: boolean }
 interface Foe { id: number; nx?: number; nz?: number; x: number; z: number; y: number; hp: number; max: number; g: THREE.Group; eye: THREE.MeshBasicMaterial; boss: boolean; cool: number; aim: number; alert: boolean; tx: number; tz: number; ph: number; hit: number; vis?: DroneVis | null; atk?: number }
@@ -54,6 +55,7 @@ export const DUN = {
 };
 let ENTR: Entrance[] = [];
 const WR = () => DUN.e?.kind === 'wrack';
+const AR = () => DUN.e?.kind === 'archiv';
 let group: THREE.Group | null = null, lamps: THREE.Vector3[] = [], pool: THREE.PointLight[] = [], head: THREE.SpotLight | null = null, gun: THREE.Group | null = null;
 let tracer: THREE.Line | null = null, tracerT = 0, lampT = 0, pathT = 0, stepT = 0, grabT = 0;
 let vm: ViewModel | null = null, mflash: THREE.PointLight | null = null, WALL_R = 0.42;     // Waffe im Bild (eigene Ebene), Mündungslicht in der Welt, Abstand zur Wand
@@ -207,6 +209,7 @@ const THEME: Record<string, { lamp: number; fog: number; deco: 'kristall' | 'lav
   asche: { lamp: 0xd8b0ff, fog: 0x060408, deco: 'lava', col: 0xb060ff },
   kristall: { lamp: 0xd8b8ff, fog: 0x060409, deco: 'kristall', col: 0xd080ff },
   wrack: { lamp: 0xffb08a, fog: 0x030406, deco: 'kristall', col: 0xb060ff },      // Notlicht, Ferrit wächst aus dem angefressenen Metall
+  archiv: { lamp: 0xa8d4ff, fog: 0x03050a, deco: 'kristall', col: 0x9a60ff },     // kaltes Licht der Erbauer, Ferrit an den Wänden
 };
 function buildTheme(type: string, R: { next: () => number }) {
   const th = THEME[type] || THEME.fels; if (th.deco === 'none' || !group) return;
@@ -670,8 +673,8 @@ function flipSwitch(si: number, how: 'self' | 'mate' | 'sync') {
   const lv = sw.g.getObjectByName('hebel'); if (lv) lv.rotation.x = 0.7;
   const st = P.dungeons![DUN.e.id]; if (!(st.sws || []).includes(si)) st.sws = [...(st.sws || []), si];
   const left = DUN.sws.filter(q => !q.on).length, who = how === 'mate' ? 'Ein Mitspieler hat einen Schalter umgelegt. ' : 'Schalter umgelegt. ';
-  if (left === 0) { DUN.door!.open = true; st.sw = true; if (how !== 'sync') { say(WR() ? 'Alle Schalter umgelegt. Das Schott zur Brücke fährt auf.' : 'Alle Schalter umgelegt. Das Tor zum Tresor fährt auf.', '#3ad06a'); sfx('door_open', 0.7, 0.7, () => snd(200, 0.6, 'sawtooth', 0.05, 80)); } }
-  else if (how !== 'sync') { say(`${who}Noch ${left} bis ${WR() ? 'zur Brücke' : 'zum Tresor'}.`, '#ffb347'); snd(520, 0.2, 'square', 0.04, 200); }
+  if (left === 0) { DUN.door!.open = true; st.sw = true; if (how !== 'sync') { say(AR() ? 'Alle Riegel gelöst. Das Tor zum Speicherkern fährt auf.' : WR() ? 'Alle Schalter umgelegt. Das Schott zur Brücke fährt auf.' : 'Alle Schalter umgelegt. Das Tor zum Tresor fährt auf.', '#3ad06a'); sfx('door_open', 0.7, 0.7, () => snd(200, 0.6, 'sawtooth', 0.05, 80)); } }
+  else if (how !== 'sync') { say(`${who}Noch ${left} bis ${AR() ? 'zum Speicherkern' : WR() ? 'zur Brücke' : 'zum Tresor'}.`, '#ffb347'); snd(520, 0.2, 'square', 0.04, 200); }
   saveGame();
   if (how === 'self') coopSend('msw', { e: DUN.e.id, i: si });
 }
@@ -731,7 +734,7 @@ export function enterDungeon(e: Entrance) {
   const seed = hashStr(e.id + ':plan'), plan = generate(seed, e.size), R = rng(seed + 7);
   group = new THREE.Group(); group.position.copy(BASE); scene.add(group);
   const tint = new THREE.Color(T ? T.ground[1] : 0x8a8270).lerp(new THREE.Color(0x777777), 0.45).multiplyScalar(1.5);
-  const wr = e.kind === 'wrack';
+  const wr = e.kind === 'wrack' || e.kind === 'archiv', thKey = e.kind === 'archiv' ? 'archiv' : wr ? 'wrack' : pl?.type || 'fels';
   const rock: THREE.Object3D = wr ? buildHull(seed % 1000) : buildRock(seed % 1000, tint);
   const rocksOn = !wr && buildCaveRocks(seed, new THREE.Color(0.7, 0.67, 0.62).lerp(tint.clone().multiplyScalar(1 / 1.5), 0.4));
   if (rocksOn) ((rock as THREE.Mesh).material as THREE.MeshStandardMaterial).color.setScalar(0.85);     // Hintergrund hinter den Felsen
@@ -739,7 +742,7 @@ export function enterDungeon(e: Entrance) {
   const ORE: Record<string, number> = { fels: 0x40c0ff, wueste: 0xffb040, eis: 0x9fe8ff, vulkan: 0xff6030, asche: 0xb070ff, kristall: 0xd080ff };
   mats(ORE[pl?.type || 'fels'] || 0x40c0ff);
   if (wr) buildWreckProps(plan, R); else if (!buildKitProps(plan, R)) buildProps(plan, R);
-  buildTheme(wr ? 'wrack' : pl?.type || 'fels', R);
+  buildTheme(thKey, R);
   // Kisten (schon geöffnete bleiben offen), dazu ein Verbandskasten auf halbem Weg
   DUN.crates = plan.crates.map((c, i) => buildCrate(c[0], c[1], false, i, R.next() * 6.28, i === 1));
   DUN.crates.push(buildCrate(plan.vault[0], plan.vault[1] + 1, true, 99, Math.PI));
@@ -829,7 +832,7 @@ export function enterDungeon(e: Entrance) {
   // Licht: Welt aus, Stirnlampe und ein kleiner Vorrat an Lampenlichtern, die den nächsten Lampen folgen
   saved.amb = ambient.intensity; saved.sun = sun.intensity; saved.rim = rim.intensity; saved.near = camera.near; saved.far = camera.far;
   const fog = scene.fog as THREE.FogExp2 | null;
-  const TH = THEME[wr ? 'wrack' : pl?.type || 'fels'] || THEME.fels;
+  const TH = THEME[thKey] || THEME.fels;
   if (fog) { saved.fogC = fog.color.getHex(); saved.fogD = fog.density; fog.color.set(TH.fog); fog.density = 0.048; }
   pool = [];
   for (let k = 0; k < 5; k++) { const l = new THREE.PointLight(TH.lamp, 0, 13, 1.6); group.add(l); pool.push(l); }
@@ -847,7 +850,7 @@ export function enterDungeon(e: Entrance) {
   for (const [dx, dz, a] of [[1, 0, -Math.PI / 2], [0, 1, Math.PI], [-1, 0, Math.PI / 2], [0, -1, 0]] as [number, number, number][]) if (tile(1 + dx, 1 + dz)) { DUN.yaw = a; break; }
   DUN.active = true; G.mode = 'dungeon'; releaseAll(); clearParticles(); particleSize(0.3);
   document.getElementById('hud')?.classList.add('hidden');
-  say(wr ? `${e.name}: ${DUN.foes.length} Wächter gemeldet. Leg die Notstromschalter um, dann fährt das Schott zur Brücke auf.` : `${e.name}: ${DUN.foes.length} Wächter gemeldet. Finde den Schalter, dann das Tor.`, '#ffb347');
+  say(e.kind === 'archiv' ? `${e.name}: ${DUN.foes.length} Wächter gemeldet. Löse die Speicherriegel, dann fährt das Tor zum Speicherkern auf.` : wr ? `${e.name}: ${DUN.foes.length} Wächter gemeldet. Leg die Notstromschalter um, dann fährt das Schott zur Brücke auf.` : `${e.name}: ${DUN.foes.length} Wächter gemeldet. Finde den Schalter, dann das Tor.`, '#ffb347');
   sfx('door_open', 0.6, 0.8, () => snd(160, 0.5, 'sawtooth', 0.05, -60));
   reveal();
 }
@@ -962,7 +965,7 @@ export function updateDungeon(dt: number) {
   // Was liegt vor mir? (Kiste, Schalter, Förderkorb)
   DUN.prompt = ''; DUN.act = null;
   const near = (tx: number, tz: number, r = 2.2) => Math.hypot(tx * TS - DUN.x, tz * TS - DUN.z) < r;
-  for (const c of DUN.crates) if (!c.open && near(c.tx, c.tz)) { DUN.prompt = c.med ? 'Verbandskasten öffnen' : c.big ? (WR() ? 'Spind der Kommandantin öffnen' : 'Tresorkiste öffnen') : WR() ? 'Spind öffnen' : 'Kiste öffnen'; DUN.act = () => openCrate(c); }
+  for (const c of DUN.crates) if (!c.open && near(c.tx, c.tz)) { DUN.prompt = c.med ? 'Verbandskasten öffnen' : c.big ? (AR() ? 'Großen Behälter öffnen' : WR() ? 'Spind der Kommandantin öffnen' : 'Tresorkiste öffnen') : AR() ? 'Behälter öffnen' : WR() ? 'Spind öffnen' : 'Kiste öffnen'; DUN.act = () => openCrate(c); }
   DUN.sws.forEach((sw, si) => {
     if (sw.on || !near(sw.tx, sw.tz)) return;
     DUN.prompt = `Schalter umlegen (${DUN.sws.filter(q => q.on).length + 1}/${DUN.sws.length})`;
@@ -980,7 +983,7 @@ export function updateDungeon(dt: number) {
     if (on && Math.random() < 0.5) burst(tr.tx * TS + (Math.random() - 0.5) * 2, 0.3 + Math.random() * (tr.kind === 'gas' ? 1.6 : 0.4), tr.tz * TS + (Math.random() - 0.5) * 2, tr.kind === 'gas' ? '#7aff60' : '#9fd0ff', tr.kind === 'gas' ? 3 : 2, tr.kind === 'gas' ? 1.2 : 3, 0.4);
     if (on && Math.abs(DUN.x - tr.tx * TS) < TS * 0.42 && Math.abs(DUN.z - tr.tz * TS) < TS * 0.42) { hurtPlayer(dt * (tr.kind === 'gas' ? 14 : 22)); if (Math.random() < dt * 2) say(tr.kind === 'gas' ? 'Giftgas! Weg von der Platte.' : 'Stromschlag!', '#ff6b5b'); }
   }
-  if (near(DUN.exit[0], DUN.exit[1], 1.6)) { DUN.prompt = WR() ? 'Schleuse: zurück zum Schiff' : 'Förderkorb: zurück an die Oberfläche'; DUN.act = () => leaveDungeon(false); }
+  if (near(DUN.exit[0], DUN.exit[1], 1.6)) { DUN.prompt = AR() ? 'Schacht: zurück an die Oberfläche' : WR() ? 'Schleuse: zurück zum Schiff' : 'Förderkorb: zurück an die Oberfläche'; DUN.act = () => leaveDungeon(false); }
   if (DUN.goal && DUN.e?.goal) {
     const bl = DUN.goal.g.getObjectByName('blink'); if (bl) bl.visible = Math.sin(performance.now() / 180) > 0;
     if (near(DUN.goal.tx, DUN.goal.tz, 2.4)) {
@@ -1014,7 +1017,7 @@ export function updateDungeon(dt: number) {
     if (fo.hp <= 0) {
       burst(BASE.x + fo.x, BASE.y + fo.y, BASE.z + fo.z, '#ffb060', fo.boss ? 60 : 22, fo.boss ? 5 : 3.5, 0.6); sfx('explosion0', fo.boss ? 0.7 : 0.4, fo.boss ? 0.8 : 1.5, () => snd(90, 0.4, 'sawtooth', 0.07, -40));
       group.remove(fo.g); DUN.foes.splice(i, 1); DUN.kills++; droneBark('tot', Math.hypot(DUN.x - fo.x, DUN.z - fo.z));
-      if (fo.boss) say(WR() ? 'Wächterkern zerstört. Die Brücke ist frei.' : 'Wächterkern zerstört. Der Tresor ist frei.', '#ffb347');
+      if (fo.boss) say(AR() ? 'Wächterkern zerstört. Der Speicherkern ist frei.' : WR() ? 'Wächterkern zerstört. Die Brücke ist frei.' : 'Wächterkern zerstört. Der Tresor ist frei.', '#ffb347');
       continue;
     }
     // Ziel: der nächste Pilot, den der Wächter sieht (sonst der nächste überhaupt)

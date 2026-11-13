@@ -47,6 +47,20 @@ function spawnTraffic(initial: boolean) {
   if (!initial) burst(x, y, z, '#ffffff', 40, 60, 0.8);
 }
 
+// Schiff der Geschichte (Kapitel 4: die Weitsicht): ein vergrößertes Zivilschiff, das zum Tor fliegt und springt. Die Ferrox greifen es an wie
+// jeden Frachter. Es bleibt bei hp 1 stehen statt zu explodieren; `jumped` zeigt, dass es das Tor erreicht hat.
+export function buildStoryShip(type: CivType, scale: number) { const b = buildCivilian(type); for (const gl of b.glows) gl.userData.base = gl.scale.x / 10; b.g.scale.setScalar(scale); return b; }
+export function spawnStoryShip(name: string, kind: string, type: CivType, scale: number, hp: number, spd: number, x: number, y: number, z: number, gate: Gate) {
+  const d0 = SHIPDEF[type], def = { n: kind, hp, sph: d0.sph.map(s => s.map(v => v * scale)), R: d0.R * scale, spd };
+  const b = buildStoryShip(type, scale);
+  b.g.position.set(x, y, z); scene.add(b.g);
+  const goal = gateGoal(gate);
+  _v.set(goal.x - x, goal.y - y, goal.z - z).normalize().multiplyScalar(spd * 0.2);
+  const t = { type, def, name, x, y, z, vx: _v.x, vy: _v.y, vz: _v.z, hp, maxhp: hp, sph: def.sph, R: def.R, mesh: b.g, parts: b, goal, wait: 0, hitT: 0, alertT: 1e9, alive: true, spd, story: true, jumped: false };
+  world.traffic.push(t);
+  return t;
+}
+export function removeStoryShip(t: any) { const i = world.traffic.indexOf(t); if (i >= 0) removeTraffic(i); }
 export function initTraffic() {
   world.traffic.length = 0;
   const n = trafficCap();
@@ -70,6 +84,7 @@ function trafficBoom(x: number, y: number, z: number) {
 export function damageTraffic(t: any, d: number) {
   if (!t.alive) return;
   t.hitT = 0.3;
+  if (t.story) { t.hp = Math.max(1, t.hp - d); return; }      // Schiff der Geschichte: geht nicht verloren, das Kapitel entscheidet bei hp 1
   if (SHARED.client && t.nid) return;   // Schaden rechnet der Gastgeber
   t.hp -= d;
   if (t.alertT <= 0) { t.alertT = 15; npcRadio('VERKEHR', `${t.def.n} „${t.name}“ wird angegriffen! Wir brauchen Hilfe!`); }
@@ -108,6 +123,7 @@ export function updateTraffic(dt: number) {
       t.vx += (_v.x - t.vx) * k; t.vy += (_v.y - t.vy) * k; t.vz += (_v.z - t.vz) * k;
       if (g.station && d < 40) t.wait = rand(20, 45);
       if (g.gate && d < 75) {
+        t.jumped = true;
         if (t.nid) hostEvent(['g', t.nid]);
         burst(t.x, t.y, t.z, '#ffffff', 50, 70, 0.8);
         snd(200, 0.5, 'sine', 0.02, 400);
@@ -148,6 +164,14 @@ function spawnAlly() {
   f.g.position.set(x, y, z);
   scene.add(f.g);
   world.allies.push({ name: cs[0], col: cs[2], x, y, z, vx: 0, vy: 0, vz: 0, hp: 140, maxhp: 140, cool: 0, mesh: f.g, f, alive: true, target: null, rt: 0, home, orbit: rand(0, 6.28), side: Math.random() < 0.5 ? 1 : -1 });
+}
+// Verbündeter der Geschichte: ein Patrouillenjäger mit eigenem Namen, der um `home` kreist (ein Objekt mit x, y, z und R, z. B. ein Schiff)
+export function spawnStoryAlly(name: string, col: number, css: string, x: number, y: number, z: number, home: any, hp = 260) {
+  const f = buildAllyModel(world.allies.length % 5, col);
+  f.g.position.set(x, y, z); scene.add(f.g);
+  const a = { name, col: css, x, y, z, vx: 0, vy: 0, vz: 0, hp, maxhp: hp, cool: 0, mesh: f.g, f, alive: true, target: null, rt: 0, home, orbit: rand(0, 6.28), side: Math.random() < 0.5 ? 1 : -1 };
+  world.allies.push(a);
+  return a;
 }
 export function initAllies() {
   world.allies.length = 0;

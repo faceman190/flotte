@@ -121,10 +121,57 @@ Diese drei Spannungen tragen die spätere Geschichte: **Sicherheit** (Rat), **Ka
 | 1 | **Echo im Sonnenfeld** | Die Trümmer des Halden-Tors senden zum ersten Mal seit 38 Jahren ein Signal. Ist es eine Nachricht der Altwelten oder etwas anderes? |
 | 2 | **Splitter der Erbauer** | Spurensuche im Splittergürtel und in der Grauzone: Ruinen der Erbauer, Ferrit mit lesbaren Daten. Der Streit zwischen Gilde und Rat bricht auf. |
 | 3 | **Die Wahrheit über die Narbe** | Was beim Fall der Narbe wirklich geschah, und wer damals Befehle verweigert hat. |
-| 4 | **Ins Herz** | Der Weg in den Ferrox-Kern. Dort liegt das Archiv der Erbauer und vielleicht ein Weg, den Riss zu öffnen. Am Ende steht eine Entscheidung. |
+| 4 | **Ins Herz** | Der Weg in den Ferrox-Kern: das Archiv der Erbauer, die Wahrheit über die Ferrox und den Riss, die Rettung der Weitsicht. Am Ende geht der Leitkristall an Rat, Grenzwacht oder Gilde. Gebaut, siehe unten. |
 | später | **Die Altwelten** | Langfristig können die Altwelten zurückkehren: ein neu geöffnetes Tor, ein Schiff der elf, die nie ankamen, oder etwas ganz anderes. Bewusst offen, damit die Geschichte über Jahre wachsen kann. |
 
 Jedes Kapitel verbindet Hauptmissionen mit dem, was das Spiel schon kann: Bergbau, Bergung, Kampf, Handel, Planeten.
+
+---
+
+## Kapitel 4: „Ins Herz“ (Alpha 1.0, `src/game/chapter4.ts`)
+
+**Worum es geht:** Die Weitsicht zog vor vier Monaten durch die Narbe nach Osten. Der Rat gibt den Flug frei. Der Pilot folgt der Spur durch das Stummfeld in den Ferrox-Kern, holt im Archiv der Erbauer den Leitkristall und bringt die Weitsicht nach Hause.
+
+**Die Wahrheit:**
+- Die Ferrox sind die Schürfmaschinen der Erbauer. Sie bauen sich selbst, wurden nie abgeschaltet und haben erst die Schiffe, dann die Städte ihrer Erbauer gefressen.
+- Jedes Tor, das anläuft, ruft sie zur Arbeit. Die Erbauer haben ihre Tore abgeschaltet, zu spät.
+- Das Halden-Tor war angefressen, lange bevor die Bastion kam. Der Riss war kein Unfall.
+- Die elf Schiffe hingen im zerbrochenen Sprung. Für die Weitsicht vergingen neun Tage, für die Crew 38 Jahre. Das Signal aus Kapitel 1 war die Weitsicht, die herausfiel. Der Schwarm hat sie nicht gefressen, sondern als Fracht in den Kern geschleppt, mit 3.000 Schläfern an Bord.
+- Der Leitkristall trägt einen einzigen Befehl an die Schürfer: „Fracht freigeben“. Er ist danach verbraucht. Die Ferrox bleiben; was bleibt, ist die Sprache, in der man mit dem Schwarm redet.
+- Ausblick: Die Weitsicht hat im Sprung mitgehört. Zehn Kennungen, alle noch unterwegs.
+
+**Entscheidungen des Nutzers (13.11.2026):** Weitsicht wird gerettet; niemand stirbt; die Ferrox bleiben Gegner; die Wahrheit über die Ferrox wird öffentlich; am Ende drei Wege statt zwei; keine Aufgabe „drei Punkte scannen“ mehr (das gab es in den Kapiteln 1 bis 3).
+
+| Schritt | Ort | Was passiert |
+|---|---|---|
+| 0 | überall | Szene „KAPITEL 4“. Brummer ruft zur Bastion. |
+| 1 | Bastion, zu Fuß | Hollweg und Achterberg im Hangar: Der Flug ist frei, Staffel Vier wartet am Rand der Narbe. (Erste Zeile je nach Wahl in Kapitel 3.) |
+| 2 | Talstadt, zu Fuß | Krull baut den **Ferrit-Leser** aus sechs Ferrit. Ferrit gibt es nirgends zu kaufen: Kristallfelder in der Grauzone oder am Nebeltor. |
+| 3 | Weg | Achterberg: Ab dem Stummfeld kein Funk. Unter 60 m/s ist der Pilot für den Schwarm Schrott. |
+| 4 | Stummfeld | Ein abgerissenes Frachtmodul der Weitsicht. Auf 170 m heran und 14 Sekunden unter 60 m/s bleiben: Der Leser zieht Vargas Logbuch. Wer mit vollem Schub ankommt, weckt drei Drohnen. |
+| 5–6 | Ferrox-Kern | Kein Funk. An den Bienenstöcken vorbei, auf Kernkristall landen. Die gefangene Weitsicht hängt neben einem Bienenstock. |
+| 7 | Kernkristall, zu Fuß | Zum Eingang des Archivs (700–1.200 m vom Landeplatz). |
+| 8 | Archiv | Dungeon-Art „Archiv“: drei Speicherriegel, Wächterkern, Leitkristall. Der Leser übersetzt beim ersten Riegel, beim letzten Riegel und nach dem Wächterkern je einen Eintrag der Erbauer. |
+| 9 | Kernkristall | Zurück ins Schiff und in den Orbit. |
+| 10 | Ferrox-Kern | Auf 350 m an die Weitsicht: Der Leitkristall sendet. Alle Drohnen und Bomber im Sektor fallen aus. Varga meldet sich. |
+| 11 | Ferrox-Kern | **Geleit** zum Tor (das mit dem freiesten Weg): drei Wellen (2 Jäger; 3 Jäger + 1 Bomber; 3 Jäger + 1 Bomber), geschwächt gegenüber dem Sektor. Zur zweiten Welle kommen Achterberg und Staffel Vier. Fällt der Rumpf auf null, beginnt das Geleit am Bienenstock neu. |
+| 12 | Weg | Aus dem Gebiet der Ferrox in die Grauzone. |
+| 13 | Wahl | Leitkristall zur Bastion (**Rat**), zum Wachtposten Ost (**Grenzwacht**) oder nach Talstadt (**Gilde**). |
+| 14 | Szene | „Heimstatt · elf Tage später“: Die Weitsicht bittet um einen Ankerplatz. „Wir dachten, wir wären die Letzten.“ – „Das dachten wir auch.“ |
+
+Belohnung: 5.000 Credits, +80 Ruf bei der gewählten Seite, −10 bei den beiden anderen. Dauervorteil je Wahl (`reputation.ts`, `keyTo`): Rat 8 % Nachlass auf Reparatur und Versorgung, Grenzwacht 15 % mehr Kopfgeld, Gilde 5 % bessere Verkaufspreise.
+Danach liegt die Weitsicht vor Anker bei der Bastion; das Frachtmodul im Stummfeld und der Eingang des Archivs bleiben stehen.
+
+Vertonung: 43 Zeilen, noch nicht erzeugt. Neue Sprecherrolle: der Ferrit-Leser (sechs Zeilen, sachliche Maschinenstimme). Varga spricht drei Zeilen als Aufnahme (wie in Kapitel 2) und vier Zeilen über Funk.
+
+Technik:
+- **Tarnung** (`hidden` in `player.ts`, gesetzt in `updateChapter4`): Schritte 3 bis 10, im All eines Ferrox-Sektors, nach 2,5 Sekunden unter 60 m/s. Die Ferrox wählen den Spieler dann nicht als Ziel (`playerVisible` in `combat.ts`). Nach dem Kapitel gibt es sie nicht mehr.
+- **Schiff der Geschichte** (`spawnStoryShip` in `npc.ts`): die Weitsicht ist ein vergrößertes Passagierschiff im Verkehr. Die Ferrox greifen sie an wie jeden Frachter; sie bleibt bei 1 Rumpfpunkt stehen statt zu explodieren. `spawnStoryAlly` stellt Achterberg und Staffel Vier als Patrouillenjäger.
+- **Archiv** (`Entrance.kind = 'archiv'` in `dungeon.ts`): gebaut wie das Wrack, kaltes Licht, betreten von der Oberfläche und dorthin zurück.
+- Liegeplatz der Weitsicht und Zieltor werden gemeinsam gewählt (`plan`): der gerade Weg soll an den Asteroidenfeldern vorbeiführen.
+- Mitspieler ohne eigenen Verkehr (Mehrspieler, nicht Gastgeber): Das Geleit gilt als geschafft, sobald sie das Tor erreichen.
+
+Geprüft im Testfenster (13.11.2026): alle 15 Schritte einmal bis zum Abschluss, Wahl „Gilde“. Nicht geprüft: die Wahlen „Rat“ und „Grenzwacht“ am Ende, das Kapitel im Mehrspieler, ein echter Durchgang mit Kampf von Hand.
 
 ---
 

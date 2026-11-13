@@ -87,10 +87,12 @@ export function addRep(id: RepId | null, d: number) {
 
 // ---------- Wirkungen ----------
 const pos = (id: RepId) => Math.max(0, level(id));
-export const serviceFactor = () => (level('rat') < 0 ? 1.15 : 1 - 0.04 * pos('rat'));
+// Entscheidung am Ende von Kapitel 4 (chapter4.ts): Wer den Leitkristall bekam, dankt es dauerhaft
+const keyTo = (f: RepId) => !!P.story && (P.story as any).ch4 === 'done' && (P.story as any).c4?.choice === f;
+export const serviceFactor = () => (level('rat') < 0 ? 1.15 : 1 - 0.04 * pos('rat')) * (keyTo('rat') ? 0.92 : 1);
 export const shipFactor = () => 1 - 0.02 * pos('rat');
-export const bountyFactor = () => 1 + 0.1 * pos('wacht');
-export const sellFactor = () => 1 + 0.015 * pos('gilde');
+export const bountyFactor = () => 1 + 0.1 * pos('wacht') + (keyTo('wacht') ? 0.15 : 0);
+export const sellFactor = () => 1 + 0.015 * pos('gilde') + (keyTo('gilde') ? 0.05 : 0);
 export const refineFeeFactor = () => 1 - 0.1 * pos('gilde');
 export function contractFactor(stationId: string, sectorId: string) {
   const f = stationFaction(stationId, sectorId);

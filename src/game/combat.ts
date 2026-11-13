@@ -7,7 +7,7 @@ import { MK } from '../models/ships';
 import { world, dropPick, breakAst, SECTOR_RADIUS } from './world';
 import { burst, puff } from './fx';
 import { P, G, stats } from './state';
-import { hurtPlayer, playerTargetable } from './player';
+import { hurtPlayer, playerTargetable, playerVisible } from './player';
 import { damageTraffic, damageAlly } from './npc';
 import { radio } from '../ui/radio';
 import { SHARED, hostEvent } from './shared';
@@ -154,7 +154,7 @@ export function updateSpawning(dt: number) {
 // Zielwahl: nur was in Reichweite ist; sonst patrouillieren
 function pickTarget(e: any) {
   const cand: { t: any; w: number }[] = [], R = 1700;
-  if (playerTargetable() && d3(P.x, P.y, P.z, e.x, e.y, e.z) < R) cand.push({ t: { player: true }, w: e.type === 'bomber' ? 0.5 : 3 });
+  if (playerVisible() && d3(P.x, P.y, P.z, e.x, e.y, e.z) < R) cand.push({ t: { player: true }, w: e.type === 'bomber' ? 0.5 : 3 });
   for (const a of world.allies) if (a.alive && d3(a.x, a.y, a.z, e.x, e.y, e.z) < R) cand.push({ t: { ally: a }, w: e.type === 'bomber' ? 0.3 : 2 });
   for (const p of SHARED.pilots) if (d3(p.x, p.y, p.z, e.x, e.y, e.z) < R) cand.push({ t: { pilot: p.id }, w: e.type === 'bomber' ? 0.5 : 3 });
   for (const s of world.traffic) if (s.alive && d3(s.x, s.y, s.z, e.x, e.y, e.z) < R + 300) cand.push({ t: { ship: s }, w: e.type === 'bomber' ? 5 : 1.5 });
@@ -167,7 +167,7 @@ const pilotOf = (id: number) => SHARED.pilots.find(p => p.id === id);
 const tpos = (t: any) => (t.player ? P : t.pilot ? pilotOf(t.pilot)! : t.ally ? t.ally : t.ship);
 function tValid(t: any) {
   if (!t) return false;
-  if (t.player) return playerTargetable();
+  if (t.player) return playerVisible();
   if (t.pilot) return !!pilotOf(t.pilot);
   if (t.ally) return t.ally.alive;
   return t.ship.alive;
@@ -252,7 +252,7 @@ export function updateEnemies(dt: number) {
         for (let k = 0; k < 2; k++) spawnEnemy('drone', e.x + rand(-90, 90), e.y + rand(-40, 40), e.z + rand(-90, 90), { x: e.x, y: e.y, z: e.z });
       }
       e.cool -= dt;
-      let aim: any = playerTargetable() && dp < 750 ? P : null;
+      let aim: any = playerVisible() && dp < 750 ? P : null;
       for (const p of SHARED.pilots) if (d3(p.x, p.y, p.z, e.x, e.y, e.z) < (aim ? d3(aim.x, aim.y, aim.z, e.x, e.y, e.z) : 750)) aim = p;
       if (aim && e.cool <= 0) {
         e.cool = 0.6;

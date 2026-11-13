@@ -10,7 +10,7 @@ import { SHARED } from './shared';
 import { IN, storyNpc, nearNpc, hangarSpot } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
-import { talk, playScene, registerChain, st, endChain, storyCtx, storyHooks, dialogBusy, type Step, type Obj, type Marker } from './story';
+import { talk, playScene, registerChain, st, endChain, storyCtx, storyHooks, dialogBusy, startChain, type Step, type Obj, type Marker } from './story';
 import { CITY, cityWorld } from './city';
 import { footTargets } from './onfoot';
 import { charInstance, animInit, animStep, animTalk, hasChar } from '../models/charModels';
@@ -338,7 +338,7 @@ function finish() {
   storyHooks.banner('KAPITEL 3 ABGESCHLOSSEN', `+3.500 Credits · ${wacht ? 'Grenzwacht' : 'Flottenrat'} dankt dir`, '#ffd27a');
   snd(523, 0.3, 'triangle', 0.06, 0); setTimeout(() => snd(659, 0.3, 'triangle', 0.06, 0), 200); setTimeout(() => snd(784, 0.5, 'triangle', 0.06, 0), 400);
   saveGame();
-  setTimeout(() => talk(['BRUMMER', 'Bastion an Pilot: Die Geschichte geht weiter. Kapitel 4 ist in Arbeit.']), 5000);
+  startChain('ch4', 30000);
 }
 
 // Nach dem Verlassen des Wracks führt die Bresche erst wieder hinein, wenn man sich entfernt hat. Wer im Wrack zusammenbricht, erfährt, wo er ist.

@@ -52,6 +52,7 @@ import { updateBaseFx } from './game/basefx';
 import { preloadBases } from './models/stationModels';
 import { updateChapter2 } from './game/chapter2';
 import { updateChapter3 } from './game/chapter3';
+import { updateChapter4 } from './game/chapter4';
 import { basePad, nearDoor } from './game/basewalk';
 import { nearCrate, openCrate as openSalvage, updateSalvage, drawSalvageHUD } from './game/salvage';
 import { toggleView, toggleCrouch } from './game/avatar';
@@ -588,6 +589,7 @@ function loop(now: number, manual = false) {
   hook('Kapitel 1', () => updateChapter1(dt));
   hook('Kapitel 2', () => updateChapter2(dt));
   hook('Kapitel 3', () => updateChapter3(dt));
+  hook('Kapitel 4', () => updateChapter4(dt));
   hook('Stadt', () => updateCity(dt));
   hook('Basis-Effekte', () => updateBaseFx(dt));
   // Stadt: durchs offene Hallentor geflogen → andocken (Landeanflug im Hangar übernimmt)

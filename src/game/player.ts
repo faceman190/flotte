@@ -34,6 +34,9 @@ const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _v = new THREE.Vector3();
 export function fwd() { _e.set(P.pitch, P.yaw, 0); return new THREE.Vector3(0, 0, -1).applyEuler(_e); }
 function right() { return new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw)); }
 export const playerTargetable = () => G.mode === 'play' && !G.dead;
+// Tarnung (setzt Kapitel 4): Die Ferrox wählen den Spieler nicht als Ziel und verlieren ihn. Treffer und Einsammeln bleiben, wie sie sind.
+export const hidden = { on: false };
+export const playerVisible = () => playerTargetable() && !hidden.on;
 export const hooks = { respawn: () => {} };
 
 export function placePlayer(x: number, y: number, z: number, yaw: number, speed = 0) {

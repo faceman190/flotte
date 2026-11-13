@@ -191,6 +191,11 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
 - Erster Einsatz: das Wrack der „Eidwacht“ in Kapitel 3 (`src/game/chapter3.ts`), Größe 7, Gefahr 2 (9 Wächter, Wächterkern, 5 Fallen, 2 Schalter).
 - Achtung: Das Texturblatt hat viel Metall. Ohne Umgebungslicht bleiben solche Wände schwarz, deshalb läuft die Kopie für das Wrack mit wenig Metall.
 
+## Archiv (Alpha 1.0)
+- Dritte Dungeon-Art: `Entrance.kind = 'archiv'`. Gebaut wie das Wrack (`buildHull`, `buildWreckProps`), Thema `archiv` mit kaltem Licht. Betreten von der Oberfläche über einen Ansprechpunkt der Geschichte (`footTargets`), zurück an die Oberfläche wie bei einem Bergwerk.
+- Eigene Texte: Speicherriegel statt Notstromschalter, Speicherkern statt Brücke, Schacht statt Schleuse.
+- Erster Einsatz: das Archiv der Erbauer auf Kernkristall in Kapitel 4 (`src/game/chapter4.ts`), Größe 8, Gefahr 3 (11 Wächter, Wächterkern, 3 Riegel).
+
 ## Noch offen
 - Weitere Arten (Bunker), Schlüssel, mehrere Ebenen, große Meteoriten im All.
 - Hände/Handschuhe an Pistole und Splitterwerfer in der Ich-Sicht.
