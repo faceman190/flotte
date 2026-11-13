@@ -4,7 +4,7 @@ Stand: Alpha 0.99. Quelle der Texte: `src/game/chapter3.ts`. Regeln wie in `docs
 (trocken erzeugen, Regie in eckigen Klammern auf Englisch, Zahlen ausgeschrieben, kein Spielername). Modell `eleven_v4`, je Zeile eine Fassung.
 
 Ablage der Aufnahmen: `asset-src/voice/kapitel3/<Kennung>.mp3`, danach `npm run assets`. Zuordnung Zeile → Kennung: `src/data/voice.ts`.
-Noch nicht erzeugt: Solange die Dateien fehlen, zeigt das Spiel nur den Untertitel.
+Erzeugt am 2026-11-13 (40 von 41 Zeilen, Kennungen der Fassungen in docs/sound/erzeugt.md). Offen: `d32_maren`, siehe dort.
 
 Umfang: 41 Zeilen, 5019 Zeichen mit Regie (ein Credit je Zeichen, also rund 5019 Credits).
 Je Figur: BRUMMER 783, HOLLWEG 513, ROTH 1517, BRANDT 492, ACHTERBERG 606, WERK 272, MAREN 341, ACHTERBERG31 341, KRULL 154.
@@ -17,11 +17,11 @@ Je Figur: BRUMMER 783, HOLLWEG 513, ROTH 1517, BRANDT 492, ACHTERBERG 606, WERK 
 | Ratsherr Hollweg | „Commander Blake“ (`Z2yQ1EdlDmcIgh9Pn4Lw`) wie Prolog |
 | Wachtmeisterin Roth | „Lola - Female Action Character“ (`KzAyD2tTf9r77ytc2bYC`) wie Kapitel 1 |
 | Gildemeisterin Krull | „Moreana - Dark, Charismatic, Seductive“ (`V8IDMv79XsMfnx3b9E2U`) wie Kapitel 1 |
-| Hauptfrau Achterberg | wie Prolog (siehe `docs/voice/prolog.md`) |
+| Hauptfrau Achterberg | „Nora Vale - Mission Control“ (`iV1OKYxbmgRtpzJ2q8kx`) wie Prolog |
 | Staffelführerin Achterberg, Jahr 31 (nur Aufnahme) | dieselbe Stimme wie Achterberg, in der Regie jünger und gehetzt; im Spiel mit Funkklang |
-| Kommandantin Maren Hollweg, Jahr 31 (nur Aufnahme), neu | noch zu wählen: ältere Frau, befehlsgewohnt, ruhig |
-| Ilvar Brandt, neu | noch zu wählen: Mann um die sechzig, rau, müde |
-| Schmelzwerk Zwölf, Schichtleitung, neu | noch zu wählen: nüchtern, über Werksfunk |
+| Kommandantin Maren Hollweg, Jahr 31 (nur Aufnahme), neu | „Elinor - The Gruff Aunt“ (`gDQfVolj9RbmXgumLcOq`); kostet 2,25 Credits je Zeichen |
+| Ilvar Brandt, neu | „Axel - ruhig, erzählend, leicht rauh“ (`CD5xyRjkR74P5qby9tmm`) |
+| Schmelzwerk Zwölf, Schichtleitung, neu | „Kalle – Raspy & Energetic“ (`LvlM6UD7pLIgPGDeuuxU`) |
 
 **Brandt** – Funker der „Eidwacht“ im Jahr 31, heute Koch an der Garküche Schleusenbräu in Neonhafen. Hat sieben Jahre geschwiegen.
 **Maren Hollweg** – erste Kommandantin, Mutter von Ratsherr Hollweg. In der Aufnahme unter Druck, aber beherrscht; kein Bösewicht.
