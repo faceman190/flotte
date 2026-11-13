@@ -44,7 +44,8 @@ TINT = {   # linear; im Bild wirken die Werte deutlich heller (0,06 ist ein dunk
     'h_sand': (0.2, 0.17, 0.12), 'h_wall': (0.1, 0.105, 0.1), 'h_dark': (0.05, 0.053, 0.058), 'h_floor': (0.06, 0.063, 0.068), 'h_olive': (0.11, 0.12, 0.08),
 }
 GLOW = {'kit_light': (1.0, 0.93, 0.8), 'kit_lamp': (1.0, 0.55, 0.12), 'kit_redlamp': (1.0, 0.1, 0.05), 'kit_screen': (0.2, 0.6, 0.9), 'kit_green': (0.2, 1.0, 0.4),
-        'kit_accent': (0.25, 0.85, 0.75), 'kit_cool': (0.75, 0.88, 1.0)}      # kit_accent: im Spiel die Akzentfarbe der Station
+        'kit_accent': (0.25, 0.85, 0.75), 'kit_cool': (0.75, 0.88, 1.0),
+        'kit_shopw': (0.62, 0.5, 0.36), 'kit_shopc': (0.4, 0.52, 0.66)}      # gedämpftes Ladenlicht (Schaufenster): warm und kalt      # kit_accent: im Spiel die Akzentfarbe der Station
 
 def V(p): return p if isinstance(p, Vector) else Vector(p)
 def T(c): return TINT[c] if isinstance(c, str) else tuple(c)
@@ -179,13 +180,13 @@ class Kit:
         """Hologramm aus dem zweiten Stadt-Atlas: durchscheinend, Schwarz lässt durch (Material kit_holo, im Spiel flackernd)."""
         d = CITY2[name]; h = w * d['h'] / d['w'] if h is None else h
         self.tile(name, c, u, v, w, h, 'none', off=0.0, cells=CITY2, scale=CPX2, mat='kit_holo')
-    def facade(self, bl, br, tl, tint='none', per=(24.0, 25.6), z0=0.0):
+    def facade(self, bl, br, tl, tint='none', per=(24.0, 25.6), z0=0.0, mat='kit_tower', u0=None):
         """Turmfassade als eine Fläche (Material kit_tower: kachelndes Bild mit Fenstern, Leuchtkarte für beleuchtete Fenster).
         bl, br, tl: Ecken (unten links, unten rechts, oben links); Texturkoordinaten in Metern / Kachelgröße. z0 verschiebt das Geschossraster."""
         bl, br, tl = V(bl), V(br), V(tl); L, H = (br - bl).length, (tl - bl).length
         if L < 1e-3 or H < 1e-3: return
-        u0 = self.R.randrange(8) * per[0] / 8; v0 = z0 / per[1]
-        self.poly((bl, br, br + (tl - bl), tl), ((u0 / per[0], v0), ((u0 + L) / per[0], v0), ((u0 + L) / per[0], v0 + H / per[1]), (u0 / per[0], v0 + H / per[1])), T(tint), 'kit_tower')
+        u0 = self.R.randrange(8) * per[0] / 8 if u0 is None else u0; v0 = z0 / per[1]
+        self.poly((bl, br, br + (tl - bl), tl), ((u0 / per[0], v0), ((u0 + L) / per[0], v0), ((u0 + L) / per[0], v0 + H / per[1]), (u0 / per[0], v0 + H / per[1])), T(tint), mat)
     def decal(self, name, c, u, v, w, h=None, tint='white', off=0.015):
         d = DECALS[name]; h = w * d['h'] / d['w'] if h is None else h
         self.tile(name, c, u, v, w, h, tint, off=off, cells=DECALS, scale=DPX, mat='kit_decal')
@@ -691,6 +692,15 @@ def kit_material(name):
     if name == 'kit_tower':
         tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img('kit_tower_col@2048.png'); te = nt.nodes.new('ShaderNodeTexImage'); te.image = _img('kit_tower_emi@2048.png')
         L(tc.outputs['Color'], P.inputs['Base Color']); L(te.outputs['Color'], P.inputs['Emission Color']); P.inputs['Emission Strength'].default_value = 2.0; P.inputs['Roughness'].default_value = 0.5
+        return m
+    if name in ('kit_hha', 'kit_hhb', 'kit_hhc', 'kit_sta', 'kit_stb', 'kit_stc'):      # Hochhausfassaden und Straßenbeläge (scripts/make-kit-hh.mjs, make-kit-str.mjs): Farbe × Tönung, Relief, Rauheit/Metall, Leuchten
+        D = os.path.join(HERE, '..', 'stadt', 'tex'); I = lambda suf, data=False: _img(os.path.join(D, name + '_' + suf + '@2048.png'), data)
+        tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = I('col'); te = nt.nodes.new('ShaderNodeTexImage'); te.image = I('emi')
+        va = nt.nodes.new('ShaderNodeVertexColor'); va.layer_name = 'Col'; mix = nt.nodes.new('ShaderNodeMix'); mix.data_type = 'RGBA'; mix.blend_type = 'MULTIPLY'; mix.inputs[0].default_value = 1.0
+        L(tc.outputs['Color'], mix.inputs[6]); L(va.outputs['Color'], mix.inputs[7]); L(mix.outputs[2], P.inputs['Base Color'])
+        tn = nt.nodes.new('ShaderNodeTexImage'); tn.image = I('nrm', True); nm = nt.nodes.new('ShaderNodeNormalMap'); nm.inputs['Strength'].default_value = 1.0; L(tn.outputs['Color'], nm.inputs['Color']); L(nm.outputs['Normal'], P.inputs['Normal'])
+        to = nt.nodes.new('ShaderNodeTexImage'); to.image = I('orm', True); sp = nt.nodes.new('ShaderNodeSeparateColor'); L(to.outputs['Color'], sp.inputs[0]); L(sp.outputs[1], P.inputs['Roughness']); L(sp.outputs[2], P.inputs['Metallic'])
+        L(te.outputs['Color'], P.inputs['Emission Color']); P.inputs['Emission Strength'].default_value = 2.0
         return m
     if name in ('kit_neon2', 'kit_holo'):
         tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img('kit_city2@2048.png')

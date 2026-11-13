@@ -102,11 +102,14 @@ export async function loadAssets() {
       // mehrere Teile (claude.ai erlaubt höchstens 16 MB je Datei)
       const parts = await Promise.all((m.embed.urls || [m.embed.url!]).map(u => fetch(u).then(r => r.json() as Promise<Record<string, string>>)));
       got += m.embed.size; show();
+      // sehr große Modelle kommen in Stücken („name#0“, „name#1“ …) und werden hier wieder zusammengesetzt
+      const chunks: Record<string, Uint8Array[]> = {};
       for (const [k, b64] of parts.flatMap(p => Object.entries(p))) {
         const bin = atob(b64), u = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-        if (m.files[k]) m.files[k].url = URL.createObjectURL(new Blob([u], { type: 'model/gltf-binary' }));
+        const [name, n] = k.split('#'); (chunks[name] = chunks[name] || [])[+(n || 0)] = u;
       }
+      for (const [k, list] of Object.entries(chunks)) if (m.files[k]) m.files[k].url = URL.createObjectURL(new Blob(list, { type: 'model/gltf-binary' }));
     } catch { console.warn('Gebündelte Modelle nicht geladen; das Spiel nutzt Ersatzmodelle.'); }
   }
   setGlobals(m);

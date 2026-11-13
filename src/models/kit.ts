@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { texMat } from '../core/textures';
+import { renderer } from '../core/engine';
 
 // =====================================================================================
 // Baukasten: gemeinsame Materialien für alle Modelle, die in Blender mit asset-src/neu/baukasten/kit_lib.py gebaut wurden.
@@ -10,6 +11,8 @@ import { texMat } from '../core/textures';
 //   kit_concrete Beton (kachelt in Metern), kit_glass dunkle Scheiben, kit_light/lamp/redlamp/screen/green selbstleuchtend
 //   kit_neon     Leuchtschriften der Städte (tex/kit_city, eigene Farben; scripts/make-kit-city.mjs), kit_neon2 zweiter Atlas (kit_city2)
 //   kit_holo     Hologramme (kit_city2, additiv, flackert: kitHoloFlicker), kit_tower Turmfassade (kachelnd, leuchtende Fenster), kit_wet nasser Boden
+//   kit_hha/b/c  Hochhausfassaden (Glasraster, Paneele, Fensterbänder), kit_sta/b/c Straßenbeläge (Gehweg, Fahrbahn, Metalldeck): kachelnde Bilder mit Relief,
+//                Rauheit/Metall und Leuchtkarte; die Bilder liegen im Hintergrund-Paket und werden erst geladen, wenn eine Stadt sie braucht (cityMat)
 // Zusatzangaben je Modell (Leuchtpunkte, Landefeld) stehen in data/kit_<Name>.json (aus Blender, export() in kit_lib.py).
 // =====================================================================================
 
@@ -40,7 +43,7 @@ function dusty<T extends THREE.Material>(m: T, key: string) {
   return m;
 }
 
-export const KIT_GLOW: Record<string, number> = { light: 0xfff0d8, lamp: 0xffa030, redlamp: 0xff3a24, screen: 0x3f9fd0, green: 0x40ff80, cool: 0xc8e0ff, accent: 0x40d8c0 };
+export const KIT_GLOW: Record<string, number> = { light: 0xfff0d8, lamp: 0xffa030, redlamp: 0xff3a24, screen: 0x3f9fd0, green: 0x40ff80, cool: 0xc8e0ff, accent: 0x40d8c0, shopw: 0xa88c68, shopc: 0x6f8cab };   // shopw/shopc: gedämpftes Ladenlicht hinter Schaufenstern
 // Innenräume: vorberechnetes Licht (Bild über den zweiten Satz Texturkoordinaten, sonst in den Eckfarben) und Akzentfarbe der Station
 export interface KitLook { lightmap?: string; intensity?: number; accent?: number }
 const SETS: Record<string, Record<string, THREE.Material>> = {};
@@ -94,8 +97,38 @@ export function kitMaterials(look: KitLook = {}) {
   M.kit_holo = HOLO; HOLO.map = shared('kit_city2', true);
   const tw = new THREE.MeshStandardMaterial({ map: shared('kit_tower_col', true), emissiveMap: shared('kit_tower_emi', true), emissive: 0xffffff, emissiveIntensity: 1.25, roughness: 0.55, metalness: 0.25, vertexColors: true });
   tw.envMapIntensity = 0.5; M.kit_tower = tw;
-  const wet = texMat(0x8e96a4, 'hangar_floor', { vertexColors: true, roughness: 0.36, metalness: 0.1 }); wet.envMapIntensity = 0; M.kit_wet = wet;   // keine Spiegelung der Weltraum-Umgebung (die wäre rosa)
+  const wet = texMat(0x8e96a4, 'hangar_floor', { vertexColors: true, roughness: 0.36, metalness: 0.1 }); wet.envMap = cityEnv(); wet.envMapIntensity = 0.3; M.kit_wet = wet;   // spiegelt die Stadt-Umgebung statt des Weltraums (der wäre rosa)
   return (SETS[key] = M);
+}
+// Umgebung für Spiegelungen in Städten: dunstiger Himmel, dunkler Grund, am Horizont die Lichter der Stadt. Die Umgebung der Szene (der Nebel des
+// Sektors, oft rötlich) taugt dafür nicht, und ihre Stärke lässt sich je Material nicht regeln (three: envMapIntensity wirkt nur mit eigener envMap).
+let CITYENV: THREE.Texture | null = null;
+function cityEnv() {
+  if (CITYENV) return CITYENV;
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+  const g = c.getContext('2d')!, gr = g.createLinearGradient(0, 0, 0, 256);
+  gr.addColorStop(0, '#2a3442'); gr.addColorStop(0.42, '#6f8492'); gr.addColorStop(0.5, '#8ea0a8'); gr.addColorStop(0.54, '#1a1e24'); gr.addColorStop(1, '#07080a');
+  g.fillStyle = gr; g.fillRect(0, 0, 512, 256);
+  for (const [x, y, r, col] of [[40, 118, 34, '255,90,200'], [130, 112, 30, '90,230,255'], [215, 120, 26, '255,190,110'], [300, 110, 36, '230,240,255'], [390, 118, 30, '90,230,255'], [470, 114, 32, '255,120,90'], [256, 40, 70, '200,215,225']] as const) {
+    const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, `rgba(${col},.9)`); rg.addColorStop(1, `rgba(${col},0)`); g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.mapping = THREE.EquirectangularReflectionMapping;
+  const pm = new THREE.PMREMGenerator(renderer); CITYENV = pm.fromEquirectangular(t).texture; pm.dispose(); t.dispose();
+  return CITYENV;
+}
+// Stadtmaterialien: erst anlegen, wenn ein Modell sie nennt (ihre Bilder liegen im Hintergrund-Paket und sollen den Start nicht bremsen)
+// Leuchtstärke, Spiegelung der Umgebung, Aufhellung der Farbe, Anteil des Metalls aus dem Bild. Ohne Aufhellung wären die dunklen Fassaden im Tageslicht
+// fast schwarz (das Spiel hat keine Umgebung, in der sich Metall spiegeln könnte); deshalb auch nur wenig Metall.
+const CITYMAT: Record<string, [number, number, number, number]> = {
+  kit_hha: [1.5, 0.9, 2.4, 0.2], kit_hhb: [1.5, 0.7, 2.4, 0.2], kit_hhc: [1.5, 0.7, 2.4, 0.2], kit_sta: [0, 0.75, 1.6, 0.5], kit_stb: [2.2, 0.75, 1.6, 0.5], kit_stc: [0, 0.6, 1.6, 0.5],
+};
+const CITYSET: Record<string, THREE.Material> = {};
+function cityMat(name: string) {
+  if (CITYSET[name]) return CITYSET[name];
+  const c = CITYMAT[name]; if (!c) return null;
+  const m = sheet(name); m.envMap = cityEnv(); m.envMapIntensity = c[1]; m.color.setScalar(c[2]); m.metalness = c[3];
+  if (c[0]) { m.emissiveMap = shared(name + '_emi', true); m.emissive.set(0xffffff); m.emissiveIntensity = c[0]; }
+  return (CITYSET[name] = m);
 }
 // Hologramme (gemeinsam für alle Städte): additiv, Schwarz bleibt durchsichtig; kitHoloFlicker lässt sie leicht flimmern
 const HOLO = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
@@ -105,7 +138,7 @@ export function applyKit(root: THREE.Object3D, look: KitLook = {}) {
   const M = kitMaterials(look);
   root.traverse((o: any) => {
     if (!o.isMesh) return;
-    const m = M[o.material?.name];
+    const m = M[o.material?.name] || cityMat(o.material?.name);
     if (!m) return;
     o.material = m;
     if (m === M.kit_decal) o.renderOrder = 1;

@@ -130,6 +130,9 @@ if (fs.existsSync(DATADIR)) for (const n of fs.readdirSync(DATADIR).filter(x => 
 // ---- Einzelne Texturen (asset-src/tex/<name>.png|jpg): höchstens 1024 px, WebP. Mit "@2048" im Namen (name@2048.png) bis zu dieser Größe ----
 const TEXDIR = path.join(ROOT, 'asset-src', 'tex');
 if (fs.existsSync(TEXDIR)) for (const n of fs.readdirSync(TEXDIR).filter(x => /\.(png|jpe?g)$/i.test(x))) { const src = fs.readFileSync(path.join(TEXDIR, n)); const base = path.basename(n, path.extname(n)), at = base.match(/^(.*)@(\d+)$/), max = at ? Math.min(4096, +at[2]) : 1024; const b = await sharp(src).resize(max, max, { fit: 'inside', withoutEnlargement: true }).webp({ quality: at ? 92 : 86, effort: 5 }).toBuffer(); put('tex/' + (at ? at[1] : base), 'webp', b, 'core', src.length); }
+// ---- Texturen fürs Hintergrund-Paket (asset-src/tex-world, z. B. Stadtfassaden und Straßenbeläge aus scripts/sync-city-tex.mjs): gleiche Regeln, Paket world ----
+const TEXW = path.join(ROOT, 'asset-src', 'tex-world');
+if (fs.existsSync(TEXW)) for (const n of fs.readdirSync(TEXW).filter(x => /\.(png|jpe?g)$/i.test(x))) { const src = fs.readFileSync(path.join(TEXW, n)); const base = path.basename(n, path.extname(n)), at = base.match(/^(.*)@(\d+)$/), max = at ? Math.min(4096, +at[2]) : 1024; const data = /_(nrm|orm)$/.test(at ? at[1] : base); const w = await sharp(src).resize(max, max, { fit: 'inside', withoutEnlargement: true }).webp({ quality: data ? 90 : at ? 90 : 86, effort: 5 }).toBuffer(); put('tex/' + (at ? at[1] : base), 'webp', w, 'world', src.length); }
 // ---- Einzelne Aufnahmen (asset-src/sound/<name>.ogg|mp3), z. B. Schritte, Klicks, Türen ----
 const SND = path.join(ROOT, 'asset-src', 'sound');
 if (fs.existsSync(SND)) for (const n of fs.readdirSync(SND).filter(x => /.(ogg|mp3)$/i.test(x))) { const b = fs.readFileSync(path.join(SND, n)); put('sound/' + path.basename(n, path.extname(n)), path.extname(n).slice(1).toLowerCase(), b, 'core', b.length); }

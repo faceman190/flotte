@@ -1,11 +1,14 @@
 # Neonhafen – Cyberpunk-Stadt auf Neuhafen IV, gebaut mit dem Baukasten (kit_lib.py + kit_interior.py). Läuft in Blender (Neonhafen.blend).
 #
 # Wie Talstadt im Koordinatensystem des Stations-Innenraums (Blender-y = -z): Die Hangarhalle umschließt genau den Hangar (Tor bei y = -112),
-# das Promenadenhaus Korridor und Promenade (y 50 … 110). Darüber und drumherum: dichte Türme (Fassaden als kachelndes Bild kit_tower),
+# das Promenadenhaus Korridor und Promenade (y 50 … 110). Darüber und drumherum: dichte Blöcke mit Ladensockel und Mittelbau, darauf gegliederte
+# Hochhäuser aus hochhaus_kit.py (Fassaden kit_hha/b/c mit Relief), Beläge und Straßenteile aus strassen_kit.py (kit_sta/b/c),
 # enge Gassen (8–9 m) mit Läden, Neon, Kabeln, Laternen, Laufbrücken, Pfützen und Dampfschächten; hinter der Promenade der Lichtplatz mit
 # abgesenkter Grube (dort dreht sich im Spiel die Skulptur), Lampensternen, Hologrammen und einer Garküche. Auf dem Hallendach der Hafenturm.
 # Neonschriften: kit_city2 (scripts/make-kit-city2.mjs), K.neon / K.holo. Spiel: src/game/city.ts (Stil „neon“: Dunst, Dämmerlicht, Hologramme, Dampf).
-import math
+import math, random, json
+import hochhaus_kit as H
+import strassen_kit as S
 
 HW, Y0, Y1, HH = 92.0, -112.0, 50.0, 42.0
 DW, DH = 62.0, 32.0
@@ -35,7 +38,7 @@ ALLEYS = [
 ]
 
 def build(lib):
-    K = lib.Kit('Neonhafen', seed=2077)
+    K = lib.Kit('Neonhafen', seed=2077); S.SPRITES = False
     X, Y, Z = lib.X, lib.Y, lib.Z
     R = K.R
     steam, holos, paths, stalls, shops = [], [], [], [], []
@@ -48,8 +51,17 @@ def build(lib):
             K.box((w, 0.5, 0.5), (0, -0.25, h - 0.5), side='beam', tint='hull_dark', bevel=0.03, bottom=True)        # Sturz
             for s in (-1, 1): K.box((0.4, 0.5, h - 0.5), (s * (w / 2 - 0.2), -0.25, 0), side='girder', tint='hull_dark', bevel=0.03, along='z')
             if k in ('shop', 'bar'):
-                K.glow(R.choice(['light', 'lamp', 'cool', 'screen']), (0, -0.02, 2.0), X, Z, w - 1.2, 3.6)                 # beleuchteter Laden
-                K.glass((0, -0.06, 2.0), X, Z, w - 1.0, 3.8)
+                K.glow(R.choice(['shopw', 'shopw', 'shopw', 'shopc', 'shopc', 'lamp']), (0, -0.02, 2.0), X, Z, w - 1.2, 3.6)      # beleuchteter Laden
+                m = max(2, round((w - 1.2) / 1.5))                                                                     # Sprossen und Auslage als Schattenriss vor dem Licht
+                for j in range(m + 1): K.box((0.1, 0.14, 3.6), (-(w - 1.2) / 2 + (w - 1.2) * j / m, -0.07, 0.2), side='plain', tint='hull_dark', bevel=0.0, along='z')
+                K.box((w - 1.0, 0.16, 0.12), (0, -0.08, 3.8), side='plain', tint='hull_dark', bevel=0.0, bottom=True)
+                for zs in (1.25, 2.15, 3.0):                                                                           # Regalböden und Ware als dunkle Umrisse
+                    K.glass((0, -0.07, zs), X, Z, w - 1.4, 0.07)
+                    xx = -(w - 1.8) / 2 + R.uniform(0.0, 0.5)
+                    while xx < (w - 1.8) / 2 - 0.4:
+                        bw_, bh_ = R.uniform(0.2, 0.55), R.uniform(0.2, 0.62)
+                        if R.random() < 0.7: K.glass((xx + bw_ / 2, -0.07, zs + 0.035 + bh_ / 2), X, Z, bw_, bh_)
+                        xx += bw_ + R.uniform(0.08, 0.5)
                 K.box((w - 1.0, 0.6, 1.0), (0, -0.6, 0), side='siding', top='plain', tint='hull_mid', bevel=0.03)          # Theke / Auslage
                 if k == 'bar':
                     for i in range(3): K.tube((-2 + i * 2, -1.5, 0), (-2 + i * 2, -1.5, 0.75), 0.05, 'plain', 'steel', 6); K.tube((-2 + i * 2, -1.5, 0.75), (-2 + i * 2, -1.5, 0.82), 0.24, 'plain', 'red', 10)
@@ -67,89 +79,82 @@ def build(lib):
             K.glowbox('light', (0.5, 0.18, 0.12), (-w / 2 + 0.8, -0.6, h - 0.8)); K.light('lamp' if R.random() < 0.5 else 'light', (-w / 2 + 0.8, -0.9, h - 0.9), 2.2)
         return k
 
-    # ------------------------------------------------------------ Turm: Sockel mit Läden, Fassaden, Gesimse, Dach, Neon an den Kanten
-    def tower(x0, y0, x1, y1, h, shopsides):
+    # ------------------------------------------------------------ Block: Sockel mit Läden, Mittelbau, darauf ein oder zwei gegliederte Hochhäuser
+    HERO = {(1, 0): 'stufen', (1, 3): 'konzern', (1, 7): 'rund', (1, 9): 'werk', (1, 13): 'kern', (-1, 0): 'kern', (-1, 2): 'konzern', (-1, 5): 'werk', (-1, 8): 'rund', (-1, 15): 'stufen'}
+    def tower(x0, y0, x1, y1, h, shopsides, hero=None, seed=1):
         cx, cy, sx, sy = (x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0
-        P0 = 6.4
-        K.box((sx, sy, P0), (cx, cy, 0.2), side='wall', top='roofing', tint='hull_dark', tint_top='hull_dark', bevel=0.06)
-        # Fassaden ab dem Sockel; hohe Türme springen oben zurück (Dachterrasse), Teile in anderer Tönung
+        P0 = 6.4; zp = P0 + 0.2; KR = K.R; Rb = random.Random(seed * 131 + 7); K.R = Rb; seg0 = K.seg; K.seg = 60.0      # hohe Bauteile nicht fein teilen
+        base = H.rect(cx, cy, sx, sy)
+        with K.at((0, 0, 0.2)): H.shaft(K, base, 0.0, P0, 'b', H.T_DARK)
         corners = {'s': ((x0, y0), (x1, y0)), 'n': ((x1, y1), (x0, y1)), 'e': ((x1, y0), (x1, y1)), 'w': ((x0, y1), (x0, y0))}
-        TN = [(0.85, 0.85, 0.88), (0.72, 0.7, 0.68), (0.6, 0.64, 0.7), (0.9, 0.85, 0.78), (0.5, 0.52, 0.56), (0.78, 0.8, 0.84)]
-        def shaft(ax0, ay0, ax1, ay1, za, zb, tint):
-            for (p0, p1) in (((ax0, ay0), (ax1, ay0)), ((ax1, ay1), (ax0, ay1)), ((ax1, ay0), (ax1, ay1)), ((ax0, ay1), (ax0, ay0))):
-                K.facade((p0[0], p0[1], za), (p1[0], p1[1], za), (p0[0], p0[1], zb), tint, z0=R.random() * 25.6)
-            K.surf((ax0, ay0, zb), (ax1, ay0, zb), (ax0, ay1, zb), 'roofing', 'hull_dark')
-            mx, my, wx, wy = (ax0 + ax1) / 2, (ay0 + ay1) / 2, ax1 - ax0, ay1 - ay0
-            with K.at((mx, my, 0)):
-                K.ring(wx + 0.2, wy + 0.2, zb, 0.5, 1.1, 'girder', 'hull_dark')                                 # Attika
-                for zz in range(int(za + 18), int(zb - 6), 24): K.ring(wx + 0.8, wy + 0.8, zz, 0.6, 0.5, 'beam', 'hull_mid')   # Gesimse
-            return mx, my, wx, wy
-        z0 = P0 + 0.2
-        if h > 62 and min(sx, sy) > 30:
-            h1 = h * R.uniform(0.45, 0.62); ins = R.uniform(4, 8)
-            shaft(x0, y0, x1, y1, z0, h1, R.choice(TN))
-            ix0, iy0, ix1, iy1 = x0 + ins * R.choice((0.5, 1)), y0 + ins * R.choice((0.5, 1)), x1 - ins * R.choice((0.5, 1)), y1 - ins * R.choice((0.5, 1))
-            for k in range(3): K.vent_unit((R.uniform(x0 + 2, x1 - 2), R.choice((y0 + 1.6, y1 - 1.6)), h1), sx=2.2, sy=2.2, sz=1.2)
-            K.railing((x0 + 0.4, y0 + 0.4, h1), (x1 - 0.4, y0 + 0.4, h1), 1.1, 'hull_dark', 2.4)
-            rx0, ry0, rx1, ry1 = ix0, iy0, ix1, iy1
-            mx, my, wx, wy = shaft(ix0, iy0, ix1, iy1, h1, h, R.choice(TN))
-        else:
-            rx0, ry0, rx1, ry1 = x0, y0, x1, y1
-            mx, my, wx, wy = shaft(x0, y0, x1, y1, z0, h, R.choice(TN))
-        # Leuchtleisten an einer Kante (Cyberpunk-Silhouette)
-        if R.random() < 0.55:
-            ex, ey = R.choice(((rx0 - 0.25, ry0 - 0.25), (rx1 + 0.25, ry0 - 0.25), (rx0 - 0.25, ry1 + 0.25), (rx1 + 0.25, ry1 + 0.25)))
-            K.glowbox(R.choice(['accent', 'redlamp', 'cool', 'lamp']), (0.25, 0.25, h - P0 - 4), (ex, ey, (h + P0) / 2 + 1))
-        # Dach: Lüfter, Tanks, Antennen, Werbewand
-        for k in range(max(1, int(wx * wy / 700))):
-            K.vent_unit((mx - wx / 2 + 4 + R.random() * (wx - 8), my - wy / 2 + 4 + R.random() * (wy - 8), h), sx=2.6, sy=2.6, sz=1.4)
-        if R.random() < 0.5: K.tank(1.4, 5.0, (mx + R.uniform(-wx / 4, wx / 4), my + R.uniform(-wy / 4, wy / 4), h), R.random() * PI, 'hull_light', None)
-        if R.random() < 0.6: K.antenna(8 + R.random() * 10, (mx - wx / 2 + 3, my + wy / 2 - 3, h))
-        if R.random() < 0.35:
-            n = R.choice('nsew'); rz, u, nv = FACES[n]; ad = R.choice(['a_lumen', 'a_volta'])
-            px, py = mx + nv[0] * (wx / 2 - 3), my + nv[1] * (wy / 2 - 3)
-            for d in (-5, 5): K.box((0.5, 0.5, 15.0), (px + u[0] * d - nv[0] * 0.6, py + u[1] * d - nv[1] * 0.6, h), side='girder', tint='hull_dark', bevel=0.03, along='z')
-            K.neon(ad, (px, py, h + 8.0), u, Z, 13.0)
-        # Kantenneon: senkrechte Schilder an zwei Ecken
-        for (px, py, n) in ((x0 - 0.3, y0 + 2.5, 'w'), (x1 + 0.3, y1 - 2.5, 'e')):
-            if R.random() < 0.6:
-                rz, u, nv = FACES[n]; K.neon(R.choice(VERT), (px, py, P0 + 7 + R.random() * 6), u, Z, 2.4)
-        # großes Schild an einer Ladenseite
-        if shopsides and R.random() < 0.75:
-            n = shopsides[0]; rz, u, nv = FACES[n]
-            a, b = corners[n]; mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
-            K.neon(R.choice(SIGNS[:11]), (mx + nv[0] * 0.25, my + nv[1] * 0.25, P0 + 10 + R.random() * 12), u, Z, min(18.0, max(sx, sy) * 0.4))
-        # Ladenzeilen im Sockel
-        for n in shopsides:
-            a, b = corners[n]; L = math.hypot(b[0] - a[0], b[1] - a[1]); nb = max(1, int(L // 9)); w = L / nb
-            rz, u, nv = FACES[n]
+        # Mittelbau: vier bis acht Geschosse über dem Sockel, bündig, mit Rippen oder Gesimsen und Technik auf dem Dach
+        zb = zp + 3.2 * Rb.randint(4, 8); km = Rb.choice(['c', 'b', 'c', 'a', 'b'])
+        H.shaft(K, base, zp, zb, km, Rb.choice(H.PALETTE)); H.band(K, base, zp - 0.4, 0.8, 0.3, 'hull_dark', None, strip='beam'); H.parapet(K, base, zb, 1.2, 0.3)
+        if km != 'b': H.fins(K, base, zp + 0.4, zb, 6.0, 0.5, 0.4)
+        else: H.ledges(K, base, zp, zb, 6.4, 0.4, 0.4)
+        H.roof_mech(K, base, zb, 4)
+        # Hochhäuser: auf langen Blöcken zwei, sonst eines; einzelne Blöcke tragen einen der ausgearbeiteten Turmtypen
+        long = sy >= sx; Lm = max(sx, sy); Ls = min(sx, sy); nt = 2 if Lm >= 78 else 1; hn = H.F32(h * 1.5)
+        for i in range(nt):
+            off = ((-0.25 if i == 0 else 0.25) * Lm if nt == 2 else 0.0) + Rb.uniform(-2, 2)
+            tx, ty = (cx, cy + off) if long else (cx + off, cy)
+            if hero and i == 0:
+                H.PODIUM = False
+                try:
+                    with K.at((0, 0, zb - (12.8 if hero == 'konzern' else 9.6))):
+                        if hero == 'konzern': H.tower_konzern(K, (tx, ty), max(190.0, hn + 40))
+                        elif hero == 'stufen': H.tower_stufen(K, (tx, ty), max(150.0, hn + 20))
+                        elif hero == 'kern': H.tower_kern(K, (tx, ty), max(170.0, hn + 30))
+                        elif hero == 'rund': H.tower_rund(K, (tx, ty), max(150.0, hn + 10))
+                        else: H.tower_werk(K, (tx, ty), max(120.0, hn))
+                finally: H.PODIUM = True
+            else:
+                w = min(Ls - 7, Rb.uniform(26, 36)); d = min(Lm / nt - 9, Rb.uniform(24, 36)); tw, td = (w, d) if long else (d, w)
+                H.tower_bundle(K, (tx, ty), seed * 3 + i * 17, zb + hn * (1.0 if i == 0 else Rb.uniform(0.62, 0.9)), tw, td, zbase=zb)
+        # Kantenneon: senkrechte Schilder an zwei Ecken des Mittelbaus
+        for (px, py, nn) in ((x0 - 0.3, y0 + 2.5, 'w'), (x1 + 0.3, y1 - 2.5, 'e')):
+            if Rb.random() < 0.6:
+                rz, u, nv = FACES[nn]; K.neon(Rb.choice(VERT), (px, py, P0 + 7 + Rb.random() * 6), u, Z, 2.4)
+        # große Tafel an einer Ladenseite
+        if shopsides and Rb.random() < 0.75:
+            nn = shopsides[0]; rz, u, nv = FACES[nn]
+            a, b = corners[nn]; mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
+            H.billboard(K, mx, my, min(zb - 4.0, P0 + 9 + Rb.random() * 8), nv[0], nv[1], min(16.0, max(sx, sy) * 0.3), Rb.choice(SIGNS[:11]), 0.7, glow='cool')
+        # Ladenzeilen im Sockel, darüber Auslegerschilder
+        for nn in shopsides:
+            a, b = corners[nn]; L = math.hypot(b[0] - a[0], b[1] - a[1]); nb = max(1, int(L // 9)); w = L / nb
+            rz, u, nv = FACES[nn]
             for i in range(nb):
                 t = (i + 0.5) / nb; px, py = a[0] + (b[0] - a[0]) * t + nv[0] * 0.02, a[1] + (b[1] - a[1]) * t + nv[1] * 0.02
-                k = bay(px, py, n, w - 0.2)
+                K.seg = seg0; k = bay(px, py, nn, w - 0.2); K.seg = 60.0
                 if k in ('shop', 'bar') and len(shops) < 40: shops.append((px + nv[0] * 2.6, py + nv[1] * 2.6, k))
-        # Klimakästen und Rohre an den Fassaden (über der Gasse)
-        for n in shopsides:
-            a, b = corners[n]; rz, u, nv = FACES[n]
-            for k in range(3):
-                t = R.random(); px, py = a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
-                K.panel('vent', (px, py, P0 + 3 + R.random() * 20), rz, 1.2, 0.9, 0.55, 'hull_light')
-            t = R.random(); px, py = a[0] + (b[0] - a[0]) * t + nv[0] * 0.35, a[1] + (b[1] - a[1]) * t + nv[1] * 0.35
-            K.tube((px, py, 0.2), (px, py, min(h - 2, 30)), 0.18, 'pipe', R.choice(['steel', 'rust', 'yellow']), 8)
+                if Rb.random() < 0.32:
+                    t2 = i / nb; S.blade_sign(K, a[0] + (b[0] - a[0]) * t2 + (b[0] - a[0]) / L * 0.6, a[1] + (b[1] - a[1]) * t2 + (b[1] - a[1]) / L * 0.6, P0 + 2.6 + Rb.random() * 5, nv[0], nv[1], Rb.choice(VERT), Rb.uniform(1.0, 1.4))
+        # Klimakästen, Steigrohre und Rohrleitungen an den Fassaden über der Gasse
+        H.ac_units(K, base, zp + 1, zb - 2, 10)
+        for nn in shopsides:
+            a, b = corners[nn]; rz, u, nv = FACES[nn]; L = math.hypot(b[0] - a[0], b[1] - a[1]); ex, ey = (b[0] - a[0]) / L, (b[1] - a[1]) / L
+            t = Rb.random(); px, py = a[0] + (b[0] - a[0]) * t + nv[0] * 0.35, a[1] + (b[1] - a[1]) * t + nv[1] * 0.35
+            K.tube((px, py, 0.2), (px, py, min(zb - 1, 30)), 0.18, 'pipe', Rb.choice(['steel', 'rust', 'yellow']), 8)
+            if Rb.random() < 0.4 and L > 30:
+                t0, t1 = Rb.uniform(0.05, 0.3), Rb.uniform(0.6, 0.95)
+                S.pipe_run(K, (a[0] + ex * L * t0, a[1] + ey * L * t0), (a[0] + ex * L * t1, a[1] + ey * L * t1), zp + Rb.uniform(2.6, 5.0), Rb.uniform(0.25, 0.4), Rb.choice(['hull_mid', 'rust', 'yellow', 'hull_light']), 0.7, drop=False)
+        K.R = KR; K.seg = seg0
 
-    # ------------------------------------------------------------ Gasse: Kabel, Laternen, Laufbrücken, Pfützen, Abfall, Dampf
+    # ------------------------------------------------------------ Gasse: Belag, Kabelbündel mit Lampions, Laufbrücken, Abfall, Dampf
     def alley(a, b, w, bridges=True):
         ax, ay = a; bx, by = b; L = math.hypot(bx - ax, by - ay); ux, uy = (bx - ax) / L, (by - ay) / L; nx, ny = -uy, ux
+        # Längsgassen bekommen die Fahrbahn (Rinnen, Linien, Schienenbett), Quergassen einen Mittelstreifen aus Metalldeck
+        if abs(ux) < 0.01: S.road(K, (ax, min(ay, by) - 0.5), (ax, max(ay, by) + 0.5), w - 0.3, 0.216)
+        else: S.ground(K, min(ax, bx) - 0.5, ay - 1.4, max(ax, bx) + 0.5, ay + 1.4, 0.213, 'kit_stc', 4.0)
         n = int(L // 8)
         for i in range(1, n):
             t = i / n; px, py = ax + (bx - ax) * t, ay + (by - ay) * t
             if R.random() < 0.75:
-                z1, z2 = 7 + R.random() * 9, 7 + R.random() * 9
+                z1, z2 = 7.5 + R.random() * 9, 7.5 + R.random() * 9
                 p1 = (px - nx * w / 2 + ux * R.uniform(-2, 2), py - ny * w / 2 + uy * R.uniform(-2, 2), z1); p2 = (px + nx * w / 2, py + ny * w / 2, z2)
-                K.cable(p1, p2, 0.6 + R.random() * 0.8, 0.04, 6)
-                if R.random() < 0.4:
-                    m = ((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (z1 + z2) / 2 - 0.9)
-                    K.glowbox(R.choice(['lamp', 'light', 'accent']), (0.35, 0.35, 0.5), m); K.light('lamp', m, 2.0)
-            if R.random() < 0.35: K.decal(R.choice(['stain1', 'stain2']), (px + nx * R.uniform(-w / 3, w / 3), py + ny * R.uniform(-w / 3, w / 3), 0.21), X, Y, 3 + R.random() * 3, 2 + R.random() * 3, 'black', off=0.01)
+                S.cable_span(K, p1, p2, 0.6 + R.random() * 0.8, R.choice([0, 1, 1, 2, 3]), (R.choice(['lamp', 'lamp', 'light', 'accent', 'redlamp', 'cool']),), 0.0, 2, 5)
+            if R.random() < 0.35: K.decal(R.choice(['stain1', 'stain2']), (px + nx * R.uniform(-w / 3, w / 3), py + ny * R.uniform(-w / 3, w / 3), 0.224), X, Y, 3 + R.random() * 3, 2 + R.random() * 3, 'black', off=0.01)
             if R.random() < 0.18:
                 sp = (px + nx * R.uniform(-w / 4, w / 4), py + ny * R.uniform(-w / 4, w / 4))
                 K.box((1.2, 1.2, 0.06), (sp[0], sp[1], 0.2), side='plain', top='floor', tint='hull_dark', bevel=0.01); steam.append(sp)
@@ -165,7 +170,7 @@ def build(lib):
     # ================================================================== Boden: nasser Belag über die ganze Stadt (Lichtplatz und Vorfeld eigens)
     K.seg = 8.0
     PL = (36.0, 118.0, 196.0)                                            # Lichtplatz: halbe Breite, y von … bis
-    K.slab(410, 485, 0.2, (0, 7.5, 0), tint=(0.22, 0.23, 0.25), cell=8.0, mat='kit_wet', uvm=4.0,
+    K.slab(410, 485, 0.2, (0, 7.5, 0), tint=(1.0, 1.0, 1.0), cell=8.0, mat='kit_sta', uvm=8.0,
            holes=[(-PL[0], PL[1] - 7.5, PL[0], PL[2] - 7.5), (-84, -235 - 7.5, 84, FY - 7.5), (-SX, FY - 7.5, SX, BY - 7.5)])
 
     # ================================================================== 1. Hangarhalle (Hülle) und Hafenturm
@@ -215,18 +220,16 @@ def build(lib):
         x = -DW + 4 + k * (2 * DW - 8) / 12
         K.glowbox('accent', (1.0, 0.5, 0.12), (x, FY - 5.0, 0.14)); K.light('lamp', (x, FY - 5.0, 0.5), 3.0)
     # Hafenturm auf dem Hallendach
-    hx0, hx1, hy0, hy1, hh = -40.0, 40.0, -20.0, 50.0, 160.0
-    for (a, b) in (((hx0, hy0), (hx1, hy0)), ((hx1, hy1), (hx0, hy1)), ((hx1, hy0), (hx1, hy1)), ((hx0, hy1), (hx0, hy0))):
-        K.facade((a[0], a[1], RZ), (b[0], b[1], RZ), (a[0], a[1], hh), (0.7, 0.72, 0.78), z0=3.0)
-    K.surf((hx0, hy0, hh), (hx1, hy0, hh), (hx0, hy1, hh), 'roofing', 'hull_dark')
-    with K.at(((hx0 + hx1) / 2, (hy0 + hy1) / 2, 0)):
-        for zz in range(int(RZ + 20), int(hh), 22): K.ring(hx1 - hx0 + 1.0, hy1 - hy0 + 1.0, zz, 0.7, 0.6, 'beam', 'hull_mid')
-        K.ring(hx1 - hx0 + 0.4, hy1 - hy0 + 0.4, hh, 0.6, 1.6, 'girder', 'hull_dark')
-    for (c, u) in (((0, hy0 - 0.3, hh - 9), X), ((0, hy1 + 0.3, hh - 9), (-1, 0, 0)), ((hx1 + 0.3, 15, hh - 9), Y), ((hx0 - 0.3, 15, hh - 9), (0, -1, 0))):
+    hx0, hx1, hy0, hy1, hh = -40.0, 40.0, -20.0, 50.0, RZ + 3.2 * 36; K.seg = 60.0
+    ht = H.rect(0, 15, 80, 70); H.shaft(K, ht, RZ, hh, 'a', H.T_BLUE); H.fins(K, ht, RZ, hh, 6.0, 0.9, 0.5); H.ledges(K, ht, RZ, hh, 25.6, 0.6, 1.1)
+    for q in ht: H.lstrip(K, q[0] + (0.5 if q[0] > 0 else -0.5), q[1] + (0.5 if q[1] > 15 else -0.5), RZ + 3, hh - 3, 'light', 0.6)
+    for (c, u) in (((0, hy0 - 1.2, hh - 9), X), ((0, hy1 + 1.2, hh - 9), (-1, 0, 0)), ((hx1 + 1.2, 15, hh - 9), Y), ((hx0 - 1.2, 15, hh - 9), (0, -1, 0))):
         K.neon('n_lumen', c, u, Z, 34.0)
-    K.box((10, 10, 6), (0, 15, hh), side='girder', top='roofing', tint='hull_dark', bevel=0.06)
-    K.tube((0, 15, hh + 6), (0, 15, hh + 34), 0.6, 'pipe', 'steel', 10, r2=0.2)
-    for z in (hh + 14, hh + 24, hh + 34): p = (0, 15, z); K.glowbox('redlamp', (0.5, 0.5, 0.5), p); K.light('redlamp', p, 6.0)
+    hz = H.step_crown(K, ht, hh, 2, 'b', H.T_DARK, 'light', 8)
+    K.box((10, 10, 6), (0, 15, hz), side='girder', top='roofing', tint='hull_dark', bevel=0.06)
+    K.tube((0, 15, hz + 6), (0, 15, hz + 34), 0.6, 'pipe', 'steel', 10, r2=0.2)
+    for z in (hz + 14, hz + 24, hz + 34): p = (0, 15, z); K.glowbox('redlamp', (0.5, 0.5, 0.5), p); K.light('redlamp', p, 6.0)
+    hh = hz; K.seg = 8.0
     holos.append({'p': [0, hh + 48, -15], 'r': 9.0, 'kind': 'ring', 'col': 0x38e8ff})
 
     # ================================================================== 2. Vorfeld (klein) zwischen den Türmen
@@ -243,9 +246,8 @@ def build(lib):
     # ================================================================== 3. Promenadenhaus mit Kapselturm darüber
     PY0, PY1, PXH, PH = BY, DOOR[1], 24.0, 16.0
     K.block(2 * PXH, PY1 - PY0, PH, (0, (PY0 + PY1) / 2, 0), tint='hull_dark', tint_top='hull_dark', plinth=0.6, cornice=0.5)
-    for (a, b) in (((-20, 62), (20, 62)), ((20, 112), (-20, 112)), ((20, 62), (20, 112)), ((-20, 112), (-20, 62))):
-        K.facade((a[0], a[1], PH), (b[0], b[1], PH), (a[0], a[1], 78.0), (0.8, 0.8, 0.86), z0=5.0)
-    K.surf((-20, 62, 78), (20, 62, 78), (-20, 112, 78), 'roofing', 'hull_dark')
+    K.seg = 60.0; kt = H.rect(0, 87, 40, 50); H.shaft(K, kt, PH, PH + 64.0, 'c', H.T_SAND); H.fins(K, kt, PH, PH + 64.0, 6.0, 0.6, 0.4); H.parapet(K, kt, PH + 64.0, 1.2, 0.3)
+    H.roof_mech(K, kt, PH + 64.0, 4); H.crown_spikes(K, kt, PH + 64.0, 5, (8, 20), 0.5); K.seg = 8.0
     K.neon('n_kapsel', (0, 112.3, 60.0), (-1, 0, 0), Z, 26.0); K.neon('v_kapsel', (20.3, 108.0, 40.0), Y, Z, 4.0)
     K.box((16, 5.0, 0.5), (0, PY1 + 2.5, 5.0), side='beam', top='roofing', tint='hull_dark', bevel=0.05, bottom=True)
     K.glow('cool', (0, PY1 + 2.5, 4.98), X, -Y, 14.0, 0.4); K.light('light', (0, PY1 + 3.0, 4.6), 6.0)
@@ -259,7 +261,7 @@ def build(lib):
 
     # ================================================================== 4. Lichtplatz: Grube mit Skulpturfuß, Lampensterne, Hologramme, Garküche, Bänke
     MX, MY0, MY1 = PL
-    K.slab(2 * MX, MY1 - MY0, 0.2, (0, (MY0 + MY1) / 2, 0), tint=(0.25, 0.26, 0.28), cell=2.0, mat='kit_wet', uvm=3.0, holes=[(-11, 160 - 11 - (MY0 + MY1) / 2, 11, 160 + 11 - (MY0 + MY1) / 2)])
+    K.slab(2 * MX, MY1 - MY0, 0.2, (0, (MY0 + MY1) / 2, 0), tint=(1.12, 1.12, 1.14), cell=2.0, mat='kit_sta', uvm=8.0, holes=[(-11, 160 - 11 - (MY0 + MY1) / 2, 11, 160 + 11 - (MY0 + MY1) / 2)])
     PC = (0.0, 160.0); PD = 2.6
     for (a, b) in (((11, 149), (-11, 149)), ((-11, 171), (11, 171)), ((-11, 149), (-11, 171)), ((11, 171), (11, 149))):
         K.surf((a[0], a[1], -PD), (b[0], b[1], -PD), (a[0], a[1], 0.2), 'wall', 'hull_dark')
@@ -271,7 +273,11 @@ def build(lib):
     K.tube((0, PC[1], 0.8), (0, PC[1], 1.0), 3.9, 'plain', 'steel', 24)
     K.glowbox('accent', (5.4, 5.4, 0.08), (0, PC[1], 1.05))
     for (a, b) in (((-11, 149), (11, 149)), ((11, 149), (11, 171)), ((11, 171), (-11, 171)), ((-11, 171), (-11, 149))):
-        K.railing((a[0], a[1], 0.2), (b[0], b[1], 0.2), 1.1, 'hull_dark', 1.8)
+        S.glass_rail(K, (a[0], a[1], 0.2), (b[0], b[1], 0.2))
+    for (gx0, gy0, gx1, gy1) in ((-14.5, 145.5, 14.5, 148.6), (-14.5, 171.4, 14.5, 174.5), (-14.5, 148.6, -11.4, 171.4), (11.4, 148.6, 14.5, 171.4)): S.ground(K, gx0, gy0, gx1, gy1, 0.213, 'kit_stc', 4.0)
+    with K.at((0, 0, 0.2)):
+        S.ad_pylon(K, -24.0, 150.0, 4.6, None, False); S.ad_pylon(K, 24.0, 170.0, 4.6, None, False)
+    for p in ((-22, 132), (22, 132), (-22, 186), (22, 186)): K.planter(2.4, 1.4, (p[0], p[1], 0.2), 0.0, 0.8, 3)
     # Lampensterne (Mast mit sechs Leuchtarmen) an den Platzecken, Kabel zu den Fassaden
     for (x, y) in ((-28, 128), (28, 128), (-28, 188), (28, 188)):
         K.box((1.0, 1.0, 1.2), (x, y, 0.2), side='girder', tint='hull_dark', bevel=0.05)
@@ -310,18 +316,23 @@ def build(lib):
     # ================================================================== 5. Türme und Gassen (gespiegelt), Nordturm
     K.seg = 6.0
     for s in (-1, 1):
-        for (x0, y0, x1, y1, h, sides) in BLOCKS:
+        for bi, (x0, y0, x1, y1, h, sides) in enumerate(BLOCKS):
             if s < 0:
                 x0, x1 = -x1, -x0
                 sides = sides.translate(str.maketrans('ew', 'we'))
-            tower(x0, y0, x1, y1, h + R.uniform(-6, 6), sides)
+            tower(x0, y0, x1, y1, h + R.uniform(-6, 6), sides, HERO.get((s, bi)), bi + 1 + (100 if s < 0 else 0))
         for (a, b, w) in ALLEYS:
             alley((s * a[0], a[1]), (s * b[0], b[1]), w)
-    tower(-36, 204, 36, 250, 118, 's')
+    tower(-36, 204, 36, 250, 118, 's', 'konzern', 77)
     K.neon('a_lumen', (0, 203.7, 30.0), X, Z, 20.0)
     alley((-36, 200), (36, 200), 8, bridges=False)
     paths.append(((-36, 124), (36, 124))); paths.append(((-36, 192), (36, 192)))
-    return K.build('Neon_Kit'), {'steam': steam, 'holos': holos, 'paths': paths, 'stalls': stalls, 'shops': shops}
+    K.lamps = []                                                         # Lichtquellen der Blender-Vorschau: hier nicht nötig
+    ob = K.build('Neon_Kit'); S.SPRITES = True
+    # Leuchtpunkte ausdünnen (jeder ist im Spiel ein eigenes Bildchen): unten alle, oben jede dritte Flugbefeuerung und die großen Tafeln
+    L = json.loads(ob['kit_lights']); keep = [l for i, l in enumerate(L) if (l['p'][1] < 32 and (l['s'] >= 2.0 or i % 2 == 0)) or (l['p'][1] >= 32 and ((l['k'] == 'redlamp' and i % 4 == 0) or (l['k'] == 'screen' and l['s'] >= 8 and i % 3 == 0)))]
+    ob['kit_lights'] = json.dumps(keep)
+    return ob, {'steam': steam, 'holos': holos, 'paths': paths, 'stalls': stalls, 'shops': shops}
 
 def meta(extra):
     g = lambda x, y: [round(x, 2), round(-y, 2)]

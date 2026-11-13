@@ -63,6 +63,51 @@ Zweite Stadt, aus der Klippenbasis (Kennung `neuhafen_base`). Skript `asset-src/
 - **Nebenbei für alle Städte:** Wer zu Fuß in der Stadt ist, ist für Mitspieler sichtbar (Netz-Zustand „fuss“); die Kamera der Außensicht rückt vor Hauswänden heran;
   die Promenadentür hat Vorrang vor anderen Ansprechpunkten.
 
+## Neonhafen ab Alpha 0.94: gegliederte Hochhäuser und neue Gassen
+
+Die 33 Kastentürme sind ersetzt. Jeder Block behält seinen Ladensockel (Gassen, Wege, Läden und Ansprechpunkte bleiben, wo sie waren), darüber
+steht ein Mittelbau mit vier bis acht Geschossen und darauf ein oder zwei Hochhäuser aus `hochhaus_kit.py` (Bündeltürme nach Kennzahl; zehn Blöcke und
+der Nordturm tragen einen der ausgearbeiteten Typen). Hafenturm und Kapselturm haben die neuen Fassaden, Rippen und Kronen. Höchster Punkt rund 287 m.
+
+- **Gassen:** Belag `kit_sta` über die ganze Stadt, Längsgassen mit Fahrbahn `kit_stb` (Rinnen, Linien, Schienenbett, Leuchtpunkte), Quergassen mit
+  Mittelstreifen aus Metalldeck `kit_stc`; Kabelbündel mit Lampions, Auslegerschilder, Rohrleitungen auf Konsolen, Werbetafeln mit Rahmen.
+- **Schaufenster:** gedämpftes Ladenlicht (`kit_shopw`, `kit_shopc`) mit Sprossen, Regalböden und Ware als dunkle Umrisse (vorher verdeckte dunkles Glas das Licht).
+- **Lichtplatz:** Geländer mit Scheiben und Lichtfuge um die Grube, Metalldeck als Rand, zwei Werbesäulen, Pflanzkübel.
+- **Im Spiel** (`src/models/kit.ts`): Stadtmaterialien entstehen erst, wenn ein Modell sie nennt (`cityMat`), ihre Bilder liegen im Hintergrund-Paket
+  (`asset-src/tex-world`, erzeugt von `scripts/sync-city-tex.mjs`). Eigene Spiegel-Umgebung `cityEnv` (dunstiger Himmel, Stadtlichter): Die Umgebung der
+  Szene ist der Nebel des Sektors, und `envMapIntensity` wirkt in three nur mit eigener `envMap`; ohne sie spiegelten die Pfützen rötlich.
+  Farbe der Fassaden 2,4-fach aufgehellt und nur 20 % Metall, sonst sind sie im Tageslicht fast schwarz.
+- **Umfang:** rund 628 000 Dreiecke, 759 Leuchtpunkte (oben ausgedünnt), Modell 15,6 MB im Hintergrund-Paket, Texturen rund 2,5 MB.
+- **Neu bauen:** `node scripts/make-kit-hh.mjs`, `node scripts/make-kit-str.mjs`, `node scripts/sync-city-tex.mjs`; in Blender (`Neonhafen.blend`)
+  `neonhafen_kit.build`, `kit_lib.bake_ao(ob, 6.0, 16)`, `kit_lib.export(..., kind='city')`; dann `npm run assets`.
+
+## Hochhaus-Baukasten (seit Alpha 0.94 in Neonhafen)
+
+Gegliederte Türme statt glatter Quader: `asset-src/neu/stadt/hochhaus_kit.py` + `Hochhaeuser.blend`, Vorschaubilder in `asset-src/neu/stadt/bilder/`.
+
+- **Fassaden:** drei kachelnde Bilder mit Relief (`scripts/make-kit-hh.mjs` → `asset-src/neu/stadt/tex/`): `kit_hha` Glasraster, `kit_hhb` schwere Paneele,
+  `kit_hhc` Fensterbänder; je Farbe, Leuchten, Relief und Rauheit/Metall. Sie liegen bewusst nicht in `asset-src/tex`, weil dort alles ins Kernpaket des Spiels wandert.
+  Im Baukasten: `K.facade(..., mat='kit_hha')`; die Tönung der Ecken färbt die Fassade.
+- **Bausteine:** `shaft`, `slab` (angesetzte Scheibe), `pod`, `fins`, `ledges`, `band`, `pier`, `step_crown`, `lattice_crown`, `crown_spikes`, `roof_mech`,
+  `landing_pad`, `billboard`, `edge_strip`, `risers`, `balconies`, `crane`, `skybridge`, `podium`.
+- **Türme:** `tower_konzern`, `tower_stufen`, `tower_kern`, `tower_rund`, `tower_werk` und `tower_bundle(K, (x, y), seed, h, w, d, far=False)` für beliebig viele Varianten
+  (`far=True`: sparsame Fassung für den Hintergrund). Schaubühnen: `lineup(lib)` und `city(lib)`.
+- **Vorschau in Blender:** Dunst als Volumenkasten (nicht über die Welt, das schluckt alles). Punktlichter im Dunst nur ohne Schatten und mit mäßiger Leistung, sonst fällt der Dunst aus.
+
+## Straßen-Baukasten (seit Alpha 0.94 in Neonhafen)
+
+Straßen, Plätze und Gassen zu den Hochhäusern: `asset-src/neu/stadt/strassen_kit.py`, Schaubühne `street_scene(lib)` → Objekt „Hochhaus_Strasse“
+(liegt in der Schlucht der Hochhaus-Stadt; dafür `hochhaus_kit.city(lib, street=True)`). Bilder: `asset-src/neu/stadt/bilder/strasse_*.jpg`.
+
+- **Beläge** (`scripts/make-kit-str.mjs` → `asset-src/neu/stadt/tex/`): `kit_sta` Gehweg/Platz (Betonplatten, Rostreihe, Riffelblech), `kit_stb` Fahrbahn
+  (läuft längs: Rinnen, gelbe Linien, Pfeile, Schienenbett, Leuchtpunkte), `kit_stc` Metalldeck. Alle mit Relief, Pfützen (glatt, dunkel) und Abnutzung.
+- **Querschnitt:** Fahrbahn 10,24 m, Gehweg bis zur Baulinie (10,6 m von der Mitte), Häuser mit 3,8 m tiefer Arkade im 5,4 m hohen Erdgeschoss.
+- **Bausteine:** `road`, `curb`, `crosswalk`, `street_building` (Arkade, Stützen, Ladenbuchten `bay_stall` / `bay_glass` / `bay_shutter` / `bay_service`,
+  Vordächer, Leuchtschriften, Auslegerschilder, Rohre), `alley`, `plaza` (Stufen, Geländer, Stände, Werbesäulen, Tanks), `lamp_post`, `bollard`, `blade_sign`,
+  `cable_span` (Kabelbündel mit Lampions), `ad_pylon`, `pipe_run`, `tank_stack`, `glass_rail`, `furnish` (Bänke, Kübel, Automaten, Poller, Kisten).
+- **Vorschau in Blender:** Abendlicht, rund 190 Punktlichter aus `K.lamp` (nur die Laternen mit Schatten), Spiegelungen der nassen Böden über Raytracing.
+  Im Spiel gibt es diese Lichter nicht: Dort tragen Leuchtflächen, Glüh-Punkte, Überstrahlen und die Spiegel-Umgebung der Stadt die Stimmung.
+
 ## Neue Stadt bauen
 
 1. Skript nach dem Vorbild `stadt_kit.py` (Halle und Promenadenhaus in denselben Maßen, Rest frei), `meta()` mit Tür, Tor, Andock- und Startpunkt,
