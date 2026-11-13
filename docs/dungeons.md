@@ -154,8 +154,13 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
   Andere sehen den Piloten als Soldaten mit den Laufclips (`avatar.ts` → `driveRemote`), sein Schiff und Rover bleiben geparkt sichtbar.
   In der Mine erscheinen nur Piloten am selben Eingang; Drohnen, Kisten und Tor sind dort (noch) je Spieler getrennt.
 
+- **Fallen, Schalter, Aussehen, neue Waffen (Alpha 0.88):**
+  - Das Tor öffnet erst, wenn **alle** Schalter (2–3 je Mine, verteilt auf entfernte Kavernen) umgelegt sind. Der Stand wird je Mine gespeichert (`dungeons[id].sws`), auf der Karte stehen offene Schalter als gelbe Punkte.
+  - **Fallen** in Gängen: Gasdüsen (grün) und Stromgitter (blau). Sie laufen im 5-Sekunden-Takt, warnen kurz vorher durch Flackern und schaden nur im aktiven Teil (ab 3,2 s). Auf der Karte als rote Punkte.
+  - **Aussehen je Planetentyp** (`THEME` in `dungeon.ts`): Lampenfarbe, Nebel und Einbauten – Eiskristalle (Eis, Kristall), glühende Bodenspalten (Vulkan, Asche), Sandverwehungen (Wüste). Felsplaneten behalten das Bergwerk.
+  - Eigene Ich-Sicht-Modelle: **P-9 „Wächter“** (Pistole) und **SW-4 „Funke“** (Splitterwerfer), gebaut in `asset-src/neu/mine/waffen2_build.py`, mit gebackenen Texturen `waffe_p9_*` / `waffe_sw_*`.
+
 ## Noch offen
-- Nur ein Aussehen (Bergwerk). Geplant: je Planetentyp eigene Farben und Einbauten, weitere Arten (Bunker, Wrack), große Meteoriten im All.
-- Fallen, Rätsel über mehrere Schalter, Schlüssel, mehrere Ebenen.
-- Eigene Modelle für Pistole und Splitterwerfer in der Ich-Sicht; Hände/Handschuhe an der Waffe.
-- Werte (Leben, Schaden, Beute) sind geschätzt und nicht eingespielt.
+- Weitere Minenarten (Bunker, Wrack), Schlüssel, mehrere Ebenen, große Meteoriten im All.
+- Hände/Handschuhe an Pistole und Splitterwerfer in der Ich-Sicht.
+- Werte (Leben, Schaden, Beute, Fallenschaden) sind geschätzt und nicht eingespielt.

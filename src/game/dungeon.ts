@@ -40,6 +40,8 @@ export const DUN = {
   crates: [] as Crate[], foes: [] as Foe[], bolts: [] as Bolt[],
   door: null as null | { tx: number; tz: number; open: boolean; k: number; g: THREE.Group; ax: boolean },
   sw: null as null | { tx: number; tz: number; on: boolean; scr: THREE.MeshBasicMaterial },
+  sws: [] as { tx: number; tz: number; on: boolean; scr: THREE.MeshBasicMaterial; g: THREE.Group }[],   // alle Schalter (das Tor öffnet, wenn alle umgelegt sind)
+  traps: [] as { tx: number; tz: number; kind: 'gas' | 'strom'; ph: number; on: boolean; g: THREE.Group; glow: THREE.MeshBasicMaterial; light: THREE.PointLight }[],
   exit: [1, 1] as Vec2, prompt: '', act: null as null | (() => void),
   msg: [] as { t: string; c: string; life: number }[], danger: 1, kills: 0, left: 0,
 };
@@ -95,7 +97,7 @@ function flood(sx: number, sz: number, out: Int16Array, door = false) {
 }
 
 // ---------- Erzeugung: Irrgarten, Schleifen, Kavernen, Tresor ----------
-interface Plan { start: Vec2; vault: Vec2; door: Vec2; doorAx: boolean; sw: Vec2; crates: Vec2[]; foes: Vec2[]; lampsAt: Vec2[] }
+interface Plan { start: Vec2; vault: Vec2; door: Vec2; doorAx: boolean; sw: Vec2; sws: Vec2[]; traps: Vec2[]; crates: Vec2[]; foes: Vec2[]; lampsAt: Vec2[] }
 function generate(seed: number, n: number): Plan {
   const R = rng(seed), W = 2 * n + 1, H = 2 * n + 1;
   DUN.W = W; DUN.H = H; DUN.t = new Uint8Array(W * H); DUN.ceil = new Float32Array(W * H).fill(3.0); DUN.seen = new Uint8Array(W * H); DUN.dist = new Int16Array(W * H);
@@ -154,7 +156,10 @@ function generate(seed: number, n: number): Plan {
   flood(door[0], door[1], dD, true); flood(1, 1, dS, true);
   dead.sort((a, b) => dD[b[1] * W + b[0]] - dD[a[1] * W + a[0]]);
   const sw: Vec2 = dead.length ? dead[0] : [1, 3];
-  const crates: Vec2[] = dead.slice(1).filter(([x, z]) => dS[z * W + x] > 5).slice(0, 4 + Math.floor(n / 2));
+  const nSw = n >= 6 ? 3 : 2, sws: Vec2[] = [];
+  for (const d of dead) { if (sws.length >= nSw) break; if (dS[d[1] * W + d[0]] > 4 && sws.every(q => Math.abs(q[0] - d[0]) + Math.abs(q[1] - d[1]) > 8)) sws.push(d); }
+  if (!sws.length) sws.push(sw);
+  const crates: Vec2[] = dead.filter(d => !sws.includes(d)).filter(([x, z]) => dS[z * W + x] > 5).slice(0, 4 + Math.floor(n / 2));
   for (const c of caves) if (t[c[1] * W + c[0]] === 1 && crates.length < 9) crates.push(c);
   // Wächter: auf Gängen und in Kavernen, nicht in der Nähe des Eingangs
   const foes: Vec2[] = [], floor: Vec2[] = [];
@@ -167,7 +172,56 @@ function generate(seed: number, n: number): Plan {
   // Lampen: an jeder dritten Gangkachel und in den Kavernen
   const lampsAt: Vec2[] = [];
   for (let z = 1; z < H - 1; z++) for (let x = 1; x < W - 1; x++) if (t[z * W + x] === 1 && (x * 7 + z * 13) % 5 === 0) lampsAt.push([x, z]);
-  return { start: [1, 1], vault: [2 * vcx + 2, 2 * vcz + 2], door, doorAx: dsel[2], sw, crates, foes, lampsAt };
+  // Fallen: gerade Gangstücke (genau zwei gegenüberliegende Nachbarn), weg vom Eingang, Schaltern und Kisten
+  const traps: Vec2[] = [], straight = floor.filter(([x, z]) => (t[z * W + x - 1] && t[z * W + x + 1] && !t[(z - 1) * W + x] && !t[(z + 1) * W + x]) || (t[(z - 1) * W + x] && t[(z + 1) * W + x] && !t[z * W + x - 1] && !t[z * W + x + 1]));
+  const wantT = Math.min(6, 2 + DUN.danger);
+  for (let k = 0; k < wantT * 8 && traps.length < wantT && straight.length; k++) {
+    const f = straight[Math.floor(R.next() * straight.length)];
+    if (dS[f[1] * W + f[0]] < 9) continue;
+    if ([...traps, ...sws, ...crates].every(g => Math.abs(g[0] - f[0]) + Math.abs(g[1] - f[1]) > 4)) traps.push(f);
+  }
+  return { start: [1, 1], vault: [2 * vcx + 2, 2 * vcz + 2], door, doorAx: dsel[2], sw: sws[0], sws, traps, crates, foes, lampsAt };
+}
+
+// ---------- Aussehen je Planetentyp: Lampenfarbe, Nebel und Einbauten in den Kavernen ----------
+const THEME: Record<string, { lamp: number; fog: number; deco: 'kristall' | 'lava' | 'sand' | 'none'; col: number }> = {
+  fels: { lamp: 0xffc890, fog: 0x030405, deco: 'none', col: 0 },
+  wueste: { lamp: 0xffd8a0, fog: 0x080604, deco: 'sand', col: 0xb89a6a },
+  eis: { lamp: 0xc8e4ff, fog: 0x03070b, deco: 'kristall', col: 0x9fe8ff },
+  vulkan: { lamp: 0xffa070, fog: 0x0a0403, deco: 'lava', col: 0xff5010 },
+  asche: { lamp: 0xd8b0ff, fog: 0x060408, deco: 'lava', col: 0xb060ff },
+  kristall: { lamp: 0xd8b8ff, fog: 0x060409, deco: 'kristall', col: 0xd080ff },
+};
+function buildTheme(type: string, R: { next: () => number }) {
+  const th = THEME[type] || THEME.fels; if (th.deco === 'none' || !group) return;
+  const spots: Vec2[] = [];
+  for (let z = 1; z < DUN.H - 1; z++) for (let x = 1; x < DUN.W - 1; x++) if (DUN.t[I(x, z)] === 1 && DUN.ceil[I(x, z)] > 4.1 && !(x < 4 && z < 4)) spots.push([x, z]);
+  // auch in Gängen ein paar, damit das Thema überall spürbar ist
+  for (let z = 1; z < DUN.H - 1; z++) for (let x = 1; x < DUN.W - 1; x++) if (DUN.t[I(x, z)] === 1 && (x * 11 + z * 7) % 9 === 0 && !(x < 4 && z < 4)) spots.push([x, z]);
+  const geoC = new THREE.OctahedronGeometry(1, 0), m = new THREE.MeshStandardMaterial({ color: new THREE.Color(th.col).multiplyScalar(0.35), emissive: th.col, emissiveIntensity: th.deco === 'kristall' ? 1.4 : 2.2, roughness: 0.25, metalness: 0.1, transparent: th.deco === 'kristall', opacity: 0.88 });
+  const sandM = new THREE.MeshStandardMaterial({ color: th.col, roughness: 1 }), geoS = new THREE.SphereGeometry(1, 10, 6);
+  for (const [x, z] of spots) {
+    if (R.next() > 0.55) continue;
+    const cx = x * TS + (R.next() - 0.5) * 2.2, cz = z * TS + (R.next() - 0.5) * 2.2;
+    if (th.deco === 'kristall') {
+      const n = 3 + Math.floor(R.next() * 4);
+      for (let k = 0; k < n; k++) {
+        const c = new THREE.Mesh(geoC, m), h = 0.4 + R.next() * 0.9;
+        c.scale.set(0.12 + R.next() * 0.1, h, 0.12 + R.next() * 0.1);
+        c.position.set(cx + (R.next() - 0.5) * 0.7, h * 0.6, cz + (R.next() - 0.5) * 0.7);
+        c.rotation.set((R.next() - 0.5) * 0.9, R.next() * 6.28, (R.next() - 0.5) * 0.9); c.userData.sh = false; group.add(c);
+      }
+    } else if (th.deco === 'lava') {
+      // glühende Spalten im Boden: schmale, leuchtende Bänder, leicht versetzt
+      for (let k = 0; k < 3; k++) {
+        const c = new THREE.Mesh(new THREE.BoxGeometry(0.08 + R.next() * 0.1, 0.02, 0.8 + R.next() * 1.4), m);
+        c.position.set(cx + (R.next() - 0.5) * 1.2, 0.012, cz + (R.next() - 0.5) * 1.2); c.rotation.y = R.next() * 6.28; c.userData.sh = false; group.add(c);
+      }
+    } else {
+      const c = new THREE.Mesh(geoS, sandM); c.scale.set(0.8 + R.next() * 0.9, 0.12 + R.next() * 0.15, 0.6 + R.next() * 0.7);
+      c.position.set(cx, 0, cz); c.rotation.y = R.next() * 6.28; c.userData.sh = false; group.add(c);
+    }
+  }
 }
 
 // ---------- Felsnetz ----------
@@ -527,6 +581,7 @@ export function enterDungeon(e: Entrance) {
   const ORE: Record<string, number> = { fels: 0x40c0ff, wueste: 0xffb040, eis: 0x9fe8ff, vulkan: 0xff6030, asche: 0xb070ff, kristall: 0xd080ff };
   mats(ORE[pl?.type || 'fels'] || 0x40c0ff);
   if (!buildKitProps(plan, R)) buildProps(plan, R);
+  buildTheme(pl?.type || 'fels', R);
   // Kisten (schon geöffnete bleiben offen), dazu ein Verbandskasten auf halbem Weg
   DUN.crates = plan.crates.map((c, i) => buildCrate(c[0], c[1], false, i, R.next() * 6.28, i === 1));
   DUN.crates.push(buildCrate(plan.vault[0], plan.vault[1] + 1, true, 99, Math.PI));
@@ -547,23 +602,38 @@ export function enterDungeon(e: Entrance) {
     }
     g.position.set(plan.door[0] * TS, 0, plan.door[1] * TS); g.rotation.y = kf ? Math.atan2(ox, oz) : plan.doorAx ? Math.PI / 2 : 0; g.traverse((o: any) => { o.userData.sh = false; }); group.add(g);
     DUN.door = { tx: plan.door[0], tz: plan.door[1], open: !!st.sw, k: st.sw ? 1 : 0, g, ax: plan.doorAx };
-    const scr = new THREE.MeshBasicMaterial({ color: st.sw ? 0x3ad06a : 0xff3020 }), sg = new THREE.Group();
-    const ks = kitPart('schalter'), kh = kitPart('hebel');
-    if (ks && kh) {
-      // an die Rückwand der Sackgasse, Vorderseite zum offenen Gang
-      let ox = 0, oz = 1;
-      for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) if (tile(plan.sw[0] + ax, plan.sw[1] + az) > 0) { ox = ax; oz = az; break; }
-      sg.add(ks); const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.14), scr); pane.position.set(-0.12, 1.42, 0.262); sg.add(pane);
-      const lw = new THREE.Group(); lw.name = 'hebel'; lw.position.set(0, 0.8, 0.36); lw.rotation.x = st.sw ? 0.7 : -0.5; lw.add(kh); sg.add(lw);
-      sg.position.set(plan.sw[0] * TS - ox * (TS / 2 - 0.5), 0, plan.sw[1] * TS - oz * (TS / 2 - 0.5)); sg.rotation.y = Math.atan2(ox, oz);
-    } else {
-      const box = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.1, 0.4), dk); box.position.y = 0.55; sg.add(box);
-      const pane = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.05), scr); pane.position.set(0, 0.9, 0.2); pane.rotation.x = -0.4; sg.add(pane);
-      const lever = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), fr); lever.position.set(0.2, 1.2, 0.1); lever.rotation.x = st.sw ? 0.7 : -0.7; lever.name = 'hebel'; sg.add(lever);
-      sg.position.set(plan.sw[0] * TS, 0, plan.sw[1] * TS);
-    } sg.traverse((o: any) => { o.userData.sh = false; }); group.add(sg);
-    DUN.sw = { tx: plan.sw[0], tz: plan.sw[1], on: !!st.sw, scr };
-    (DUN.sw as any).g = sg;
+    DUN.sws = [];
+    plan.sws.forEach((swp, si) => {
+      const on = !!st.sw || !!(st.sws && st.sws.includes(si));
+      const scr = new THREE.MeshBasicMaterial({ color: on ? 0x3ad06a : 0xff3020 }), sg = new THREE.Group();
+      const ks = kitPart('schalter'), kh = kitPart('hebel');
+      if (ks && kh) {
+        // an die Rückwand der Sackgasse, Vorderseite zum offenen Gang
+        let ox = 0, oz = 1;
+        for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) if (tile(swp[0] + ax, swp[1] + az) > 0) { ox = ax; oz = az; break; }
+        sg.add(ks); const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.14), scr); pane.position.set(-0.12, 1.42, 0.262); sg.add(pane);
+        const lw = new THREE.Group(); lw.name = 'hebel'; lw.position.set(0, 0.8, 0.36); lw.rotation.x = on ? 0.7 : -0.5; lw.add(kh); sg.add(lw);
+        sg.position.set(swp[0] * TS - ox * (TS / 2 - 0.5), 0, swp[1] * TS - oz * (TS / 2 - 0.5)); sg.rotation.y = Math.atan2(ox, oz);
+      } else {
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.1, 0.4), dk); box.position.y = 0.55; sg.add(box);
+        const pane = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.05), scr); pane.position.set(0, 0.9, 0.2); pane.rotation.x = -0.4; sg.add(pane);
+        const lever = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), fr); lever.position.set(0.2, 1.2, 0.1); lever.rotation.x = on ? 0.7 : -0.7; lever.name = 'hebel'; sg.add(lever);
+        sg.position.set(swp[0] * TS, 0, swp[1] * TS);
+      } sg.traverse((o: any) => { o.userData.sh = false; }); group!.add(sg);
+      DUN.sws.push({ tx: swp[0], tz: swp[1], on, scr, g: sg });
+    });
+    DUN.sw = DUN.sws[0] || null;
+    // Fallen: Bodenplatte mit Leuchtrand; Gas (grün, Schwaden) oder Strom (blau, Funken), pulsierend
+    DUN.traps = plan.traps.map((tp, ti) => {
+      const kind: 'gas' | 'strom' = ti % 2 ? 'strom' : 'gas', g = new THREE.Group();
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(TS * 0.8, 0.06, TS * 0.8), std(0x2a2c30, { roughness: 0.6, metalness: 0.8 })); plate.position.y = 0.03; g.add(plate);
+      const glow = new THREE.MeshBasicMaterial({ color: kind === 'gas' ? 0x2a6a20 : 0x20406a });
+      for (const [w2, d2, x2, z2] of [[TS * 0.8, 0.06, 0, TS * 0.4], [TS * 0.8, 0.06, 0, -TS * 0.4], [0.06, TS * 0.8, TS * 0.4, 0], [0.06, TS * 0.8, -TS * 0.4, 0]]) { const e2 = new THREE.Mesh(new THREE.BoxGeometry(w2, 0.04, d2), glow); e2.position.set(x2, 0.07, z2); g.add(e2); }
+      for (let k = 0; k < 6; k++) { const v = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, TS * 0.6), std(0x111214, { roughness: 0.8 })); v.position.set(-0.6 + k * 0.24, 0.065, 0); g.add(v); }
+      const light = new THREE.PointLight(kind === 'gas' ? 0x60ff40 : 0x60a0ff, 0, 6, 2); light.position.y = 0.8; g.add(light);
+      g.position.set(tp[0] * TS, 0, tp[1] * TS); g.traverse((o: any) => { o.userData.sh = false; }); group!.add(g);
+      return { tx: tp[0], tz: tp[1], kind, ph: (ti * 1.7) % 5, on: false, g, glow, light };
+    });
   }
   // Förderkorb am Eingang
   {
@@ -588,9 +658,10 @@ export function enterDungeon(e: Entrance) {
   // Licht: Welt aus, Stirnlampe und ein kleiner Vorrat an Lampenlichtern, die den nächsten Lampen folgen
   saved.amb = ambient.intensity; saved.sun = sun.intensity; saved.rim = rim.intensity; saved.near = camera.near; saved.far = camera.far;
   const fog = scene.fog as THREE.FogExp2 | null;
-  if (fog) { saved.fogC = fog.color.getHex(); saved.fogD = fog.density; fog.color.set(0x030405); fog.density = 0.048; }
+  const TH = THEME[pl?.type || 'fels'] || THEME.fels;
+  if (fog) { saved.fogC = fog.color.getHex(); saved.fogD = fog.density; fog.color.set(TH.fog); fog.density = 0.048; }
   pool = [];
-  for (let k = 0; k < 5; k++) { const l = new THREE.PointLight(0xffc890, 0, 13, 1.6); group.add(l); pool.push(l); }
+  for (let k = 0; k < 5; k++) { const l = new THREE.PointLight(TH.lamp, 0, 13, 1.6); group.add(l); pool.push(l); }
   head = new THREE.SpotLight(0xe6eeff, 18, 38, 0.6, 0.55, 1.0); scene.add(head); scene.add(head.target);
   mflash = new THREE.PointLight(0xffb060, 0, 9, 1.6); scene.add(mflash);
   vm = buildViewModel(viewModelId(P.gear?.waffe));
@@ -718,9 +789,30 @@ export function updateDungeon(dt: number) {
   DUN.prompt = ''; DUN.act = null;
   const near = (tx: number, tz: number, r = 2.2) => Math.hypot(tx * TS - DUN.x, tz * TS - DUN.z) < r;
   for (const c of DUN.crates) if (!c.open && near(c.tx, c.tz)) { DUN.prompt = c.med ? 'Verbandskasten öffnen' : c.big ? 'Tresorkiste öffnen' : 'Kiste öffnen'; DUN.act = () => openCrate(c); }
-  if (DUN.sw && !DUN.sw.on && near(DUN.sw.tx, DUN.sw.tz)) {
-    DUN.prompt = 'Schalter umlegen';
-    DUN.act = () => { DUN.sw!.on = true; DUN.sw!.scr.color.set(0x3ad06a); DUN.door!.open = true; P.dungeons![DUN.e!.id].sw = true; const lv = (DUN.sw as any).g.getObjectByName('hebel'); if (lv) lv.rotation.x = 0.7; say('Das Tor zum Tresor fährt auf.', '#3ad06a'); sfx('door_open', 0.7, 0.7, () => snd(200, 0.6, 'sawtooth', 0.05, 80)); saveGame(); };
+  DUN.sws.forEach((sw, si) => {
+    if (sw.on || !near(sw.tx, sw.tz)) return;
+    DUN.prompt = `Schalter umlegen (${DUN.sws.filter(q => q.on).length + 1}/${DUN.sws.length})`;
+    DUN.act = () => {
+      sw.on = true; sw.scr.color.set(0x3ad06a);
+      const lv = sw.g.getObjectByName('hebel'); if (lv) lv.rotation.x = 0.7;
+      const st = P.dungeons![DUN.e!.id]; st.sws = [...(st.sws || []), si];
+      const left = DUN.sws.filter(q => !q.on).length;
+      if (left === 0) { DUN.door!.open = true; st.sw = true; say('Alle Schalter umgelegt. Das Tor zum Tresor fährt auf.', '#3ad06a'); sfx('door_open', 0.7, 0.7, () => snd(200, 0.6, 'sawtooth', 0.05, 80)); }
+      else { say(`Schalter umgelegt. Noch ${left} bis zum Tresor.`, '#ffb347'); snd(520, 0.2, 'square', 0.04, 200); }
+      saveGame();
+    };
+  });
+  // Fallen: alle 5 s für 1,8 s aktiv (vorher kurzes Warnblinken); wer darauf steht, nimmt Schaden
+  for (const tr of DUN.traps) {
+    tr.ph = (tr.ph + dt) % 5;
+    const warn = tr.ph > 2.6 && tr.ph < 3.2, on = tr.ph >= 3.2;
+    if (on && !tr.on) sfx(tr.kind === 'gas' ? 'laser' : 'shield_hit', 0.25, tr.kind === 'gas' ? 0.5 : 1.4, () => snd(tr.kind === 'gas' ? 140 : 900, 0.3, 'sawtooth', 0.03, -80));
+    tr.on = on;
+    const blink = warn ? (Math.sin(tr.ph * 30) > 0 ? 1 : 0.3) : on ? 1 : 0.25;
+    tr.glow.color.setHex(tr.kind === 'gas' ? 0x60ff40 : 0x60a0ff).multiplyScalar(blink);
+    tr.light.intensity = on ? 14 + Math.random() * 6 : warn ? 4 * blink : 0;
+    if (on && Math.random() < 0.5) burst(tr.tx * TS + (Math.random() - 0.5) * 2, 0.3 + Math.random() * (tr.kind === 'gas' ? 1.6 : 0.4), tr.tz * TS + (Math.random() - 0.5) * 2, tr.kind === 'gas' ? '#7aff60' : '#9fd0ff', tr.kind === 'gas' ? 3 : 2, tr.kind === 'gas' ? 1.2 : 3, 0.4);
+    if (on && Math.abs(DUN.x - tr.tx * TS) < TS * 0.42 && Math.abs(DUN.z - tr.tz * TS) < TS * 0.42) { hurtPlayer(dt * (tr.kind === 'gas' ? 14 : 22)); if (Math.random() < dt * 2) say(tr.kind === 'gas' ? 'Giftgas! Weg von der Platte.' : 'Stromschlag!', '#ff6b5b'); }
   }
   if (near(DUN.exit[0], DUN.exit[1], 1.6)) { DUN.prompt = 'Förderkorb: zurück an die Oberfläche'; DUN.act = () => leaveDungeon(false); }
   for (const c of DUN.crates) if (c.open && c.lid.rotation.x > -1.9) c.lid.rotation.x = Math.max(-1.9, c.lid.rotation.x - dt * 4);
@@ -932,7 +1024,8 @@ export function drawDungeonHUD(roverX = 0, roverZ = 0, roverOn = false) {
   }
   const dot = (tx: number, tz: number, c: string, r = cs * 0.34) => { if (!DUN.seen[I(tx, tz)]) return; ux.fillStyle = c; ux.beginPath(); ux.arc(mx0 + (tx + 0.5) * cs, my0 + (tz + 0.5) * cs, r, 0, 6.283); ux.fill(); };
   for (const c of DUN.crates) if (!c.open) dot(c.tx, c.tz, c.med ? '#3ad06a' : c.big ? '#ffb347' : '#5fd0ff');
-  if (DUN.sw) dot(DUN.sw.tx, DUN.sw.tz, DUN.sw.on ? '#3ad06a' : '#ff5a40');
+  for (const sw of DUN.sws) dot(sw.tx, sw.tz, sw.on ? '#3ad06a' : '#ff5a40');
+  for (const tr of DUN.traps) dot(tr.tx, tr.tz, tr.kind === 'gas' ? '#7aff60' : '#9fd0ff', cs * 0.22);
   dot(DUN.exit[0], DUN.exit[1], '#ffffff', cs * 0.28);
   for (const f of DUN.foes) if (f.alert) dot(Math.round(f.x / TS), Math.round(f.z / TS), '#ff3020', cs * 0.3);
   { const px = mx0 + (DUN.x / TS + 0.5) * cs, pz = my0 + (DUN.z / TS + 0.5) * cs, a = -DUN.yaw; ux.fillStyle = '#ffffff'; ux.beginPath(); ux.moveTo(px - Math.sin(-a) * 0 + Math.sin(DUN.yaw) * -cs * 0.75, pz - Math.cos(DUN.yaw) * cs * 0.75); ux.lineTo(px + Math.cos(DUN.yaw) * cs * 0.45 + Math.sin(DUN.yaw) * cs * 0.4, pz - Math.sin(DUN.yaw) * cs * 0.45 + Math.cos(DUN.yaw) * cs * 0.4); ux.lineTo(px - Math.cos(DUN.yaw) * cs * 0.45 + Math.sin(DUN.yaw) * cs * 0.4, pz + Math.sin(DUN.yaw) * cs * 0.45 + Math.cos(DUN.yaw) * cs * 0.4); ux.fill(); }

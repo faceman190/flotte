@@ -54,7 +54,7 @@ export interface Player {
   locker: InvItem[];                            // Spind, von jeder Station aus erreichbar
   shipGear: Partial<Record<ShipSlot, string>>;  // Module des aktiven Schiffs
   salvage?: Record<string, { t: number; open: number[] }>;   // je Planet: Zeitpunkt, geöffnete Kisten (Wracks und Versorgungskisten, src/game/salvage.ts)
-  dungeons?: Record<string, { t: number; open: number[]; sw?: boolean }>;   // je Mine: Zeitpunkt des letzten frischen Besuchs, geöffnete Kisten, Schalter
+  dungeons?: Record<string, { t: number; open: number[]; sw?: boolean; sws?: number[] }>;   // je Mine: Zeitpunkt des letzten frischen Besuchs, geöffnete Kisten, Schalter
 }
 export type Tool = 'guns' | 'laser' | 'charge';
 export interface Contract { id: string; station: string; sector: string; stName: string; item: ItemId; amount: number; reward: number; trust?: boolean }

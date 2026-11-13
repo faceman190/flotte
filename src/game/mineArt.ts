@@ -120,10 +120,12 @@ const WDEFS: Record<string, WDef> = {
   k12: { tpl: 'Mine_Waffe', body: 'waffe', glas: 'glas', absehen: 'absehen', licht: 'lampenglas', tex: 'waffe', muzzle: [0, 0.04, -0.5585], pos: [0.118, -0.178, -0.30], col: 0xfff2dc },
   ig3: { tpl: 'Mine_W_ig3', body: 'ig3', glas: 'ig3_glas', absehen: 'ig3_absehen', licht: 'ig3_licht', tex: 'waffe_ig3', muzzle: [0, 0.046, -0.724], pos: [0.128, -0.228, -0.42], col: 0x8fd0ff },
   ef2: { tpl: 'Mine_W_ef2', body: 'ef2', glas: 'ef2_glas', absehen: 'ef2_absehen', licht: 'ef2_licht', tex: 'waffe_ef2', muzzle: [0, 0.046, -0.330], pos: [0.112, -0.168, -0.29], col: 0x6fc2ff, env: 0.07 },
+  p9: { tpl: 'Mine_W_p9', body: 'p9', glas: 'p9_glas', absehen: 'p9_absehen', licht: 'p9_licht', tex: 'waffe_p9', muzzle: [0, 0.030, -0.112], pos: [0.052, -0.080, -0.185], col: 0xffe2b0 },
+  sw: { tpl: 'Mine_W_sw', body: 'sw', glas: 'sw_glas', absehen: 'sw_absehen', licht: 'sw_licht', tex: 'waffe_sw', muzzle: [0, 0.038, -0.232], pos: [0.098, -0.140, -0.27], col: 0xc070ff, env: 0.12 },
 };
 // Welches Modell zur angelegten Waffe gehört (fehlt die Datei, nimmt das Spiel den K-12)
 export function viewModelId(gear?: string) {
-  const id = gear === 'waffe_impuls' ? 'ig3' : gear === 'waffe_flinte' ? 'ef2' : 'k12';
+  const id = gear === 'waffe_impuls' ? 'ig3' : gear === 'waffe_flinte' ? 'ef2' : gear === 'waffe_pistole' ? 'p9' : gear === 'waffe_splitter' ? 'sw' : 'k12';
   return stationTemplate(WDEFS[id].tpl) ? id : 'k12';
 }
 let ENV: THREE.Texture | null = null;
