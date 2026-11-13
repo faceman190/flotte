@@ -35,8 +35,8 @@ export const footHooks = {
 // Ziele zu Fuß, die die Geschichte setzt (z. B. Kristall bergen): [E] in Reichweite r
 export const footTargets: { x: number; z: number; r: number; label: string; act: () => void }[] = [];
 export const nearFootTarget = () => footTargets.find(t => Math.hypot(t.x - FOOT.x, t.z - FOOT.z) < t.r)
-  || cityTargets.find(t => Math.hypot(t.x - FOOT.x, t.z - FOOT.z) < t.r)
   || (CITY.st && cityDoorNear(FOOT.x, FOOT.z) ? { x: FOOT.x, z: FOOT.z, r: 4, label: `Promenade von ${CITY.st.name} betreten`, act: () => footHooks.enterCity() } : null)
+  || cityTargets.find(t => Math.hypot(t.x - FOOT.x, t.z - FOOT.z) < t.r)
   || null;
 export function footAt(x: number, z: number, yaw: number) { place(x, z, yaw); }
 let me: Avatar | null = null, stepT = 0, grabT = 0;
@@ -170,7 +170,7 @@ export function updateFoot(dt: number) {
 
 const _c = new THREE.Vector3();
 export function footCamera(dt: number) {
-  if (VIEW.tp && me) tpCamPos(_c, FOOT.x, FOOT.y + FOOT.jy, FOOT.z, FOOT.yaw, FOOT.pitch, (x, y, z) => y > padGround(x, z) + 0.3 && !baseBlocked(x, z, y - 1.2) && !(ROVER.model && Math.hypot(x - ROVER.x, z - ROVER.z) < 2.2) && !treeNear(x, z, 1.1), dt);
+  if (VIEW.tp && me) tpCamPos(_c, FOOT.x, FOOT.y + FOOT.jy, FOOT.z, FOOT.yaw, FOOT.pitch, (x, y, z) => y > padGround(x, z) + 0.3 && !baseBlocked(x, z, y - 1.2) && !(CITY.walk && wallBetween(FOOT.x, FOOT.z, x, z, y - 1.8)) && !(ROVER.model && Math.hypot(x - ROVER.x, z - ROVER.z) < 2.2) && !treeNear(x, z, 1.1), dt);
   else _c.set(FOOT.x, FOOT.y + FOOT.jy + eyeH() + FOOT.bob, FOOT.z);
   camera.position.copy(_c);
   camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch + FIGHT.kick * 0.012, FOOT.yaw, 0);

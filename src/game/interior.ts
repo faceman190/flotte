@@ -677,7 +677,7 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.42), mat(new THREE.MeshBasicMaterial({ map: signTex('Stadt · Markt', PAL[kind].css), toneMapped: false })));
     sign.position.set(0, 3.25, PZ0 + 0.34); door.add(sign);
     group.add(door);
-    inters.push({ x: 0, z: PZ0 + 1.2, r: 2.4, label: () => `Hinaus nach ${st.name} (Marktplatz)`, act: () => interiorHooks.toCity() });
+    inters.push({ x: 0, z: PZ0 + 1.2, r: 2.4, label: () => `Hinaus in die Stadt ${st.name}`, act: () => interiorHooks.toCity() });
   }
 }
 export function leaveInterior() {

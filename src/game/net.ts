@@ -152,9 +152,9 @@ export function pilotsHere() { const st = myStation(); return st ? [...remotes.v
 const footObj = new THREE.Object3D();
 function myState() {
   if (DUN.active) { footObj.position.set(DUN.x, 0, DUN.z); footObj.rotation.set(0, DUN.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'mine' }; }
-  if (IN.active || G.dockedAt) return { o: SHIP.g, m: 'innen' };
-  if (FOOT.active) { footObj.position.set(FOOT.x, FOOT.y, FOOT.z);   // zu Fuß (aus dem Rover oder direkt aus dem Schiff)
+  if (FOOT.active && !IN.active) { footObj.position.set(FOOT.x, FOOT.y, FOOT.z);   // zu Fuß (aus dem Rover oder direkt aus dem Schiff)
     footObj.rotation.set(0, FOOT.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'fuss' }; }
+  if (IN.active || G.dockedAt) return { o: SHIP.g, m: 'innen' };
   if (ROVER.active && ROVER.model) return { o: ROVER.model.g, m: 'rover' };
   return { o: SHIP.g, m: 'schiff' };
 }

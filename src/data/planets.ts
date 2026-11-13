@@ -50,7 +50,7 @@ export const PLANETS: Record<string, PlanetDef> = {
   heimstatt: { name: 'Heimstatt II', type: 'fels', danger: 0, base: 'Talstadt', city: 'Talstadt' },   // Stadt mit Hangar (src/game/city.ts)
   lichtwall: { name: 'Lichtwall Prime', type: 'wueste', danger: 0, base: 'Sandhafen' },
   eisgarten: { name: 'Frostbiss', type: 'eis', danger: 0, base: 'Eisgrube Nord' },
-  neuhafen: { name: 'Neuhafen IV', type: 'fels', danger: 1, base: 'Klippenbasis' },
+  neuhafen: { name: 'Neuhafen IV', type: 'fels', danger: 1, base: 'Neonhafen', city: 'Neonhafen' },   // Cyberpunk-Stadt (src/game/city.ts, Stil neon)
   sonnenfeld: { name: 'Glutsand', type: 'wueste', danger: 0, base: 'Oase Sieben' },
   rotfels: { name: 'Rotkessel', type: 'vulkan', danger: 2, base: 'Schlotwacht' },
   nebeltor: { name: 'Nebelfrost', type: 'eis', danger: 3 },

@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { scene, camera, glowMat } from '../core/engine';
-import { applyKit, kitMeta, loadKitMeta, KIT_GLOW } from '../models/kit';
+import { scene, camera, glowMat, ambient, sun, bloomPass } from '../core/engine';
+import { puff } from './fx';
+import { applyKit, kitMeta, loadKitMeta, KIT_GLOW, kitHoloFlicker } from '../models/kit';
 import { collisionSpheres } from '../models/stationModels';
 import { hasChar, charInstance, animInit, animStep, animTalk, type CharAnim } from '../models/charModels';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
@@ -33,6 +34,9 @@ export interface CityMeta {
   stalls?: [number, number][]; shops?: [number, number][]; bar?: [number, number]; inn?: [number, number]; monument?: [number, number];
   paths?: [number, number][][]; guards?: [number, number, number][]; traffic?: { far: [number, number, number]; in: [number, number, number] };
   lights?: { k: string; p: [number, number, number]; s: number }[];
+  // Stil „neon“ (Neonhafen): Dunst und Dämmerlicht in den Gassen, Hologramme, Skulptur, Dampf aus den Schächten
+  style?: 'neon'; steam?: [number, number][]; sculpture?: [number, number, number]; bounds?: { x: number; z0: number; z1: number };
+  holos?: { p: [number, number, number]; r: number; kind: 'sphere' | 'ring' | 'curtain'; col: number; w?: number; h?: number; yaw?: number }[];
 }
 const meta = (name: string) => kitMeta(name) as unknown as CityMeta;
 
@@ -71,7 +75,7 @@ export function buildCityModel(name: string) {
   const lights: THREE.Sprite[] = [], navs: THREE.Sprite[] = [];
   for (const l of m.lights || []) {
     const sp = new THREE.Sprite(glowMat(KIT_GLOW[l.k] ?? 0xffffff, l.k === 'light' ? 0.5 : 0.9));
-    sp.position.set(l.p[0], l.p[1], l.p[2]); sp.scale.setScalar(l.s); g.add(sp);
+    sp.position.set(l.p[0], l.p[1], l.p[2]); sp.scale.setScalar(m.style === 'neon' && l.p[1] < 25 ? Math.min(l.s, 1.0) : l.s); g.add(sp);   // in engen Gassen kleinere Leuchtpunkte
     if (l.k === 'redlamp' && l.p[1] > 20) navs.push(sp); else if (l.k === 'lamp' && l.p[1] < 1 && l.p[2] > 112) lights.push(sp);   // Leitlichter vor dem Tor
   }
   // Durchs offene Tor: der echte Hangar (dasselbe Modell wie im Innenraum, an derselben Stelle)
@@ -104,8 +108,9 @@ export function initCity(st: Station) {
   const R = mulberry(name.length * 7919);
   // Passanten: je Weg zwei bis drei, verschiedene Figuren und Helligkeiten
   const kinds = ['worker', 'lagerarbeiter', 'mechaniker', 'worker'].filter(hasChar);
+  const cap = m.style === 'neon' ? 30 : 99;
   if (kinds.length) (m.paths || []).forEach((p, pi) => {
-    const n = pi < 2 ? 3 : 2;
+    const n = Math.min(pi < 2 ? 3 : m.style === 'neon' ? 1 : 2, cap - walkers.length);
     for (let k = 0; k < n; k++) {
       const c = charInstance(kinds[(pi + k) % kinds.length], 0.8 + R() * 0.35);
       animInit(c.anim, true); c.anim.look = camera.position;
@@ -128,6 +133,7 @@ export function initCity(st: Station) {
     const a = makeAvatar({ helm: 'wache', anzug: 'panzer' }); if (!a) break;
     life.add(a.s.g); guards.push({ a, x: gd[0], z: gd[1], yaw: gd[2] });
   }
+  if (m.style === 'neon') buildNeon(m);
   // Ansprechpunkte zu Fuß (Weltkoordinaten)
   cityTargets.length = 0;
   const tgt = (p: [number, number] | undefined, r: number, label: string, act: () => void) => { if (!p) return; const w = toWorld(st, p[0], 0, p[1]); cityTargets.push({ x: w.x, z: w.z, r, label, act }); };
@@ -139,11 +145,14 @@ export function initCity(st: Station) {
   tgt(sh[0], 3.0, 'Sanität · Reparatur und Versorgung', () => { staffBark('Ilka', 'service'); cityHooks.tab('service', 'Sanität Talstadt: „Reparatur, Munition, Sprengladungen. Alles da.“'); });
   tgt(sh[4], 3.0, 'Ersatzteile · Werkstatt', () => { staffBark('Brann', 'werkstatt'); cityHooks.tab('werkstatt', 'Ersatzteile Talstadt: „Was sollen wir an deinem Schiff verbessern?“'); });
   tgt(sh[2], 3.0, 'Lagerhaus · Lagerabteil', () => { staffBark('Okko', 'lager'); cityHooks.tab('lager', 'Lagerhaus Talstadt: „Dein Lagerabteil ist bei uns sicher.“'); });
-  tgt(m.bar, 3.2, 'Zur Schleuse · Aufträge am Tresen', () => { staffBark('Runa', 'auftraege'); cityHooks.tab('auftraege', 'Wirtin der „Schleuse“: „Wir haben immer Bedarf. Schau dir die Aufträge an.“'); });
-  tgt(m.inn, 3.2, 'Herberge · Ausruhen (Spielstand sichern)', () => cityHooks.rest());
-  tgt(m.monument, 4.5, 'Gründerdenkmal lesen', () => radio('TAFEL', 'Dieses Landebein trug die „Talwind“, das erste Siedlerschiff auf Heimstatt II. Aus ihrem Rumpf entstand die Halle, aus ihrer Besatzung diese Stadt.', '#e8d8b0'));
+  const neon = m.style === 'neon';
+  tgt(m.bar, 3.2, neon ? 'Garküche „Schleusenbräu“ · Aufträge am Tresen' : 'Zur Schleuse · Aufträge am Tresen', () => { staffBark('Runa', 'auftraege'); cityHooks.tab('auftraege', neon ? 'Wirtin der Garküche: „Wir haben immer Bedarf. Schau dir die Aufträge an.“' : 'Wirtin der „Schleuse“: „Wir haben immer Bedarf. Schau dir die Aufträge an.“'); });
+  tgt(m.inn, 3.2, neon ? 'Kapselhotel · Ausruhen (Spielstand sichern)' : 'Herberge · Ausruhen (Spielstand sichern)', () => cityHooks.rest());
+  tgt(m.monument, 4.5, neon ? 'Lichtskulptur betrachten' : 'Gründerdenkmal lesen', () => radio('TAFEL', neon ? '„Der Funke“ – die Lichtskulptur von Neonhafen. Ihre Ringe drehen sich seit dem Tag, an dem die erste Leuchtschrift der Stadt anging, und sind seitdem nie stillgestanden.' : 'Dieses Landebein trug die „Talwind“, das erste Siedlerschiff auf Heimstatt II. Aus ihrem Rumpf entstand die Halle, aus ihrer Besatzung diese Stadt.', '#e8d8b0'));
 }
 export function clearCity() {
+  if (atmoK > 0) setAtmo(0);
+  atmoBase = null; fx = [];
   if (life) life.removeFromParent();
   life = null; walkers = []; vendors = []; guards = [];
   for (const f of flyers) { scene.remove(f.m.g); }
@@ -206,6 +215,94 @@ export function updateCity(dt: number) {
   }
   // Verkehr: alle 25–45 s ein Schiff, abwechselnd hinein und hinaus
   updateFlyers(dt, st, visible);
+  if (meta(CITY.name).style === 'neon') updateNeon(dt, st, visible, near);
+}
+
+// ---------- Stil „neon“ ----------
+// Atmosphäre: je tiefer man in der Stadt ist (Kamera innerhalb der Grenzen und unter 120 m), desto dichter der Dunst, desto dunkler Sonne und
+// Grundlicht, desto stärker das Leuchten (Bloom). Ausgangswerte werden beim Aufbau gemerkt; im Innenraum regelt der Innenraum das Licht.
+let atmoK = 0, atmoBase: { fogC: number; fogD: number; amb: number; sun: number; bloom: number } | null = null, steamT = 0, tNeon = 0;
+let fx: { o: THREE.Object3D; kind: string; spin: number; tex?: THREE.Texture }[] = [];
+const NEON_FOG = new THREE.Color(0x1a1f2e), _c = new THREE.Color();
+function setAtmo(k: number) {
+  const fog = scene.fog as THREE.FogExp2 | null; const b = atmoBase; if (!b) return;
+  if (fog) { fog.color.setHex(b.fogC).lerp(NEON_FOG, k); fog.density = b.fogD + (0.0042 - b.fogD) * k; }
+  if (!IN.active) { ambient.intensity = b.amb * (1 - 0.45 * k); sun.intensity = b.sun * (1 - 0.72 * k); }
+  if (bloomPass) bloomPass.strength = b.bloom + 0.3 * k;
+}
+function buildNeon(m: CityMeta) {
+  const fog = scene.fog as THREE.FogExp2 | null;
+  atmoBase = { fogC: fog ? fog.color.getHex() : 0, fogD: fog ? fog.density : 0, amb: ambient.intensity, sun: sun.intensity, bloom: bloomPass ? bloomPass.strength : 0.5 };
+  atmoK = 0; fx = [];
+  // Skulptur über der Grube: ineinander drehende Ringe um einen leuchtenden Kern
+  if (m.sculpture) {
+    const g = new THREE.Group(); g.position.set(m.sculpture[0], m.sculpture[1] + 6.5, m.sculpture[2]);
+    const metal = new THREE.MeshStandardMaterial({ color: 0xb8c0c8, metalness: 0.95, roughness: 0.22, envMapIntensity: 1.4 });
+    const edge = new THREE.MeshBasicMaterial({ color: 0x5fe8ff, toneMapped: false });
+    for (let k = 0; k < 5; k++) {
+      const r = 1.6 + k * 0.85, ring = new THREE.Group();
+      ring.add(new THREE.Mesh(new THREE.TorusGeometry(r, 0.16 + k * 0.035, 10, 48), metal));
+      const glowR = new THREE.Mesh(new THREE.TorusGeometry(r + 0.21 + k * 0.035, 0.035, 6, 48), edge); ring.add(glowR);
+      for (let j = 0; j < 3 + k; j++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.9), metal); const a = j / (3 + k) * Math.PI * 2; b.position.set(Math.cos(a) * r, Math.sin(a) * r, 0); b.rotation.z = a; ring.add(b); }
+      ring.rotation.set(Math.random() * 3, Math.random() * 3, 0); g.add(ring);
+      fx.push({ o: ring, kind: 'ring', spin: (k % 2 ? -1 : 1) * (0.18 + k * 0.07) });
+    }
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.0, 2), new THREE.MeshBasicMaterial({ color: 0xbff8ff, toneMapped: false })); g.add(core);
+    const halo = new THREE.Sprite(glowMat(0x5fe8ff, 0.45)); halo.scale.setScalar(7); g.add(halo);
+    life!.add(g);
+  }
+  // Hologramme: Gitterkugel mit Ring, Doppelring, Lichtvorhang
+  for (const h of m.holos || []) {
+    const add = new THREE.MeshBasicMaterial({ color: h.col, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+    const g = new THREE.Group(); g.position.set(h.p[0], h.p[1], h.p[2]);
+    if (h.kind === 'sphere') {
+      g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(h.r, 2), new THREE.MeshBasicMaterial({ color: h.col, wireframe: true, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })));
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(h.r * 1.25, h.r * 0.03, 6, 64), add); ring.rotation.x = Math.PI / 2; g.add(ring);
+      fx.push({ o: g, kind: 'holo', spin: 0.35 });
+    } else if (h.kind === 'ring') {
+      for (let k = 0; k < 2; k++) { const ring = new THREE.Mesh(new THREE.TorusGeometry(h.r * (1 - k * 0.3), h.r * 0.04, 6, 72), add); ring.rotation.x = Math.PI / 2 + k * 0.5; g.add(ring); }
+      fx.push({ o: g, kind: 'holo', spin: -0.25 });
+    } else {
+      // Lichtvorhang: fallende Leuchtstreifen (Bild mit senkrechten Strichen, das nach unten wandert)
+      const c = document.createElement('canvas'); c.width = 128; c.height = 256; const x = c.getContext('2d')!;
+      x.fillStyle = '#000'; x.fillRect(0, 0, 128, 256);
+      for (let k = 0; k < 18; k++) { const px = Math.random() * 128, len = 40 + Math.random() * 160, py = Math.random() * 256; const gr = x.createLinearGradient(0, py, 0, py + len); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(255,255,255,1)'); x.fillStyle = gr; x.fillRect(px, py, 2 + Math.random() * 2, len); }
+      const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      const mat = new THREE.MeshBasicMaterial({ map: t, color: h.col, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+      const pl = new THREE.Mesh(new THREE.PlaneGeometry(h.w || 6, h.h || 10), mat); pl.rotation.y = h.yaw || 0; g.add(pl);
+      fx.push({ o: g, kind: 'curtain', spin: 0, tex: t });
+    }
+    life!.add(g);
+  }
+}
+function updateNeon(dt: number, st: Station, visible: boolean, near: boolean) {
+  const m = meta(CITY.name), bd = m.bounds || { x: 210, z0: -255, z1: 240 };
+  tNeon += dt; kitHoloFlicker(tNeon);
+  // Atmosphäre nach Lage der Kamera
+  const pl = st.mesh.worldToLocal(_w.copy(camera.position));
+  const inside = visible && Math.abs(pl.x) < bd.x && pl.z > bd.z0 && pl.z < bd.z1 && pl.y < 120;
+  const want = inside ? Math.min(1, Math.max(0, (120 - pl.y) / 60)) : 0;
+  const k = atmoK + (want - atmoK) * Math.min(1, dt * 1.5);
+  if (IN.active) { if (atmoK > 0) { const fog = scene.fog as THREE.FogExp2 | null; if (fog && atmoBase) { fog.color.setHex(atmoBase.fogC); fog.density = atmoBase.fogD; } if (bloomPass && atmoBase) bloomPass.strength = atmoBase.bloom; } atmoK = 0; return; }
+  if (Math.abs(k - atmoK) > 1e-4 || (k > 0 && k === atmoK)) setAtmo(k);
+  atmoK = k < 1e-3 ? 0 : k;
+  if (!visible || !near) return;
+  // Skulptur und Hologramme
+  for (const f of fx) {
+    if (f.kind === 'ring') { f.o.rotation.x += dt * f.spin; f.o.rotation.y += dt * f.spin * 0.6; }
+    else if (f.kind === 'holo') { f.o.rotation.y += dt * f.spin; f.o.visible = Math.random() > 0.015; }
+    else if (f.kind === 'curtain' && f.tex) f.tex.offset.y += dt * 0.35;
+  }
+  // Dampf aus den Schächten in der Nähe
+  if ((steamT -= dt) <= 0 && m.steam?.length) {
+    steamT = 0.08;
+    for (let i = 0; i < 2; i++) {
+      const s = m.steam[Math.floor(Math.random() * m.steam.length)];
+      if (Math.hypot(s[0] - pl.x, s[1] - pl.z) > 90) continue;
+      const w = toWorld(st, s[0] + (Math.random() - 0.5) * 0.8, 0.4, s[1] + (Math.random() - 0.5) * 0.8);
+      puff(w.x, w.y, w.z, (Math.random() - 0.5) * 0.4, 1.2 + Math.random() * 1.2, (Math.random() - 0.5) * 0.4, '#8a92a0', 3.2);
+    }
+  }
 }
 const NPC_CLS = (): ShipId[] => (['falke', 'elster', 'kaerrner', 'habicht', 'pfeil'] as string[]).filter(c => (SHIPS as any)[c]) as ShipId[];
 function updateFlyers(dt: number, st: Station, visible: boolean) {

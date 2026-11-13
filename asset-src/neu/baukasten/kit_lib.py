@@ -25,6 +25,9 @@ SM, DECALS, DPX, SIGNS, SPX = _A['size_m'], _D['cells'], _D['px'], _S['cells'], 
 # Leuchtschriften der Städte (scripts/make-kit-city.mjs → kit_city.json): eigene Farben, Material kit_neon
 _C = json.load(open(os.path.join(HERE, 'kit_city.json'))) if os.path.exists(os.path.join(HERE, 'kit_city.json')) else {'px': 2048, 'cells': {}}
 CITY, CPX = _C['cells'], _C['px']
+# Zweiter Atlas (Neonhafen: scripts/make-kit-city2.mjs → kit_city2.json): Material kit_neon2, als Hologramm kit_holo
+_C2 = json.load(open(os.path.join(HERE, 'kit_city2.json'))) if os.path.exists(os.path.join(HERE, 'kit_city2.json')) else {'px': 2048, 'cells': {}}
+CITY2, CPX2 = _C2['cells'], _C2['px']
 # Zwei Texturblätter: außen (kit_trim) und innen (kit_int). Jeder Streifen und jede Kachel kennt ihr Material.
 SHEET = {n: ('kit_trim', a, b) for n, (a, b) in _A['strips'].items()}; SHEET.update({n: ('kit_int', a, b) for n, (a, b) in _A2['strips'].items()})
 TILES = {n: ('kit_trim', r) for n, r in _A['tiles'].items()}; TILES.update({n: ('kit_int', r) for n, r in _A2['tiles'].items()})
@@ -168,9 +171,21 @@ class Kit:
         poster = name.startswith('ad_') if poster is None else poster
         self.tile(name, c, u, v, w, h, 'none', off=off, cells=SIGNS, scale=SPX, mat='kit_poster' if poster else 'kit_sign')
     def neon(self, name, c, u, v, w, h=None, off=0.03):
-        """Leuchtschrift oder Leuchtkasten aus dem Stadt-Atlas (kit_city.json), selbstleuchtend in eigenen Farben."""
-        d = CITY[name]; h = w * d['h'] / d['w'] if h is None else h
-        self.tile(name, c, u, v, w, h, 'none', off=off, cells=CITY, scale=CPX, mat='kit_neon')
+        """Leuchtschrift oder Leuchtkasten aus einem der Stadt-Atlanten (kit_city.json → kit_neon, kit_city2.json → kit_neon2), selbstleuchtend in eigenen Farben."""
+        cells, px, mat = (CITY, CPX, 'kit_neon') if name in CITY else (CITY2, CPX2, 'kit_neon2')
+        d = cells[name]; h = w * d['h'] / d['w'] if h is None else h
+        self.tile(name, c, u, v, w, h, 'none', off=off, cells=cells, scale=px, mat=mat)
+    def holo(self, name, c, u, v, w, h=None):
+        """Hologramm aus dem zweiten Stadt-Atlas: durchscheinend, Schwarz lässt durch (Material kit_holo, im Spiel flackernd)."""
+        d = CITY2[name]; h = w * d['h'] / d['w'] if h is None else h
+        self.tile(name, c, u, v, w, h, 'none', off=0.0, cells=CITY2, scale=CPX2, mat='kit_holo')
+    def facade(self, bl, br, tl, tint='none', per=(24.0, 25.6), z0=0.0):
+        """Turmfassade als eine Fläche (Material kit_tower: kachelndes Bild mit Fenstern, Leuchtkarte für beleuchtete Fenster).
+        bl, br, tl: Ecken (unten links, unten rechts, oben links); Texturkoordinaten in Metern / Kachelgröße. z0 verschiebt das Geschossraster."""
+        bl, br, tl = V(bl), V(br), V(tl); L, H = (br - bl).length, (tl - bl).length
+        if L < 1e-3 or H < 1e-3: return
+        u0 = self.R.randrange(8) * per[0] / 8; v0 = z0 / per[1]
+        self.poly((bl, br, br + (tl - bl), tl), ((u0 / per[0], v0), ((u0 + L) / per[0], v0), ((u0 + L) / per[0], v0 + H / per[1]), (u0 / per[0], v0 + H / per[1])), T(tint), 'kit_tower')
     def decal(self, name, c, u, v, w, h=None, tint='white', off=0.015):
         d = DECALS[name]; h = w * d['h'] / d['w'] if h is None else h
         self.tile(name, c, u, v, w, h, tint, off=off, cells=DECALS, scale=DPX, mat='kit_decal')
@@ -673,6 +688,17 @@ def kit_material(name):
     m = bpy.data.materials.get(name)
     if m: return m
     m = bpy.data.materials.new(name); m.use_nodes = True; nt = m.node_tree; P = nt.nodes['Principled BSDF']; L = nt.links.new
+    if name == 'kit_tower':
+        tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img('kit_tower_col@2048.png'); te = nt.nodes.new('ShaderNodeTexImage'); te.image = _img('kit_tower_emi@2048.png')
+        L(tc.outputs['Color'], P.inputs['Base Color']); L(te.outputs['Color'], P.inputs['Emission Color']); P.inputs['Emission Strength'].default_value = 2.0; P.inputs['Roughness'].default_value = 0.5
+        return m
+    if name in ('kit_neon2', 'kit_holo'):
+        tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img('kit_city2@2048.png')
+        L(tc.outputs['Color'], P.inputs['Base Color']); L(tc.outputs['Color'], P.inputs['Emission Color']); P.inputs['Emission Strength'].default_value = 4.0
+        if name == 'kit_holo': L(tc.outputs['Color'], P.inputs['Alpha'])
+        return m
+    if name == 'kit_wet':
+        name = 'kit_concrete'; m.name = 'kit_wet'
     if name == 'kit_neon':
         tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img('kit_city@2048.png')
         L(tc.outputs['Color'], P.inputs['Base Color']); L(tc.outputs['Color'], P.inputs['Emission Color']); P.inputs['Emission Strength'].default_value = 4.0
@@ -807,7 +833,7 @@ def export(ob, name, meta=None, kind='station', extra=()):
     return {'glb_kb': round(os.path.getsize(path) / 1024), 'verts': len(ob.data.vertices), 'faces': len(ob.data.polygons), 'lights': len(d['lights'])}
 
 # Leuchtstärken der selbstleuchtenden Materialien für die Lichtberechnung (Blender)
-EMIT = {'kit_neon': 3.0, 'kit_light': 10.0, 'kit_cool': 5.0, 'kit_accent': 6.0, 'kit_screen': 4.0, 'kit_lamp': 6.0, 'kit_redlamp': 4.0, 'kit_green': 2.0, 'kit_sign': 4.0, 'kit_poster': 2.2}
+EMIT = {'kit_neon': 3.0, 'kit_neon2': 3.0, 'kit_holo': 2.0, 'kit_tower': 1.5, 'kit_light': 10.0, 'kit_cool': 5.0, 'kit_accent': 6.0, 'kit_screen': 4.0, 'kit_lamp': 6.0, 'kit_redlamp': 4.0, 'kit_green': 2.0, 'kit_sign': 4.0, 'kit_poster': 2.2}
 def set_emission(scale=1.0):
     for n, v in EMIT.items():
         m = bpy.data.materials.get(n)

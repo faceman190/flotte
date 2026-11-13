@@ -44,6 +44,25 @@ Das Stadtmodell (7 MB) liegt im **Hintergrund-Paket** (`asset-src/glb/city/` →
 `preloadCities()` holt es kurz nach dem Start. Landet man vorher auf dem Planeten, steht vorerst die Basis; sobald die Stadt geladen ist,
 ersetzt `addStation` sie (solange man nicht gerade dort angedockt ist). Pflanzen, Felsen und Versorgungskisten halten um eine Stadt 360 m Abstand (`src/game/keep.ts`).
 
+## Neonhafen (ab Alpha 0.93): Cyberpunk-Gassen auf Neuhafen IV
+
+Zweite Stadt, aus der Klippenbasis (Kennung `neuhafen_base`). Skript `asset-src/neu/stadt/neonhafen_kit.py` + `Neonhafen.blend` → `asset-src/glb/city/Neonhafen.glb` (rund 457 000 Dreiecke, 11 MB im Hintergrund-Paket).
+
+- **Aufbau:** Hangarhalle und Promenadenhaus wie in Talstadt (gleiches Koordinatensystem), darüber der 113 m hohe **Hafenturm** (Krone LUMEN KORP, Holo-Ring)
+  und der **Kapselturm** über der Promenade. Drumherum 33 Türme (48–118 m, hohe mit Rücksprung und Dachterrasse) und ein Netz enger **Gassen** (8–9 m):
+  Ladenzeilen im Erdgeschoss mit Neon, Kabel mit Laternen quer über die Gassen, Laufbrücken, Klimakästen, Rohre, Pfützen, Abfall, Dampfschächte.
+- **Lichtplatz** hinter der Promenade: abgesenkte Grube mit der Lichtskulptur „Der Funke“ (im Spiel drehende Ringe um einen leuchtenden Kern), vier Lampensterne,
+  NACHTMARKT-Hologramm, Lichtvorhang, zwei Garküchen (Schleusenbräu, Nudelbar Drache), Bänke, Automaten; Werbewand LUMEN am Nordturm.
+- **Ansprechen:** Garküche (Aufträge), Kapselhotel in der Seitengasse am Promenadenhaus (ausruhen), Läden (Markt, Service, Werkstatt …), Skulptur.
+- **Stil „neon“** (`style: 'neon'` in den Angaben, `src/game/city.ts`): Je tiefer man in der Stadt ist (Kamera innerhalb der Grenzen, unter 120 m), desto dichter
+  der bläuliche Dunst, desto dunkler Sonne und Grundlicht und desto stärker das Leuchten (Bloom). Hologramme flackern, Dampf steigt aus den Schächten,
+  bis zu 30 Passanten. Im Innenraum regelt der Innenraum das Licht; beim Verlassen des Planeten werden Nebel und Licht zurückgesetzt.
+- **Neue Baukasten-Teile:** `K.facade` (Turmfassade als eine Fläche, Material `kit_tower`: kachelndes Bild mit Fenstern und Leuchtkarte, `scripts/make-kit-tower.mjs`),
+  `K.holo` (Hologramm, `kit_holo`), zweiter Neon-Atlas `kit_city2` (`scripts/make-kit-city2.mjs`: Nachtmarkt, Neonhafen, Lumen Korp, Volta, Nudelbar Drache,
+  Kapselhotel, Schleusenbräu, Späti 24/7, Klinik, Pfandhaus, Robo·Tek, Karaoke, Zone 3, Piktogramme, senkrechte Schilder, zwei Werbewände), Boden `kit_wet` (dunkel, glänzend).
+- **Nebenbei für alle Städte:** Wer zu Fuß in der Stadt ist, ist für Mitspieler sichtbar (Netz-Zustand „fuss“); die Kamera der Außensicht rückt vor Hauswänden heran;
+  die Promenadentür hat Vorrang vor anderen Ansprechpunkten.
+
 ## Neue Stadt bauen
 
 1. Skript nach dem Vorbild `stadt_kit.py` (Halle und Promenadenhaus in denselben Maßen, Rest frei), `meta()` mit Tür, Tor, Andock- und Startpunkt,

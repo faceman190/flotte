@@ -8,7 +8,8 @@ import { texMat } from '../core/textures';
 //   kit_trim     Texturblatt (tex/kit_trim_col, _nrm, _orm: Farbe, Relief, Verdeckung/Rauheit/Metall)
 //   kit_decal    Aufkleber mit Transparenz (tex/kit_decals): Schrift, Ziffern, Schilder, Schmutz
 //   kit_concrete Beton (kachelt in Metern), kit_glass dunkle Scheiben, kit_light/lamp/redlamp/screen/green selbstleuchtend
-//   kit_neon     Leuchtschriften der Städte (tex/kit_city, eigene Farben; scripts/make-kit-city.mjs)
+//   kit_neon     Leuchtschriften der Städte (tex/kit_city, eigene Farben; scripts/make-kit-city.mjs), kit_neon2 zweiter Atlas (kit_city2)
+//   kit_holo     Hologramme (kit_city2, additiv, flackert: kitHoloFlicker), kit_tower Turmfassade (kachelnd, leuchtende Fenster), kit_wet nasser Boden
 // Zusatzangaben je Modell (Leuchtpunkte, Landefeld) stehen in data/kit_<Name>.json (aus Blender, export() in kit_lib.py).
 // =====================================================================================
 
@@ -89,8 +90,16 @@ export function kitMaterials(look: KitLook = {}) {
   M.kit_sign = new THREE.MeshBasicMaterial({ map: signs, color: look.accent ?? KIT_GLOW.accent });     // Wegweiser in der Akzentfarbe der Station
   M.kit_poster = new THREE.MeshBasicMaterial({ map: signs, color: 0xd8d8d8 });
   M.kit_neon = new THREE.MeshBasicMaterial({ map: shared('kit_city', true) });
+  M.kit_neon2 = new THREE.MeshBasicMaterial({ map: shared('kit_city2', true) });
+  M.kit_holo = HOLO; HOLO.map = shared('kit_city2', true);
+  const tw = new THREE.MeshStandardMaterial({ map: shared('kit_tower_col', true), emissiveMap: shared('kit_tower_emi', true), emissive: 0xffffff, emissiveIntensity: 1.25, roughness: 0.55, metalness: 0.25, vertexColors: true });
+  tw.envMapIntensity = 0.5; M.kit_tower = tw;
+  const wet = texMat(0x8e96a4, 'hangar_floor', { vertexColors: true, roughness: 0.36, metalness: 0.1 }); wet.envMapIntensity = 0; M.kit_wet = wet;   // keine Spiegelung der Weltraum-Umgebung (die wäre rosa)
   return (SETS[key] = M);
 }
+// Hologramme (gemeinsam für alle Städte): additiv, Schwarz bleibt durchsichtig; kitHoloFlicker lässt sie leicht flimmern
+const HOLO = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+export function kitHoloFlicker(t: number) { HOLO.opacity = 0.62 + 0.18 * Math.sin(t * 7.3) * Math.sin(t * 2.1) + (Math.random() < 0.02 ? -0.35 : 0); }
 // Ersetzt in einem geladenen Modell alle kit_*-Materialien durch die gemeinsamen
 export function applyKit(root: THREE.Object3D, look: KitLook = {}) {
   const M = kitMaterials(look);
@@ -100,6 +109,7 @@ export function applyKit(root: THREE.Object3D, look: KitLook = {}) {
     if (!m) return;
     o.material = m;
     if (m === M.kit_decal) o.renderOrder = 1;
+    if (m === M.kit_holo) o.renderOrder = 3;
   });
 }
 
