@@ -889,7 +889,7 @@ export function updateWalk(dt: number) {
   // Bewegung: weich anlaufen und abbremsen (Geschwindigkeit folgt der Eingabe), an Wänden entlanggleiten
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   {
-    const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run && !STANCE.crouch ? 10 : 6) * crouchK() * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
+    const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run && !STANCE.crouch ? 6.8 : 6) * crouchK() * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
     const k = Math.min(1, dt * (f || s ? 9 : 12));
     walkV.x += ((-sy * f + cy * s) * sp - walkV.x) * k; walkV.z += ((-cy * f - sy * s) * sp - walkV.z) * k;
     if (Math.hypot(walkV.x, walkV.z) < 0.05) walkV.x = walkV.z = 0;
@@ -903,9 +903,9 @@ export function updateWalk(dt: number) {
     const moved = Math.hypot(IN.x - ox, IN.z - oz), v = dt > 0 ? moved / dt : 0;
     IN.dist += moved;
     stepT -= moved;
-    if (stepT <= 0 && moved > 0 && IN.jy === 0) { stepT = v > 8 ? 2.3 : 1.9; sfx(mesh && IN.area === 'Frachtraum' ? 'step_grate' + Math.floor(Math.random() * 4) : 'step' + Math.floor(Math.random() * 5), v > 8 ? 0.5 : 0.34, 0.9 + Math.random() * 0.2, () => snd(70 + Math.random() * 20, 0.06, 'triangle', v > 8 ? 0.026 : 0.018, -20)); }
+    if (stepT <= 0 && moved > 0 && IN.jy === 0) { stepT = v > 6.4 ? 2.3 : 1.9; sfx(mesh && IN.area === 'Frachtraum' ? 'step_grate' + Math.floor(Math.random() * 4) : 'step' + Math.floor(Math.random() * 5), v > 6.4 ? 0.5 : 0.34, 0.9 + Math.random() * 0.2, () => snd(70 + Math.random() * 20, 0.06, 'triangle', v > 6.4 ? 0.026 : 0.018, -20)); }
     // Wippen: stärker beim Rennen, klingt aus, wenn man steht
-    const amp = Math.min(1, v / 6) * (v > 8 ? 0.075 : 0.045);
+    const amp = Math.min(1, v / 6) * (v > 6.4 ? 0.075 : 0.045);
     IN.bob += (Math.sin(IN.dist * 3.3) * amp - IN.bob) * Math.min(1, dt * 14);
   }
   // Modell-Raum: Bodenhöhe folgen (Treppen, Rampen, Decks); im Sprung bleibt die Höhe über alles erhalten, der Boden darunter wechselt

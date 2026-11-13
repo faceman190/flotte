@@ -132,7 +132,8 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
 - **Zu Fuß auf dem Planeten (`src/game/onfoot.ts`):** im Rover **F** = aussteigen (Rover muss stehen), am Rover F oder E = einsteigen.
   Über die Rampe aus dem Schiff steht man zu Fuß hinter dem Schiff. [E] am Schiff = an Bord, an einem Stolleneingang = Mine betreten
   (danach steht man wieder am Eingang). Gelände folgt dem Boden, zu steile Hänge, Wasser/Lava, Lagerstätten, Schiff, Rover und Bäume halten auf.
-- **Noch offen:** in Station/Hangar ist Rennen (10 m/s) schneller als der Sprint-Clip (6,75 m/s), dort rutschen die Füße noch;
+- **Tempo zu Fuß:** Station/Hangar/Schiff gehen 6 m/s, rennen 6,8 m/s (Alpha 0.83, vorher 10; passt zum Sprint-Clip); Mine und Planet 4,2 / 6,4 m/s.
+- **Noch offen:**
   Nachladen, Treffer, Springen als Clip; Hände an der Waffe korrigieren (linke Hand per IK an den Handschutz).
 
 ## Noch offen
