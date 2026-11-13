@@ -4,7 +4,7 @@ Stand: Alpha 0.99. Quelle der Texte: `src/game/chapter3.ts`. Regeln wie in `docs
 (trocken erzeugen, Regie in eckigen Klammern auf Englisch, Zahlen ausgeschrieben, kein Spielername). Modell `eleven_v4`, je Zeile eine Fassung.
 
 Ablage der Aufnahmen: `asset-src/voice/kapitel3/<Kennung>.mp3`, danach `npm run assets`. Zuordnung Zeile → Kennung: `src/data/voice.ts`.
-Erzeugt am 2026-11-13 (40 von 41 Zeilen, Kennungen der Fassungen in docs/sound/erzeugt.md). Offen: `d32_maren`, siehe dort.
+Erzeugt am 2026-11-13 (alle 41 Zeilen, Kennungen der Fassungen in docs/sound/erzeugt.md).
 
 Umfang: 41 Zeilen, 5019 Zeichen mit Regie (ein Credit je Zeichen, also rund 5019 Credits).
 Je Figur: BRUMMER 783, HOLLWEG 513, ROTH 1517, BRANDT 492, ACHTERBERG 606, WERK 272, MAREN 341, ACHTERBERG31 341, KRULL 154.

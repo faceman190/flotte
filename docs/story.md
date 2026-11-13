@@ -153,7 +153,7 @@ Jedes Kapitel verbindet Hauptmissionen mit dem, was das Spiel schon kann: Bergba
 | 13 | Szene | „Die Aufnahme“: die Stimmen von damals, dann Achterberg, Hollweg, Roth, Krull. Brummer: „Vor vier Monaten zog eine Kennung durch die Narbe.“ |
 
 Belohnung: 3.500 Credits, +60 Ruf bei der gewählten Seite, −15 bei der anderen, +10 Bergbaugilde. Das Wrackfeld bleibt in der Narbe stehen.
-Vertonung: 41 Zeilen (docs/voice/kapitel3.md), 40 davon eingebaut; `d32_maren` ist offen.
+Vertonung: 41 Zeilen (docs/voice/kapitel3.md), alle eingebaut.
 
 Technik: Das Wrackfeld (`buildField`) nutzt das Modell der Bastion, verkleinert und ausgebrannt, dazu zwei Schiffswracks, Trümmer und Ferrit, das an der Rumpfoberfläche sitzt (Strahltests). Die Bresche wird am Rumpf gemessen. Das Innere ist die neue Dungeon-Art „Wrack“ (`docs/dungeons.md`). Brandt ist eine Figur der Stadt mit eigenem Ansprechpunkt (`cityTargets`).
 

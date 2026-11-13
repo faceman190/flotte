@@ -144,14 +144,13 @@ Herunterladen: `creative_get_generations` → `full_res_url` unverändert laden 
 
 ## Stimmen Kapitel 3 (eingebaut in Alpha 0.99, 2026-11-13)
 
-Flow `q7tyyVSucSE1DlH6rXWM`, Modell `eleven_v4`, je Zeile eine Fassung. 40 von 41 Zeilen erzeugt, zusammen **5.277 Credits**.
+Flow `q7tyyVSucSE1DlH6rXWM`, Modell `eleven_v4`, je Zeile eine Fassung. Alle 41 Zeilen erzeugt, zusammen **5.446 Credits** (geschätzt waren 5.019).
 Texte und Regie: docs/voice/kapitel3.md, Dateien: asset-src/voice/kapitel3/<Kennung>.mp3.
 Neue Stimmen: Brandt „Axel - ruhig, erzählend, leicht rauh“ (`CD5xyRjkR74P5qby9tmm`), Schmelzwerk „Kalle – Raspy & Energetic“ (`LvlM6UD7pLIgPGDeuuxU`),
 Maren Hollweg „Elinor - The Gruff Aunt“ (`gDQfVolj9RbmXgumLcOq`). Achterberg im Jahr 31 spricht mit ihrer Stimme „Nora Vale“, in der Regie jünger.
 
 **Achtung, Preis:** Die Stimme „Elinor“ kostet 2,25 Credits je Zeichen statt 1 (d25: 333 statt 148, d30: 266 statt 118). Vor dem Einsatz einer
-neuen Stimme eine Zeile mit `estimate_only` und genau dieser Stimme prüfen. Die Zeile **d32_maren** („Die Linie hält, Hauptfrau. Das ist ein Befehl.“)
-ist deshalb noch nicht erzeugt (rund 160 Credits mit Elinor); im Spiel läuft sie als Untertitel.
+neuen Stimme eine Zeile mit `estimate_only` und genau dieser Stimme prüfen. Die Zeile **d32_maren** kam deshalb erst nach Rückfrage dazu (169 Credits).
 
 | Kennung | Fassung |
 |---|---|
@@ -186,6 +185,7 @@ ist deshalb noch nicht erzeugt (rund 160 Credits mit Elinor); im Spiel läuft si
 | d29_hollweg | wTRreDSYxIJGR3Q7bnNq |
 | d30_maren | gkUnus27jnGC9GWLeYB9 |
 | d31_achterberg | kxz6Ea4ScQqlIswQZ2Hd |
+| d32_maren | KpNU8225DtJD6V9AOBp5 |
 | d33_achterberg | nQ88nAdjATYPXsSKLDEF |
 | d34_achterberg | LfxBgbDCqD7hkQQeCRBM |
 | d35_hollweg | 0di9sxunU64lQlUqw87a |
