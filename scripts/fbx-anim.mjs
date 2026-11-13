@@ -103,7 +103,8 @@ let report = [];
 for (const o of order) {
   const n = o.name; if (!MAP[n] || !S[MAP[n][0]]) continue;
   const a = ALIGN ? align(n) : null;
-  if (!ALIGN) { const l = LIMBS ? limbAlign(n) : null; A[n] = l ? l.q : new THREE.Quaternion(); const b = l || align(n); if (b) report.push(`${n} ${b.deg.toFixed(0)}°${l ? ' (Achse)' : ''}`); continue; }
+  // Die Hand hat keinen Richtungsgeber. Sie übernimmt die Ausrichtung des Unterarms, sonst knickt das Handgelenk um genau diesen Winkel (rund 10°).
+  if (!ALIGN) { const l = LIMBS ? limbAlign(n) : null; const hand = LIMBS && /Hand$/.test(n) ? A[o.parent.name] : null; A[n] = l ? l.q : hand ? hand.clone() : new THREE.Quaternion(); const b = l || align(n); if (b) report.push(`${n} ${b.deg.toFixed(0)}°${l ? ' (Achse)' : ''}`); continue; }
   // Endknochen ohne Richtungsgeber (Hand, Zehen) übernehmen die Angleichung ihres Elternknochens
   A[n] = a ? a.q : (A[o.parent.name] || new THREE.Quaternion());
   if (a) report.push(`${n} ${a.deg.toFixed(0)}°`);

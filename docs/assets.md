@@ -153,6 +153,20 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   `meshy_to_merchant(Name)` (Textblock `figur_build` in `Figuren.blend`). Im Spiel rechnet `fit()` in src/models/charModels.ts
   die Hüftspur geliehener Clips auf die Beinlänge der Figur um. Einsatz: Hangarmeister = Mechaniker, die Leute auf den Gängen
   gemischt aus Arbeiter, Lagerarbeiter und Mechaniker (`buildPerson(..., model)` in src/game/interior.ts).
+- **Alpha 0.97: Umstellung berichtigt (`meshy_to_merchant2(Name, curl=…)`, ersetzt `meshy_to_merchant`).** Die alte Fassung gab jedem
+  Knochen die volle Lage des Händler-Knochens, samt Drehung um die eigene Achse. Die war bei Meshy aber beliebig: Die Hände standen
+  eine Vierteldrehung falsch (Handflächen nach vorn oder hinten statt zum Oberschenkel), und weil Ober- und Unterschenkel einzeln
+  ausgerichtet wurden, standen die Figuren mit gebeugten Knien (Achterberg 19°). Jetzt:
+  1. Nur schwenken: Jeder Knochen dreht sich auf dem kürzesten Weg in die Richtung der Händlerin. Arme und Beine als Ganzes
+     (Schulter → Handgelenk, Hüftgelenk → Knöchel, Tabelle `SWING_CHILD`); Ellbogen, Knie und Hand behalten ihre Lage von Meshy.
+  2. Haltung einfrieren, dann im Bearbeitungsmodus die Knochenachsen der Händlerin setzen. Die Hülle bewegt sich dabei nicht.
+  3. Wahlweise `relax_fingers` (zwei weiche Knicke zur Handfläche; nur bei Achterberg nötig, `curl=dict(a1=12, a2=16)`) und
+     `twist_hand` zum Nachdrehen einer Hand um die Unterarmachse.
+  Prüfen: alle Figuren nebeneinander über `charInstance` aufstellen, `animInit` aufrufen (sonst stehen sie in der T-Haltung) und
+  Stehen, Gehen und Sprechen von vorn und von der Seite ansehen. Vergleichsbilder: `docs/bilder/figuren-vorher.jpg`, `figuren-097-*.jpg`.
+- Fingerknochen gibt es weiterhin nicht (24 Knochen); die Finger bewegen sich nicht einzeln.
+- Umrechner `fbx-anim.mjs`: Mit `--limbs` übernimmt die Hand jetzt die Ausrichtung des Unterarms. Vorher knickte das Handgelenk um
+  rund 10°, weil nur der Unterarm nachgerichtet wurde.
 
 ## Hangar (Alpha 0.62)
 - Quelle: `asset-src/neu/hangar/Hangar.blend` (per Skript gebaut; Textblöcke `hangar_lib` und `hangar_build` mit `build_shell`, `build_details`, `build_props`).
