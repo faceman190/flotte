@@ -99,6 +99,36 @@ die neue Datei unter demselben Namen ablegen und `npm run assets`.
 
 ## Stimmen Kapitel 2 (eingebaut in Alpha 0.86, 2026-11-13)
 
-Flow , Modell , je Zeile eine Fassung, zusammen **3.124 Credits**. Texte und Regie: docs/voice/kapitel2.md, Dateien: asset-src/voice/kapitel2/<Kennung>.mp3.
-Neue Stimmen: Kessler „Leonard Berger – Rough & Resonant“ (), Varga „Irene - reflective thinking“ ().
-Fassungen (Kennung → Generierung) stehen im Flow; je Kennung genau eine Fassung.
+Flow `obTuDaY5TEaVhIP0A2FU`, Modell `eleven_v4`, je Zeile eine Fassung, zusammen **3.124 Credits**. Texte und Regie: docs/voice/kapitel2.md, Dateien: asset-src/voice/kapitel2/<Kennung>.mp3.
+Neue Stimmen: Kessler „Leonard Berger – Rough & Resonant“ (`Lpl4mdZ3QP3R1V6iShDZ`), Varga „Irene - reflective thinking“ (`ZswvODxwIaNVszyBPqBF`).
+| Kennung | Fassung |
+|---|---|
+| c01_krull | dHTXKyXzYkfqVQJGyz3b |
+| c02_krull | zfgo5ya2UV3nxN6Zh8HP |
+| c03_kessler | ss3COIoJV085zO3XXM7H |
+| c04_kessler | ykElWMxcqbuoUyv97vU4 |
+| c05_kessler | heJLj7ruOVOPtzXzbQDt |
+| c06_kessler | 59IyGRynC1ZQYdxyKpuX |
+| c07_kessler | 00XpXQKG5lXizdha8UU7 |
+| c08_kessler | OSy7pgRiyfySAbYqXXTk |
+| c09_kessler | sXmnovBMTvxqzBnZwQnE |
+| c10_krull | MG7xEatggdvhf9HpSVQg |
+| c11_krull | kZkbWuVR8d1EijGIyf18 |
+| c12_roth | dh4VEuR34678N4XR5wp7 |
+| c13_krull | vT4Bp5vGPMCNl00DLpG3 |
+| c14_roth | q7TTvfGOFI171OvbBKAU |
+| c15_krull | rFZ07V4dkO3hJsb8p9WI |
+| c16_krull | 5MwYj85dTMBWZJ6IbCuZ |
+| c17_varga | 8SlYHEjChajl9YsveO4u |
+| c18_roth | sFjOevG7MmcZCEwkh2Pk |
+| c19_krull | lN3ZUqrOp6uUnKKiXuwV |
+| c20_hollweg | W3KdbICsWT8Bw7Cb5CN7 |
+| c21_krull | U3CS8sBuhPfSIselTQ3a |
+| c22_kessler | 3FBumF6J1vez7GIOc1Mr |
+| c23_hollweg | jW7SIuQZQ7lc1INigvCJ |
+| c24_krull | yeqboPMkLcphqgzJergC |
+| c25_hollweg | VvwQfw9OC9bIvth7fwe4 |
+| c26_krull | tjGPaANXGIFMw3lLmwbc |
+| c27_roth | jXUBF0br4YE1R2oASiIX |
+| c28_brummer | NFYhJtwmemQXFowEeu3Y |
+| c29_brummer | LP5wJ5qErgeSdNzUDtD0 |

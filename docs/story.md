@@ -128,7 +128,7 @@ Jedes Kapitel verbindet Hauptmissionen mit dem, was das Spiel schon kann: Bergba
 
 ---
 
-## Kapitel 2: „Splitter der Erbauer“ (Alpha 0.86, )
+## Kapitel 2: „Splitter der Erbauer“ (Alpha 0.86, `src/game/chapter2.ts`)
 
 **Worum es geht:** Seit dem Signal „singt“ das Ferrit im Splittergürtel. Die Muster sind eine Karte zu einer Ruine der Erbauer auf Schlacke Prime.
 Dort liegt ein Archivkristall, bewacht von Ferrox-Drohnen, und daneben eine Rettungskapsel der verschollenen „Weitsicht“. Der Streit zwischen Gilde und Rat bricht auf.
