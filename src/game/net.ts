@@ -15,6 +15,8 @@ import { viewModelId } from './mineArt';
 import { FOOT } from './onfoot';
 import { DUN, syncMinePilots } from './dungeon';
 import { newRemoteFig, driveRemote, dropRemote, gearFromNet, readNetFlags, netFlags, type RemoteFig } from './avatar';
+import { coopNet, coopReceive } from './coop';
+import { setFieldMates } from './fieldfight';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { SHIPS, type ShipId } from '../data/ships';
 import type { Paint } from '../models/gltfShips';
@@ -58,7 +60,7 @@ export function connect(url = settings.server || defaultUrl()) {
   ws.onclose = () => {
     if (NET.ws !== ws) return;
     const was = NET.status === 'online';
-    NET.ws = null; NET.status = wantOnline ? 'fehler' : 'aus'; NET.roster = []; NET.account = null;
+    NET.ws = null; NET.status = wantOnline ? 'fehler' : 'aus'; NET.roster = []; NET.account = null; coopNet.id = 0;
     clearRemotes(); leaveShared(); netHooks.lost();
     if (was) radio('SYSTEM', 'Verbindung zum Mehrspieler-Server verloren.');
     netHooks.changed();
@@ -70,16 +72,17 @@ export function disconnect(silent = false) {
   wantOnline = false;
   const ws = NET.ws; NET.ws = null;
   if (ws) try { ws.close(); } catch { /* egal */ }
-  NET.status = 'aus'; NET.roster = []; NET.id = 0; NET.account = null;
+  NET.status = 'aus'; NET.roster = []; NET.id = 0; NET.account = null; coopNet.id = 0;
   clearRemotes(); leaveShared(); netHooks.lost();
   if (!silent) netHooks.changed();
 }
 export const sendMsg = (m: object) => { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(m)); };
+coopNet.send = sendMsg;
 export function sendChat(text: string) { const t = text.trim().slice(0, 200); if (t) sendMsg({ t: 'chat', text: t }); }
 
 function onMsg(m: any) {
   if (m.t === 'welcome') {
-    NET.id = m.id; NET.status = 'online'; NET.tempStore = !!m.temp;
+    NET.id = m.id; NET.status = 'online'; NET.tempStore = !!m.temp; coopNet.id = m.id;
     const off = (m.now || 0) - performance.now() / 1000;
     SHARED.now = () => performance.now() / 1000 + off;
     SHARED.market = m.market || {};
@@ -131,6 +134,8 @@ function onMsg(m: any) {
     (SHARED.market[m.st] = SHARED.market[m.st] || {})[m.k] = { s: m.s, t: m.at };
   } else if (m.t === 'tr') {
     netHooks.trade(m);
+  } else if (m.t === 'co') {
+    coopReceive(m);
   } else if (m.t === 'chat') {
     radio(m.name, m.text, m.id === NET.id ? '#ffb347' : '#7fe0a0');
   }
@@ -148,7 +153,8 @@ const footObj = new THREE.Object3D();
 function myState() {
   if (DUN.active) { footObj.position.set(DUN.x, 0, DUN.z); footObj.rotation.set(0, DUN.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'mine' }; }
   if (IN.active || G.dockedAt) return { o: SHIP.g, m: 'innen' };
-  if (ROVER.active && FOOT.active) { footObj.position.set(FOOT.x, FOOT.y, FOOT.z); footObj.rotation.set(0, FOOT.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'fuss' }; }
+  if (FOOT.active) { footObj.position.set(FOOT.x, FOOT.y, FOOT.z);   // zu Fuß (aus dem Rover oder direkt aus dem Schiff)
+    footObj.rotation.set(0, FOOT.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'fuss' }; }
   if (ROVER.active && ROVER.model) return { o: ROVER.model.g, m: 'rover' };
   return { o: SHIP.g, m: 'schiff' };
 }
@@ -178,6 +184,11 @@ export function netUpdate(dt: number) {
   syncOtherPilots([...remotes.values()].filter(r => r.m === 'innen' && r.w).map(r => ({ id: r.id, name: r.name, st: String(r.w![0]), x: +r.w![1], z: +r.w![2], yaw: +r.w![3], g: r.g })));
   // andere Piloten in derselben Mine
   syncMinePilots([...remotes.values()].filter(r => r.m === 'mine' && r.w).map(r => ({ id: r.id, name: r.name, e: String(r.w![0]), x: +r.w![1], z: +r.w![2], yaw: +r.w![3], g: r.g })), dt);
+  // Mitspieler zu Fuß oder im Rover auf demselben Planeten (Koop gegen die Felddrohnen)
+  setFieldMates([...remotes.values()].filter(r => r.m === 'fuss' || r.m === 'rover').map(r => {
+    const o = r.m === 'fuss' && r.fig?.init ? { x: r.fig.x, y: r.fig.y, z: r.fig.z } : { x: r.tp.x, y: r.tp.y, z: r.tp.z };
+    return { id: r.id, ...o, foot: r.m === 'fuss' };
+  }));
   // andere Piloten weich nachführen
   const k = Math.min(1, dt * 8), now = performance.now();
   for (const r of [...remotes.values()]) {

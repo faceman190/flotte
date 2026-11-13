@@ -142,6 +142,10 @@ wss.on('connection', ws => {
     } else if (m.t === 'w' || m.t === 'f' || m.t === 'fk') {
       // Weltstand (Asteroiden 'w', Ferrox mit NPC-Verkehr und Patrouillen 'f', Abschuss 'fk') vom Gastgeber an die anderen im Raum
       if (c.room && hostOf(c.room) === c) toRoom(c.room, m, ws);
+    } else if (m.t === 'co') {
+      // Koop zu Fuß (Mine, Planetenboden): an alle im Raum; die Clients ordnen es selbst zu (Mine, Gastgeber)
+      if (!c.room || typeof m.k !== 'string' || raw.length > 6000) return;
+      toRoom(c.room, { ...m, k: clean(m.k, 8), from: c.id }, ws);
     } else if (m.t === 'a') {
       // Abbau-Meldung eines Mitspielers an den Gastgeber
       const h = c.room ? hostOf(c.room) : null, hw = h && h !== c ? wsOf(h) : null;

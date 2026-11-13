@@ -14,6 +14,7 @@ import { SECTOR } from '../data/galaxy';
 import { PLANETS, PTYPE } from '../data/planets';
 import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
 import { droneBark } from './barks';
+import { onCoop, coopSend, coopNow, pack, CoopGroup } from './coop';
 import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
@@ -30,7 +31,7 @@ const TS = 3.2, BASE = new THREE.Vector3(0, -60000, 0);
 type Vec2 = [number, number];
 interface Entrance { id: string; x: number; y: number; z: number; yaw: number; size: number; name: string }
 interface Crate { tx: number; tz: number; g: THREE.Group; lid: THREE.Object3D; open: boolean; big: boolean; idx: number; a: number; med?: boolean }
-interface Foe { x: number; z: number; y: number; hp: number; max: number; g: THREE.Group; eye: THREE.MeshBasicMaterial; boss: boolean; cool: number; aim: number; alert: boolean; tx: number; tz: number; ph: number; hit: number; vis?: DroneVis | null; atk?: number }
+interface Foe { id: number; nx?: number; nz?: number; x: number; z: number; y: number; hp: number; max: number; g: THREE.Group; eye: THREE.MeshBasicMaterial; boss: boolean; cool: number; aim: number; alert: boolean; tx: number; tz: number; ph: number; hit: number; vis?: DroneVis | null; atk?: number }
 interface Bolt { m: THREE.Mesh; x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; dmg: number }
 
 export const DUN = {
@@ -42,7 +43,7 @@ export const DUN = {
   door: null as null | { tx: number; tz: number; open: boolean; k: number; g: THREE.Group; ax: boolean },
   sw: null as null | { tx: number; tz: number; on: boolean; scr: THREE.MeshBasicMaterial },
   sws: [] as { tx: number; tz: number; on: boolean; scr: THREE.MeshBasicMaterial; g: THREE.Group }[],   // alle Schalter (das Tor öffnet, wenn alle umgelegt sind)
-  traps: [] as { tx: number; tz: number; kind: 'gas' | 'strom'; ph: number; on: boolean; g: THREE.Group; glow: THREE.MeshBasicMaterial; light: THREE.PointLight }[],
+  traps: [] as { tx: number; tz: number; kind: 'gas' | 'strom'; ph: number; off: number; on: boolean; g: THREE.Group; glow: THREE.MeshBasicMaterial; light: THREE.PointLight }[],
   exit: [1, 1] as Vec2, prompt: '', act: null as null | (() => void),
   msg: [] as { t: string; c: string; life: number }[], danger: 1, kills: 0, left: 0,
 };
@@ -53,19 +54,25 @@ let vm: ViewModel | null = null, mflash: THREE.PointLight | null = null, WALL_R 
 const sway = { x: 0, y: 0, yaw: 0, pitch: 0 };
 let me: Avatar | null = null;                                              // eigene Figur (Außensicht, src/game/avatar.ts)
 export { VIEW };
-// Mitspieler in derselben Mine (Netz: Eingang, Lage, Blick); Drohnen und Kisten bleiben je Spieler getrennt
+// Mitspieler in derselben Mine (Netz: Eingang, Lage, Blick). Koop (src/game/coop.ts): der Gastgeber steuert die Wächter,
+// Schalter, Tor und Kisten gelten für alle, aus jeder Kiste bekommt jeder seinen eigenen Fund.
 const mates = new Map<number, RemoteFig>();
+let coT = 0, coEv: (string | number)[][] = [], coSynced = 0;
+const grp = new CoopGroup();
+const amHost = (ids: Iterable<number>) => grp.amHost(ids);
 export function syncMinePilots(list: { id: number; name: string; e: string; x: number; z: number; yaw: number; g?: string[] | null }[], dt: number) {
   if (!DUN.active || !group || !DUN.e) { if (mates.size) { for (const f of mates.values()) dropRemote(f); mates.clear(); } return; }
   const seen = new Set<number>();
   for (const o of list) {
     if (o.e !== DUN.e.id) continue;
     seen.add(o.id);
+    const isNew = !mates.has(o.id);
     const f = mates.get(o.id) || newRemoteFig(); mates.set(o.id, f);
+    if (isNew) sendFull();
     const ng = gearFromNet(o.g); f.gear = ng.gear; f.wid = ng.wid; readNetFlags(f, o.g?.[4]); f.tx = o.x; f.ty = 0; f.tz = o.z; f.yaw = o.yaw;
     driveRemote(group, f, dt);
   }
-  for (const [id, f] of mates) if (!seen.has(id)) { dropRemote(f); mates.delete(id); }
+  for (const [id, f] of mates) if (!seen.has(id)) { dropRemote(f); mates.delete(id); grp.since.delete(id); }
 }
 let chunks: { x: number; z: number; meshes: THREE.Object3D[] }[] = [];      // Felsbereiche (4 × 4 Kacheln), nach Wegstrecke ein- und ausgeblendet
 const saved = { amb: 0, sun: 0, rim: 0, fogC: 0, fogD: 0, near: 0.5, far: 30000 };
@@ -85,8 +92,9 @@ function los(ax: number, az: number, bx: number, bz: number) {
   return true;
 }
 // Abstand jeder Kachel zum Spieler in Schritten (Wegfindung der Wächter)
-function flood(sx: number, sz: number, out: Int16Array, door = false) {
+function flood(sx: number, sz: number, out: Int16Array, door = false, more: Vec2[] = []) {
   out.fill(-1); const q = [I(sx, sz)]; out[q[0]] = 0;
+  for (const [mx, mz] of more) if (inb(mx, mz) && out[I(mx, mz)] < 0) { out[I(mx, mz)] = 0; q.push(I(mx, mz)); }
   for (let h = 0; h < q.length; h++) {
     const c = q[h], x = c % DUN.W, z = (c - x) / DUN.W;
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) {
@@ -466,7 +474,7 @@ function buildFoe(tx: number, tz: number, boss: boolean): Foe {
   if (vis) {
     group!.add(vis.g);
     const hp = (boss ? 260 : 34) * (1 + 0.3 * (DUN.danger - 1));
-    return { x: tx * TS, z: tz * TS, y: boss ? 1.95 : 1.5, hp, max: hp, g: vis.g, eye: new THREE.MeshBasicMaterial(), boss, cool: 1 + Math.random() * 2, aim: 0, alert: false, tx: tx * TS, tz: tz * TS, ph: Math.random() * 6, hit: 0, vis, atk: 0 };
+    return { id: boss ? 99 : 0, x: tx * TS, z: tz * TS, y: boss ? 1.95 : 1.5, hp, max: hp, g: vis.g, eye: new THREE.MeshBasicMaterial(), boss, cool: 1 + Math.random() * 2, aim: 0, alert: false, tx: tx * TS, tz: tz * TS, ph: Math.random() * 6, hit: 0, vis, atk: 0 };
   }
   const g = new THREE.Group(), s = boss ? 1.9 : 1, eye = new THREE.MeshBasicMaterial({ color: 0xff3020 });
   const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.36 * s, 1), std(boss ? 0x2a2030 : 0x23262b, { roughness: 0.45, metalness: 0.85, flatShading: true })); g.add(shell);
@@ -476,7 +484,7 @@ function buildFoe(tx: number, tz: number, boss: boolean): Foe {
   g.traverse((o: any) => { o.userData.sh = false; });
   group!.add(g);
   const hp = (boss ? 260 : 34) * (1 + 0.3 * (DUN.danger - 1));
-  return { x: tx * TS, z: tz * TS, y: boss ? 1.9 : 1.5, hp, max: hp, g, eye, boss, cool: 1 + Math.random() * 2, aim: 0, alert: false, tx: tx * TS, tz: tz * TS, ph: Math.random() * 6, hit: 0 };
+  return { id: boss ? 99 : 0, x: tx * TS, z: tz * TS, y: boss ? 1.9 : 1.5, hp, max: hp, g, eye, boss, cool: 1 + Math.random() * 2, aim: 0, alert: false, tx: tx * TS, tz: tz * TS, ph: Math.random() * 6, hit: 0 };
 }
 
 // ---------- Waffe des Piloten ----------
@@ -549,20 +557,83 @@ function lootId(R: () => number, big: boolean): string {
   return poolIds[Math.floor(R() * poolIds.length)] || 'fund_datenkern';
 }
 function say(t: string, c = '#dfe8f0') { DUN.msg.unshift({ t, c, life: 6 }); if (DUN.msg.length > 5) DUN.msg.pop(); }
-function openCrate(c: Crate) {
-  const st = P.dungeons![DUN.e!.id];
-  if (c.med) { DUN.hp = Math.min(DUN.maxHp, DUN.hp + 45); say('Verbandskasten: +45 Leben', '#3ad06a'); }
+// shared: ein Mitspieler hat die Kiste geöffnet – Deckel geht auf, man bekommt seinen eigenen Anteil (Verbandskasten heilt nur den Öffner)
+function openCrate(c: Crate, shared = false) {
+  if (c.open) return;
+  const st = P.dungeons![DUN.e!.id], pre = shared ? 'Geteilte Beute: ' : '';
+  if (c.med) { if (!shared) { DUN.hp = Math.min(DUN.maxHp, DUN.hp + 45); say('Verbandskasten: +45 Leben', '#3ad06a'); } }
   else {
     const R = rng(hashStr(DUN.e!.id + ':' + c.idx + ':' + st.t)), id = lootId(R.next, c.big), d = gearDef(id)!;
-    if (!canAdd(id)) { say('Rucksack voll. Die Kiste bleibt zu.', '#ff6b5b'); snd(180, 0.2, 'square', 0.04, -60); return; }
-    const cr = Math.round((c.big ? 600 : 60) * (1 + DUN.danger * 0.6) * (0.7 + R.next() * 0.6));
-    addItem(id, 1); P.credits += cr; P.earned += cr;
-    say(`${d.n} (${RARITY[d.rar].n})`, TIERC[d.rar]); say(`+${cr} Credits`, '#ffb347');
-    if (c.big) { const f = R.next() < 0.5 ? 'fund_relikt' : 'fund_datenkern'; if (addItem(f, 1)) say(gearDef(f)!.n, TIERC[gearDef(f)!.rar]); }
+    if (!canAdd(id)) {
+      if (!shared) { say('Rucksack voll. Die Kiste bleibt zu.', '#ff6b5b'); snd(180, 0.2, 'square', 0.04, -60); return; }
+      say('Ein Mitspieler hat eine Kiste geöffnet – dein Rucksack ist voll, dein Anteil verfällt.', '#ff6b5b');
+    } else {
+      const cr = Math.round((c.big ? 600 : 60) * (1 + DUN.danger * 0.6) * (0.7 + R.next() * 0.6));
+      addItem(id, 1); P.credits += cr; P.earned += cr;
+      say(`${pre}${d.n} (${RARITY[d.rar].n})`, TIERC[d.rar]); say(`+${cr} Credits`, '#ffb347');
+      if (c.big) { const f = R.next() < 0.5 ? 'fund_relikt' : 'fund_datenkern'; if (addItem(f, 1)) say(gearDef(f)!.n, TIERC[gearDef(f)!.rar]); }
+    }
   }
-  c.open = true; st.open.push(c.idx);
-  sfx('pickup', 0.7, 1, () => snd(700, 0.2, 'triangle', 0.05, 300)); saveGame();
+  c.open = true; if (!st.open.includes(c.idx)) st.open.push(c.idx);
+  sfx('pickup', shared ? 0.4 : 0.7, 1, () => snd(700, 0.2, 'triangle', 0.05, 300)); saveGame();
+  if (!shared) coopSend('mcr', { e: DUN.e!.id, i: c.idx });
 }
+// Schalter umlegen: how = 'self' (selbst), 'mate' (Mitspieler), 'sync' (Stand beim Dazukommen, ohne Meldung)
+function flipSwitch(si: number, how: 'self' | 'mate' | 'sync') {
+  const sw = DUN.sws[si]; if (!sw || sw.on || !DUN.e) return;
+  sw.on = true; sw.scr.color.set(0x3ad06a);
+  const lv = sw.g.getObjectByName('hebel'); if (lv) lv.rotation.x = 0.7;
+  const st = P.dungeons![DUN.e.id]; if (!(st.sws || []).includes(si)) st.sws = [...(st.sws || []), si];
+  const left = DUN.sws.filter(q => !q.on).length, who = how === 'mate' ? 'Ein Mitspieler hat einen Schalter umgelegt. ' : 'Schalter umgelegt. ';
+  if (left === 0) { DUN.door!.open = true; st.sw = true; if (how !== 'sync') { say('Alle Schalter umgelegt. Das Tor zum Tresor fährt auf.', '#3ad06a'); sfx('door_open', 0.7, 0.7, () => snd(200, 0.6, 'sawtooth', 0.05, 80)); } }
+  else if (how !== 'sync') { say(`${who}Noch ${left} bis zum Tresor.`, '#ffb347'); snd(520, 0.2, 'square', 0.04, 200); }
+  saveGame();
+  if (how === 'self') coopSend('msw', { e: DUN.e.id, i: si });
+}
+// eigener Stand an neue Mitspieler: umgelegte Schalter, offene Kisten
+function sendFull() {
+  if (!DUN.e) return;
+  coopSend('mfull', { e: DUN.e.id, since: grp.mine, sw: DUN.sws.map((q, i) => (q.on ? i : -1)).filter(i => i >= 0), cr: DUN.crates.filter(c => c.open).map(c => c.idx) });
+}
+// Geschoss eines Wächters (beim Gastgeber erzeugt, bei allen anderen aus seinem Ereignis)
+function spawnBolt(x: number, y: number, z: number, vx: number, vy: number, vz: number, dmg: number, boss: number) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(boss ? 0.13 : 0.09, 8, 6), new THREE.MeshBasicMaterial({ color: boss ? 0xc070ff : 0xff5030 })); m.userData.sh = false; scene.add(m);
+  m.position.set(BASE.x + x, BASE.y + y, BASE.z + z);
+  DUN.bolts.push({ m, x, y, z, vx, vy, vz, life: 4, dmg });
+  sfx('laser', 0.2, boss ? 0.7 : 1.4, () => snd(300, 0.15, 'sawtooth', 0.04, -200));
+}
+const sameMine = (m: any) => DUN.active && !!DUN.e && m.e === DUN.e.id;
+onCoop('mfull', m => {
+  if (!sameMine(m)) return;
+  if (isFinite(+m.since)) grp.since.set(+m.from, +m.since);
+  for (const i of Array.isArray(m.sw) ? m.sw : []) flipSwitch(+i, 'sync');
+  for (const idx of Array.isArray(m.cr) ? m.cr : []) { const c = DUN.crates.find(q => q.idx === +idx); if (c && !c.open) { c.open = true; const st = P.dungeons![DUN.e!.id]; if (!st.open.includes(c.idx)) st.open.push(c.idx); } }
+});
+onCoop('msw', m => { if (sameMine(m)) flipSwitch(+m.i, 'mate'); });
+onCoop('mcr', m => { if (!sameMine(m)) return; const c = DUN.crates.find(q => q.idx === +m.i); if (c) openCrate(c, true); });
+// Treffer eines Mitspielers (nur der Gastgeber wertet)
+onCoop('mh', m => {
+  if (!sameMine(m) || !amHost(mates.keys())) return;
+  const fo = DUN.foes.find(f => f.id === +m.i); if (!fo) return;
+  fo.hp -= clamp(+m.d || 0, 0, 200); fo.hit = 0.12;
+  if (!fo.alert) droneBark('alarm', Math.hypot(fo.x - DUN.x, fo.z - DUN.z)); fo.alert = true;
+});
+// Stand der Wächter vom Gastgeber
+onCoop('mst', m => {
+  if (!sameMine(m) || !mates.has(m.from) || grp.host(mates.keys()) !== m.from) return;
+  const first = coSynced !== m.from; coSynced = m.from;
+  const seen = new Set<number>();
+  for (const a of Array.isArray(m.f) ? m.f : []) {
+    const fo = DUN.foes.find(f => f.id === a[0]); if (!fo) continue;
+    seen.add(fo.id); fo.nx = +a[1]; fo.nz = +a[2]; if (first) { fo.x = fo.nx; fo.z = fo.nz; }
+    fo.hp = Math.min(fo.hp, +a[3]) > 0 ? +a[3] : 0;
+    const al = !!(a[4] & 1); if (al && !fo.alert && !first) droneBark('alarm', Math.hypot(fo.x - DUN.x, fo.z - DUN.z));
+    fo.alert = al; fo.aim = a[4] & 2 ? 0.3 : 0;
+  }
+  // beim Gastgeber nicht mehr vorhanden: zerstört (beim ersten Abgleich ohne Explosion – war schon vorher weg)
+  for (const fo of DUN.foes) if (!seen.has(fo.id)) fo.hp = first ? -999 : Math.min(fo.hp, 0);
+  for (const ev of Array.isArray(m.ev) ? m.ev : []) if (ev[0] === 'b') spawnBolt(+ev[1], +ev[2], +ev[3], +ev[4], +ev[5], +ev[6], +ev[7], +ev[8]);
+});
 
 // ---------- Betreten und Verlassen ----------
 export function enterDungeon(e: Entrance) {
@@ -571,7 +642,7 @@ export function enterDungeon(e: Entrance) {
   P.dungeons = P.dungeons || {};
   let st = P.dungeons[e.id];
   if (!st || Date.now() - st.t > 20 * 60000) st = P.dungeons[e.id] = { t: Date.now(), open: [], sw: false };
-  DUN.e = e;
+  DUN.e = e; grp.reset();
   const seed = hashStr(e.id + ':plan'), plan = generate(seed, e.size), R = rng(seed + 7);
   group = new THREE.Group(); group.position.copy(BASE); scene.add(group);
   const tint = new THREE.Color(T ? T.ground[1] : 0x8a8270).lerp(new THREE.Color(0x777777), 0.45).multiplyScalar(1.5);
@@ -633,7 +704,7 @@ export function enterDungeon(e: Entrance) {
       for (let k = 0; k < 6; k++) { const v = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, TS * 0.6), std(0x111214, { roughness: 0.8 })); v.position.set(-0.6 + k * 0.24, 0.065, 0); g.add(v); }
       const light = new THREE.PointLight(kind === 'gas' ? 0x60ff40 : 0x60a0ff, 0, 6, 2); light.position.y = 0.8; g.add(light);
       g.position.set(tp[0] * TS, 0, tp[1] * TS); g.traverse((o: any) => { o.userData.sh = false; }); group!.add(g);
-      return { tx: tp[0], tz: tp[1], kind, ph: (ti * 1.7) % 5, on: false, g, glow, light };
+      return { tx: tp[0], tz: tp[1], kind, ph: 0, off: (ti * 1.7) % 5, on: false, g, glow, light };
     });
   }
   // Förderkorb am Eingang
@@ -653,7 +724,7 @@ export function enterDungeon(e: Entrance) {
     DUN.exit = plan.start;
   }
   // Wächter und der Wächterkern im Tresor
-  DUN.foes = plan.foes.map(f => buildFoe(f[0], f[1], false));
+  DUN.foes = plan.foes.map((f, i) => { const o = buildFoe(f[0], f[1], false); o.id = i; return o; });
   if (!st.open.includes(99)) DUN.foes.push(buildFoe(plan.vault[0], plan.vault[1], true));
   DUN.bolts = [];
   // Licht: Welt aus, Stirnlampe und ein kleiner Vorrat an Lampenlichtern, die den nächsten Lampen folgen
@@ -692,7 +763,7 @@ export function leaveDungeon(died = false) {
   overlay.scene = null; overlay.camera = null; vm = null; me = null;
   if (tracer) { scene.remove(tracer); tracer.geometry.dispose(); tracer = null; }
   for (const b of DUN.bolts) scene.remove(b.m);
-  DUN.bolts = []; DUN.foes = []; DUN.crates = []; pool = []; chunks = [];
+  DUN.bolts = []; DUN.foes = []; DUN.crates = []; pool = []; chunks = []; coEv = []; coSynced = 0;
   ambient.intensity = saved.amb; sun.intensity = saved.sun; rim.intensity = saved.rim;
   const fog = scene.fog as THREE.FogExp2 | null; if (fog) { fog.color.setHex(saved.fogC); fog.density = saved.fogD; }
   camera.near = saved.near; camera.far = saved.far; camera.updateProjectionMatrix();
@@ -741,7 +812,8 @@ function shoot() {
       if (px * px + py * py + pz * pz < r * r) { bt = t; best = f; }
     }
     const hp = cp.clone().addScaledVector(d, bt); end = hp;
-    if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; burst(hp.x, hp.y, hp.z, '#ffb060', 6, 2.2, 0.25); G.hitMark = 0.12; }
+    if (best && mates.size && !amHost(mates.keys())) { best.hit = 0.12; coopSend('mh', { e: DUN.e!.id, i: best.id, d: w.dmg }); burst(hp.x, hp.y, hp.z, '#ffb060', 6, 2.2, 0.25); G.hitMark = 0.12; }
+    else if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; burst(hp.x, hp.y, hp.z, '#ffb060', 6, 2.2, 0.25); G.hitMark = 0.12; }
     else burst(hp.x, hp.y, hp.z, w.col, 3, 2, 0.2);
   }
   if (tracer && end && (gun || vm)) {
@@ -793,19 +865,11 @@ export function updateDungeon(dt: number) {
   DUN.sws.forEach((sw, si) => {
     if (sw.on || !near(sw.tx, sw.tz)) return;
     DUN.prompt = `Schalter umlegen (${DUN.sws.filter(q => q.on).length + 1}/${DUN.sws.length})`;
-    DUN.act = () => {
-      sw.on = true; sw.scr.color.set(0x3ad06a);
-      const lv = sw.g.getObjectByName('hebel'); if (lv) lv.rotation.x = 0.7;
-      const st = P.dungeons![DUN.e!.id]; st.sws = [...(st.sws || []), si];
-      const left = DUN.sws.filter(q => !q.on).length;
-      if (left === 0) { DUN.door!.open = true; st.sw = true; say('Alle Schalter umgelegt. Das Tor zum Tresor fährt auf.', '#3ad06a'); sfx('door_open', 0.7, 0.7, () => snd(200, 0.6, 'sawtooth', 0.05, 80)); }
-      else { say(`Schalter umgelegt. Noch ${left} bis zum Tresor.`, '#ffb347'); snd(520, 0.2, 'square', 0.04, 200); }
-      saveGame();
-    };
+    DUN.act = () => flipSwitch(si, 'self');
   });
   // Fallen: alle 5 s für 1,8 s aktiv (vorher kurzes Warnblinken); wer darauf steht, nimmt Schaden
   for (const tr of DUN.traps) {
-    tr.ph = (tr.ph + dt) % 5;
+    tr.ph = (coopNow() + tr.off) % 5;
     const warn = tr.ph > 2.6 && tr.ph < 3.2, on = tr.ph >= 3.2;
     if (on && !tr.on) sfx(tr.kind === 'gas' ? 'laser' : 'shield_hit', 0.25, tr.kind === 'gas' ? 0.5 : 1.4, () => snd(tr.kind === 'gas' ? 140 : 900, 0.3, 'sawtooth', 0.03, -80));
     tr.on = on;
@@ -825,7 +889,7 @@ export function updateDungeon(dt: number) {
   // Wächter
   pathT -= dt;
   if (pathT <= 0) {
-    pathT = 0.4; flood(Math.round(DUN.x / TS), Math.round(DUN.z / TS), DUN.dist);
+    pathT = 0.4; flood(Math.round(DUN.x / TS), Math.round(DUN.z / TS), DUN.dist, false, [...mates.values()].filter(f => f.init).map(f => [Math.round(f.x / TS), Math.round(f.z / TS)] as Vec2));
     // Felsbereiche, die über den Weg weiter als 13 Kacheln entfernt sind (oder hinter dem geschlossenen Tor liegen), sieht man nicht
     for (const c of chunks) {
       let best = 9999;
@@ -833,56 +897,68 @@ export function updateDungeon(dt: number) {
       const on = best <= 13; for (const m of c.meshes) m.visible = on;
     }
   }
+  const client = mates.size > 0 && !amHost(mates.keys());
+  const players: { x: number; z: number; eye: number }[] = [{ x: DUN.x, z: DUN.z, eye: EYE() }];
+  if (!client) for (const f of mates.values()) if (f.init) players.push({ x: f.x, z: f.z, eye: f.crouch ? 1.12 : 1.6 });
   for (let i = DUN.foes.length - 1; i >= 0; i--) {
     const fo = DUN.foes[i];
+    if (fo.hp <= -900) { group.remove(fo.g); DUN.foes.splice(i, 1); continue; }   // schon vorher zerstört (Abgleich)
     if (fo.hp <= 0) {
       burst(BASE.x + fo.x, BASE.y + fo.y, BASE.z + fo.z, '#ffb060', fo.boss ? 60 : 22, fo.boss ? 5 : 3.5, 0.6); sfx('explosion0', fo.boss ? 0.7 : 0.4, fo.boss ? 0.8 : 1.5, () => snd(90, 0.4, 'sawtooth', 0.07, -40));
       group.remove(fo.g); DUN.foes.splice(i, 1); DUN.kills++; droneBark('tot', Math.hypot(DUN.x - fo.x, DUN.z - fo.z));
       if (fo.boss) say('Wächterkern zerstört. Der Tresor ist frei.', '#ffb347');
       continue;
     }
-    const ddx = DUN.x - fo.x, ddz = DUN.z - fo.z, d = Math.hypot(ddx, ddz), sees = d < 26 && los(fo.x, fo.z, DUN.x, DUN.z);
-    if (sees && d < (fo.boss ? 20 : 16)) { if (!fo.alert) droneBark('alarm', d); fo.alert = true; }
+    // Ziel: der nächste Pilot, den der Wächter sieht (sonst der nächste überhaupt)
+    let tg = players[0], td = Infinity, sees = false;
+    for (const pl of players) { const dd = Math.hypot(pl.x - fo.x, pl.z - fo.z), sv = dd < 26 && los(fo.x, fo.z, pl.x, pl.z); if ((sv && !sees) || (sv === sees && dd < td)) { tg = pl; td = dd; sees = sv; } }
+    const ddx = tg.x - fo.x, ddz = tg.z - fo.z, d = Math.max(0.01, td);
     fo.ph += dt; fo.hit = Math.max(0, fo.hit - dt);
-    const spd = fo.boss ? 1.6 : 2.6;
-    let mx = 0, mz = 0;
-    if (fo.alert) {
-      if (sees) { const want = fo.boss ? 6 : 5.5; const k2 = d > want + 1 ? 1 : d < want - 1.5 ? -0.8 : 0; mx = ddx / d * k2 + (-ddz / d) * Math.sin(fo.ph * 0.9) * 0.6; mz = ddz / d * k2 + (ddx / d) * Math.sin(fo.ph * 0.9) * 0.6; }
-      else {
-        // dem Abstandsfeld folgen: zur Nachbarkachel, die näher am Spieler liegt
-        const cx = Math.round(fo.x / TS), cz = Math.round(fo.z / TS), cur = DUN.dist[I(cx, cz)]; let bx = cx, bz = cz, bd = cur < 0 ? 9999 : cur;
-        for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) { const v2 = inb(cx + ax, cz + az) ? DUN.dist[I(cx + ax, cz + az)] : -1; if (v2 >= 0 && v2 < bd) { bd = v2; bx = cx + ax; bz = cz + az; } }
-        const tx = bx * TS - fo.x, tz = bz * TS - fo.z, tl = Math.hypot(tx, tz) || 1; mx = tx / tl; mz = tz / tl;
-        if (cur > 30) fo.alert = false;
-      }
+    if (client) {
+      // Mitspieler: nur dem Stand des Gastgebers folgen
+      if (fo.nx !== undefined && fo.nz !== undefined) { const kk = Math.min(1, dt * 10); fo.x += (fo.nx - fo.x) * kk; fo.z += (fo.nz - fo.z) * kk; }
     } else {
-      // Streife: gemächlich zwischen Nachbarkacheln
-      if (Math.hypot(fo.tx - fo.x, fo.tz - fo.z) < 0.3 || Math.random() < dt * 0.1) {
-        const cx = Math.round(fo.x / TS), cz = Math.round(fo.z / TS), o: Vec2[] = [];
-        for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) if (!solidT(cx + ax, cz + az)) o.push([cx + ax, cz + az]);
-        if (o.length) { const p = o[Math.floor(Math.random() * o.length)]; fo.tx = p[0] * TS; fo.tz = p[1] * TS; }
+      if (sees && d < (fo.boss ? 20 : 16)) { if (!fo.alert) droneBark('alarm', Math.hypot(DUN.x - fo.x, DUN.z - fo.z)); fo.alert = true; }
+      const spd = fo.boss ? 1.6 : 2.6;
+      let mx = 0, mz = 0;
+      if (fo.alert) {
+        if (sees) { const want = fo.boss ? 6 : 5.5; const k2 = d > want + 1 ? 1 : d < want - 1.5 ? -0.8 : 0; mx = ddx / d * k2 + (-ddz / d) * Math.sin(fo.ph * 0.9) * 0.6; mz = ddz / d * k2 + (ddx / d) * Math.sin(fo.ph * 0.9) * 0.6; }
+        else {
+          // dem Abstandsfeld folgen: zur Nachbarkachel, die näher an einem Piloten liegt
+          const cx = Math.round(fo.x / TS), cz = Math.round(fo.z / TS), cur = DUN.dist[I(cx, cz)]; let bx = cx, bz = cz, bd = cur < 0 ? 9999 : cur;
+          for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) { const v2 = inb(cx + ax, cz + az) ? DUN.dist[I(cx + ax, cz + az)] : -1; if (v2 >= 0 && v2 < bd) { bd = v2; bx = cx + ax; bz = cz + az; } }
+          const tx = bx * TS - fo.x, tz = bz * TS - fo.z, tl = Math.hypot(tx, tz) || 1; mx = tx / tl; mz = tz / tl;
+          if (cur > 30) fo.alert = false;
+        }
+      } else {
+        // Streife: gemächlich zwischen Nachbarkacheln
+        if (Math.hypot(fo.tx - fo.x, fo.tz - fo.z) < 0.3 || Math.random() < dt * 0.1) {
+          const cx = Math.round(fo.x / TS), cz = Math.round(fo.z / TS), o: Vec2[] = [];
+          for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) if (!solidT(cx + ax, cz + az)) o.push([cx + ax, cz + az]);
+          if (o.length) { const pp = o[Math.floor(Math.random() * o.length)]; fo.tx = pp[0] * TS; fo.tz = pp[1] * TS; }
+        }
+        const tx = fo.tx - fo.x, tz = fo.tz - fo.z, tl = Math.hypot(tx, tz) || 1; mx = tx / tl * 0.4; mz = tz / tl * 0.4;
       }
-      const tx = fo.tx - fo.x, tz = fo.tz - fo.z, tl = Math.hypot(tx, tz) || 1; mx = tx / tl * 0.4; mz = tz / tl * 0.4;
-    }
-    const nx = fo.x + mx * spd * dt, nz = fo.z + mz * spd * dt, rr = fo.boss ? 0.8 : 0.5;
-    if (free(nx, fo.z, rr)) fo.x = nx; if (free(fo.x, nz, rr)) fo.z = nz;
-    fo.g.position.set(fo.x, fo.y + Math.sin(fo.ph * 2.2) * 0.12, fo.z);
-    fo.g.rotation.y = fo.alert ? Math.atan2(ddx, ddz) : fo.g.rotation.y + dt * 0.6;
-    // Feuern: Auge glüht auf, dann ein Bolzen
-    fo.cool -= dt;
-    if (fo.alert && sees && fo.cool <= 0.45 && fo.aim === 0) { fo.aim = 0.45; snd(fo.boss ? 300 : 520, 0.4, 'sine', 0.025, 500); }
-    if (fo.aim > 0) {
-      fo.aim -= dt;
-      if (fo.aim <= 0) {
-        fo.aim = 0; fo.cool = (fo.boss ? 0.9 : 1.7) + Math.random() * 0.6;
-        if (sees) for (let b = 0; b < (fo.boss ? 3 : 1); b++) {
-          const m = new THREE.Mesh(new THREE.SphereGeometry(fo.boss ? 0.13 : 0.09, 8, 6), new THREE.MeshBasicMaterial({ color: fo.boss ? 0xc070ff : 0xff5030 })); m.userData.sh = false; scene.add(m);
-          const tx = ddx + (b - (fo.boss ? 1 : 0)) * 0.9 * (-ddz / d), tz = ddz + (b - (fo.boss ? 1 : 0)) * 0.9 * (ddx / d), ty = EYE() - 0.15 - fo.y, tl = Math.hypot(tx, ty, tz), v0 = fo.boss ? 15 : 12;
-          DUN.bolts.push({ m, x: fo.x, y: fo.y, z: fo.z, vx: tx / tl * v0, vy: ty / tl * v0, vz: tz / tl * v0, life: 4, dmg: (fo.boss ? 13 : 8) * (1 + 0.25 * (DUN.danger - 1)) });
-          sfx('laser', 0.2, fo.boss ? 0.7 : 1.4, () => snd(300, 0.15, 'sawtooth', 0.04, -200));
+      const nx = fo.x + mx * spd * dt, nz = fo.z + mz * spd * dt, rr = fo.boss ? 0.8 : 0.5;
+      if (free(nx, fo.z, rr)) fo.x = nx; if (free(fo.x, nz, rr)) fo.z = nz;
+      // Feuern: Auge glüht auf, dann ein Bolzen auf den Zielpiloten
+      fo.cool -= dt;
+      if (fo.alert && sees && fo.cool <= 0.45 && fo.aim === 0) { fo.aim = 0.45; snd(fo.boss ? 300 : 520, 0.4, 'sine', 0.025, 500); }
+      if (fo.aim > 0) {
+        fo.aim -= dt;
+        if (fo.aim <= 0) {
+          fo.aim = 0; fo.cool = (fo.boss ? 0.9 : 1.7) + Math.random() * 0.6;
+          if (sees) for (let b = 0; b < (fo.boss ? 3 : 1); b++) {
+            const tx = ddx + (b - (fo.boss ? 1 : 0)) * 0.9 * (-ddz / d), tz = ddz + (b - (fo.boss ? 1 : 0)) * 0.9 * (ddx / d), ty = tg.eye - 0.15 - fo.y, tl = Math.hypot(tx, ty, tz), v0 = fo.boss ? 15 : 12;
+            const bv = [fo.x, fo.y, fo.z, tx / tl * v0, ty / tl * v0, tz / tl * v0, (fo.boss ? 13 : 8) * (1 + 0.25 * (DUN.danger - 1)), fo.boss ? 1 : 0];
+            spawnBolt(bv[0], bv[1], bv[2], bv[3], bv[4], bv[5], bv[6], bv[7]);
+            if (mates.size) coEv.push(['b', ...pack(...bv)]);
+          }
         }
       }
     }
+    fo.g.position.set(fo.x, fo.y + Math.sin(fo.ph * 2.2) * 0.12, fo.z);
+    fo.g.rotation.y = fo.alert ? Math.atan2(ddx, ddz) : fo.g.rotation.y + dt * 0.6;
     const ec = fo.hit > 0 ? 0xffffff : fo.aim > 0 ? 0xffd040 : fo.alert ? 0xff3020 : 0x802018;
     if (fo.vis) {
       fo.atk = (fo.atk || 0) + ((fo.alert ? 1 : 0) - (fo.atk || 0)) * Math.min(1, dt * 3);
@@ -891,6 +967,11 @@ export function updateDungeon(dt: number) {
       fo.vis.mat.forEach((m, k) => { m.emissive.setHex(ec); m.color.copy(fo.vis!.base[k]).multiplyScalar(fo.hit > 0 ? 2.4 : 1); });
     } else fo.eye.color.setHex(ec);
   }
+  // Gastgeber: Stand der Wächter an die Mitspieler (10× pro Sekunde)
+  if (mates.size && !client && DUN.e && (coT -= dt) <= 0) {
+    coT = 0.1;
+    coopSend('mst', { e: DUN.e.id, f: DUN.foes.filter(fo => fo.hp > 0).map(fo => [fo.id, ...pack(fo.x, fo.z), Math.round(fo.hp), (fo.alert ? 1 : 0) | (fo.aim > 0 ? 2 : 0)]), ev: coEv.splice(0) });
+  } else if (!mates.size) coEv = [];
   // Bolzen der Wächter
   for (let i = DUN.bolts.length - 1; i >= 0; i--) {
     const b = DUN.bolts[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.life -= dt;

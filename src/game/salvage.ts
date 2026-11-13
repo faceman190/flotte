@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { onCoop, coopSend } from './coop';
 import { scene, camera, view, ux } from '../core/engine';
 import { rng, hashStr } from '../core/util';
 import { sfx, snd } from '../core/audio';
@@ -110,20 +111,34 @@ export function nearCrate(x: number, z: number) {
   for (const c of S.crates) { if (c.open) continue; const d = Math.hypot(c.x - x, c.z - z); if (d < bd) { bd = d; best = c; } }
   return best;
 }
-export function openCrate(c: Crate) {
+// shared: ein Mitspieler hat die Kiste geöffnet – Deckel geht auf, jeder bekommt seinen eigenen Fund (Koop, src/game/coop.ts)
+export function openCrate(c: Crate, shared = false) {
+  if (c.open) return;
   const st = state(), R = rng(hashStr(S.sector + ':' + c.idx + ':' + st.t)), wreck = c.wreck >= 0;
   // Tresorkiste im Wrack: jede vierte etwa enthält ein legendäres Stück, sonst Stufe 2–3
   const legend = c.big && wreck && R.next() < 0.25;
   const id = lootId(R.next, c.big ? 3 : 1, legend), d = gearDef(id)!;
-  if (!canAdd(id)) { say('Rucksack voll. Die Kiste bleibt zu.', '#ff6b5b'); snd(180, 0.2, 'square', 0.04, -60); return; }
-  const cr = Math.round((c.big ? 450 : 50) * (wreck ? 1.4 : 1) * (0.7 + R.next() * 0.6));
-  addItem(id, 1); P.credits += cr; P.earned += cr;
-  say(`${d.n} (${RARITY[d.rar].n})`, TIERC[Math.min(3, d.rar)]); say(`+${cr} Credits`, '#ffb347');
-  if (legend) radio('SYSTEM', `Legendärer Fund im Wrack: ${d.n}.`);
-  if (c.big && R.next() < 0.5) { const f = R.next() < 0.5 ? 'fund_relikt' : 'fund_datenkern'; if (addItem(f, 1)) say(gearDef(f)!.n, TIERC[Math.min(3, gearDef(f)!.rar)]); }
-  c.open = true; st.open.push(c.idx);
-  sfx('pickup', 0.7, 1, () => snd(700, 0.2, 'triangle', 0.05, 300)); saveGame();
+  if (!canAdd(id) && !shared) { say('Rucksack voll. Die Kiste bleibt zu.', '#ff6b5b'); snd(180, 0.2, 'square', 0.04, -60); return; }
+  if (!canAdd(id)) say('Ein Mitspieler hat eine Kiste geöffnet – dein Rucksack ist voll, dein Anteil verfällt.', '#ff6b5b');
+  else {
+    const cr = Math.round((c.big ? 450 : 50) * (wreck ? 1.4 : 1) * (0.7 + R.next() * 0.6));
+    addItem(id, 1); P.credits += cr; P.earned += cr;
+    say(`${shared ? 'Geteilte Beute: ' : ''}${d.n} (${RARITY[d.rar].n})`, TIERC[Math.min(3, d.rar)]); say(`+${cr} Credits`, '#ffb347');
+    if (legend) radio('SYSTEM', `Legendärer Fund im Wrack: ${d.n}.`);
+    if (c.big && R.next() < 0.5) { const f = R.next() < 0.5 ? 'fund_relikt' : 'fund_datenkern'; if (addItem(f, 1)) say(gearDef(f)!.n, TIERC[Math.min(3, gearDef(f)!.rar)]); }
+  }
+  c.open = true; if (!st.open.includes(c.idx)) st.open.push(c.idx);
+  sfx('pickup', shared ? 0.4 : 0.7, 1, () => snd(700, 0.2, 'triangle', 0.05, 300)); saveGame();
+  if (!shared) coopSend('scr', { s: S.sector, i: c.idx });
 }
+// Koop: offene Kisten an neue Mitspieler; Meldungen der anderen
+export function salvageFull() { if (S.sector) coopSend('sfull', { s: S.sector, cr: S.crates.filter(c => c.open).map(c => c.idx) }); }
+onCoop('scr', m => { if (m.s !== S.sector) return; const c = S.crates.find(q => q.idx === +m.i); if (c) openCrate(c, true); });
+onCoop('sfull', m => {
+  if (m.s !== S.sector) return;
+  const st = state();
+  for (const idx of Array.isArray(m.cr) ? m.cr : []) { const c = S.crates.find(q => q.idx === +idx); if (c && !c.open) { c.open = true; if (!st.open.includes(c.idx)) st.open.push(c.idx); } }
+});
 
 let smokeT = 0;
 export function updateSalvage(dt: number, puff: (x: number, y: number, z: number) => void) {

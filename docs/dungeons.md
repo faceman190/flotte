@@ -168,6 +168,19 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
   - **Aussehen je Planetentyp** (`THEME` in `dungeon.ts`): Lampenfarbe, Nebel und Einbauten – Eiskristalle (Eis, Kristall), glühende Bodenspalten (Vulkan, Asche), Sandverwehungen (Wüste). Felsplaneten behalten das Bergwerk.
   - Eigene Ich-Sicht-Modelle: **P-9 „Wächter“** (Pistole) und **SW-4 „Funke“** (Splitterwerfer), gebaut in `asset-src/neu/mine/waffen2_build.py`, mit gebackenen Texturen `waffe_p9_*` / `waffe_sw_*`.
 
+- **Koop zu Fuß (Alpha 0.91, `src/game/coop.ts`):** Minen und Planetenboden werden gemeinsam gespielt.
+  - **Gruppe:** alle in derselben Mine (gleicher Eingang) bzw. alle zu Fuß auf demselben Planeten. **Gastgeber** ist, wer am längsten vor Ort ist
+    (Ankunftszeit nach Serveruhr, bei Gleichstand die kleinere Kennung). Wer neu dazukommt, übernimmt den laufenden Stand; geht der Gastgeber, übernimmt der Nächste nahtlos.
+  - **Drohnen:** Nur der Gastgeber rechnet sie (Ziel ist der nächste Pilot, den sie sehen; Wegfeld in der Mine von allen Piloten aus) und schickt
+    10× pro Sekunde Lage, Leben und Alarm (`mst` Mine, `fst` Planet). Mitspieler melden Treffer (`mh`/`fh`), der Gastgeber zieht den Schaden ab.
+    Schüsse der Drohnen kommen als Ereignis bei allen an; jeder prüft selbst, ob es ihn trifft. Abschussbelohnung auf dem Planeten bekommt nur der Schütze.
+    Die Wachen der Geschichte (Kapitel 2, Ruine) bleiben bei jedem selbst.
+  - **Schalter, Tor, Kisten:** gemeinsam (`msw`, `mcr`, `scr`). Aus jeder Kiste bekommt jeder Mitspieler seinen **eigenen Fund** („Geteilte Beute“);
+    der Verbandskasten heilt nur den, der ihn öffnet. Neue Mitspieler bekommen den Stand (umgelegte Schalter, offene Kisten, Ankunftszeit: `mfull`, `sfull`, `ffull`).
+  - **Fallen** laufen nach der Serveruhr – alle sehen denselben Takt.
+  - Server: Nachricht `co` wird an alle im Raum weitergereicht (bis 6 KB).
+  - Nebenbei behoben: Wer direkt aus dem Schiff ausstieg (nicht aus dem Rover), wurde dem Netz als „im Schiff“ gemeldet und war für andere unsichtbar.
+
 ## Noch offen
 - Weitere Minenarten (Bunker, Wrack), Schlüssel, mehrere Ebenen, große Meteoriten im All.
 - Hände/Handschuhe an Pistole und Splitterwerfer in der Ich-Sicht.

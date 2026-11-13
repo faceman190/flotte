@@ -15,7 +15,8 @@ import { GEAR_IDS, gearDef } from '../data/gear';
 import { SECTOR } from '../data/galaxy';
 import { burst } from './fx';
 import { radio } from '../ui/radio';
-import { SALV } from './salvage';
+import { SALV, salvageFull } from './salvage';
+import { onCoop, coopSend, coopNet, pack, CoopGroup } from './coop';
 
 // =====================================================================================
 // Kampf zu Fuß auf Planeten (Alpha 0.85): Ferrox-Wachdrohnen an den Wracks und auf Streife.
@@ -23,7 +24,7 @@ import { SALV } from './salvage';
 // Lebenspunkte zu Fuß; wer zusammenbricht, wacht am Schiff wieder auf. Drohnen kommen mit dem nächsten Besuch zurück.
 // =====================================================================================
 
-interface Foe { x: number; y: number; z: number; hx: number; hz: number; hr: number; hp: number; max: number; alert: boolean; cool: number; ph: number; hit: number; atk: number; vis: DroneVis | null; g: THREE.Object3D; dead: boolean }
+interface Foe { id: number; nx?: number; ny?: number; nz?: number; x: number; y: number; z: number; hx: number; hz: number; hr: number; hp: number; max: number; alert: boolean; cool: number; ph: number; hit: number; atk: number; vis: DroneVis | null; g: THREE.Object3D; dead: boolean }
 interface Bolt { m: THREE.Mesh; x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; dmg: number }
 export const FIGHT = { hp: 100, max: 100, cool: 0, kick: 0, flash: 0, hurt: 0, down: 0, foes: [] as Foe[], bolts: [] as Bolt[], lastShot: -99, msg: [] as { t: string; c: string; life: number }[] };
 let vm: ViewModel | null = null, tracer: THREE.Line | null = null, tracerT = 0, mflash: THREE.PointLight | null = null, sector = '';
@@ -39,14 +40,14 @@ function droneObj(): { vis: DroneVis | null; g: THREE.Object3D } {
 
 // Drohnen je Planet: zwei an jedem Wrack, drei auf Streife; Gefahr des Sektors erhöht Leben und Anzahl
 export function buildFieldFoes(sec: string) {
-  clearFieldFoes(); sector = sec;
+  clearFieldFoes(); sector = sec; grp.reset(); coSynced = 0;
   if (!world.surface) return;
   const R = rng(hashStr(sec + ':drohnen')), dg = danger();
   const add = (hx: number, hz: number, hr: number) => {
     const { vis, g } = droneObj(), max = Math.round(40 * (1 + 0.3 * (dg - 1)));
     const a = R.range(0, 6.28), x = hx + Math.cos(a) * hr, z = hz + Math.sin(a) * hr, y = terrainAt(x, z) + 3;
     g.position.set(x, y, z); scene.add(g); world.extras.push(g);
-    FIGHT.foes.push({ x, y, z, hx, hz, hr, hp: max, max, alert: false, cool: R.range(0.5, 2), ph: a, hit: 0, atk: 0, vis, g, dead: false });
+    FIGHT.foes.push({ id: FIGHT.foes.length, x, y, z, hx, hz, hr, hp: max, max, alert: false, cool: R.range(0.5, 2), ph: a, hit: 0, atk: 0, vis, g, dead: false });
   };
   for (const w of SALV.wrecks) for (let k = 0; k < (dg >= 3 ? 3 : 2); k++) add(w.x, w.z, w.r + 6 + k * 3);
   for (let k = 0; k < 3; k++) { const a = R.range(0, 6.28), d = R.range(600, 2400); add(Math.cos(a) * d, Math.sin(a) * d, 40); }
@@ -61,7 +62,7 @@ export function addGuardDrones(x: number, z: number, n: number) {
     const { vis, g } = droneObj(), max = Math.round(55 * (1 + 0.3 * (dg - 1))), a = k / n * Math.PI * 2;
     const fx = x + Math.cos(a) * 14, fz = z + Math.sin(a) * 14, fy = terrainAt(fx, fz) + 3;
     g.position.set(fx, fy, fz); scene.add(g); world.extras.push(g);
-    const f: Foe = { x: fx, y: fy, z: fz, hx: x, hz: z, hr: 14, hp: max, max, alert: true, cool: 1 + k * 0.4, ph: a, hit: 0, atk: 0, vis, g, dead: false };
+    const f: Foe = { id: -1, x: fx, y: fy, z: fz, hx: x, hz: z, hr: 14, hp: max, max, alert: true, cool: 1 + k * 0.4, ph: a, hit: 0, atk: 0, vis, g, dead: false };
     FIGHT.foes.push(f); guards.push(f);
   }
 }
@@ -70,6 +71,51 @@ export function clearFieldFoes() {
   guards = [];
   for (const b of FIGHT.bolts) { scene.remove(b.m); b.m.geometry.dispose(); }
   FIGHT.bolts = []; FIGHT.foes = []; FIGHT.msg = [];
+}
+
+// ---------- Koop (src/game/coop.ts): Mitspieler zu Fuß auf demselben Planeten ----------
+// Gastgeber steuert die Drohnen des Planeten (Kennung ≥ 0); die Wachen der Geschichte (Kennung −1) bleiben bei jedem selbst.
+interface FMate { id: number; x: number; y: number; z: number; foot: boolean }
+let mates: FMate[] = [], coT = 0, coEv: (string | number)[][] = [], coSynced = 0;
+const grp = new CoopGroup();
+export function setFieldMates(l: FMate[]) {
+  const before = new Set(mates.map(m => m.id));
+  mates = world.surface && sector === P.sector ? l.filter(m => m.foot) : [];
+  for (const id of before) if (!mates.some(m => m.id === id)) grp.since.delete(id);
+  if (mates.some(m => !before.has(m.id))) { salvageFull(); coopSend('ffull', { s: P.sector, since: grp.mine }); }
+}
+const mateIds = () => mates.map(m => m.id);
+const isClient = () => mates.length > 0 && !grp.amHost(mateIds());
+onCoop('ffull', m => { if (m.s === P.sector && isFinite(+m.since)) grp.since.set(+m.from, +m.since); });
+const sameField = (m: any) => !!world.surface && m.s === P.sector && sector === P.sector;
+const byId = (id: number) => FIGHT.foes.find(f => f.id === id && id >= 0);
+onCoop('fh', m => {
+  if (!sameField(m) || isClient()) return;
+  const f = byId(+m.i); if (!f || f.dead) return;
+  f.hp -= clamp(+m.d || 0, 0, 200); f.hit = 0.12; f.alert = true;
+  if (f.hp <= 0) kill(f, +m.from);
+});
+onCoop('fst', m => {
+  if (!sameField(m) || !mates.some(q => q.id === m.from) || grp.host(mateIds()) !== m.from) return;
+  const first = coSynced !== m.from; coSynced = m.from;
+  const seen = new Set<number>();
+  for (const a of Array.isArray(m.f) ? m.f : []) {
+    const f = byId(+a[0]); if (!f || f.dead) continue;
+    seen.add(f.id); f.nx = +a[1]; f.ny = +a[2]; f.nz = +a[3]; if (first) { f.x = f.nx; f.y = f.ny; f.z = f.nz; }
+    f.hp = +a[4]; const al = !!a[5]; if (al && !f.alert && !first) droneBark('alarm', Math.hypot(f.x - camera.position.x, f.z - camera.position.z)); f.alert = al;
+  }
+  for (const ev of Array.isArray(m.ev) ? m.ev : []) {
+    if (ev[0] === 'b') spawnBolt(+ev[1], +ev[2], +ev[3], +ev[4], +ev[5], +ev[6], +ev[7]);
+    else if (ev[0] === 'k') { const f = byId(+ev[1]); if (f && !f.dead) kill(f, +ev[2]); }
+  }
+  // beim Gastgeber schon zerstört (z. B. vor dem Dazukommen): still entfernen
+  for (const f of FIGHT.foes) if (f.id >= 0 && !f.dead && !seen.has(f.id)) { f.dead = true; f.g.visible = false; }
+});
+function spawnBolt(x: number, y: number, z: number, vx: number, vy: number, vz: number, dmg: number) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshBasicMaterial({ color: 0xc070ff }));
+  m.position.set(x, y, z); scene.add(m);
+  FIGHT.bolts.push({ m, x, y, z, vx, vy, vz, life: 4, dmg });
+  snd(520, 0.12, 'square', 0.03, -300);
 }
 
 // Sichtlinie über dem Gelände (Hügel verdecken)
@@ -106,9 +152,10 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
       if (qx * qx + qy * qy + qz * qz < 0.62 * 0.62) { bt = t; best = f; }
     }
     end = new THREE.Vector3(px + d.x * bt, py + d.y * bt, pz + d.z * bt);
-    if (best) {
+    if (best && best.id >= 0 && isClient()) { best.hit = 0.12; coopSend('fh', { s: P.sector, i: best.id, d: w.dmg }); burst(end.x, end.y, end.z, '#ffb060', 6, 2.2, 0.25); }
+    else if (best) {
       if (!best.alert) droneBark('alarm', Math.hypot(best.x - px, best.z - pz)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; burst(end.x, end.y, end.z, '#ffb060', 6, 2.2, 0.25);
-      if (best.hp <= 0) kill(best);
+      if (best.hp <= 0) kill(best, coopNet.id);
     } else if (bt < tw + 0.01 && tw < 120) burst(end.x, end.y, end.z, '#8a7a66', 3, 1.5, 0.2);
   }
   if (tracer && end) {
@@ -117,11 +164,13 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
     (tracer.material as THREE.LineBasicMaterial).color.set(w.col);
   }
 }
-function kill(f: Foe) {
+function kill(f: Foe, by = coopNet.id) {
   f.dead = true; f.g.visible = false;
   droneBark('tot', camera.position.distanceTo(f.g.position));
   burst(f.x, f.y, f.z, '#b070ff', 40, 6, 0.9); burst(f.x, f.y, f.z, '#ffb060', 20, 4, 0.5);
   sfx('ferrox_death', 0.6, 1, () => snd(160, 0.4, 'sawtooth', 0.05, -120));
+  if (f.id >= 0 && mates.length && !isClient()) coEv.push(['k', f.id, by]);
+  if (by !== coopNet.id) return;                                   // ein Mitspieler hat sie erwischt
   const cr = Math.round((40 + Math.random() * 50) * (1 + 0.4 * (danger() - 1)));
   P.credits += cr; P.earned += cr; P.kills = (P.kills || 0) + 1;
   say(`Drohne zerstört · +${cr} Credits`, '#ffb347');
@@ -150,31 +199,47 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
   const fighting = FIGHT.foes.some(f => !f.dead && f.alert);
   if (!fighting && FIGHT.down <= 0) FIGHT.hp = Math.min(FIGHT.max, FIGHT.hp + dt * 4);
   // Drohnen
-  const dg = danger();
+  const dg = danger(), client = isClient();
+  // Ziele: ich (wenn handlungsfähig) und – beim Gastgeber – die Mitspieler zu Fuß
+  const players: { x: number; y: number; z: number; ok: boolean }[] = [{ x: px, y: py, z: pz, ok: me.active && FIGHT.down <= 0 }];
+  if (!client) for (const m of mates) players.push({ x: m.x, y: m.y + 1.6, z: m.z, ok: true });
   for (const f of FIGHT.foes) {
     if (f.dead) continue;
-    const dx = px - f.x, dz = pz - f.z, d = Math.hypot(dx, dz);
-    if (me.active && FIGHT.down <= 0 && d < 34 && los(f.x, f.y, f.z, px, py, pz)) { if (!f.alert) droneBark('alarm', d); f.alert = true; }
-    if (f.alert && (d > 70 || !me.active || FIGHT.down > 0)) f.alert = false;
+    const local = !client || f.id < 0;
+    let tg = players[0], td = Infinity, sees = false;
+    for (const pl of local ? players : [players[0]]) {
+      if (!pl.ok) continue;
+      const dd = Math.hypot(pl.x - f.x, pl.z - f.z), sv = dd < 34 && los(f.x, f.y, f.z, pl.x, pl.y, pl.z);
+      if ((sv && !sees) || (sv === sees && dd < td)) { tg = pl; td = dd; sees = sv; }
+    }
+    const dx = tg.x - f.x, dz = tg.z - f.z, d = td === Infinity ? Math.hypot(dx, dz) : td;
     f.ph += dt * (f.alert ? 0.9 : 0.25);
-    let tx: number, tz: number;
-    if (f.alert) { const want = 15, s = d > want ? 1 : -0.6; tx = f.x + dx / Math.max(d, 0.1) * s * 6 + Math.cos(f.ph * 2) * 3; tz = f.z + dz / Math.max(d, 0.1) * s * 6 + Math.sin(f.ph * 2) * 3; }
-    else { tx = f.hx + Math.cos(f.ph) * f.hr; tz = f.hz + Math.sin(f.ph) * f.hr; }
-    const sp = f.alert ? 5 : 2.2, mx = tx - f.x, mz = tz - f.z, ml = Math.hypot(mx, mz);
-    if (ml > 0.1) { f.x += mx / ml * Math.min(ml, sp * dt); f.z += mz / ml * Math.min(ml, sp * dt); }
-    const gy = terrainAt(f.x, f.z) + 2.6 + Math.sin(f.ph * 3) * 0.3;
-    f.y += (gy - f.y) * Math.min(1, dt * 3);
-    f.g.position.set(f.x, f.y, f.z);
-    f.g.rotation.y = f.alert ? Math.atan2(dx, dz) : f.ph + Math.PI / 2;
-    // Schuss: leuchtende Kugel auf die Brust
     f.cool -= dt; f.atk = Math.max(0, f.atk - dt * 2); f.hit -= dt;
-    if (f.alert && f.cool <= 0 && d < 40 && los(f.x, f.y, f.z, px, py - 0.4, pz)) {
-      f.cool = 1.5 + Math.random() * 0.8; f.atk = 1;
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshBasicMaterial({ color: 0xc070ff }));
-      const ty = py - 0.45 - f.y, tl = Math.hypot(dx, ty, dz), v0 = 15;
-      m.position.set(f.x, f.y, f.z); scene.add(m);
-      FIGHT.bolts.push({ m, x: f.x, y: f.y, z: f.z, vx: dx / tl * v0, vy: ty / tl * v0, vz: dz / tl * v0, life: 4, dmg: 7 * (1 + 0.25 * (dg - 1)) });
-      snd(520, 0.12, 'square', 0.03, -300);
+    if (!local) {
+      // Mitspieler: dem Stand des Gastgebers folgen
+      if (f.nx !== undefined) { const kk = Math.min(1, dt * 8); f.x += (f.nx - f.x) * kk; f.y += (f.ny! - f.y) * kk; f.z += (f.nz! - f.z) * kk; }
+      f.g.position.set(f.x, f.y, f.z);
+      f.g.rotation.y = f.alert ? Math.atan2(px - f.x, pz - f.z) : f.ph + Math.PI / 2;
+    } else {
+      if (sees) { if (!f.alert) droneBark('alarm', Math.hypot(px - f.x, pz - f.z)); f.alert = true; }
+      if (f.alert && (td === Infinity || d > 70)) f.alert = false;
+      let tx: number, tz: number;
+      if (f.alert) { const want = 15, s = d > want ? 1 : -0.6; tx = f.x + dx / Math.max(d, 0.1) * s * 6 + Math.cos(f.ph * 2) * 3; tz = f.z + dz / Math.max(d, 0.1) * s * 6 + Math.sin(f.ph * 2) * 3; }
+      else { tx = f.hx + Math.cos(f.ph) * f.hr; tz = f.hz + Math.sin(f.ph) * f.hr; }
+      const sp = f.alert ? 5 : 2.2, mx = tx - f.x, mz = tz - f.z, ml = Math.hypot(mx, mz);
+      if (ml > 0.1) { f.x += mx / ml * Math.min(ml, sp * dt); f.z += mz / ml * Math.min(ml, sp * dt); }
+      const gy = terrainAt(f.x, f.z) + 2.6 + Math.sin(f.ph * 3) * 0.3;
+      f.y += (gy - f.y) * Math.min(1, dt * 3);
+      f.g.position.set(f.x, f.y, f.z);
+      f.g.rotation.y = f.alert ? Math.atan2(dx, dz) : f.ph + Math.PI / 2;
+      // Schuss: leuchtende Kugel auf die Brust des Zielpiloten
+      if (f.alert && f.cool <= 0 && d < 40 && los(f.x, f.y, f.z, tg.x, tg.y - 0.4, tg.z)) {
+        f.cool = 1.5 + Math.random() * 0.8; f.atk = 1;
+        const ty = tg.y - 0.45 - f.y, tl = Math.hypot(dx, ty, dz), v0 = 15;
+        const bv = [f.x, f.y, f.z, dx / tl * v0, ty / tl * v0, dz / tl * v0, 7 * (1 + 0.25 * (dg - 1))];
+        spawnBolt(bv[0], bv[1], bv[2], bv[3], bv[4], bv[5], bv[6]);
+        if (f.id >= 0 && mates.length) coEv.push(['b', ...pack(...bv)]);
+      }
     }
     if (f.vis) {
       if (f.vis.attack) f.vis.attack.setEffectiveWeight(f.atk); if (f.vis.idle) f.vis.idle.setEffectiveWeight(1 - f.atk * 0.8);
@@ -183,6 +248,11 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
       f.vis.mat.forEach((m, k) => { m.emissive.setHex(ec); m.color.copy(f.vis!.base[k]).multiplyScalar(f.hit > 0 ? 2.4 : 1); });
     }
   }
+  // Gastgeber: Stand der Planetendrohnen an die Mitspieler (10× pro Sekunde, alle noch lebenden)
+  if (mates.length && !client && (coT -= dt) <= 0) {
+    coT = 0.1;
+    coopSend('fst', { s: P.sector, f: FIGHT.foes.filter(f => f.id >= 0 && !f.dead).map(f => [f.id, ...pack(f.x, f.y, f.z), Math.round(f.hp), f.alert ? 1 : 0]), ev: coEv.splice(0) });
+  } else if (!mates.length) coEv = [];
   // Geschosse
   for (let i = FIGHT.bolts.length - 1; i >= 0; i--) {
     const b = FIGHT.bolts[i];
