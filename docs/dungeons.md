@@ -136,6 +136,15 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
 - **Noch offen:**
   Nachladen, Treffer, Springen als Clip; Hände an der Waffe korrigieren (linke Hand per IK an den Handschutz).
 
+## Planeten zu Fuß: Basen und Bergung (Alpha 0.84)
+- **Basen ohne Hangar:** Auf Planeten fliegt man nicht mehr in die Basis. [E] am Andockpunkt landet das Schiff auf dem Landefeld (`src/game/basewalk.ts`: Feld per Strahltests vermessen),
+  man steigt aus und geht zur Tür (an der ersten echten Wand zwischen Feld und Basismitte, mit Leuchtschild EINGANG). Drinnen beginnt man im Gang zur Promenade,
+  der Hangar ist abgesperrt; [E] an der Ausgangstür oder „Ablegen“ im Menü führt wieder hinaus. Größere Städte/Stationen mit Hangar kommen später.
+- **Begehen der Basis:** Boden und Wände kommen aus den Dreiecken des Modells (Raster 2 m, eigener Strahltest): Sockel und Stufen bis 1,7 m werden erstiegen.
+- **Bergung (`src/game/salvage.ts`):** je Planet 4 Wracks (verkohlte Schiffsmodelle) mit Tresorkiste und 2 Kisten, dazu 12 verstreute Versorgungskisten.
+  Beute wie in Minen (Ausrüstung nach Gefahr, Credits); die Tresorkiste im Wrack enthält mit 25 % ein legendäres Stück (Sonnenlanze, Orakel, Splitterwerfer, Kristallhelm).
+  Geöffnet bleibt 60 Minuten (P.salvage). Wracks qualmen, sind auf Sicht markiert und halten Rover und Fußgänger auf.
+
 ## Noch offen
 - Nur ein Aussehen (Bergwerk). Geplant: je Planetentyp eigene Farben und Einbauten, weitere Arten (Bunker, Wrack), große Meteoriten im All.
 - Fallen, Rätsel über mehrere Schalter, Schlüssel, mehrere Ebenen.

@@ -46,6 +46,7 @@ export const interiorHooks = {
   tabs: () => [] as string[],
   takeoff: () => {},     // Planet: vom Pilotensitz aus abheben
   toRover: () => {},     // Planet: über die Rampe zurück zum Rover
+  leaveBase: () => {},   // Planetenbasis: durch die Tür wieder hinaus (zu Fuß)
 };
 export const IN = {
   active: false, station: null as Station | null, locked: false,
@@ -606,13 +607,14 @@ export function syncParkedShip() {
 }
 
 // ---------- Betreten / Verlassen ----------
-export function enterInterior(st: Station) {
+export function enterInterior(st: Station, onFoot = false) {
   if (IN.active) leaveInterior();
   IN.active = true; IN.station = st;
   group = build(st);
   stationGroup = group;
   const Y = st.launch.yaw, fx = -Math.sin(Y), fz = -Math.cos(Y);
   group.position.set(st.launch.x - fx * HZ1, st.launch.y - DH / 2, st.launch.z - fz * HZ1);
+  if (onFoot) group.position.y -= 600;   // Planetenbasis zu Fuß: Innenraum tief unter dem Gelände (sonst ragt der Boden hinein)
   group.rotation.y = Y + Math.PI;
   group.updateMatrixWorld(true);
   scene.add(group);
@@ -630,8 +632,24 @@ export function enterInterior(st: Station) {
   camera.near = 0.12; camera.updateProjectionMatrix();
   G.inside = true; resetTpCam();
   G.mode = 'walk';
-  beginSeq(-1, 4.5, null);   // Landung: das Schiff kommt durchs Tor herein und setzt auf
-  say('SYSTEM', `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
+  if (onFoot) {
+    // Planetenbasis zu Fuß: im Gang hinter der Außentür, Hangar dahinter gesperrt
+    obstacles.push([-HW, HW, HZ0 - 0.7, HZ1]);
+    const door = new THREE.Group();
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(CW * 2 + 0.4, CH, 0.3), mat(new THREE.MeshStandardMaterial({ color: 0x5a5e66, roughness: 0.55, metalness: 0.6 })));
+    wall.position.set(0, CH / 2, HZ0 - 0.4); door.add(wall);
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.6, 0.12), mat(new THREE.MeshStandardMaterial({ color: 0x2c3036, roughness: 0.4, metalness: 0.8 })));
+    leaf.position.set(0, 1.3, HZ0 - 0.6); door.add(leaf);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.32), mat(new THREE.MeshBasicMaterial({ map: signTex('Ausgang', PAL[kind].css), toneMapped: false })));
+    sign.position.set(0, 2.95, HZ0 - 0.62); sign.rotation.y = Math.PI; door.add(sign);
+    group.add(door);
+    inters.push({ x: 0, z: HZ0 - 1.4, r: 2.4, label: () => `${st.name} verlassen`, act: () => interiorHooks.leaveBase() });
+    IN.x = 0; IN.z = HZ0 - 2.6; IN.yaw = 0;
+    say('SYSTEM', `Willkommen in ${st.name}. Der Gang führt zur ${PAL[kind].hall}.`);
+  } else {
+    beginSeq(-1, 4.5, null);   // Landung: das Schiff kommt durchs Tor herein und setzt auf
+    say('SYSTEM', `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
+  }
 }
 export function leaveInterior() {
   if (room) leaveShip();

@@ -14,6 +14,7 @@ import { buildGate } from '../models/structures';
 import { buildFlora, updateFlora } from './flora';
 import { gearFactor } from './inventory';
 import { buildDungeonEntrances } from './dungeon';
+import { buildSalvage, SALV } from './salvage';
 import { setOutpostDust } from '../models/stationModels';
 import { mesh, alongZ } from '../models/helpers';
 import { world, clearSector, addStation, makeAst, removeAst, type Asteroid, type Ore } from './world';
@@ -213,6 +214,7 @@ export function buildSurface(sector: string) {
   void 0;      // Felsbrocken, Felsnadeln, Pflanzen (src/game/flora.ts)
   world.surface = { planet: sector, limit: SURF.limit };
   world.ground = groundAt;
+  buildSalvage(sector);                                                          // Wracks und Versorgungskisten (src/game/salvage.ts)
   world.regrowT = 1e9;
   return { plateau, arrive: { x: -2300, y: plateau + 1300, z: 2300 } };
 }
@@ -487,6 +489,7 @@ export function updateRover(dt: number) {
   const obst: { x: number; z: number; r: number }[] = world.asteroids.map(a => ({ x: a.x, z: a.z, r: a.r * 0.85 + 1.6 }));
   for (const s of world.stations) obst.push({ x: s.x, z: s.z, r: 34 }, { x: s.dock.x, z: s.dock.z, r: 6 });
   obst.push({ x: R.ship.x, z: R.ship.z, r: stats().radius * 0.75 + 1.6 });
+  for (const w of SALV.wrecks) obst.push({ x: w.x, z: w.z, r: w.r + 2 });
   for (const o of obst) { const d = Math.hypot(nx - o.x, nz - o.z); if (d < o.r) { nx = o.x + (nx - o.x) / d * o.r; nz = o.z + (nz - o.z) / d * o.r; R.speed *= 0.6; } }
   R.x = nx; R.z = nz;
   R.y = heightAt(R.x, R.z);

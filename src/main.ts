@@ -17,7 +17,7 @@ import { updateStory, startPrologue, resumePrologue, skipPrologue, prologActive,
 import { updateChapter1 } from './game/chapter1';
 import { preloadMeshRooms } from './game/meshRoom';
 import { SHIP, placePlayer, updatePlayer, updatePickups, syncShip, nearDock, gateHit, hooks, fwd, setShipModel } from './game/player';
-import { updateParticles, syncParticles } from './game/fx';
+import { updateParticles, syncParticles, puff } from './game/fx';
 import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
 import { drawHUD, updatePanels, showBanner, nextHop } from './ui/hud';
 import { radio, clearRadio } from './ui/radio';
@@ -42,9 +42,11 @@ import { hasInterior } from './data/ships';
 import { loadRockModel } from './game/world';
 import { loadStationModels } from './models/stationModels';
 import { loadCharModels } from './models/charModels';
-import type { Gate } from './game/world';
+import type { Gate, Station } from './game/world';
 import { DUN, enterDungeon, updateDungeon, dungeonCamera, drawDungeonHUD, dungeonKey, nearEntrance, dunHooks } from './game/dungeon';
-import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover } from './game/onfoot';
+import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover, landAtBase, leaveBaseOnFoot } from './game/onfoot';
+import { basePad, nearDoor } from './game/basewalk';
+import { nearCrate, openCrate as openSalvage, updateSalvage, drawSalvageHUD } from './game/salvage';
 import { toggleView, toggleCrouch } from './game/avatar';
 
 loadSettings();
@@ -186,6 +188,23 @@ dockHooks.leave = leaveInterior;
 interiorHooks.openTab = (t, n) => showMenu(t, n);
 interiorHooks.undock = undock;
 dockHooks.launch = startLaunch;
+// Planetenbasis zu Fuß: hinein durch die Tür, hinaus wieder vor die Tür (das Schiff steht auf dem Landefeld)
+function enterBase(st: Station) {
+  footOff(); ROVER.active = false; laserSound(false);
+  G.baseWalk = true; G.dockedAt = st; P.shield = stats().maxShield; G.heat = 0; G.overheat = false;
+  $('hud').classList.add('hidden'); releaseAll();
+  enterInterior(st, true);
+  saveGame();
+}
+function leaveBase() {
+  leaveInterior();
+  G.baseWalk = false; G.dockedAt = null; $('dock').classList.add('hidden');
+  ROVER.active = true; leaveBaseOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll();
+  $('hud').classList.remove('hidden'); document.body.classList.add('playing');
+  saveGame();
+}
+dockHooks.leaveBase = leaveBase;
+interiorHooks.leaveBase = leaveBase;
 interiorHooks.openMap = openMap;
 interiorHooks.pause = pause;
 interiorHooks.tabs = () => (G.dockedAt ? dockTabs(G.dockedAt) : []);
@@ -257,6 +276,10 @@ onKey(code => {
       // im Rover oder zu Fuß (FOOT): Schiff, Mine, Rover
       const atShip = FOOT.active ? footNearShip() : nearShip();
       const mine = atShip ? null : nearEntrance(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z);
+      const door = FOOT.active ? nearDoor(FOOT.x, FOOT.z) : null;
+      if (door) { enterBase(door.st); return; }
+      const crate = FOOT.active ? nearCrate(FOOT.x, FOOT.z) : null;
+      if (crate) { openSalvage(crate); return; }
       if (mine) { laserSound(false); enterDungeon(mine); }
       else if (!atShip) { if (FOOT.active && FOOT.act === 'rover') enterRover(); }
       else if (settings.walk && hasInterior(P.cls)) {
@@ -269,7 +292,8 @@ onKey(code => {
     }
     else if (G.mode === 'play') {
       const st = nearDock();
-      if (st) openDock(st);
+      if (st && world.surface && settings.walk && basePad(st)) { if (landAtBase(st)) { G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); } }   // Planetenbasis: aufs Landefeld, zu Fuß hinein
+      else if (st) openDock(st);
       else if (world.surface && landShip()) { footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); }
     }
   }
@@ -488,6 +512,7 @@ function simulate(dt: number) {
   else if ((m as string) === 'launch') updateHangarSequence(dt);
   else if (m === 'entry') updateEntry(dt);
   else if (m === 'rover') { if (G.dead) updatePlayer(dt); else if (FOOT.active) updateFoot(dt); else updateRover(dt); }
+  if (world.surface && !IN.active && !DUN.active) updateSalvage(dt, (x, y, z) => puff(x, y, z, (Math.random() - 0.5) * 1.5, 2 + Math.random() * 2, (Math.random() - 0.5) * 1.5, '#2a2622', 2.2));
   if (live) updateMissions(dt);
   updateAsteroids(dt);
   if (m !== 'menu') { updateSpawning(dt); updateEnemies(dt); updateProjectiles(dt); updateStationDefense(dt); }
@@ -572,7 +597,7 @@ function loop(now: number, manual = false) {
   drawHUD();
   if (world.def && G.mode !== 'map' && !IN.active && !DUN.active) drawFlare(ux, dt, flareOccluders());
   drawWalkHUD();
-  if (!FOOT.active) drawRoverHUD(); else drawFootHUD();
+  if (!FOOT.active) { drawRoverHUD(); if (G.mode === 'rover' && ROVER.active) drawSalvageHUD(ROVER.x, ROVER.z); } else drawFootHUD();
   drawDungeonHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, ROVER.active);
   if (G.mode === 'rover') $('prompt').classList.add('hidden');
   if (G.mode === 'play' || G.mode === 'jump' || G.mode === 'entry') updatePanels(dt);

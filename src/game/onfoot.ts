@@ -12,6 +12,10 @@ import { radio } from '../ui/radio';
 import { nearEntrance } from './dungeon';
 import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
 import { viewModelId } from './mineArt';
+import { basePad, padGround, baseBlocked, nearDoor, surfaceAt, wallBetween } from './basewalk';
+import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
+import { landShip } from './surface';
+import type { Station } from './world';
 
 // =====================================================================================
 // Zu Fuß auf dem Planetenboden (Unterzustand des Rover-Modus: G.mode bleibt 'rover', FOOT.active = true).
@@ -21,7 +25,7 @@ import { viewModelId } from './mineArt';
 
 export const FOOT = {
   active: false, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, vx: 0, vz: 0, jy: 0, jv: 0, bob: 0, walked: 0,
-  locked: false, act: '' as '' | 'rover' | 'ship' | 'mine', prompt: '', warn: 0,
+  locked: false, act: '' as '' | 'rover' | 'ship' | 'mine' | 'base' | 'crate', prompt: '', warn: 0,
 };
 export const footHooks = { unlock: () => {} };
 let me: Avatar | null = null, stepT = 0, grabT = 0;
@@ -31,7 +35,7 @@ export const footNearShip = () => FOOT.active && Math.hypot(FOOT.x - ROVER.ship.
 export const footNearRover = () => FOOT.active && ROVER.model !== null && Math.hypot(FOOT.x - ROVER.x, FOOT.z - ROVER.z) < 4.5;
 
 function place(x: number, z: number, yaw: number) {
-  FOOT.x = x; FOOT.z = z; FOOT.y = terrainAt(x, z); FOOT.yaw = yaw; FOOT.pitch = 0; FOOT.vx = FOOT.vz = 0; FOOT.jy = FOOT.jv = 0;
+  FOOT.x = x; FOOT.z = z; FOOT.y = surfaceAt(x, z, terrainAt(x, z) + 2.5); FOOT.yaw = yaw; FOOT.pitch = 0; FOOT.vx = FOOT.vz = 0; FOOT.jy = FOOT.jv = 0;
   FOOT.active = true; resetTpCam();
   if (me) me.first = true;
 }
@@ -51,6 +55,26 @@ export function leaveShipOnFoot() {
   const S = ROVER.ship, bx = Math.sin(S.yaw), bz = Math.cos(S.yaw), r = stats().radius;
   place(S.x + bx * (r * 0.7 + 3), S.z + bz * (r * 0.7 + 3), S.yaw + Math.PI);
 }
+// Planetenbasis: auf dem Landefeld landen und gleich zu Fuß aussteigen
+export function landAtBase(st: Station) {
+  const p = basePad(st); if (!p) return false;
+  const px = P.x, pz = P.z; P.x = p.x; P.z = p.z;
+  if (!landShip()) { P.x = px; P.z = pz; return false; }
+  const r = stats().radius;
+  let ax = p.x - st.x, az = p.z - st.z; const L = Math.hypot(ax, az) || 1; ax /= L; az /= L;   // vom Gebäude weg
+  ROVER.ship = { x: p.x, y: p.y + r * 0.55, z: p.z, yaw: Math.atan2(-ax, -az) };
+  const off = Math.max(p.hu, p.hv) + 6;
+  ROVER.x = p.x + ax * off; ROVER.z = p.z + az * off; ROVER.y = terrainAt(ROVER.x, ROVER.z); ROVER.yaw = ROVER.ship.yaw;
+  place(p.x - ax * (r * 0.8 + 2.5), p.z - az * (r * 0.8 + 2.5), Math.atan2(ax, az));   // zwischen Schiff und Tür, Blick zur Basis
+  radio('SYSTEM', `Auf dem Landefeld von ${st.name} gelandet. Zu Fuß zum Eingang.`);
+  return true;
+}
+// aus der Basis hinaus: vor der Tür, Blick nach draußen
+export function leaveBaseOnFoot() {
+  const st = world.stations[0], p = st && basePad(st);
+  if (p) place(p.door.x - Math.sin(p.door.yaw) * 2.0, p.door.z - Math.cos(p.door.yaw) * 2.0, p.door.yaw);
+  else place(ROVER.ship.x + 8, ROVER.ship.z, 0);
+}
 export function enterRover() { FOOT.active = false; FOOT.act = ''; resetRoverCamera(); if (me) me.s.g.visible = false; sfx('door_close', 0.4, 1.2, () => snd(200, 0.2, 'triangle', 0.03, 60)); }
 export function footOff() { FOOT.active = false; FOOT.act = ''; if (me) me.s.g.visible = false; if (document.pointerLockElement === gl) document.exitPointerLock(); }
 export function footJump() { if (!FOOT.active || FOOT.jy > 0 || FOOT.jv !== 0) return; FOOT.jv = 4.6; snd(95, 0.05, 'triangle', 0.02, 40); }
@@ -64,10 +88,11 @@ function blocked(x: number, z: number, ox: number, oz: number) {
   // runde Hindernisse: gesperrt ist nur, was näher heranführt (wer drinsteht, kommt immer heraus)
   const hit = (cx: number, cz: number, r: number) => { const d = Math.hypot(x - cx, z - cz); return d < r && d < Math.hypot(ox - cx, oz - cz); };
   for (const a of world.asteroids) if (hit(a.x, a.z, a.r * 0.85 + 0.45)) return 'fest';
-  for (const s of world.stations) if (hit(s.x, s.z, 34)) return 'fest';
+  if (wallBetween(ox, oz, x, z, FOOT.y) || surfaceAt(x, z, FOOT.y) - FOOT.y > 1.7) return 'fest';
   if (hit(ROVER.ship.x, ROVER.ship.z, shipR())) return 'fest';
   if (ROVER.model && hit(ROVER.x, ROVER.z, 2.3)) return 'fest';
   if (treeNear(x, z, 0.6) && !treeNear(ox, oz, 0.6)) return 'fest';
+  if (salvageBlock(x, z, 0.4) && !salvageBlock(ox, oz, 0.4)) return 'fest';
   return '';
 }
 
@@ -98,7 +123,7 @@ export function updateFoot(dt: number) {
   }
   if (why === 'nass' && FOOT.warn <= 0) { radio('SYSTEM', 'Hier geht es nicht weiter: Flüssigkeit voraus.'); FOOT.warn = 4; }
   // Boden folgen; Sprung mit Schwerkraft
-  const g = terrainAt(FOOT.x, FOOT.z);
+  const g = surfaceAt(FOOT.x, FOOT.z, FOOT.y + FOOT.jy);
   if (FOOT.jv !== 0 || FOOT.jy > 0) {
     FOOT.jy += FOOT.jv * dt; FOOT.jv -= 15 * dt;
     if (FOOT.jy <= 0) { FOOT.jy = 0; FOOT.jv = 0; stepT = 0; }
@@ -110,8 +135,10 @@ export function updateFoot(dt: number) {
   FOOT.bob += (Math.sin(FOOT.walked * 4.2) * Math.min(1, v / 4) * 0.045 - FOOT.bob) * Math.min(1, dt * 14);
   // Was ist in Reichweite?
   const mine = nearEntrance(FOOT.x, FOOT.z);
-  FOOT.act = footNearShip() ? 'ship' : mine ? 'mine' : footNearRover() ? 'rover' : '';
-  FOOT.prompt = FOOT.act === 'ship' ? (settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`) : FOOT.act === 'mine' ? `${mine!.name} betreten` : FOOT.act === 'rover' ? 'In den Rover steigen' : '';
+  const door = nearDoor(FOOT.x, FOOT.z);
+  const crate = nearCrate(FOOT.x, FOOT.z);
+  FOOT.act = door ? 'base' : crate ? 'crate' : footNearShip() ? 'ship' : mine ? 'mine' : footNearRover() ? 'rover' : '';
+  FOOT.prompt = FOOT.act === 'crate' ? (crate!.big ? 'Tresorkiste öffnen' : 'Kiste öffnen') : FOOT.act === 'base' ? `${door!.st.name} betreten` : FOOT.act === 'ship' ? (settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`) : FOOT.act === 'mine' ? `${mine!.name} betreten` : FOOT.act === 'rover' ? 'In den Rover steigen' : '';
   // eigene Figur
   if (VIEW.tp) me = syncAvatar(scene, me, P.gear || {});
   if (me) {
@@ -122,7 +149,7 @@ export function updateFoot(dt: number) {
 
 const _c = new THREE.Vector3();
 export function footCamera(dt: number) {
-  if (VIEW.tp && me) tpCamPos(_c, FOOT.x, FOOT.y + FOOT.jy, FOOT.z, FOOT.yaw, FOOT.pitch, (x, y, z) => y > terrainAt(x, z) + 0.3 && !(ROVER.model && Math.hypot(x - ROVER.x, z - ROVER.z) < 2.2) && !treeNear(x, z, 1.1), dt);
+  if (VIEW.tp && me) tpCamPos(_c, FOOT.x, FOOT.y + FOOT.jy, FOOT.z, FOOT.yaw, FOOT.pitch, (x, y, z) => y > padGround(x, z) + 0.3 && !baseBlocked(x, z, y - 1.2) && !(ROVER.model && Math.hypot(x - ROVER.x, z - ROVER.z) < 2.2) && !treeNear(x, z, 1.1), dt);
   else _c.set(FOOT.x, FOOT.y + FOOT.jy + eyeH() + FOOT.bob, FOOT.z);
   camera.position.copy(_c);
   camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch, FOOT.yaw, 0);
@@ -152,6 +179,9 @@ export function drawFootHUD() {
   const dS = Math.hypot(FOOT.x - ROVER.ship.x, FOOT.z - ROVER.ship.z);
   marker(ROVER.ship.x, ROVER.ship.y + 10, ROVER.ship.z, `${P.shipName.toUpperCase()} · ${Math.round(dS)} m`, '#5fd0ff', 0);
   if (ROVER.model) { const dR = Math.hypot(FOOT.x - ROVER.x, FOOT.z - ROVER.z); if (dR > 6) marker(ROVER.x, ROVER.y + 4, ROVER.z, `ROVER · ${Math.round(dR)} m`, '#e09030', 1); }
+  drawSalvageHUD(FOOT.x, FOOT.z);
+  const bs = world.stations[0], bp = bs && basePad(bs);
+  if (bp) { const dD = Math.hypot(FOOT.x - bp.door.x, FOOT.z - bp.door.z); if (dD > 4 && dD < 400) { _p.set(bp.door.x, padGround(bp.door.x, bp.door.z) + 3, bp.door.z).project(camera); if (_p.z < 1 && Math.abs(_p.x) < 1 && Math.abs(_p.y) < 1) { ux.fillStyle = '#7fe0a0'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'center'; ux.fillText(`EINGANG · ${Math.round(dD)} m`, (_p.x + 1) / 2 * W, (1 - _p.y) / 2 * H); } } }
   if (FOOT.locked) { ux.fillStyle = 'rgba(255,255,255,.75)'; ux.beginPath(); ux.arc(W / 2, H / 2, 2.2, 0, 6.283); ux.fill(); }
   if (FOOT.prompt) {
     const t = `[E] ${FOOT.prompt}`;

@@ -1,6 +1,6 @@
 import { look } from '../core/input';
 import { $, esc } from '../core/util';
-import { P, G, stats } from '../game/state';
+import { P, G, stats, settings } from '../game/state';
 import { world } from '../game/world';
 import { nearDock } from '../game/player';
 import { landInfo, nearShip, ROVER } from '../game/surface';
@@ -55,7 +55,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     const r: Row[] = [], st = stats();
     if (tradeAsk()) r.push(['T', `Handelsanfrage von ${tradeAsk()}`, true]);
     const dock = nearDock(), li = !dock ? landInfo() : null;
-    if (dock) r.push(['E', `Andocken · ${dock.name}`, true]);
+    if (dock) r.push(['E', world.surface && settings.walk ? `Auf dem Landefeld landen · ${dock.name}` : `Andocken · ${dock.name}`, true]);
     else if (li && li.ok) r.push(['E', 'Landen, Rover aussetzen', true]);
     if (G.lockT && P.rockets > 0) r.push(['F', 'Rakete abfeuern', true]);
     const fire = P.tool === 'laser' ? (MINE.target ? 'Laser halten: abbauen' : 'Bergbaulaser') : P.tool === 'charge' ? 'Sprengladung werfen' : 'Kanonen feuern';

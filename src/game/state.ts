@@ -53,6 +53,7 @@ export interface Player {
   gear: Partial<Record<GearSlot, string>>;      // angelegte Ausrüstung
   locker: InvItem[];                            // Spind, von jeder Station aus erreichbar
   shipGear: Partial<Record<ShipSlot, string>>;  // Module des aktiven Schiffs
+  salvage?: Record<string, { t: number; open: number[] }>;   // je Planet: Zeitpunkt, geöffnete Kisten (Wracks und Versorgungskisten, src/game/salvage.ts)
   dungeons?: Record<string, { t: number; open: number[]; sw?: boolean }>;   // je Mine: Zeitpunkt des letzten frischen Besuchs, geöffnete Kisten, Schalter
 }
 export type Tool = 'guns' | 'laser' | 'charge';
@@ -127,6 +128,7 @@ export const G = {
   shake: 0, hitMark: 0, sinceHit: 99, roll: 0, thrust: 0, cool: 0, gunSide: 0,
   lockT: null as any,
   dockedAt: null as any,
+  baseWalk: false,    // zu Fuß in einer Planetenbasis (kein Hangar; hinaus geht es durch die Tür)
   jumpT: 0, jumpTo: null as string | null, jumpFrom: null as string | null,
   warnT: 0,
   saveT: 20,
