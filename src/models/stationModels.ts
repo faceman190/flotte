@@ -145,13 +145,38 @@ export function buildCarrierModel(): (StructureModel & { glows: THREE.Sprite[]; 
 // ---------- Außenposten auf den Planeten: mit dem Baukasten gebaut (asset-src/neu/aussenposten/posten_kit.py → asset-src/glb/station/Aussenposten.glb) ----------
 // In echten Metern, Ursprung = Boden in der Mitte des Hauptgebäudes, das Tor zeigt nach +Z. Der Stationspunkt liegt 14 m über dem Plateau
 // (surface.ts), deshalb sitzt das Modell 14 m tiefer. Materialien kommen aus src/models/kit.ts; Leuchtpunkte und Landefeld aus data/kit_Aussenposten.json.
-const OUTPOST_Y = -14;
+export const OUTPOST_Y = -14;
+// Weitere Basen und Aufbauten (asset-src/glb/base, Hintergrund-Paket): erst laden, wenn ihr Planet sie braucht (wie die Städte)
+const BASES: Record<string, THREE.Group> = {}, BASEP: Record<string, Promise<boolean>> = {};
+export const baseLoaded = (name: string) => !!BASES[name];
+export function loadBase(name: string): Promise<boolean> {
+  if (BASES[name]) return Promise.resolve(true);
+  if (name in BASEP) return BASEP[name];
+  const url = (window as any).BASEDATA?.[name] as string | undefined;
+  if (!url) return Promise.resolve(false);
+  return (BASEP[name] = (async () => {
+    try {
+      const g = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url);
+      await loadKitMeta([name]);
+      const wrap = new THREE.Group(); wrap.add(g.scene); BASES[name] = wrap;
+      return true;
+    } catch (e) { console.warn('Basis nicht geladen:', name, e); delete BASEP[name]; return false; }
+  })());
+}
+export function preloadBases() { for (const n of Object.keys((window as any).BASEDATA || {})) loadBase(n); }
+// Aufbau ohne Landefeld (z. B. Bohrturm): Modell mit Baukasten-Materialien und seinen Leuchtpunkten, Ursprung wie in Blender
+export function buildDeco(name: string): THREE.Group | null {
+  const t = BASES[name]; if (!t) return null;
+  const g = t.clone(true); applyKit(g);
+  for (const l of kitMeta(name).lights || []) { const sp = new THREE.Sprite(glowMat(KIT_GLOW[l.k] ?? 0xffffff, l.k === 'light' ? 0.5 : 0.9)); sp.position.set(l.p[0], l.p[1], l.p[2]); sp.scale.setScalar(l.s); g.add(sp); }
+  return g;
+}
 export { setKitDust as setOutpostDust } from './kit';
-export function buildBaseModel(): StructureModel | null {
-  const t = TPL.Aussenposten;
+export function buildBaseModel(name?: string): StructureModel | null {
+  const own = name ? BASES[name] : null, t = own || TPL.Aussenposten?.group;
   if (!t) return null;
-  const meta = kitMeta('Aussenposten');
-  const g = new THREE.Group(), body = t.group.clone(true);
+  const meta = kitMeta(own ? name! : 'Aussenposten');
+  const g = new THREE.Group(), body = t.clone(true);
   body.children[0].position.set(0, 0, 0);          // der Lader zentriert Modelle; hier gilt der Ursprung aus Blender
   body.position.y = OUTPOST_Y;
   g.add(body); g.updateMatrixWorld(true);

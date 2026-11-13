@@ -1,7 +1,7 @@
 import { rng, hashStr } from '../core/util';
 import { ITEMS, ITEM_IDS, REFINE, type ItemId, type Zone } from '../data/items';
 import { SECTOR, type StationDef } from '../data/galaxy';
-import { P, stats, cargoUsed, type Contract } from './state';
+import { P, G, stats, cargoUsed, type Contract } from './state';
 import { SHARED } from './shared';
 import { addRep, stationFaction, sellFactor, refineFeeFactor, contractFactor, trustSlot } from './reputation';
 import { gearFactor } from './inventory';
@@ -90,15 +90,17 @@ export function buy(sd: StationDef, sectorId: string, k: ItemId, n: number) {
 export function refineInfo(k: ItemId) {
   const r = REFINE[k];
   if (!r) return null;
-  const bars = Math.floor(P.cargo[k] / r.ratio), fee = Math.max(1, Math.round(r.fee * refineFeeFactor()));
-  return { ...r, fee, bars, cost: bars * fee };
+  // Großraffinerie (Schmelzwerk Zwölf): je 3 Rohstoff 2 Barren, halbe Gebühr; sonst 2 → 1
+  const big = !!G.dockedAt?.def.refineBonus, batch = big ? 3 : r.ratio, out = big ? 2 : 1;
+  const bars = Math.floor(P.cargo[k] / batch) * out, fee = Math.max(1, Math.round(r.fee * refineFeeFactor() * (big ? 0.5 : 1)));
+  return { ...r, ratio: batch / out, batch, out, fee, bars, cost: bars * fee };
 }
 export function refine(k: ItemId) {
   const r = refineInfo(k);
   if (!r || r.bars <= 0) return 0;
-  const bars = Math.min(r.bars, Math.floor(P.credits / r.fee));
+  const bars = Math.min(r.bars, Math.floor(P.credits / r.fee / r.out) * r.out);      // nur ganze Chargen
   if (bars <= 0) return 0;
-  P.cargo[k] -= bars * r.ratio;
+  P.cargo[k] -= bars / r.out * r.batch;
   P.cargo[r.to] += bars;
   P.credits -= bars * r.fee;
   addRep('gilde', bars * 0.25);

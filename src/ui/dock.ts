@@ -209,11 +209,11 @@ function render() {
     }
     h += `<p class="hint">Händler zahlen 45 % des Werts. Angelegte Ausrüstung und eingebaute Module musst du zum Verkaufen erst ablegen.</p>`;
   } else if (tab === 'raffinerie') {
-    h += `<p style="margin-top:0">Die Raffinerie schmilzt je 2 Einheiten Erz oder Eis zu 1 Barren. Barren sind mehr wert als das Rohmaterial und sparen Frachtraum.</p>
+    h += `<p style="margin-top:0">${s.def.refineBonus ? 'Die Großraffinerie schmilzt je 3 Einheiten Erz oder Eis zu 2 Barren, zur halben Gebühr. Nirgends sonst bleibt so viel vom Erz übrig.' : 'Die Raffinerie schmilzt je 2 Einheiten Erz oder Eis zu 1 Barren.'} Barren sind mehr wert als das Rohmaterial und sparen Frachtraum.</p>
       <table><tr><th>Rohstoff</th><th class="num">Fracht</th><th>→ Produkt</th><th class="num">Barren</th><th class="num">Gebühr</th><th class="num">Wertgewinn</th><th></th></tr>`;
     for (const k of Object.keys(REFINE) as ItemId[]) {
       const r = refineInfo(k)!, gain = r.bars ? basePriceHere(s.def, def.id, r.to) * r.bars - basePriceHere(s.def, def.id, k) * r.bars * r.ratio - r.cost : 0;
-      h += `<tr style="${P.cargo[k] >= 2 ? '' : 'opacity:.55'}"><td>${dot(k)}${ITEMS[k].n}</td><td class="num">${P.cargo[k]}</td><td>${dot(r.to)}${ITEMS[r.to].n}</td>
+      h += `<tr style="${P.cargo[k] >= r.batch ? '' : 'opacity:.55'}"><td>${dot(k)}${ITEMS[k].n}</td><td class="num">${P.cargo[k]}</td><td>${dot(r.to)}${ITEMS[r.to].n}</td>
         <td class="num">${r.bars}</td><td class="num">${r.bars ? r.cost + ' Cr' : '—'}</td><td class="num ${gain > 0 ? 'good' : ''}">${r.bars ? (gain > 0 ? '+' : '') + fmtN(gain) + ' Cr' : '—'}</td>
         <td class="num"><button data-a="refine" data-k="${k}" ${r.bars && P.credits >= r.fee ? '' : 'disabled'}>Raffinieren</button></td></tr>`;
     }

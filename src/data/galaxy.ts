@@ -12,6 +12,8 @@ export interface StationDef {
   pos: [number, number, number];
   prices?: Partial<Record<ItemId, number>>; // Faktor auf den Grundpreis
   refinery?: boolean;
+  model?: string;                 // Planetenbasis mit eigenem Modell (asset-src/glb/base, siehe PlanetDef.model)
+  refineBonus?: boolean;          // Großraffinerie: 3 Rohstoff → 2 Barren zur halben Gebühr
 }
 export interface FieldDef { kind: FieldKind; pos: [number, number, number]; r: number; n: number; ore?: Partial<Record<ItemId, number>> }
 export interface SectorDef {
@@ -84,8 +86,8 @@ export const SECTORS: SectorDef[] = [
   },
   {
     id: 'kupferbucht', name: 'Kupferbucht', faction: 'core', danger: 1, map: [170, 525], links: ['neuhafen'],
-    desc: 'Bergbaukolonie am Rand. Viel Erz, wenig Eis, gelegentlich Ärger.',
-    neb: 'red', tint: 0xc8b8a8,
+    desc: 'Bergbaukolonie am Rand. Viel Erz, wenig Eis, gelegentlich Ärger. Auf dem Mond Brocken steht die Großraffinerie Schmelzwerk Zwölf.',
+    neb: 'red', tint: 0xc8b8a8, planet: { size: 1700, tint: 0xb4b4b8, dir: [-0.5, 0.25, 0.8], atm: 0x8a94a0 },
     stations: [{ id: 'kupfermine', kind: 'outpost', name: 'Kupferbucht-Mine', pos: [0, 0, 0], prices: { erz: 0.8, eis: 1.35 } }],
     fields: [{ kind: 'metal', pos: [1300, -100, 1200], r: 1000, n: 65, ore: { kupfer: 6, erz: 3, titan: 0.3 } }, { kind: 'mixed', pos: [-1500, 0, -900], r: 800, n: 35 }],
   },

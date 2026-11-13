@@ -1,11 +1,13 @@
 import type { ItemId, RockKind } from './items';
 
 // Landbare Planeten: einer pro Sektor mit Planet. Oberfläche wird aus dem Namen deterministisch erzeugt.
-export type PlanetType = 'fels' | 'wueste' | 'eis' | 'vulkan' | 'asche' | 'kristall';
+export type PlanetType = 'fels' | 'wueste' | 'eis' | 'vulkan' | 'asche' | 'kristall' | 'mond';
 export interface PlanetDef {
   name: string; type: PlanetType; danger: number;
   base?: string;               // Name der Bodenstation (ohne = keine)
   city?: string;                 // statt der Basis eine Stadt mit Hangar
+  model?: string;                // eigenes Basis-Modell (asset-src/glb/base/<Name>.glb, Hintergrund-Paket) statt des Außenpostens
+  refineBonus?: boolean;         // Großraffinerie: 3 Rohstoff → 2 Barren zur halben Gebühr
 }
 export interface PlanetTypeDef {
   n: string;                   // Beschreibung
@@ -44,6 +46,11 @@ export const PTYPE: Record<PlanetType, PlanetTypeDef> = {
     n: 'Kristallwüste der Ferrox', ground: [0x302a40, 0x4a3a68, 0x8a70c0], sky: [0x8a50d0, 0x180830], fog: 0x5a3a90, fogDensity: 0.00018,
     amp: 560, rock: 'crystal', ore: { ferrit: 5, iridium: 2, erden: 1 }, craters: 2,
   },
+  mond: {
+    // Karger Mond ohne Luft: grauer Regolith, schwarzer Himmel mit Sternen, viele Krater. Der Gasriese steht am Himmel (surface.ts, skyBody).
+    n: 'Karger Erzmond im Schatten eines Gasriesen', ground: [0x4c4c50, 0x7a7a7e, 0xb0b0b4], sky: [0x10161f, 0x020307], fog: 0x1b2028, fogDensity: 0.00006,
+    amp: 430, rock: 'metal', ore: { erz: 5, kupfer: 4, titan: 2.5, erden: 1 }, craters: 9,
+  },
 };
 
 export const PLANETS: Record<string, PlanetDef> = {
@@ -52,6 +59,7 @@ export const PLANETS: Record<string, PlanetDef> = {
   eisgarten: { name: 'Frostbiss', type: 'eis', danger: 0, base: 'Eisgrube Nord' },
   neuhafen: { name: 'Neuhafen IV', type: 'fels', danger: 1, base: 'Neonhafen', city: 'Neonhafen' },   // Cyberpunk-Stadt (src/game/city.ts, Stil neon)
   sonnenfeld: { name: 'Glutsand', type: 'wueste', danger: 0, base: 'Oase Sieben' },
+  kupferbucht: { name: 'Brocken', type: 'mond', danger: 1, base: 'Schmelzwerk Zwölf', model: 'Schmelzwerk', refineBonus: true },   // Bergbaumond mit Großraffinerie (src/game/basefx.ts)
   rotfels: { name: 'Rotkessel', type: 'vulkan', danger: 2, base: 'Schlotwacht' },
   nebeltor: { name: 'Nebelfrost', type: 'eis', danger: 3 },
   schlacke: { name: 'Schlacke Prime', type: 'vulkan', danger: 3, base: 'Hitzeschild-Basis' },
@@ -63,6 +71,6 @@ const RINGS: Record<string, number> = { sonnenfeld: 0xc8b090, aschewelt: 0x9a8aa
 export const planetLook = (sector: string) => {
   const pd = PLANETS[sector];
   if (!pd) return {};
-  return { type: pd.type, cities: pd.base ? (sector === 'heimstatt' ? 1 : 0.55) : 0, ring: RINGS[sector] };
+  return { type: pd.type, cities: pd.base ? (sector === 'heimstatt' ? 1 : pd.type === 'mond' ? 0.2 : 0.55) : 0, ring: RINGS[sector] };
 };
 export const planetBaseId = (sector: string) => `${sector}_base`;

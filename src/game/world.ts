@@ -15,7 +15,7 @@ import { buildStation, buildOutpost, buildGate } from '../models/structures';
 import { burst, clearParticles } from './fx';
 import { snd } from '../core/audio';
 import { planetLook } from '../data/planets';
-import { buildModelStation, buildCarrierModel, buildBaseModel } from '../models/stationModels';
+import { buildModelStation, buildCarrierModel, buildBaseModel, baseLoaded, loadBase } from '../models/stationModels';
 import { SHARED } from './shared';
 
 // ---------------- Typen der Sektor-Objekte ----------------
@@ -66,7 +66,7 @@ export const world = {
   spawnT: 0, trafficT: 0, regrowT: 0, allyT: 0,
   hiveT: [] as number[],
   // Planetenoberfläche
-  surface: null as null | { planet: string; limit: number },
+  surface: null as null | { planet: string; limit: number; type?: string },
   ground: null as null | ((x: number, z: number) => number),
   extras: [] as THREE.Object3D[],       // zusätzliche Szenenobjekte (Gelände, Anflugzone) – werden beim Leeren entfernt
   orbit: null as null | { x: number; y: number; z: number; name: string; mesh: THREE.Object3D },
@@ -364,6 +364,17 @@ export function addStation(sd: StationDef, yaw: number) {
     });
     return;
   }
+  if (sd.model && sd.id.endsWith('_base') && !baseLoaded(sd.model)) {
+    // eigenes Basis-Modell noch nicht geladen: vorerst der Außenposten, danach austauschen
+    addStation({ ...sd, model: undefined }, yaw);
+    loadBase(sd.model).then(ok => {
+      const i = world.stations.findIndex(s => s.id === sd.id && !s.def.model);
+      if (!ok || i < 0 || !world.surface || G.dockedAt === world.stations[i]) return;
+      const old = world.stations[i]; scene.remove(old.mesh); world.stations.splice(i, 1); resetBasePad();
+      addStation(sd, yaw);
+    });
+    return;
+  }
   if (sd.city) model = buildCityModel(sd.city);
   else if (sd.kind === 'carrier') {
     // neues Modell aus Blender, falls geladen; sonst die frühere Bastion aus Grundformen
@@ -373,7 +384,7 @@ export function addStation(sd: StationDef, yaw: number) {
   } else {
     // KI-Modelle, falls geladen; sonst die eingebauten Grundformen
     const isBase = sd.id.endsWith('_base');
-    model = (isBase ? buildBaseModel() || buildModelStation('base', 170, { ground: 14, cell: 26, R: 130 })
+    model = (isBase ? buildBaseModel(sd.model) || buildModelStation('base', 170, { ground: 14, cell: 26, R: 130 })
       : sd.kind === 'station' ? buildModelStation('station', 380, { cell: 40, R: 230 })
       : buildModelStation('outpost', 210, { cell: 30, R: 130 }))
       || (sd.kind === 'station' ? buildStation() : buildOutpost());

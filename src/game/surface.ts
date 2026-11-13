@@ -17,7 +17,7 @@ import { gearFactor } from './inventory';
 import { buildDungeonEntrances } from './dungeon';
 import { buildSalvage, SALV } from './salvage';
 import { buildFieldFoes } from './fieldfight';
-import { setOutpostDust } from '../models/stationModels';
+import { setOutpostDust, loadBase, buildDeco } from '../models/stationModels';
 import { mesh, alongZ } from '../models/helpers';
 import { world, clearSector, addStation, makeAst, removeAst, type Asteroid, type Ore } from './world';
 import { P, G, stats, cargoUsed, settings } from './state';
@@ -78,8 +78,8 @@ export function buildSurface(sector: string) {
   curType = T;
   const R = rng(hashStr(sector + ':oberflaeche')), nz = noise2(hashStr(sector) % 1000);
   // Pseudo-Sektor: gleiche ID (für Preise/Zone), eigener Name und eigene Stationen
-  const base: StationDef | null = pd.base ? { id: planetBaseId(sector), kind: pd.city ? 'station' : 'outpost', name: pd.base, pos: [0, 0, 0], refinery: true, prices: { erden: 0.9, helium: 0.9 }, city: pd.city } : null;
-  KEEP.r = pd.city ? 360 : 130;
+  const base: StationDef | null = pd.base ? { id: planetBaseId(sector), kind: pd.city ? 'station' : 'outpost', name: pd.base, pos: [0, 0, 0], refinery: true, prices: { erden: 0.9, helium: 0.9 }, city: pd.city, model: pd.model, refineBonus: pd.refineBonus } : null;
+  KEEP.r = pd.city ? 360 : pd.model ? 270 : 130;
   world.def = { ...sec, name: pd.name, danger: pd.danger, stations: base ? [base] : [], fields: [], hives: 0, links: [] };
   // Höhen
   const half = SURF.size / 2, cell = SURF.size / (N - 1);
@@ -188,7 +188,8 @@ export function buildSurface(sector: string) {
   sd[1] = Math.max(0.45, sd[1]);
   setSky({ neb: sec.neb, tint: sec.tint, rot, sunDir: sd });
   const SL = SKYLOOK[pd.type];
-  setSurfaceSky({ horizon: T.sky[0], zenith: T.sky[1], fog: T.fog, fogDensity: T.fogDensity, clouds: SL.clouds, cloudCol: SL.cloudCol, stars: SL.stars, body: skyBody(sector) });
+  setSurfaceSky({ horizon: T.sky[0], zenith: T.sky[1], fog: T.fog, fogDensity: T.fogDensity, clouds: SL.clouds, cloudCol: SL.cloudCol, stars: SL.stars, body: skyBody(sector),
+    ...(pd.type === 'mond' ? { air: 0.15, moon: { dir: [-0.86, 0.5, -0.1] as [number, number, number], rad: 0.036, col: 0xb8bcc4 } } : {}) });
   setAmbience({ id: sector + ':oberflaeche', neb: sec.neb, faction: sec.faction, fields: [] }, 0);
   // Bodenstation
   // Staub bzw. Schnee auf waagrechten Flächen des Außenpostens in der Bodenfarbe des Planeten
@@ -197,6 +198,7 @@ export function buildSurface(sector: string) {
   if (base && base.city) { base.pos = [0, plateau + 0.3, 0]; addStation(base, -Math.PI / 4); }
   else if (base) { base.pos = [0, plateau + 14, 0]; addStation(base, R.range(0, Math.PI * 2)); }
   // Lagerstätten in Gruppen
+  const rigs: [number, number][] = [];
   for (let g = 0; g < 6; g++) {
     let cx = 0, cz = 0;
     for (let t = 0; t < 30; t++) {
@@ -204,10 +206,12 @@ export function buildSurface(sector: string) {
       cx = Math.cos(a) * d; cz = Math.sin(a) * d;
       if (heightAt(cx, cz) > liquidLevel + 15) break;
     }
+    rigs.push([cx, cz]);
     const n = 9 + Math.floor(R.next() * 6);
     for (let i = 0; i < n; i++) {
       const x = cx + R.range(-220, 220), z = cz + R.range(-220, 220), h = heightAt(x, z);
       if (h < liquidLevel + 4) continue;
+      if (pd.type === 'mond' && Math.hypot(x - cx, z - cz) < 26) continue;      // Platz für den Bohrturm in der Mitte
       const r = R.pick([9, 12, 12, 16]);
       const a = makeAst(x, h + r * 0.28, z, r, T.rock, null, compFrom(T.ore, R.next));
       a.vx = a.vy = a.vz = 0; a.wx = a.wy = 0;
@@ -217,7 +221,16 @@ export function buildSurface(sector: string) {
   buildFlora(pd.type, R, heightAt, liquidLevel, hashStr(sector) % 1000);
   buildDungeonEntrances(sector, heightAt, liquidLevel);                         // Stolleneingänge (src/game/dungeon.ts)
   void 0;      // Felsbrocken, Felsnadeln, Pflanzen (src/game/flora.ts)
-  world.surface = { planet: sector, limit: SURF.limit };
+  world.surface = { planet: sector, limit: SURF.limit, type: pd.type };
+  // Bergbaumond: an jeder Lagerstätte steht ein Bohrturm (Modell aus dem Hintergrund-Paket, kommt nach, sobald es geladen ist)
+  if (pd.type === 'mond') loadBase('Bohrturm').then(ok => {
+    if (!ok || !world.surface || world.surface.planet !== sector) return;
+    for (const [i, [x, z]] of rigs.entries()) {
+      const o = buildDeco('Bohrturm'); if (!o) return;
+      o.position.set(x, heightAt(x, z) - 0.35, z); o.rotation.y = i * 1.3; o.traverse((q: any) => { if (q.isMesh) q.castShadow = true; });
+      scene.add(o); world.extras.push(o);
+    }
+  });
   world.ground = groundAt;
   buildSalvage(sector);                                                          // Wracks und Versorgungskisten (src/game/salvage.ts)
   buildFieldFoes(sector);                                                        // Ferrox-Wachdrohnen (src/game/fieldfight.ts)
@@ -229,7 +242,7 @@ export function buildSurface(sector: string) {
 // die Farbe zur Bodenfarbe des Planetentyps (planets.ts, ground[1]) gezogen wird (0 = Foto, 1 = ganz Planetenfarbe).
 const GROUND: Record<string, { m: number; tint: number; nrm: number }> = {
   fels: { m: 2, tint: 0.45, nrm: 1 }, wueste: { m: 1.5, tint: 0.55, nrm: 0.8 }, eis: { m: 2, tint: 0.35, nrm: 0.7 },
-  vulkan: { m: 2.4, tint: 0.75, nrm: 1 }, asche: { m: 3.1, tint: 0.85, nrm: 1 }, kristall: { m: 2, tint: 0.9, nrm: 1 },
+  vulkan: { m: 2.4, tint: 0.75, nrm: 1 }, asche: { m: 3.1, tint: 0.85, nrm: 1 }, kristall: { m: 2, tint: 0.9, nrm: 1 }, mond: { m: 2.6, tint: 0.25, nrm: 1.15 },
 };
 // Gelände-Shader: flache Stellen mit Bodenbild, Steilhänge mit Fels.
 // Das Bodenbild wird aus drei Richtungen projiziert (von oben und von zwei Seiten, gewichtet nach der Flächenneigung), damit es an Hängen
@@ -244,9 +257,12 @@ const SKYLOOK: Record<string, { clouds: number; cloudCol: number; stars: number;
   vulkan: { clouds: 0.55, cloudCol: 0x3c2822, stars: 0, snow: [0x6a625c, 0.45, -200], mist: 0.6 },       // graue Asche
   asche: { clouds: 0.35, cloudCol: 0x8a70a0, stars: 0.5, snow: [0x9a8a98, 0.55, -200], mist: 0.6 },
   kristall: { clouds: 0.12, cloudCol: 0xc8a0ff, stars: 0.9, snow: [0x8a70c8, 0.4, -200], mist: 0.45 },   // violetter Reif
+  mond: { clouds: 0, cloudCol: 0xffffff, stars: 1, snow: [0xb9b9be, 0.42, -200], mist: 0.12 },             // heller Staub in Flecken, kein Dunst
 };
 // Nachbarplanet am Himmel: Richtung, Größe, Farbe und Ring stehen je Sektor fest
 function skyBody(sector: string) {
+  // Bergbaumond: Der Gasriese, den der Mond umkreist, füllt ein gutes Stück des Himmels und steht halb hinter dem Horizont
+  if (PLANETS[sector]?.type === 'mond') return { dir: [-0.55, 0.27, -0.79] as [number, number, number], rad: 0.44, col: 0xd9b48c, ring: 0, giant: 1 };
   const h = hashStr(sector + ':himmel'), a = (h % 628) / 100, el = 0.3 + ((h >> 4) % 30) / 100, cols = [0xe8d8b8, 0xc8d0e8, 0xe0b090, 0xb8c8b0, 0xd8b8d8];
   return { dir: [Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)] as [number, number, number], rad: 0.07 + ((h >> 8) % 60) / 1000, col: cols[h % cols.length], ring: (h >> 3) % 5 < 3 ? 1 : 0 };
 }

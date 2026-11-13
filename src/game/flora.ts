@@ -15,6 +15,7 @@ import { world, rockGeo } from './world';
 interface FloraDef {
   grass: number; grassCol: number; shrub: number; shrubCol: number; tree: number; glow?: number;
   spire: number; spireCol: number; spireRough: number; spireGlow?: number; spireH: [number, number]; rock: number;
+  stones?: number; stoneCol?: number;      // Geröll rund um die Kamera (Dichte 0–1, Farbe)
 }
 export const FLORA: Record<string, FloraDef> = {
   fels: { grass: 0.85, grassCol: 0x9a8a50, shrub: 0.3, shrubCol: 0x5c6a38, tree: 0.14, spire: 0.25, spireCol: 0x5a4a40, spireRough: 0.9, spireH: [5, 16], rock: 1 },
@@ -22,6 +23,7 @@ export const FLORA: Record<string, FloraDef> = {
   eis: { grass: 0, grassCol: 0, shrub: 0.05, shrubCol: 0xa8c4cc, tree: 0, spire: 0.7, spireCol: 0xcfe8ff, spireRough: 0.18, spireH: [6, 24], rock: 0.7 },
   vulkan: { grass: 0, grassCol: 0, shrub: 0.07, shrubCol: 0x1c1816, tree: 0, spire: 0.8, spireCol: 0x1c1614, spireRough: 0.7, spireH: [6, 26], rock: 1 },
   asche: { grass: 0.1, grassCol: 0x625060, shrub: 0.12, shrubCol: 0x3a3038, tree: 0, spire: 1, spireCol: 0x2a2028, spireRough: 0.55, spireH: [8, 34], rock: 0.9 },
+  mond: { grass: 0, grassCol: 0, shrub: 0, shrubCol: 0, tree: 0, spire: 0.55, spireCol: 0x74747a, spireRough: 0.92, spireH: [9, 38], rock: 1.8, stones: 0.9, stoneCol: 0xc4c4c8 },
   kristall: { grass: 0.3, grassCol: 0x8a5cc8, shrub: 0, shrubCol: 0, tree: 0, glow: 0.3, spire: 1, spireCol: 0x8a60d0, spireRough: 0.22, spireGlow: 0.8, spireH: [6, 30], rock: 0.4 },
 };
 
@@ -112,7 +114,7 @@ function treeGeo() {
 }
 
 // ---------- Zustand ----------
-interface Layer { im: THREE.InstancedMesh; cell: number; rad: number; dens: number; h: [number, number]; w: number; lx: number; lz: number; salt: number }
+interface Layer { im: THREE.InstancedMesh; cell: number; rad: number; dens: number; h: [number, number]; w: number; lx: number; lz: number; salt: number; rock?: boolean }
 let layers: Layer[] = [], hAt: (x: number, z: number) => number = () => 0, liquid = -1e9, seed = 1;
 const hash = (ix: number, iz: number, k: number) => { const s = Math.sin(ix * 127.1 + iz * 311.7 + k * 74.7 + seed * 0.37) * 43758.5453; return s - Math.floor(s); };
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _c = new THREE.Color();
@@ -123,7 +125,7 @@ export function buildFlora(type: string, R: { range: (a: number, b: number) => n
   const add = (o: THREE.Object3D) => { scene.add(o); world.extras.push(o); };
   // ----- Felsbrocken (fest) -----
   {
-    const n = Math.round(900 * F.rock), mat = type === 'eis' ? std(0xd8ecff, { roughness: 0.3, metalness: 0.05 }) : texMat(type === 'kristall' ? 0x6a5a8a : 0xb0a898, 'rock', { roughness: 0.92, metalness: 0.05 }, 1.3);
+    const n = Math.round(900 * F.rock), mat = type === 'eis' ? std(0xd8ecff, { roughness: 0.3, metalness: 0.05 }) : texMat(type === 'kristall' ? 0x6a5a8a : type === 'mond' ? 0xa6a6aa : 0xb0a898, 'rock', { roughness: 0.92, metalness: 0.05 }, 1.3);
     const im = new THREE.InstancedMesh(rockGeo(1), mat, n); let k = 0;
     for (let i = 0; i < n * 3 && k < n; i++) {
       const cx = R.range(-3500, 3500), cz = R.range(-3500, 3500), cl = R.next() < 0.6 ? 1 + Math.floor(R.next() * 5) : 1;
@@ -169,6 +171,13 @@ export function buildFlora(type: string, R: { range: (a: number, b: number) => n
   if (F.grass > 0) layer(crossGeo(), card(tGrass, F.grassCol, F.glow || 0), 6000, 1.3, 50, F.grass, [0.25, 0.7], 1.8, 1);
   if (F.shrub > 0) layer(crossGeo(), card(tShrub, F.shrubCol), 900, 13, 240, F.shrub, [0.9, 2.4], 1.25, 2, true);
   if (F.tree > 0) layer(treeGeo(), card(treeTex(), 0xffffff), 900, 26, 800, F.tree, [9, 21], 1, 3, true);
+  // Geröll: kleine Steine dicht um die Kamera, größere Brocken weiter hinaus (halb im Boden, jeder etwas anders gefärbt)
+  if (F.stones) {
+    const sm = texMat(F.stoneCol ?? 0xa0a0a4, 'rock', { roughness: 0.95, metalness: 0.04 }, 1.2);
+    layer(rockGeo(1), sm, 3200, 2.0, 64, F.stones, [0.1, 0.42], 1.6, 4, false);
+    layer(rockGeo(1), sm, 900, 8, 250, F.stones * 0.55, [0.5, 1.7], 1.35, 5, true);
+    for (const L of layers) if (L.salt >= 4) L.rock = true;
+  }
 }
 
 // Steht im Umkreis r um (x, z) ein Baum? (gleiche Regeln wie updateFlora; für Laufen zu Fuß und die Kamera der Außensicht)
@@ -209,6 +218,13 @@ export function updateFlora(cam: THREE.Vector3) {
       if (sl > 1.5) continue;                                              // zu steil
       const fade = Math.min(1, (L.rad - d) / (L.rad * 0.25)), hh = (L.h[0] + (L.h[1] - L.h[0]) * hash(ix, iz, 13 + L.salt)) * (0.35 + 0.65 * fade);
       const cv = hash(ix, iz, 15 + L.salt);
+      if (L.rock) {
+        // Steine: nur heller oder dunkler (kein Farbstich), gekippt und in jeder Richtung anders gestreckt, halb im Boden
+        const g = 0.74 + 0.4 * cv, a = hash(ix, iz, 17 + L.salt), b = hash(ix, iz, 18 + L.salt);
+        L.im.setColorAt(k, _c.setRGB(g, g, g * 1.02));
+        L.im.setMatrixAt(k++, _m.compose(_p.set(x, h - hh * 0.25, z), _q.setFromEuler(_e.set(a * 1.2 - 0.6, hash(ix, iz, 14) * 6.28, b * 1.2 - 0.6)), _s.set(hh * L.w * (0.65 + 0.7 * a), hh * (0.8 + 0.6 * b), hh * L.w * (0.65 + 0.7 * hash(ix, iz, 19 + L.salt)))));
+        continue;
+      }
       L.im.setColorAt(k, _c.setRGB(0.72 + 0.4 * cv, 0.78 + 0.34 * hash(ix, iz, 16), 0.7 + 0.3 * cv));       // jede Pflanze etwas anders gefärbt
       L.im.setMatrixAt(k++, _m.compose(_p.set(x, h - 0.04, z), _q.setFromEuler(_e.set(0, hash(ix, iz, 14) * 6.28, 0)), _s.set(hh * L.w, hh, hh * L.w)));
     }

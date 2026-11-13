@@ -17,7 +17,7 @@ function lru(cache: Record<string, THREE.Texture>, max: number) {
 }
 export function planetMap(type: string) {
   if (MAPS[type]) return MAPS[type];
-  const uri = window.PLANETDATA?.map[type];
+  const uri = window.PLANETDATA?.map[type] || (type === 'mond' ? window.PLANETDATA?.map.asche : undefined);   // der Mond nutzt die Karte der Aschewelt
   if (!uri) return null;
   lru(MAPS, 2);
   const t = loader.load(uri);
@@ -54,6 +54,7 @@ const LOOK: Record<string, Look> = {
   vulkan: { clouds: 0.35, cloudCol: 0x4a3c36, glowW: [1, -0.55, -0.9], glowT: 0.3, glowCol: 0xff6a18, glow: 1.3, atm: 0xff7040, atmK: 0.8 },
   asche: { clouds: 0.08, cloudCol: 0x8a7a88, glowW: [0, 0, 0], glowT: 9, glowCol: 0, glow: 0, atm: 0xb070ff, atmK: 0.55 },
   kristall: { clouds: 0, cloudCol: 0xffffff, glowW: [0.45, -1, 0.75], glowT: 0.2, glowCol: 0xd070ff, glow: 1.1, atm: 0xb050ff, atmK: 0.9 },
+  mond: { clouds: 0, cloudCol: 0xffffff, glowW: [0, 0, 0], glowT: 9, glowCol: 0, glow: 0, atm: 0x9098a4, atmK: 0.12 },
 };
 
 const NOISE = `

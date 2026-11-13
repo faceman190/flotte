@@ -47,6 +47,8 @@ import type { Gate, Station } from './game/world';
 import { DUN, enterDungeon, updateDungeon, dungeonCamera, drawDungeonHUD, dungeonKey, nearEntrance, dunHooks } from './game/dungeon';
 import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover, landAtBase, leaveBaseOnFoot, nearFootTarget, drawGroundMarkers, footAt } from './game/onfoot';
 import { CITY, updateCity, insideCityGate, preloadCities, cityDoorOut, hangarPadPose, cityHooks, cityWorld } from './game/city';
+import { updateBaseFx } from './game/basefx';
+import { preloadBases } from './models/stationModels';
 import { updateChapter2 } from './game/chapter2';
 import { basePad, nearDoor } from './game/basewalk';
 import { nearCrate, openCrate as openSalvage, updateSalvage, drawSalvageHUD } from './game/salvage';
@@ -578,6 +580,7 @@ function loop(now: number, manual = false) {
   updateChapter1(dt);
   updateChapter2(dt);
   updateCity(dt);
+  updateBaseFx(dt);
   // Stadt: durchs offene Hallentor geflogen → andocken (Landeanflug im Hangar übernimmt)
   if (G.mode === 'play' && !G.dead && CITY.st && insideCityGate(P.x, P.y, P.z)) openDock(CITY.st);
   G.eBusy = G.mode === 'play' && (!!nearDock() || !!world.surface);
@@ -653,6 +656,7 @@ if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterSh
 // Schiffsmodelle laden (kurz), dann Menü zeigen. Ohne Modelle laufen die eingebauten Ersatzmodelle.
 Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false)]).then(() => {
   setTimeout(preloadMeshRooms, 3000);
+  setTimeout(preloadBases, 4000);    // Planetenbasen mit eigenem Modell (Schmelzwerk, Bohrturm)
   setTimeout(preloadCities, 2500);   // Städte (Hintergrund-Paket): vor dem ersten Landen auf Heimstatt II geladen
   loadRockModel();   // Felsmodell für Asteroiden (kleine Datei, ist vor dem ersten Flug geladen)
   setTimeout(preloadSfx, 1500);   // Schritte, Klicks, Türen   // begehbare Innenräume aus Modellen im Hintergrund vorladen

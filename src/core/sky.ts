@@ -187,7 +187,7 @@ export function setSky(d: SkyDef) {
 // ---------- Atmosphäre einer Planetenoberfläche ----------
 const ATM_FS = `
 uniform vec3 horizon; uniform vec3 zenith; uniform vec3 fogc; uniform vec3 sdir; uniform vec3 scol; uniform vec3 cloudCol; uniform vec3 bdir; uniform vec3 bcol;
-uniform float time; uniform float cloud; uniform float stars; uniform float brad; uniform float ring;
+uniform float time; uniform float cloud; uniform float stars; uniform float brad; uniform float ring; uniform float giant; uniform float air; uniform vec3 mdir; uniform vec3 mcol; uniform float mrad;
 varying vec3 vDir;
 float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -199,12 +199,13 @@ void main() {
   // Grundverlauf, Dunst am Horizont, warmer Schein um die Sonne
   vec3 col = mix(horizon, zenith, pow(h, 0.5));
   col = mix(col, fogc, pow(1.0 - h, 7.0));
-  col += scol * (pow(sun, 8.0) * 0.2 + pow(sun, 48.0) * 0.32) * (0.4 + 0.6 * pow(1.0 - h, 2.0));
+  col += scol * (pow(sun, 8.0) * 0.2 + pow(sun, 48.0) * 0.32) * (0.4 + 0.6 * pow(1.0 - h, 2.0)) * air;
+  vec3 starC = vec3(0.0); float bodyMask = 0.0;
   // Sterne: bei dünner Luft schon am Tag im Zenit zu sehen
   if (stars > 0.0) {
     vec3 q = d * 190.0, c = floor(q), f = fract(q) - 0.5;
     float r = h21(c.xy + c.z * 17.3);
-    col += vec3(step(0.9962, r) * smoothstep(0.24, 0.0, length(f))) * stars * smoothstep(0.08, 0.6, h) * (0.5 + 0.5 * h21(c.yz + 3.1));
+    starC = vec3(step(0.9962, r) * smoothstep(0.24, 0.0, length(f))) * stars * smoothstep(0.08 * air, 0.1 + 0.5 * air, h) * (0.5 + 0.5 * h21(c.yz + 3.1));
   }
   // Nachbarplanet am Himmel: beleuchtete Sichel, bei manchen mit Ring
   if (brad > 0.0 && dot(d, bdir) > 0.0) {
@@ -213,7 +214,20 @@ void main() {
     vec2 pr = vec2(p.x * 0.94 + p.y * 0.34, (-p.x * 0.34 + p.y * 0.94) / 0.3); float rl = length(pr);
     float ringA = ring * smoothstep(1.38, 1.46, rl) * (1.0 - smoothstep(2.3, 2.38, rl)) * (0.5 + 0.5 * sin(rl * 30.0) * sin(rl * 11.0 + 1.0));
     float haze = 0.35 + 0.65 * smoothstep(0.0, 0.5, h);                       // tief am Horizont blasser
-    if (rr < 1.0) {
+    if (giant > 0.5) {
+      // Gasriese: verwirbelte Bänder in mehreren Tönen, Sturmfleck, Randverdunklung, Nachtseite fast schwarz; verdeckt die Sterne
+      if (rr < 1.0) {
+        vec3 n = bx * p.x + by * p.y - bd * sqrt(1.0 - rr * rr);
+        float lit = smoothstep(-0.1, 0.35, dot(n, sd));
+        float lat = p.y + 0.05 * sin(p.x * 5.0 + p.y * 9.0) + 0.06 * (fbm(p * 4.0 + 3.0) - 0.5);
+        float b1 = sin(lat * 14.0) * 0.5 + 0.5, b2 = sin(lat * 33.0 + 1.7) * 0.5 + 0.5, tur = fbm(vec2(p.x * 7.0 + sin(lat * 22.0) * 0.6, lat * 38.0));
+        vec3 base = mix(bcol * 0.58, bcol * 1.1, b1); base = mix(base, bcol * vec3(1.18, 0.9, 0.72), b2 * 0.4); base *= 0.84 + 0.3 * tur;
+        vec2 sp = (p - vec2(0.3, -0.24)) / vec2(0.2, 0.085); base = mix(base, bcol * vec3(1.22, 0.7, 0.5), smoothstep(1.0, 0.45, length(sp)) * 0.7);
+        float limb = pow(max(1.0 - rr * rr, 0.0), 0.3);
+        bodyMask = smoothstep(1.0, 0.99, rr);
+        col = mix(col, base * (lit * 0.8 * limb + 0.02), bodyMask);
+      } else col += bcol * 0.1 * exp(-(rr - 1.0) * 26.0) * smoothstep(-0.3, 0.5, dot(normalize(bx * p.x + by * p.y), sd));
+    } else if (rr < 1.0) {
       vec3 n = bx * p.x + by * p.y - bd * sqrt(1.0 - rr * rr);
       float lit = smoothstep(-0.08, 0.3, dot(n, sd));
       float bands = 0.82 + 0.18 * sin(p.y * 10.0 + sin(p.x * 3.0) * 1.3);
@@ -221,6 +235,16 @@ void main() {
       if (pr.y < 0.0) col += bcol * ringA * 0.5 * haze;                       // vordere Ringhälfte liegt vor dem Planeten
     } else col += bcol * ringA * 0.5 * haze;
   }
+  // kleiner Begleiter (zweiter Mond): beleuchtete Sichel mit Flecken
+  if (mrad > 0.0 && dot(d, mdir) > 0.0) {
+    vec3 md = normalize(mdir), mx = normalize(cross(vec3(0.0, 1.0, 0.0), md)), my = cross(md, mx);
+    vec2 q = vec2(dot(d, mx), dot(d, my)) / mrad; float qr = length(q);
+    if (qr < 1.0) {
+      vec3 n = mx * q.x + my * q.y - md * sqrt(1.0 - qr * qr); float lit = smoothstep(-0.05, 0.25, dot(n, sd)), mk = smoothstep(1.0, 0.92, qr);
+      col = mix(col, mcol * (0.8 + 0.2 * vn(q * 5.0 + 2.0)) * (lit * 0.85 + 0.015), mk); bodyMask = max(bodyMask, mk);
+    }
+  }
+  col += starC * (1.0 - bodyMask);
   // Wolken: Rauschen auf einer gedachten Ebene, zur Sonne hin hell, Unterseiten dunkler, zum Horizont im Dunst
   if (cloud > 0.0 && d.y > 0.015) {
     vec2 uv = d.xz / (d.y + 0.12) * 1.5 + vec2(time * 0.0035, time * 0.0012);
@@ -242,6 +266,7 @@ const atmMat = new THREE.ShaderMaterial({
     horizon: { value: new THREE.Color() }, zenith: { value: new THREE.Color() }, fogc: { value: new THREE.Color() }, sdir: { value: new THREE.Vector3(0, 1, 0) }, scol: { value: new THREE.Color(0xfff0d0) },
     cloudCol: { value: new THREE.Color(0xffffff) }, bdir: { value: new THREE.Vector3(0, 1, 0) }, bcol: { value: new THREE.Color(0xffffff) },
     time: { value: 0 }, cloud: { value: 0 }, stars: { value: 0 }, brad: { value: 0 }, ring: { value: 0 },
+    giant: { value: 0 }, air: { value: 1 }, mdir: { value: new THREE.Vector3(0, 1, 0) }, mcol: { value: new THREE.Color(0xffffff) }, mrad: { value: 0 },
   },
   vertexShader: SKY_VS, fragmentShader: ATM_FS, side: THREE.BackSide, depthWrite: false, fog: false,
 });
@@ -254,7 +279,9 @@ const RIM_SPACE = rim.color.getHex(), GREY = new THREE.Color(0x808080);
 export interface SurfaceSky {
   horizon: number; zenith: number; fog: number; fogDensity: number;
   clouds?: number; cloudCol?: number; stars?: number;                                   // Wolkenmenge (0–1), Wolkenfarbe, Sterne am Tag (0–1)
-  body?: { dir: [number, number, number]; rad: number; col: number; ring: number };       // Nachbarplanet am Himmel (Richtung, Winkelradius, Farbe, Ring 0/1)
+  body?: { dir: [number, number, number]; rad: number; col: number; ring: number; giant?: number };   // Nachbarplanet am Himmel (Richtung, Winkelradius, Farbe, Ring 0/1; giant: großer Gasriese mit Bändern)
+  moon?: { dir: [number, number, number]; rad: number; col: number };                     // kleiner Begleiter
+  air?: number;                                                                           // 1 = normale Lufthülle, gegen 0 = luftlos (kein Schein um die Sonne, Sterne bis zum Horizont)
 }
 export function setSurfaceSky(cfg: null | SurfaceSky) {
   const fog = scene.fog as THREE.FogExp2;
@@ -277,10 +304,13 @@ export function setSurfaceSky(cfg: null | SurfaceSky) {
   atmMat.uniforms.cloud.value = cfg.clouds ?? 0; atmMat.uniforms.cloudCol.value.set(cfg.cloudCol ?? 0xffffff); atmMat.uniforms.stars.value = cfg.stars ?? 0;
   atmMat.uniforms.brad.value = cfg.body ? cfg.body.rad : 0;
   if (cfg.body) { atmMat.uniforms.bdir.value.set(...cfg.body.dir).normalize(); atmMat.uniforms.bcol.value.set(cfg.body.col); atmMat.uniforms.ring.value = cfg.body.ring; }
+  atmMat.uniforms.giant.value = cfg.body?.giant ?? 0; atmMat.uniforms.air.value = cfg.air ?? 1;
+  atmMat.uniforms.mrad.value = cfg.moon ? cfg.moon.rad : 0;
+  if (cfg.moon) { atmMat.uniforms.mdir.value.set(...cfg.moon.dir).normalize(); atmMat.uniforms.mcol.value.set(cfg.moon.col); }
   atmDome.visible = true;
   skySphere.visible = false;
   if (planet) planet.visible = false;
-  for (const m of starUniforms) m.uniforms.fade.value = 0.18;
+  for (const m of starUniforms) m.uniforms.fade.value = cfg.body?.giant ? 0 : 0.18;      // Sternpunkte lägen sonst vor dem Gasriesen
   fog.color.set(cfg.fog); fog.density = cfg.fogDensity;
   sunCore.visible = true; sunHalo.visible = false;
 }

@@ -108,11 +108,11 @@ for (const [k, v] of Object.entries(STATIONDATA)) await model('station/' + k, v,
 for (const [k, v] of Object.entries(CHARDATA)) await model('char/' + k, v, 'core');
 // ---- Neue Modelle direkt als GLB (asset-src/glb/<Art>/<Name>.glb); ersetzen gleichnamige aus den Quellpaketen ----
 const GLB = path.join(ROOT, 'asset-src', 'glb');
-for (const kind of ['ship', 'station', 'char', 'deco', 'city']) {   // city: Städte (groß, nur auf ihrem Planeten nötig) → Hintergrund-Paket
+for (const kind of ['ship', 'station', 'char', 'deco', 'city', 'base']) {   // city: Städte, base: Planetenbasen mit eigenem Modell (nur auf ihrem Planeten nötig) → Hintergrund-Paket
   const dir = path.join(GLB, kind);
   if (!fs.existsSync(dir)) continue;
   for (const n of fs.readdirSync(dir).filter(x => x.toLowerCase().endsWith('.glb'))) {
-    await model(`${kind}/${path.basename(n, path.extname(n))}`, fs.readFileSync(path.join(dir, n)), kind === 'deco' || kind === 'city' ? 'world' : 'core');
+    await model(`${kind}/${path.basename(n, path.extname(n))}`, fs.readFileSync(path.join(dir, n)), kind === 'deco' || kind === 'city' || kind === 'base' ? 'world' : 'core');
   }
 }
 // ---- Begehbare Schiffsinnenräume: Innenmodell (asset-src/glb/interior/<Name>.glb) und Laufkarte (asset-src/walk/<Name>.json) ----
