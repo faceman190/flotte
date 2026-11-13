@@ -108,6 +108,29 @@ Straßen, Plätze und Gassen zu den Hochhäusern: `asset-src/neu/stadt/strassen_
 - **Vorschau in Blender:** Abendlicht, rund 190 Punktlichter aus `K.lamp` (nur die Laternen mit Schatten), Spiegelungen der nassen Böden über Raytracing.
   Im Spiel gibt es diese Lichter nicht: Dort tragen Leuchtflächen, Glüh-Punkte, Überstrahlen und die Spiegel-Umgebung der Stadt die Stimmung.
 
+## Vorberechnetes Stadtlicht und gescannte Materialien (ab Alpha 0.96, Neonhafen)
+
+Zwei Schritte in Richtung der großen Vorbilder: das Licht der Schilder, Schaufenster und Laternen liegt als berechnetes Bild auf Boden und Wänden, und die Texturen tragen Kratzer, Flecken und Körnung aus echten Materialscans.
+
+**Stadtlicht (Lichtkarte)**
+- In `neonhafen_kit.py` bekommen nur die Flächen einen eigenen Platz in der Lichtkarte, an denen man entlangläuft: Sockel der Türme, Gassenböden, Häuserblock an der Promenade, Lichtplatz. Dafür `K.lm = True` um die betreffenden Aufrufe setzen (`K.lm_px = 2048`, `K.lm_min = 40.0` als kleinste Fläche in m²). `K.facade`, `S.ground` und `S.road` legen dann von selbst ein Feld an. Alle übrigen Flächen zeigen auf einen schwarzen Bildpunkt und bekommen kein vorberechnetes Licht.
+- `bake_city_light(ob, name, samples=96, bounces=3, blur=2)` in `kit_lib.py` rechnet mit Cycles nur das Licht der leuchtenden Flächen (kein Himmel, keine Sonne), direkt und indirekt, und speichert `asset-src/tex-world/kit_lm_<Name>@2048.png`. Kodierung wie bei den Innenräumen: v = x / (1 + x). Die Farben je Ecke (Lack × Verdeckung aus `bake_ao`) bleiben unberührt. Neonhafen: 204 Felder, 64 Proben, gut fünf Minuten.
+- Reihenfolge: bauen, `bake_ao`, `bake_city_light`, `export`. Danach `npm run assets`.
+- Im Spiel: `buildCityModel` (city.ts) übergibt `applyKit(body, { city: 'kit_lm_<Name>' })`, sobald es das Bild gibt. `kit.ts` legt dafür einen eigenen Materialsatz an (`cityLit`): Lichtkarte über den zweiten Satz Texturkoordinaten, zusätzlich zum Tageslicht. Stärke: `CITY_LIGHT` in `kit.ts`. Eine neue Stadt braucht dafür keinen Code, nur das Bild mit passendem Namen.
+
+**Abendstimmung**
+- `setAtmo(k)` in city.ts senkt tief in der Stadt Grundlicht, Sonne, Gegenlicht und die Spiegelung der Umgebung (Werte in `AT`), dunkelt den Himmel ab (`setSkyDusk` in sky.ts) und dreht das Stadtlicht auf (`setCityLight`). Über der Stadt (k = 0) bleibt es Tag, das Stadtlicht läuft dort mit 30 %.
+- Baukasten-Flächen in Städten spiegeln die Stadt-Umgebung (`cityEnv`), nicht den Nebel des Sektors. Ohne das färbt ein roter Nebel dunkle Wände rot, sobald das Tageslicht sinkt.
+
+**Gescannte Materialien**
+- `scripts/kit-scan.mjs` lädt Scans von Poly Haven (CC0, `asset-src/tex-src/polyhaven/<id>/col.jpg, nor.jpg, rough.jpg`, 1k) als Detailschicht: Farbabweichung vom Mittel, Rauheit, Feinrelief. Das Raster aus Paneelen, Fugen und Fenstern bleibt berechnet.
+- `make-kit-hh.mjs` und `make-kit-str.mjs` ordnen jeder Fläche über eine Kennzahl je Bildpunkt einen Scan zu (Option `s` an den Rechtecken). Verwendet: metal_plate, metal_plate_02, blue_metal_plate, concrete_wall_008, concrete_floor_worn_001, asphalt_04.
+- Ablauf nach Änderungen: `node scripts/make-kit-hh.mjs`, `node scripts/make-kit-str.mjs`, `node scripts/sync-city-tex.mjs`, `npm run assets`. Das Abgleich-Skript räumt nur seine eigenen Bilder (`kit_hh*`, `kit_st*`) aus `asset-src/tex-world`; Lichtkarten bleiben liegen.
+
+**Grenzen**
+- Figuren und Schiffe bekommen kein Licht aus der Karte; sie sind in den Gassen nur vom gedämpften Grundlicht beleuchtet.
+- Die Lichtkarte ist fest: Schilder, die im Spiel flackern, flackern auf dem Boden nicht mit.
+
 ## Neue Stadt bauen
 
 1. Skript nach dem Vorbild `stadt_kit.py` (Halle und Promenadenhaus in denselben Maßen, Rest frei), `meta()` mit Tür, Tor, Andock- und Startpunkt,

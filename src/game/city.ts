@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { scene, camera, glowMat, ambient, sun, bloomPass } from '../core/engine';
+import { scene, camera, glowMat, ambient, sun, rim, bloomPass } from '../core/engine';
 import { puff } from './fx';
-import { applyKit, kitMeta, loadKitMeta, KIT_GLOW, kitHoloFlicker } from '../models/kit';
+import { applyKit, kitMeta, loadKitMeta, KIT_GLOW, kitHoloFlicker, setCityLight } from '../models/kit';
+import { setSkyDusk } from '../core/sky';
 import { collisionSpheres } from '../models/stationModels';
 import { hasChar, charInstance, animInit, animStep, animTalk, type CharAnim } from '../models/charModels';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
@@ -68,7 +69,8 @@ export function buildCityModel(name: string) {
   if (!t) { loadCity(name); return null; }
   const m = meta(name);
   const g = new THREE.Group(), body = t.clone(true);
-  applyKit(body);
+  const lm = 'kit_lm_' + name;                          // vorberechnetes Stadtlicht, falls für diese Stadt eines gebacken wurde
+  applyKit(body, window.TEXDATA?.[lm] ? { city: lm } : {});
   g.add(body); g.updateMatrixWorld(true);
   g.userData.walkRoot = body;                           // nur die Stadt selbst ist begehbar (nicht der Hangar dahinter, nicht die Leute)
   const sph = collisionSpheres(body, 7, m.collide_above ?? 1);
@@ -152,6 +154,7 @@ export function initCity(st: Station) {
 }
 export function clearCity() {
   if (atmoK > 0) setAtmo(0);
+  setSkyDusk(0); scene.environmentIntensity = 1;
   atmoBase = null; fx = [];
   if (life) life.removeFromParent();
   life = null; walkers = []; vendors = []; guards = [];
@@ -221,18 +224,22 @@ export function updateCity(dt: number) {
 // ---------- Stil „neon“ ----------
 // Atmosphäre: je tiefer man in der Stadt ist (Kamera innerhalb der Grenzen und unter 120 m), desto dichter der Dunst, desto dunkler Sonne und
 // Grundlicht, desto stärker das Leuchten (Bloom). Ausgangswerte werden beim Aufbau gemerkt; im Innenraum regelt der Innenraum das Licht.
-let atmoK = 0, atmoBase: { fogC: number; fogD: number; amb: number; sun: number; bloom: number } | null = null, steamT = 0, tNeon = 0;
+let atmoK = 0, atmoBase: { fogC: number; fogD: number; amb: number; sun: number; rim: number; bloom: number } | null = null, steamT = 0, tNeon = 0;
 let fx: { o: THREE.Object3D; kind: string; spin: number; tex?: THREE.Texture }[] = [];
 const NEON_FOG = new THREE.Color(0x1a1f2e), _c = new THREE.Color();
+// Abendstimmung: Anteil, um den Grundlicht und Sonne tief in der Stadt sinken, Abdunkeln des Himmels, Stärke des Stadtlichts bei Tag (über der Stadt)
+// (rim: Gegenlicht in der Himmelsfarbe, env: Spiegelung der Umgebung; beide würden die dunklen Gassen sonst flach und farbstichig aufhellen)
+export const AT = { amb: 0.8, sun: 0.95, rim: 0.85, env: 0.75, sky: 0.85, lm0: 0.3 };
 function setAtmo(k: number) {
   const fog = scene.fog as THREE.FogExp2 | null; const b = atmoBase; if (!b) return;
   if (fog) { fog.color.setHex(b.fogC).lerp(NEON_FOG, k); fog.density = b.fogD + (0.0042 - b.fogD) * k; }
-  if (!IN.active) { ambient.intensity = b.amb * (1 - 0.45 * k); sun.intensity = b.sun * (1 - 0.72 * k); }
+  if (!IN.active) { ambient.intensity = b.amb * (1 - AT.amb * k); sun.intensity = b.sun * (1 - AT.sun * k); rim.intensity = b.rim * (1 - AT.rim * k); scene.environmentIntensity = 1 - AT.env * k; }
+  setSkyDusk(AT.sky * k); setCityLight(AT.lm0 + (1 - AT.lm0) * k);
   if (bloomPass) bloomPass.strength = b.bloom + 0.3 * k;
 }
 function buildNeon(m: CityMeta) {
   const fog = scene.fog as THREE.FogExp2 | null;
-  atmoBase = { fogC: fog ? fog.color.getHex() : 0, fogD: fog ? fog.density : 0, amb: ambient.intensity, sun: sun.intensity, bloom: bloomPass ? bloomPass.strength : 0.5 };
+  atmoBase = { fogC: fog ? fog.color.getHex() : 0, fogD: fog ? fog.density : 0, amb: ambient.intensity, sun: sun.intensity, rim: rim.intensity, bloom: bloomPass ? bloomPass.strength : 0.5 };
   atmoK = 0; fx = [];
   // Skulptur über der Grube: ineinander drehende Ringe um einen leuchtenden Kern
   if (m.sculpture) {
@@ -283,7 +290,7 @@ function updateNeon(dt: number, st: Station, visible: boolean, near: boolean) {
   const inside = visible && Math.abs(pl.x) < bd.x && pl.z > bd.z0 && pl.z < bd.z1 && pl.y < 120;
   const want = inside ? Math.min(1, Math.max(0, (120 - pl.y) / 60)) : 0;
   const k = atmoK + (want - atmoK) * Math.min(1, dt * 1.5);
-  if (IN.active) { if (atmoK > 0) { const fog = scene.fog as THREE.FogExp2 | null; if (fog && atmoBase) { fog.color.setHex(atmoBase.fogC); fog.density = atmoBase.fogD; } if (bloomPass && atmoBase) bloomPass.strength = atmoBase.bloom; } atmoK = 0; return; }
+  if (IN.active) { if (atmoK > 0) { setSkyDusk(0); scene.environmentIntensity = 1; if (atmoBase) rim.intensity = atmoBase.rim; const fog = scene.fog as THREE.FogExp2 | null; if (fog && atmoBase) { fog.color.setHex(atmoBase.fogC); fog.density = atmoBase.fogD; } if (bloomPass && atmoBase) bloomPass.strength = atmoBase.bloom; } atmoK = 0; return; }
   if (Math.abs(k - atmoK) > 1e-4 || (k > 0 && k === atmoK)) setAtmo(k);
   atmoK = k < 1e-3 ? 0 : k;
   if (!visible || !near) return;

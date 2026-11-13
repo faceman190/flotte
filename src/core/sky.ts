@@ -187,7 +187,7 @@ export function setSky(d: SkyDef) {
 // ---------- Atmosphäre einer Planetenoberfläche ----------
 const ATM_FS = `
 uniform vec3 horizon; uniform vec3 zenith; uniform vec3 fogc; uniform vec3 sdir; uniform vec3 scol; uniform vec3 cloudCol; uniform vec3 bdir; uniform vec3 bcol;
-uniform float time; uniform float cloud; uniform float stars; uniform float brad; uniform float ring; uniform float giant; uniform float air; uniform vec3 mdir; uniform vec3 mcol; uniform float mrad;
+uniform float time; uniform float dusk; uniform float cloud; uniform float stars; uniform float brad; uniform float ring; uniform float giant; uniform float air; uniform vec3 mdir; uniform vec3 mcol; uniform float mrad;
 varying vec3 vDir;
 float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -257,6 +257,7 @@ void main() {
   }
   col += scol * (pow(sun, 1400.0) * 5.0 + pow(sun, 240.0) * 0.7);
   if (d.y < 0.0) col = mix(fogc, fogc * 0.72, clamp(-d.y * 3.0, 0.0, 1.0));
+  col *= mix(vec3(1.0), vec3(0.2, 0.235, 0.34), dusk);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -265,7 +266,7 @@ const atmMat = new THREE.ShaderMaterial({
   uniforms: {
     horizon: { value: new THREE.Color() }, zenith: { value: new THREE.Color() }, fogc: { value: new THREE.Color() }, sdir: { value: new THREE.Vector3(0, 1, 0) }, scol: { value: new THREE.Color(0xfff0d0) },
     cloudCol: { value: new THREE.Color(0xffffff) }, bdir: { value: new THREE.Vector3(0, 1, 0) }, bcol: { value: new THREE.Color(0xffffff) },
-    time: { value: 0 }, cloud: { value: 0 }, stars: { value: 0 }, brad: { value: 0 }, ring: { value: 0 },
+    time: { value: 0 }, dusk: { value: 0 }, cloud: { value: 0 }, stars: { value: 0 }, brad: { value: 0 }, ring: { value: 0 },
     giant: { value: 0 }, air: { value: 1 }, mdir: { value: new THREE.Vector3(0, 1, 0) }, mcol: { value: new THREE.Color(0xffffff) }, mrad: { value: 0 },
   },
   vertexShader: SKY_VS, fragmentShader: ATM_FS, side: THREE.BackSide, depthWrite: false, fog: false,
@@ -315,6 +316,8 @@ export function setSurfaceSky(cfg: null | SurfaceSky) {
   sunCore.visible = true; sunHalo.visible = false;
 }
 export const onSurfaceSky = () => atmDome.visible;
+// Abendstimmung in Neonstädten: der Himmel wird dunkler und blauer (0 = Tag, 1 = Dämmerung); city.ts setzt den Wert mit dem Dunst
+export function setSkyDusk(k: number) { atmMat.uniforms.dusk.value = k; }
 
 // Himmel wandert mit der Kamera; Reflexionen erst setzen, wenn das Nebelbild geladen ist
 let t0 = performance.now();

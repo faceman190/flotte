@@ -185,8 +185,9 @@ class Kit:
         bl, br, tl: Ecken (unten links, unten rechts, oben links); Texturkoordinaten in Metern / Kachelgröße. z0 verschiebt das Geschossraster."""
         bl, br, tl = V(bl), V(br), V(tl); L, H = (br - bl).length, (tl - bl).length
         if L < 1e-3 or H < 1e-3: return
-        u0 = self.R.randrange(8) * per[0] / 8 if u0 is None else u0; v0 = z0 / per[1]
-        self.poly((bl, br, br + (tl - bl), tl), ((u0 / per[0], v0), ((u0 + L) / per[0], v0), ((u0 + L) / per[0], v0 + H / per[1]), (u0 / per[0], v0 + H / per[1])), T(tint), mat)
+        u0 = self.R.randrange(8) * per[0] / 8 if u0 is None else u0; v0 = z0 / per[1]; ch = 0; st = None
+        if self.lm and not self._ov and L * H >= self.lm_min: self.charts.append((L, H)); ch = len(self.charts); st = ((0, 0), (1, 0), (1, 1), (0, 1))      # eigenes Feld der Lichtkarte
+        self.poly((bl, br, br + (tl - bl), tl), ((u0 / per[0], v0), ((u0 + L) / per[0], v0), ((u0 + L) / per[0], v0 + H / per[1]), (u0 / per[0], v0 + H / per[1])), T(tint), mat, ch, st)
     def decal(self, name, c, u, v, w, h=None, tint='white', off=0.015):
         d = DECALS[name]; h = w * d['h'] / d['w'] if h is None else h
         self.tile(name, c, u, v, w, h, tint, off=off, cells=DECALS, scale=DPX, mat='kit_decal')
@@ -621,7 +622,7 @@ class Kit:
     def build(self, coll='Kit'):
         """Macht aus allem ein Objekt: Punkte verschmelzen, harte Kanten ab 60°, Normalen nach Flächengröße gewichtet."""
         bm = self.bm
-        self.lm_size = self._pack() if self.charts else 0
+        self.lm_size = self._pack(getattr(self, 'lm_px', 2048)) if self.charts else 0      # lm_px: Kantenlänge der Lichtkarte (Städte: nach Bedarf größer)
         if self.lm and not self.charts:          # Teil ohne eigene Felder in einem Raum mit Lichtkarte: alles zeigt auf das Festfeld
             self.lm_size = 2048
             for f in bm.faces:
@@ -843,11 +844,63 @@ def export(ob, name, meta=None, kind='station', extra=()):
     return {'glb_kb': round(os.path.getsize(path) / 1024), 'verts': len(ob.data.vertices), 'faces': len(ob.data.polygons), 'lights': len(d['lights'])}
 
 # Leuchtstärken der selbstleuchtenden Materialien für die Lichtberechnung (Blender)
-EMIT = {'kit_neon': 3.0, 'kit_neon2': 3.0, 'kit_holo': 2.0, 'kit_tower': 1.5, 'kit_light': 10.0, 'kit_cool': 5.0, 'kit_accent': 6.0, 'kit_screen': 4.0, 'kit_lamp': 6.0, 'kit_redlamp': 4.0, 'kit_green': 2.0, 'kit_sign': 4.0, 'kit_poster': 2.2}
+EMIT = {'kit_shopw': 7.0, 'kit_shopc': 7.0, 'kit_hha': 0.8, 'kit_hhb': 0.8, 'kit_hhc': 0.8, 'kit_stb': 1.0, 'kit_neon': 3.0, 'kit_neon2': 3.0, 'kit_holo': 2.0, 'kit_tower': 1.5, 'kit_light': 10.0, 'kit_cool': 5.0, 'kit_accent': 6.0, 'kit_screen': 4.0, 'kit_lamp': 6.0, 'kit_redlamp': 4.0, 'kit_green': 2.0, 'kit_sign': 4.0, 'kit_poster': 2.2}
 def set_emission(scale=1.0):
     for n, v in EMIT.items():
         m = bpy.data.materials.get(n)
         if m and m.use_nodes and m.node_tree.nodes.get('Principled BSDF'): m.node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = v * scale
+
+def bake_city_light(ob, name, samples=96, bounces=3, ref=None, blur=2):
+    """Lichtkarte einer Stadt: nur das Licht der leuchtenden Flächen (Schilder, Schaufenster, Lampions, Lichtbänder) auf den Flächen mit eigenem Feld
+    (Gassenböden, Sockelwände; beim Bauen K.lm = True setzen). Sonne und Himmel bleiben aus, die kommen im Spiel in Echtzeit dazu.
+    Die Eckfarben (Tönung × Verdeckung aus bake_ao) bleiben unberührt. Bild: asset-src/tex-world/kit_lm_<name>@<Größe>.png (Hintergrund-Paket),
+    Kodierung wie bake_light (v = x / (1 + x), sRGB). Das Festfeld ist schwarz: Flächen ohne eigenes Feld bekommen kein vorberechnetes Licht."""
+    import numpy as np
+    sc = bpy.context.scene; me = ob.data; size = int(ob.get('kit_lm', 0)) or 2048
+    set_emission()
+    img = bpy.data.images.get('kit_lm_' + name)
+    if img and img.size[0] != size: bpy.data.images.remove(img); img = None
+    img = img or bpy.data.images.new('kit_lm_' + name, size, size, alpha=False, float_buffer=True)
+    for m in me.materials:
+        nt = m.node_tree; n = nt.nodes.get('BakeZiel') or nt.nodes.new('ShaderNodeTexImage'); n.name = 'BakeZiel'; n.image = img
+        for x in nt.nodes: x.select = False
+        n.select = True; nt.nodes.active = n
+    me.uv_layers.active = me.uv_layers['Lightmap']
+    hidden = [o for o in sc.objects if o is not ob and o.type in ('MESH', 'LIGHT') and not o.hide_render]
+    for o in hidden: o.hide_render = True
+    w = sc.world; bg = w.node_tree.nodes['Background'] if w and w.use_nodes else None; old = bg.inputs['Strength'].default_value if bg else None
+    if bg: bg.inputs['Strength'].default_value = 0.0
+    sc.render.engine = 'CYCLES'; sc.cycles.device = 'CPU'; sc.cycles.samples = samples; sc.cycles.max_bounces = bounces; sc.cycles.diffuse_bounces = bounces
+    sc.render.bake.target = 'IMAGE_TEXTURES'; sc.render.bake.margin = 4; bpy.context.view_layer.update()
+    for q in sc.objects: q.select_set(False)
+    ob.select_set(True); bpy.context.view_layer.objects.active = ob
+    win = bpy.context.window; area = next(a for a in win.screen.areas if a.type == 'VIEW_3D'); region = next(r for r in area.regions if r.type == 'WINDOW')
+    ctx = dict(window=win, area=area, region=region, object=ob, active_object=ob, selected_objects=[ob], selected_editable_objects=[ob])
+    with bpy.context.temp_override(**ctx): bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'}, use_clear=True, margin=4)
+    for o in hidden: o.hide_render = False
+    if bg: bg.inputs['Strength'].default_value = old
+    me.uv_layers.active = me.uv_layers['UVMap']
+    a = np.empty(size * size * 4, np.float32); img.pixels.foreach_get(a); a = a.reshape(size, size, 4)[..., :3].copy()
+    a = np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0); a[:24, :24] = 0.0
+    hi = float(np.percentile(a, 99.9)) if a.max() > 0 else 1.0; a = np.minimum(a, hi * 3.0)      # einzelne Ausreißer (Rauschen) kappen
+    mask = a.mean(axis=2) > 1e-6
+    for _ in range(blur):
+        k = a.copy()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)): k += np.roll(a, (dy, dx), axis=(0, 1))
+        a = k / 5.0
+    med = float(np.median(a.mean(axis=2)[mask])) if mask.any() else 0.1
+    ref = ref or 2.2 * med
+    v = (a / ref) / (1.0 + a / ref); v[:24, :24] = 0.0
+    srgb = np.where(v <= 0.0031308, v * 12.92, 1.055 * np.power(np.clip(v, 1e-8, 1), 1 / 2.4) - 0.055)
+    out = bpy.data.images.get('kit_lm8_' + name)
+    if out and out.size[0] != size: bpy.data.images.remove(out); out = None
+    out = out or bpy.data.images.new('kit_lm8_' + name, size, size, alpha=False)
+    buf = np.ones((size, size, 4), np.float32); buf[..., :3] = srgb; out.pixels.foreach_set(buf.ravel()); out.update()
+    d = os.path.join(ROOT, 'asset-src', 'tex-world'); os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, 'kit_lm_%s@%d.png' % (name, size)); out.filepath_raw = path; out.file_format = 'PNG'; out.save()
+    col = me.color_attributes.get('Col')
+    if col: me.color_attributes.active_color = col
+    return {'size': size, 'ref': round(ref, 4), 'median': round(med, 4), 'lit': round(float(mask.mean()), 3), 'max': round(float(a.max()), 3)}
 
 def bake_light(ob, name, samples=64, bounces=4, ref=None, blur=1):
     """Rechnet das Licht eines Innenraums vor (Cycles, alle leuchtenden Flächen und Lampen der Szene sind Lichtquellen):

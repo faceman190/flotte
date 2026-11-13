@@ -39,6 +39,7 @@ ALLEYS = [
 
 def build(lib):
     K = lib.Kit('Neonhafen', seed=2077); S.SPRITES = False
+    K.lm_px = 2048; K.lm_min = 40.0      # Lichtkarte: nur wo K.lm eingeschaltet wird (Gassenböden, Sockelwände, Lichtplatz, Promenadenhaus)
     X, Y, Z = lib.X, lib.Y, lib.Z
     R = K.R
     steam, holos, paths, stalls, shops = [], [], [], [], []
@@ -85,7 +86,9 @@ def build(lib):
         cx, cy, sx, sy = (x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0
         P0 = 6.4; zp = P0 + 0.2; KR = K.R; Rb = random.Random(seed * 131 + 7); K.R = Rb; seg0 = K.seg; K.seg = 60.0      # hohe Bauteile nicht fein teilen
         base = H.rect(cx, cy, sx, sy)
+        K.lm = True
         with K.at((0, 0, 0.2)): H.shaft(K, base, 0.0, P0, 'b', H.T_DARK)
+        K.lm = False
         corners = {'s': ((x0, y0), (x1, y0)), 'n': ((x1, y1), (x0, y1)), 'e': ((x1, y0), (x1, y1)), 'w': ((x0, y1), (x0, y0))}
         # Mittelbau: vier bis acht Geschosse über dem Sockel, bündig, mit Rippen oder Gesimsen und Technik auf dem Dach
         zb = zp + 3.2 * Rb.randint(4, 8); km = Rb.choice(['c', 'b', 'c', 'a', 'b'])
@@ -145,8 +148,12 @@ def build(lib):
     def alley(a, b, w, bridges=True):
         ax, ay = a; bx, by = b; L = math.hypot(bx - ax, by - ay); ux, uy = (bx - ax) / L, (by - ay) / L; nx, ny = -uy, ux
         # Längsgassen bekommen die Fahrbahn (Rinnen, Linien, Schienenbett), Quergassen einen Mittelstreifen aus Metalldeck
+        K.lm = True
         if abs(ux) < 0.01: S.road(K, (ax, min(ay, by) - 0.5), (ax, max(ay, by) + 0.5), w - 0.3, 0.216)
-        else: S.ground(K, min(ax, bx) - 0.5, ay - 1.4, max(ax, bx) + 0.5, ay + 1.4, 0.213, 'kit_stc', 4.0)
+        else:
+            S.ground(K, min(ax, bx) - 0.5, ay - w / 2 + 0.1, max(ax, bx) + 0.5, ay + w / 2 - 0.1, 0.207, 'kit_sta', 8.0)      # Pflaster über die ganze Breite (trägt das vorberechnete Licht)
+            S.ground(K, min(ax, bx) - 0.5, ay - 1.4, max(ax, bx) + 0.5, ay + 1.4, 0.213, 'kit_stc', 4.0)
+        K.lm = False
         n = int(L // 8)
         for i in range(1, n):
             t = i / n; px, py = ax + (bx - ax) * t, ay + (by - ay) * t
@@ -245,7 +252,7 @@ def build(lib):
 
     # ================================================================== 3. Promenadenhaus mit Kapselturm darüber
     PY0, PY1, PXH, PH = BY, DOOR[1], 24.0, 16.0
-    K.block(2 * PXH, PY1 - PY0, PH, (0, (PY0 + PY1) / 2, 0), tint='hull_dark', tint_top='hull_dark', plinth=0.6, cornice=0.5)
+    K.lm = True; K.block(2 * PXH, PY1 - PY0, PH, (0, (PY0 + PY1) / 2, 0), tint='hull_dark', tint_top='hull_dark', plinth=0.6, cornice=0.5); K.lm = False
     K.seg = 60.0; kt = H.rect(0, 87, 40, 50); H.shaft(K, kt, PH, PH + 64.0, 'c', H.T_SAND); H.fins(K, kt, PH, PH + 64.0, 6.0, 0.6, 0.4); H.parapet(K, kt, PH + 64.0, 1.2, 0.3)
     H.roof_mech(K, kt, PH + 64.0, 4); H.crown_spikes(K, kt, PH + 64.0, 5, (8, 20), 0.5); K.seg = 8.0
     K.neon('n_kapsel', (0, 112.3, 60.0), (-1, 0, 0), Z, 26.0); K.neon('v_kapsel', (20.3, 108.0, 40.0), Y, Z, 4.0)
@@ -261,6 +268,7 @@ def build(lib):
 
     # ================================================================== 4. Lichtplatz: Grube mit Skulpturfuß, Lampensterne, Hologramme, Garküche, Bänke
     MX, MY0, MY1 = PL
+    K.lm = True
     K.slab(2 * MX, MY1 - MY0, 0.2, (0, (MY0 + MY1) / 2, 0), tint=(1.12, 1.12, 1.14), cell=2.0, mat='kit_sta', uvm=8.0, holes=[(-11, 160 - 11 - (MY0 + MY1) / 2, 11, 160 + 11 - (MY0 + MY1) / 2)])
     PC = (0.0, 160.0); PD = 2.6
     for (a, b) in (((11, 149), (-11, 149)), ((-11, 171), (11, 171)), ((-11, 149), (-11, 171)), ((11, 171), (11, 149))):
@@ -278,6 +286,7 @@ def build(lib):
     with K.at((0, 0, 0.2)):
         S.ad_pylon(K, -24.0, 150.0, 4.6, None, False); S.ad_pylon(K, 24.0, 170.0, 4.6, None, False)
     for p in ((-22, 132), (22, 132), (-22, 186), (22, 186)): K.planter(2.4, 1.4, (p[0], p[1], 0.2), 0.0, 0.8, 3)
+    K.lm = False
     # Lampensterne (Mast mit sechs Leuchtarmen) an den Platzecken, Kabel zu den Fassaden
     for (x, y) in ((-28, 128), (28, 128), (-28, 188), (28, 188)):
         K.box((1.0, 1.0, 1.2), (x, y, 0.2), side='girder', tint='hull_dark', bevel=0.05)

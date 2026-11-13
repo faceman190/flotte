@@ -6,7 +6,7 @@ import fs from 'fs';
 import sharp from 'sharp';
 const SRC = 'asset-src/neu/stadt/tex', OUT = 'asset-src/tex-world';
 fs.mkdirSync(OUT, { recursive: true });
-for (const f of fs.readdirSync(OUT)) fs.rmSync(`${OUT}/${f}`);
+for (const f of fs.readdirSync(OUT)) if (f.startsWith('kit_hh') || f.startsWith('kit_st')) fs.rmSync(`${OUT}/${f}`);   // nur die eigenen Bilder; Lichtkarten (kit_lm_*, aus Blender) bleiben liegen
 for (const f of fs.readdirSync(SRC).filter(x => x.endsWith('@2048.png'))) {
   const name = f.replace('@2048.png', '');
   if (name === 'kit_sta_emi' || name === 'kit_stc_emi') continue;

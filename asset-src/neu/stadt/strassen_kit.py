@@ -25,13 +25,16 @@ SPRITES = True     # False: kaum Leuchtpunkte fürs Spiel merken (jeder ist dort
 
 # ------------------------------------------------------------------ Boden
 def ground(K, x0, y0, x1, y1, z=0.0, mat='kit_sta', per=8.0, tint=(1, 1, 1)):
-    """Ebene Fläche mit kachelndem Belag (Texturkoordinaten in Metern / per)."""
-    K.poly(((x0, y0, z), (x1, y0, z), (x1, y1, z), (x0, y1, z)), ((x0 / per, y0 / per), (x1 / per, y0 / per), (x1 / per, y1 / per), (x0 / per, y1 / per)), tint, mat)
+    """Ebene Fläche mit kachelndem Belag (Texturkoordinaten in Metern / per). Mit K.lm bekommt sie ein eigenes Feld der Lichtkarte."""
+    ch = 0; st = None
+    if K.lm and not K._ov: K.charts.append((abs(x1 - x0), abs(y1 - y0))); ch = len(K.charts); st = ((0, 0), (1, 0), (1, 1), (0, 1))
+    K.poly(((x0, y0, z), (x1, y0, z), (x1, y1, z), (x0, y1, z)), ((x0 / per, y0 / per), (x1 / per, y0 / per), (x1 / per, y1 / per), (x0 / per, y1 / per)), tint, mat, ch, st)
 def road(K, a, b, w=RW, z=0.012):
     """Fahrbahn von a nach b (Mittellinie): Das Bild läuft längs, die ganze Breite ist eine Kachel."""
-    L, ex, ey, nx, ny = H._edge(a, b)
+    L, ex, ey, nx, ny = H._edge(a, b); ch = 0; st = None
+    if K.lm and not K._ov: K.charts.append((L, w)); ch = len(K.charts); st = ((0, 0), (1, 0), (1, 1), (0, 1))
     K.poly(((a[0] + nx * w / 2, a[1] + ny * w / 2, z), (b[0] + nx * w / 2, b[1] + ny * w / 2, z), (b[0] - nx * w / 2, b[1] - ny * w / 2, z), (a[0] - nx * w / 2, a[1] - ny * w / 2, z)),
-           ((0, 0), (L / 10.24, 0), (L / 10.24, 1), (0, 1)), (1, 1, 1), 'kit_stb')
+           ((0, 0), (L / 10.24, 0), (L / 10.24, 1), (0, 1)), (1, 1, 1), 'kit_stb', ch, st)
 def curb(K, x0, y0, x1, y1, h=SW, mat='kit_sta', per=8.0, z0=0.0, led=None):
     """Erhöhte Fläche mit Bordstein ringsum (Gehweg, Stufe, Podest)."""
     x0, x1 = min(x0, x1), max(x0, x1); y0, y1 = min(y0, y1), max(y0, y1)
