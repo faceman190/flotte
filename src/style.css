@@ -17,6 +17,9 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:var(--ui);font-size:15px}
 canvas{display:block;position:fixed;inset:0}
+/* Bild und Anzeige immer genau so groß wie das Fenster. Ohne feste Größe gilt die Zahl der Bildpunkte der Zeichenfläche, und die ist bei
+   skalierten Bildschirmen (Windows 125 %, 150 %) größer als das Fenster: Anzeige versetzt, Ränder abgeschnitten. */
+#gl,#ui{width:100%;height:100%}
 #ui{pointer-events:none}
 body.playing #gl{cursor:none}
 .hidden{display:none!important}

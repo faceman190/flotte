@@ -48,8 +48,8 @@ export function resize() {
   camera.aspect = view.W / view.H;
   camera.updateProjectionMatrix();
   const d = Math.min(2, devicePixelRatio || 1);
-  ui.width = view.W * d;
-  ui.height = view.H * d;
+  ui.width = Math.round(view.W * d);        // ganze Bildpunkte; die Größe am Schirm legt das Stylesheet fest (#gl, #ui: 100 %)
+  ui.height = Math.round(view.H * d);
   ux.setTransform(d, 0, 0, d, 0, 0);
   if (composer) composer.setSize(view.W, view.H);
 }
