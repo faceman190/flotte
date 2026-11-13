@@ -145,6 +145,11 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
   Beute wie in Minen (Ausrüstung nach Gefahr, Credits); die Tresorkiste im Wrack enthält mit 25 % ein legendäres Stück (Sonnenlanze, Orakel, Splitterwerfer, Kristallhelm).
   Geöffnet bleibt 60 Minuten (P.salvage). Wracks qualmen, sind auf Sicht markiert und halten Rover und Fußgänger auf.
 
+- **Kampf zu Fuß (Alpha 0.85, `src/game/fieldfight.ts`):** Ferrox-Wachdrohnen (Modell der Minendrohne): 2–3 an jedem Wrack, 3 auf Streife; sie bemerken den Spieler
+  auf 34 m bei freier Sicht über das Gelände, halten ~15 m Abstand und schießen Leuchtkugeln. Klick schießt mit der angelegten Waffe (Werte aus der Mine),
+  in der Ich-Sicht mit Waffenmodell und Händen. Leben zu Fuß wie in der Mine (Schutz-Ausrüstung), Erholung außer Gefecht; wer zusammenbricht, wacht am Schiff auf.
+  Abschuss: Credits nach Gefahr, 15 % Chance auf einen kleinen Fund.
+
 ## Noch offen
 - Nur ein Aussehen (Bergwerk). Geplant: je Planetentyp eigene Farben und Einbauten, weitere Arten (Bunker, Wrack), große Meteoriten im All.
 - Fallen, Rätsel über mehrere Schalter, Schlüssel, mehrere Ebenen.

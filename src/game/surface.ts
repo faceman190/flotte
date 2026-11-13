@@ -15,6 +15,7 @@ import { buildFlora, updateFlora } from './flora';
 import { gearFactor } from './inventory';
 import { buildDungeonEntrances } from './dungeon';
 import { buildSalvage, SALV } from './salvage';
+import { buildFieldFoes } from './fieldfight';
 import { setOutpostDust } from '../models/stationModels';
 import { mesh, alongZ } from '../models/helpers';
 import { world, clearSector, addStation, makeAst, removeAst, type Asteroid, type Ore } from './world';
@@ -215,6 +216,7 @@ export function buildSurface(sector: string) {
   world.surface = { planet: sector, limit: SURF.limit };
   world.ground = groundAt;
   buildSalvage(sector);                                                          // Wracks und Versorgungskisten (src/game/salvage.ts)
+  buildFieldFoes(sector);                                                        // Ferrox-Wachdrohnen (src/game/fieldfight.ts)
   world.regrowT = 1e9;
   return { plateau, arrive: { x: -2300, y: plateau + 1300, z: 2300 } };
 }

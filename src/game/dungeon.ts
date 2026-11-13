@@ -416,7 +416,7 @@ const WEAP: Record<string, { iv: number; n: number; spread: number; auto: boolea
   waffe_flinte: { iv: 0.85, n: 7, spread: 0.075, auto: false, col: '#ffc080', snd: 0.8 }, waffe_impuls: { iv: 0.2, n: 1, spread: 0.006, auto: true, col: '#b090ff', snd: 1.9 },
   waffe_splitter: { iv: 0.24, n: 2, spread: 0.03, auto: true, col: '#c070ff', snd: 2.2 },
 };
-const weapon = () => {
+export const weapon = () => {
   const id = P.gear?.waffe || '', d = gearDef(id), w = WEAP[id];
   return w && d ? { ...w, dmg: (d.st?.schaden || 6) / (w.n > 1 ? w.n * 0.45 : 1), name: d.n } : { iv: 0.42, n: 1, spread: 0.012, auto: false, col: '#ffb060', snd: 2.6, dmg: 5, name: 'Schneidbrenner' };
 };

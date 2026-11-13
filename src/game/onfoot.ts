@@ -14,6 +14,7 @@ import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTp
 import { viewModelId } from './mineArt';
 import { basePad, padGround, baseBlocked, nearDoor, surfaceAt, wallBetween } from './basewalk';
 import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
+import { FIGHT, updateFieldFight, fieldDown, fieldViewModel, hideFieldViewModel, drawFieldHUD } from './fieldfight';
 import { landShip } from './surface';
 import type { Station } from './world';
 
@@ -75,8 +76,8 @@ export function leaveBaseOnFoot() {
   if (p) place(p.door.x - Math.sin(p.door.yaw) * 2.0, p.door.z - Math.cos(p.door.yaw) * 2.0, p.door.yaw);
   else place(ROVER.ship.x + 8, ROVER.ship.z, 0);
 }
-export function enterRover() { FOOT.active = false; FOOT.act = ''; resetRoverCamera(); if (me) me.s.g.visible = false; sfx('door_close', 0.4, 1.2, () => snd(200, 0.2, 'triangle', 0.03, 60)); }
-export function footOff() { FOOT.active = false; FOOT.act = ''; if (me) me.s.g.visible = false; if (document.pointerLockElement === gl) document.exitPointerLock(); }
+export function enterRover() { hideFieldViewModel(); FOOT.active = false; FOOT.act = ''; resetRoverCamera(); if (me) me.s.g.visible = false; sfx('door_close', 0.4, 1.2, () => snd(200, 0.2, 'triangle', 0.03, 60)); }
+export function footOff() { hideFieldViewModel(); FOOT.active = false; FOOT.act = ''; if (me) me.s.g.visible = false; if (document.pointerLockElement === gl) document.exitPointerLock(); }
 export function footJump() { if (!FOOT.active || FOOT.jy > 0 || FOOT.jv !== 0) return; FOOT.jv = 4.6; snd(95, 0.05, 'triangle', 0.02, 40); }
 
 // Platz für den Körper? (Gelände zu steil, Wasser/Lava, Kartenrand, Lagerstätten, Station, Schiff, Rover)
@@ -99,6 +100,13 @@ function blocked(x: number, z: number, ox: number, oz: number) {
 export function updateFoot(dt: number) {
   if (!FOOT.active) return;
   updateFlora(camera.position);
+  // zusammengebrochen (Ferrox-Drohnen): kurz liegen bleiben, dann am Schiff aufwachen
+  if (FIGHT.down > 0) {
+    if (fieldDown(dt)) { leaveShipOnFoot(); radio('SYSTEM', 'Du kommst am Schiff wieder zu dir.'); }
+    if (me) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y, z: FOOT.z, yaw: FOOT.yaw, pitch: 0, vx: 0, vz: 0, dead: FIGHT.down > 0, crouch: STANCE.crouch });
+    updateFieldFight(dt, { x: FOOT.x, y: FOOT.y, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH(), active: false, tp: VIEW.tp, muzzle: null });
+    return;
+  }
   FOOT.warn -= dt;
   FOOT.locked = document.pointerLockElement === gl;
   if (!FOOT.locked && (grabT -= dt) <= 0) { grabT = 0.4; const ua = (navigator as any).userActivation; if (!ua || ua.isActive) { try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* bleibt bei Zeigersteuerung */ } } }
@@ -143,8 +151,11 @@ export function updateFoot(dt: number) {
   if (VIEW.tp) me = syncAvatar(scene, me, P.gear || {});
   if (me) {
     me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05 });
+    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert) });
   }
+  // Kampf: Schießen (Klick), Drohnen, Geschosse; in der Außensicht kommt der Leuchtstrich aus der Mündung der Figur
+  const mz = VIEW.tp && me?.s.weapon ? me.s.weapon.localToWorld(new THREE.Vector3().copy(me.s.muzzle)) : null;
+  updateFieldFight(dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH(), active: true, tp: VIEW.tp, muzzle: mz });
 }
 
 const _c = new THREE.Vector3();
@@ -152,7 +163,9 @@ export function footCamera(dt: number) {
   if (VIEW.tp && me) tpCamPos(_c, FOOT.x, FOOT.y + FOOT.jy, FOOT.z, FOOT.yaw, FOOT.pitch, (x, y, z) => y > padGround(x, z) + 0.3 && !baseBlocked(x, z, y - 1.2) && !(ROVER.model && Math.hypot(x - ROVER.x, z - ROVER.z) < 2.2) && !treeNear(x, z, 1.1), dt);
   else _c.set(FOOT.x, FOOT.y + FOOT.jy + eyeH() + FOOT.bob, FOOT.z);
   camera.position.copy(_c);
-  camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch, FOOT.yaw, 0);
+  camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch + FIGHT.kick * 0.012, FOOT.yaw, 0);
+  if (FIGHT.down > 0 && !VIEW.tp) camera.position.y -= (3 - FIGHT.down) * 0.4;
+  fieldViewModel(FOOT.active && !VIEW.tp, FOOT.bob, FOOT.walked);
   if (Math.abs(camera.fov - 72) > 0.05) { camera.fov = 72; camera.updateProjectionMatrix(); }
 }
 
@@ -180,6 +193,7 @@ export function drawFootHUD() {
   marker(ROVER.ship.x, ROVER.ship.y + 10, ROVER.ship.z, `${P.shipName.toUpperCase()} · ${Math.round(dS)} m`, '#5fd0ff', 0);
   if (ROVER.model) { const dR = Math.hypot(FOOT.x - ROVER.x, FOOT.z - ROVER.z); if (dR > 6) marker(ROVER.x, ROVER.y + 4, ROVER.z, `ROVER · ${Math.round(dR)} m`, '#e09030', 1); }
   drawSalvageHUD(FOOT.x, FOOT.z);
+  drawFieldHUD();
   const bs = world.stations[0], bp = bs && basePad(bs);
   if (bp) { const dD = Math.hypot(FOOT.x - bp.door.x, FOOT.z - bp.door.z); if (dD > 4 && dD < 400) { _p.set(bp.door.x, padGround(bp.door.x, bp.door.z) + 3, bp.door.z).project(camera); if (_p.z < 1 && Math.abs(_p.x) < 1 && Math.abs(_p.y) < 1) { ux.fillStyle = '#7fe0a0'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'center'; ux.fillText(`EINGANG · ${Math.round(dD)} m`, (_p.x + 1) / 2 * W, (1 - _p.y) / 2 * H); } } }
   if (FOOT.locked) { ux.fillStyle = 'rgba(255,255,255,.75)'; ux.beginPath(); ux.arc(W / 2, H / 2, 2.2, 0, 6.283); ux.fill(); }
