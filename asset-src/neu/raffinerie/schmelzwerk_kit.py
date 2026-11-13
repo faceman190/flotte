@@ -7,7 +7,9 @@
 # Ofenhalle mit Schloten, Brecher mit Förderbändern und Erzhalden, Tanklager mit Rohrbrücke, drei Fackelmasten, Frachtfeld mit Kran,
 # Wohnmodule auf Stelzen, Lichtmasten. Zusatzangaben fürs Spiel: Landefeld, Fackeln, Dampf (meta()).
 #
-# Aufruf:  ob, extra = schmelzwerk_kit.build(lib);  lib.bake_ao(ob, 6.0, 16);  lib.export(ob, 'Schmelzwerk', schmelzwerk_kit.meta(extra), kind='base')
+# Aufruf:  ob, extra = schmelzwerk_kit.build(lib);  lib.bake_ao(ob, 6.0, 16)
+#          lib.bake_city_light(ob, 'Schmelzwerk', 96);  lib.bake_city_shade(ob, 'Schmelzwerk', SUN)      # SUN: Sonnenrichtung im Spiel, siehe unten
+#          lib.export(ob, 'Schmelzwerk', schmelzwerk_kit.meta(extra), kind='base')
 #          ob2 = schmelzwerk_kit.build_bohrturm(lib);  lib.export(ob2, 'Bohrturm', {'R': 14}, kind='base')
 import math, random
 import hochhaus_kit as H
@@ -16,6 +18,7 @@ import strassen_kit as S
 PI = math.pi
 PAD = (-10.0, -72.0)       # Mitte des Landefelds (Blender x, y)
 NUM = '12'
+SUN = (-0.7832, -0.217, 0.5827)   # Richtung zur Sonne auf Brocken im Rahmen der Basis (Spiel: sunDir lokal (x, y, z) -> Blender (x, -z, y))
 
 def _T(tint):
     import kit_lib as L_
@@ -248,6 +251,7 @@ def control(K):
 # ------------------------------------------------------------------ Anlage
 def build(lib):
     K = lib.Kit('Schmelzwerk', seed=1212); K.seg = 60.0; S.SPRITES = True; R = K.R
+    K.lm = True; K.lm_min = 60.0; K.lm_px = 2048; K.lm_inherit = True      # Licht- und Schattenkarte: Hof, Felder, Fahrwege und große Wände (bake_city_light, bake_city_shade)
     flares, steam = [], []
     # ---------- Flächen: Betonhof mit Landefeld, Frachtfeld, Fahrwege
     K.seg = 8.0

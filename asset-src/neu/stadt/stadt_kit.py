@@ -20,6 +20,7 @@ RZ = 47.0                                          # Dachoberkante
 WX, WY0, WY1 = 238.0, -240.0, 246.0                # Stadtmauer
 DOOR = (0.0, 118.0)                                # Tür Promenadenhaus → Marktplatz (Außenseite)
 PI = math.pi
+SUN = (0.0432, -0.7013, 0.7115)                   # Richtung zur Sonne auf Heimstatt II im Rahmen der Stadt (Spiel: sunDir lokal (x, y, z) -> Blender (x, -z, y))
 
 # Ausrichtung einer Fassade: Normale → (Drehung um z für Teile, die nach -Y zeigen; Leserichtung u für Schilder)
 def face(n):
@@ -27,6 +28,7 @@ def face(n):
 
 def build(lib):
     K = lib.Kit('Talstadt', seed=77)
+    K.lm = True; K.lm_min = 80.0; K.lm_px = 4096; K.lm_inherit = True      # Schattenkarte (bake_city_shade): Platz, Straßen, große Wände
     X, Y, Z = lib.X, lib.Y, lib.Z
     R = K.R
 

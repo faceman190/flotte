@@ -677,7 +677,37 @@ class Kit:
                 for l in f.loops: s_, t_ = l[self.uv1].uv; l[self.uv1].uv = ((x + s_ * w) / size, (y + t_ * h) / size)
             else:
                 for l in f.loops: l[self.uv1].uv = (8 / size, 8 / size)
+        if getattr(self, 'lm_inherit', False): self._inherit(size)
         return size
+    def _inherit(self, size, tol=0.08):
+        """Flächen ohne eigenes Feld, die flach auf einer Fläche mit Feld liegen (Markierungen, Aufkleber, kleine Platten), übernehmen deren Platz
+        in der Lichtkarte. Sonst blieben Bodenmarkierungen im Schatten eines Gebäudes hell. Einschalten mit K.lm_inherit = True (Städte, Basen im Freien)."""
+        import numpy as np
+        lmi = self.bm.faces.layers.int.get('lmi') or self.bm.faces.layers.int.new('lmi'); self.bm.faces.ensure_lookup_table(); self.bm.normal_update()      # neue Flächen haben erst danach eine Normale
+        ch = {}
+        for f in self.bm.faces:
+            c = f[self.chl]
+            if c: ch.setdefault(c, []).append(f)
+        info = []
+        for c, fs in ch.items():
+            P = np.array([list(l.vert.co) for f in fs for l in f.loops]); U = np.array([list(l[self.uv1].uv) for f in fs for l in f.loops])
+            p0 = P.mean(axis=0); M = np.linalg.lstsq(np.c_[P - p0, np.ones(len(P))], U, rcond=None)[0]      # uv = (p - p0, 1) · M
+            info.append((np.array(fs[0].normal), p0, M, U.min(axis=0), U.max(axis=0), P.min(axis=0) - tol, P.max(axis=0) + tol))
+        if not info: return
+        N = np.array([i[0] for i in info]); P0 = np.array([i[1] for i in info]); lo = np.array([i[5] for i in info]); hi = np.array([i[6] for i in info])
+        k = 0
+        for f in self.bm.faces:
+            if f[self.chl]: continue
+            c = np.array(f.calc_center_median()); n = np.array(f.normal)
+            ok = (N @ n > 0.97) & (np.abs(((c - P0) * N).sum(axis=1)) < tol) & (c >= lo).all(axis=1) & (c <= hi).all(axis=1)
+            idx = np.nonzero(ok)[0]
+            if not len(idx): continue
+            _, p0, M, umin, umax, _, _ = info[idx[0]]
+            for l in f.loops:
+                uv = np.r_[np.array(l.vert.co) - p0, 1.0] @ M
+                l[self.uv1].uv = (float(min(max(uv[0], umin[0]), umax[0])), float(min(max(uv[1], umin[1]), umax[1])))
+            f[lmi] = 1; k += 1
+        self.lm_inherited = k
 
 
 # ---------------------------------------------------------------- Materialien (Vorschau in Blender; das Spiel setzt eigene ein)
@@ -850,14 +880,34 @@ def set_emission(scale=1.0):
         m = bpy.data.materials.get(n)
         if m and m.use_nodes and m.node_tree.nodes.get('Principled BSDF'): m.node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = v * scale
 
-def bake_city_light(ob, name, samples=96, bounces=3, ref=None, blur=2):
+def _bake_twin(ob):
+    """Zwilling für die Licht- und Schattenkarte: ohne die Flächen, die flach auf einer Fläche mit Feld liegen (Markierungen, Aufkleber, Platten).
+    Sie würden das Feld darunter verdecken und trügen dann selbst Schwarz. Leuchtende Flächen bleiben, sie sind die Lichtquellen."""
+    import numpy as np
+    me = ob.data
+    if not me.attributes.get('lmi'): return None
+    tmp = ob.copy(); tmp.data = me.copy(); bpy.context.scene.collection.objects.link(tmp); tmp.modifiers.clear()
+    glow = {i for i, m in enumerate(tmp.data.materials) if m and m.name in EMIT}
+    bm = bmesh.new(); bm.from_mesh(tmp.data); L = bm.faces.layers.int.get('lmi')
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f[L] and f.material_index not in glow], context='FACES')
+    bm.to_mesh(tmp.data); bm.free()
+    return tmp
+def _median3(a):
+    """Einzelne helle Bildpunkte (Rauschen kleiner Lichtquellen) entfernen: Median über 3 × 3."""
+    import numpy as np
+    st = np.stack([np.roll(a, (dy, dx), axis=(0, 1)) for dy in (-1, 0, 1) for dx in (-1, 0, 1)])
+    return np.median(st, axis=0)
+
+def bake_city_light(ob, name, samples=96, bounces=3, ref=None, blur=2, emit=1.0):
     """Lichtkarte einer Stadt: nur das Licht der leuchtenden Flächen (Schilder, Schaufenster, Lampions, Lichtbänder) auf den Flächen mit eigenem Feld
     (Gassenböden, Sockelwände; beim Bauen K.lm = True setzen). Sonne und Himmel bleiben aus, die kommen im Spiel in Echtzeit dazu.
     Die Eckfarben (Tönung × Verdeckung aus bake_ao) bleiben unberührt. Bild: asset-src/tex-world/kit_lm_<name>@<Größe>.png (Hintergrund-Paket),
-    Kodierung wie bake_light (v = x / (1 + x), sRGB). Das Festfeld ist schwarz: Flächen ohne eigenes Feld bekommen kein vorberechnetes Licht."""
+    Kodierung wie bake_light (v = x / (1 + x), sRGB). Das Festfeld ist schwarz: Flächen ohne eigenes Feld bekommen kein vorberechnetes Licht.
+    ref: Bezugshelligkeit (None = 2,2 × Median; für Orte mit wenigen Lampen fest vorgeben, Neonhafen hat 0,36), emit: Faktor auf alle Leuchtstärken
+    (Flutlichter an Masten sind in Wirklichkeit viel heller als ein Schaufenster)."""
     import numpy as np
     sc = bpy.context.scene; me = ob.data; size = int(ob.get('kit_lm', 0)) or 2048
-    set_emission()
+    set_emission(emit)
     img = bpy.data.images.get('kit_lm_' + name)
     if img and img.size[0] != size: bpy.data.images.remove(img); img = None
     img = img or bpy.data.images.new('kit_lm_' + name, size, size, alpha=False, float_buffer=True)
@@ -872,17 +922,23 @@ def bake_city_light(ob, name, samples=96, bounces=3, ref=None, blur=2):
     if bg: bg.inputs['Strength'].default_value = 0.0
     sc.render.engine = 'CYCLES'; sc.cycles.device = 'CPU'; sc.cycles.samples = samples; sc.cycles.max_bounces = bounces; sc.cycles.diffuse_bounces = bounces
     sc.render.bake.target = 'IMAGE_TEXTURES'; sc.render.bake.margin = 4; bpy.context.view_layer.update()
+    twin = _bake_twin(ob); bo = twin or ob
+    if twin: ob.hide_render = True; twin.data.uv_layers.active = twin.data.uv_layers['Lightmap']
+    bpy.context.view_layer.update()
     for q in sc.objects: q.select_set(False)
-    ob.select_set(True); bpy.context.view_layer.objects.active = ob
+    bo.select_set(True); bpy.context.view_layer.objects.active = bo
     win = bpy.context.window; area = next(a for a in win.screen.areas if a.type == 'VIEW_3D'); region = next(r for r in area.regions if r.type == 'WINDOW')
-    ctx = dict(window=win, area=area, region=region, object=ob, active_object=ob, selected_objects=[ob], selected_editable_objects=[ob])
+    ctx = dict(window=win, area=area, region=region, object=bo, active_object=bo, selected_objects=[bo], selected_editable_objects=[bo])
     with bpy.context.temp_override(**ctx): bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'}, use_clear=True, margin=4)
+    if twin: tm = twin.data; bpy.data.objects.remove(twin, do_unlink=True); bpy.data.meshes.remove(tm); ob.hide_render = False
+    set_emission()
     for o in hidden: o.hide_render = False
     if bg: bg.inputs['Strength'].default_value = old
     me.uv_layers.active = me.uv_layers['UVMap']
     a = np.empty(size * size * 4, np.float32); img.pixels.foreach_get(a); a = a.reshape(size, size, 4)[..., :3].copy()
     a = np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0); a[:24, :24] = 0.0
     hi = float(np.percentile(a, 99.9)) if a.max() > 0 else 1.0; a = np.minimum(a, hi * 3.0)      # einzelne Ausreißer (Rauschen) kappen
+    a = _median3(a)
     mask = a.mean(axis=2) > 1e-6
     for _ in range(blur):
         k = a.copy()
@@ -901,6 +957,139 @@ def bake_city_light(ob, name, samples=96, bounces=3, ref=None, blur=2):
     col = me.color_attributes.get('Col')
     if col: me.color_attributes.active_color = col
     return {'size': size, 'ref': round(ref, 4), 'median': round(med, 4), 'lit': round(float(mask.mean()), 3), 'max': round(float(a.max()), 3)}
+
+def bake_city_shade(ob, name, sun, samples=32, ao_dist=45.0, ao_samples=64, angle=2.0, blur=1):
+    """Schattenkarte einer Stadt oder Basis im Tageslicht, für dieselben Felder wie die Lichtkarte (zweiter Satz Texturkoordinaten):
+      Rot  = Anteil der Sonne (1 = frei, 0 = im Schatten eines Gebäudes), Grün = Anteil des Himmels (weiträumige Verdeckung, ao_dist Meter).
+    sun = Richtung ZUR Sonne in Blender-Koordinaten (im Spiel: sunDir im Rahmen der Station, (x, y, z) -> (x, -z, y)).
+    Das Spiel multipliziert damit Sonne und Grundlicht (kit.ts, look.shade). Flächen ohne eigenes Feld zeigen auf das Festfeld, dort steht Weiß.
+    Der Sonnenanteil ist das Verhältnis zweier Rechnungen (mit und ohne Schattenwurf); so fällt der Einfallswinkel heraus, den das Spiel selbst rechnet.
+    Bild: asset-src/tex-world/kit_sh_<name>@<Größe>.png (Hintergrund-Paket)."""
+    import numpy as np
+    from mathutils import Vector
+    sc = bpy.context.scene; me = ob.data; size = int(ob.get('kit_lm', 0)) or 2048
+    img = bpy.data.images.get('kit_sh_tmp')
+    if img and img.size[0] != size: bpy.data.images.remove(img); img = None
+    img = img or bpy.data.images.new('kit_sh_tmp', size, size, alpha=False, float_buffer=True)
+    for m in me.materials:
+        nt = m.node_tree; n = nt.nodes.get('BakeZiel') or nt.nodes.new('ShaderNodeTexImage'); n.name = 'BakeZiel'; n.image = img
+        for x in nt.nodes: x.select = False
+        n.select = True; nt.nodes.active = n
+    me.uv_layers.active = me.uv_layers['Lightmap']
+    hidden = [o for o in sc.objects if o is not ob and o.type in ('MESH', 'LIGHT') and not o.hide_render]
+    for o in hidden: o.hide_render = True
+    set_emission(0.0)
+    if not sc.world: sc.world = bpy.data.worlds.new('Welt')
+    w = sc.world; bg = w.node_tree.nodes['Background'] if w.use_nodes else None; old = bg.inputs['Strength'].default_value if bg else None
+    if bg: bg.inputs['Strength'].default_value = 0.0
+    sd = bpy.data.lights.new('sh_sonne', 'SUN'); sd.energy = 3.0; sd.angle = math.radians(angle)
+    so = bpy.data.objects.new('sh_sonne', sd); sc.collection.objects.link(so)
+    so.rotation_euler = (-Vector(sun).normalized()).to_track_quat('-Z', 'Y').to_euler()
+    sc.render.engine = 'CYCLES'; sc.cycles.device = 'CPU'; sc.cycles.samples = samples; sc.cycles.max_bounces = 0; sc.cycles.diffuse_bounces = 0
+    sc.render.bake.target = 'IMAGE_TEXTURES'; sc.render.bake.margin = 4; bpy.context.view_layer.update()
+    twin = _bake_twin(ob); bo = twin or ob
+    if twin: ob.hide_render = True; twin.data.uv_layers.active = twin.data.uv_layers['Lightmap']
+    bpy.context.view_layer.update()
+    for q in sc.objects: q.select_set(False)
+    bo.select_set(True); bpy.context.view_layer.objects.active = bo
+    win = bpy.context.window; area = next(a for a in win.screen.areas if a.type == 'VIEW_3D'); region = next(r for r in area.regions if r.type == 'WINDOW')
+    ctx = dict(window=win, area=area, region=region, object=bo, active_object=bo, selected_objects=[bo], selected_editable_objects=[bo])
+    def grab():
+        a = np.empty(size * size * 4, np.float32); img.pixels.foreach_get(a)
+        return np.nan_to_num(a.reshape(size, size, 4)[..., :3].mean(axis=2), nan=0.0, posinf=0.0, neginf=0.0)
+    with bpy.context.temp_override(**ctx): bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT'}, use_clear=True, margin=4)
+    A = grab()
+    bo.visible_shadow = False; bpy.context.view_layer.update()
+    with bpy.context.temp_override(**ctx): bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT'}, use_clear=True, margin=4)
+    B = grab(); bo.visible_shadow = True
+    bpy.data.objects.remove(so, do_unlink=True); bpy.data.lights.remove(sd)
+    lim = 0.03 * float(np.percentile(B, 99.5)) if B.max() > 0 else 1.0
+    vis = np.where(B > lim, np.clip(A / np.maximum(B, 1e-6), 0, 1), 1.0)
+    # Himmel: Verdeckung über ao_dist Meter, mit einer Grundfläche (Wände sähen sonst unter dem Horizont freien Himmel)
+    gm = bpy.data.meshes.new('sh_boden'); gb = bmesh.new(); bmesh.ops.create_grid(gb, x_segments=1, y_segments=1, size=900); gb.to_mesh(gm); gb.free()
+    g = bpy.data.objects.new('sh_boden', gm); g.location = (0, 0, -0.3); sc.collection.objects.link(g)
+    sc.world.light_settings.distance = ao_dist; sc.cycles.samples = ao_samples; bpy.context.view_layer.update()
+    for q in sc.objects: q.select_set(False)
+    bo.select_set(True); bpy.context.view_layer.objects.active = bo
+    with bpy.context.temp_override(**ctx): bpy.ops.object.bake(type='AO', use_clear=True, margin=4)
+    S = np.clip(grab(), 0, 1); used = (B > 0) | (S > 0)
+    bpy.data.objects.remove(g, do_unlink=True); bpy.data.meshes.remove(gm)
+    S = np.where(used, S, 1.0)
+    if twin: tm = twin.data; bpy.data.objects.remove(twin, do_unlink=True); bpy.data.meshes.remove(tm); ob.hide_render = False
+    for _ in range(blur):
+        for arr in (vis, S):
+            k = arr.copy()
+            for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)): k += np.roll(arr, (dy, dx), axis=(0, 1))
+            arr[:] = k / 5.0
+    vis[:24, :24] = 1.0; S[:24, :24] = 1.0
+    for o in hidden: o.hide_render = False
+    if bg: bg.inputs['Strength'].default_value = old
+    set_emission()
+    me.uv_layers.active = me.uv_layers['UVMap']
+    out = bpy.data.images.get('kit_sh8_' + name)
+    if out and out.size[0] != size: bpy.data.images.remove(out); out = None
+    out = out or bpy.data.images.new('kit_sh8_' + name, size, size, alpha=False)
+    out.colorspace_settings.name = 'Non-Color'
+    buf = np.ones((size, size, 4), np.float32); buf[..., 0] = vis; buf[..., 1] = S; out.pixels.foreach_set(buf.ravel()); out.update()
+    d = os.path.join(ROOT, 'asset-src', 'tex-world'); os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, 'kit_sh_%s@%d.png' % (name, size)); out.filepath_raw = path; out.file_format = 'PNG'; out.save()
+    col = me.color_attributes.get('Col')
+    if col: me.color_attributes.active_color = col
+    return {'size': size, 'shadow': round(float((vis[used] < 0.5).mean()), 3) if used.any() else 0, 'sky_mean': round(float(S[used].mean()), 3) if used.any() else 1, 'used': round(float(used.mean()), 3)}
+
+def bake_city_probe(ob, name, x0, x1, y0, y1, cell=3.0, h=1.0, samples=192, bounces=3, ref=0.36, emit=1.0):
+    """Lichtraster einer Stadt für bewegte Figuren: wie hell und in welcher Farbe das Stadtlicht an einem Ort ist (eine Zelle je cell Meter,
+    gemessen auf einer waagrechten Fläche in h Metern Höhe). Figuren haben keinen Platz in der Lichtkarte; das Spiel liest dieses Raster an ihrem
+    Standort ab (city.ts, cityProbe). Bereich in Blender-Koordinaten; im Spiel gilt x wie hier und z = -y. Das Bild liegt so, dass die oberste Zeile
+    zu y1 gehört (kleinstes z im Spiel). Kodierung wie die Lichtkarte, mit fester Bezugshelligkeit ref (dieselbe wie bei bake_city_light angeben).
+    Bild: asset-src/tex-world/kit_pr_<name>.png"""
+    import numpy as np
+    sc = bpy.context.scene
+    W = max(2, round((x1 - x0) / cell)); H = max(2, round((y1 - y0) / cell))
+    img = bpy.data.images.get('kit_pr_tmp')
+    if img: bpy.data.images.remove(img)
+    img = bpy.data.images.new('kit_pr_tmp', W, H, alpha=False, float_buffer=True)
+    me = bpy.data.meshes.new('pr_raster'); bm = bmesh.new()
+    vs = [bm.verts.new(p) for p in ((x0, y0, h), (x1, y0, h), (x1, y1, h), (x0, y1, h))]; f = bm.faces.new(vs); uv = bm.loops.layers.uv.new('UVMap')
+    for l, st in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1))): l[uv].uv = st
+    bm.to_mesh(me); bm.free()
+    mat = bpy.data.materials.new('pr_raster'); mat.use_nodes = True; nt = mat.node_tree
+    n = nt.nodes.new('ShaderNodeTexImage'); n.image = img; nt.nodes.active = n; n.select = True
+    bs = nt.nodes.get('Principled BSDF')
+    if bs: bs.inputs['Base Color'].default_value = (1, 1, 1, 1); bs.inputs['Roughness'].default_value = 1.0
+    me.materials.append(mat)
+    po = bpy.data.objects.new('pr_raster', me); sc.collection.objects.link(po)
+    po.visible_shadow = False; po.visible_diffuse = False; po.visible_glossy = False      # das Raster selbst wirft keinen Schatten und kein Licht zurück
+    hidden = [o for o in sc.objects if o is not ob and o is not po and o.type in ('MESH', 'LIGHT') and not o.hide_render]
+    for o in hidden: o.hide_render = True
+    set_emission(emit)
+    w = sc.world; bg = w.node_tree.nodes['Background'] if w and w.use_nodes else None; old = bg.inputs['Strength'].default_value if bg else None
+    if bg: bg.inputs['Strength'].default_value = 0.0
+    sc.render.engine = 'CYCLES'; sc.cycles.device = 'CPU'; sc.cycles.samples = samples; sc.cycles.max_bounces = bounces; sc.cycles.diffuse_bounces = bounces
+    sc.render.bake.target = 'IMAGE_TEXTURES'; sc.render.bake.margin = 0; bpy.context.view_layer.update()
+    for q in sc.objects: q.select_set(False)
+    po.select_set(True); bpy.context.view_layer.objects.active = po
+    win = bpy.context.window; area = next(a for a in win.screen.areas if a.type == 'VIEW_3D'); region = next(r for r in area.regions if r.type == 'WINDOW')
+    ctx = dict(window=win, area=area, region=region, object=po, active_object=po, selected_objects=[po], selected_editable_objects=[po])
+    with bpy.context.temp_override(**ctx): bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'}, use_clear=True, margin=0)
+    a = np.empty(W * H * 4, np.float32); img.pixels.foreach_get(a); a = np.nan_to_num(a.reshape(H, W, 4)[..., :3].copy(), nan=0.0, posinf=0.0, neginf=0.0)
+    for o in hidden: o.hide_render = False
+    if bg: bg.inputs['Strength'].default_value = old
+    set_emission()
+    bpy.data.objects.remove(po, do_unlink=True); bpy.data.meshes.remove(me); bpy.data.materials.remove(mat)
+    hi = float(np.percentile(a, 99.5)) if a.max() > 0 else 1.0; a = np.minimum(a, hi * 2.0); a = _median3(a)
+    k = a.copy()
+    for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)): k += np.roll(a, (dy, dx), axis=(0, 1))
+    a = k / 5.0
+    v = (a / ref) / (1.0 + a / ref)
+    srgb = np.where(v <= 0.0031308, v * 12.92, 1.055 * np.power(np.clip(v, 1e-8, 1), 1 / 2.4) - 0.055)
+    out = bpy.data.images.get('kit_pr8_' + name)
+    if out: bpy.data.images.remove(out)
+    out = bpy.data.images.new('kit_pr8_' + name, W, H, alpha=False)
+    buf = np.ones((H, W, 4), np.float32); buf[..., :3] = srgb; out.pixels.foreach_set(buf.ravel()); out.update()
+    d = os.path.join(ROOT, 'asset-src', 'tex-world'); os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, 'kit_pr_%s.png' % name); out.filepath_raw = path; out.file_format = 'PNG'; out.save()
+    return {'w': W, 'h': H, 'median': round(float(np.median(a.mean(axis=2))), 4), 'max': round(float(a.max()), 3), 'lit': round(float((a.mean(axis=2) > 0.01).mean()), 3)}
 
 def bake_light(ob, name, samples=64, bounces=4, ref=None, blur=1):
     """Rechnet das Licht eines Innenraums vor (Cycles, alle leuchtenden Flächen und Lampen der Szene sind Lichtquellen):

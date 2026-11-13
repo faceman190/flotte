@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { scene, camera, glowMat, ambient, sun, rim, bloomPass } from '../core/engine';
 import { puff } from './fx';
-import { applyKit, kitMeta, loadKitMeta, KIT_GLOW, kitHoloFlicker, setCityLight } from '../models/kit';
+import { applyKit, kitMeta, loadKitMeta, KIT_GLOW, kitHoloFlicker, setCityLight, cityLook, probeLit } from '../models/kit';
 import { setSkyDusk } from '../core/sky';
 import { collisionSpheres } from '../models/stationModels';
 import { hasChar, charInstance, animInit, animStep, animTalk, type CharAnim } from '../models/charModels';
@@ -69,8 +69,7 @@ export function buildCityModel(name: string) {
   if (!t) { loadCity(name); return null; }
   const m = meta(name);
   const g = new THREE.Group(), body = t.clone(true);
-  const lm = 'kit_lm_' + name;                          // vorberechnetes Stadtlicht, falls für diese Stadt eines gebacken wurde
-  applyKit(body, window.TEXDATA?.[lm] ? { city: lm } : {});
+  applyKit(body, cityLook(name));                       // vorberechnetes Licht und Schatten, falls für diese Stadt gebacken
   g.add(body); g.updateMatrixWorld(true);
   g.userData.walkRoot = body;                           // nur die Stadt selbst ist begehbar (nicht der Hangar dahinter, nicht die Leute)
   const sph = collisionSpheres(body, 7, m.collide_above ?? 1);
@@ -87,9 +86,9 @@ export function buildCityModel(name: string) {
 }
 
 // ---------- Stadt im Spiel ----------
-interface Walker { c: ReturnType<typeof charInstance>; path: [number, number][]; i: number; dir: number; x: number; z: number; v: number; wait: number }
-interface Vendor { c: ReturnType<typeof charInstance>; x: number; z: number }
-interface Guard { a: Avatar; x: number; z: number; yaw: number }
+interface Walker { lc?: THREE.Color; c: ReturnType<typeof charInstance>; path: [number, number][]; i: number; dir: number; x: number; z: number; v: number; wait: number }
+interface Vendor { lc?: THREE.Color; c: ReturnType<typeof charInstance>; x: number; z: number }
+interface Guard { lc?: THREE.Color; a: Avatar; x: number; z: number; yaw: number }
 interface Flyer { m: ShipModel; t: number; dur: number; a: THREE.Vector3; b: THREE.Vector3; c: THREE.Vector3; out: boolean }
 export const CITY = { st: null as Station | null, name: '', walk: false };
 let life: THREE.Group | null = null, walkers: Walker[] = [], vendors: Vendor[] = [], guards: Guard[] = [], flyers: Flyer[] = [], flyT = 8;
@@ -98,6 +97,36 @@ export const cityHooks = { tab: (_t: string, _n: string) => {}, rest: () => {} }
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 const toWorld = (st: Station, x: number, y: number, z: number) => st.mesh.localToWorld(_v.set(x, y, z)).clone();
 export const cityWorld = toWorld;
+
+// ---------- Lichtraster für Figuren ----------
+// Ein kleines Bild je Stadt (kit_pr_<Name>, eine Zelle je 3 m über die Grenzen der Stadt, oberste Zeile = kleinstes z): Helligkeit und Farbe des
+// Stadtlichts am Boden. Figuren lesen es an ihrem Standort ab. Kodierung wie die Lichtkarte (v = x / (1 + x), sRGB).
+let probe: { w: number; h: number; d: Float32Array; bx: number; z0: number; z1: number } | null = null, probeFor = '';
+const PROBE_K = 5.0;                                     // Stärke wie die Lichtkarte (CITY_LIGHT in kit.ts), etwas angehoben für das Licht von der Seite
+function loadProbe(name: string) {
+  probe = null; probeFor = name;
+  const url = window.TEXDATA?.['kit_pr_' + name]; if (!url) return false;
+  const bd = meta(name).bounds || { x: 210, z0: -255, z1: 240 }, im = new Image();
+  im.onload = () => {
+    if (probeFor !== name) return;
+    const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+    const g = c.getContext('2d')!; g.drawImage(im, 0, 0);
+    const px = g.getImageData(0, 0, im.width, im.height).data, d = new Float32Array(im.width * im.height * 3);
+    for (let i = 0, n = im.width * im.height; i < n; i++) for (let k = 0; k < 3; k++) {
+      const s = px[i * 4 + k] / 255, v = Math.min(0.965, s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4));
+      d[i * 3 + k] = v / (1 - v);
+    }
+    probe = { w: im.width, h: im.height, d, bx: bd.x, z0: bd.z0, z1: bd.z1 };
+  };
+  im.src = url;
+  return true;
+}
+function probeAt(x: number, z: number, out: THREE.Color, k: number) {
+  const p = probe!, fx = Math.min(p.w - 1.001, Math.max(0, (x + p.bx) / (2 * p.bx) * p.w - 0.5)), fz = Math.min(p.h - 1.001, Math.max(0, (z - p.z0) / (p.z1 - p.z0) * p.h - 0.5));
+  const x0 = Math.floor(fx), z0 = Math.floor(fz), tx = fx - x0, tz = fz - z0, d = p.d, a = (z0 * p.w + x0) * 3, b = a + 3, c = a + p.w * 3, e = c + 3;
+  const w0 = (1 - tx) * (1 - tz) * k, w1 = tx * (1 - tz) * k, w2 = (1 - tx) * tz * k, w3 = tx * tz * k;
+  out.setRGB(d[a] * w0 + d[b] * w1 + d[c] * w2 + d[e] * w3, d[a + 1] * w0 + d[b + 1] * w1 + d[c + 1] * w2 + d[e + 1] * w3, d[a + 2] * w0 + d[b + 2] * w1 + d[c + 2] * w2 + d[e + 2] * w3);
+}
 
 // Leben aufbauen, sobald die Stadt als Station steht (surface.ts / world.ts nach addStation)
 export function initCity(st: Station) {
@@ -108,6 +137,7 @@ export function initCity(st: Station) {
   life = new THREE.Group(); life.name = 'leben'; st.mesh.add(life);
   walkers = []; vendors = []; guards = []; flyers = []; flyT = 6;
   const R = mulberry(name.length * 7919);
+  const lit = loadProbe(name);                           // Lichtraster der Stadt: Figuren bekommen das Stadtlicht ihres Standorts
   // Passanten: je Weg zwei bis drei, verschiedene Figuren und Helligkeiten
   const kinds = ['worker', 'lagerarbeiter', 'mechaniker', 'worker'].filter(hasChar);
   const cap = m.style === 'neon' ? 30 : 99;
@@ -119,7 +149,7 @@ export function initCity(st: Station) {
       const i = Math.floor(R() * (p.length - 1)), t = R();
       const x = p[i][0] + (p[i + 1][0] - p[i][0]) * t, z = p[i][1] + (p[i + 1][1] - p[i][1]) * t;
       c.g.position.set(x, 0.18, z); life!.add(c.g);
-      walkers.push({ c, path: p, i, dir: 1, x, z, v: 1.25 + R() * 0.4, wait: R() * 3 });
+      walkers.push({ c, path: p, i, dir: 1, x, z, v: 1.25 + R() * 0.4, wait: R() * 3, lc: lit ? probeLit(c.g) : undefined });
     }
   });
   // Händler hinter den Theken (die Stände stehen am Platzrand und schauen zur Mitte)
@@ -128,12 +158,12 @@ export function initCity(st: Station) {
     const c = charInstance(vk, 0.85 + R() * 0.3); animInit(c.anim, false); c.anim.look = camera.position;
     const out = s[0] < 0 ? -1 : 1, x = s[0] + out * 3.4, z = s[1];
     c.g.position.set(x, 0.18, z); c.g.rotation.y = out < 0 ? Math.PI / 2 : -Math.PI / 2; life.add(c.g);
-    vendors.push({ c, x, z });
+    vendors.push({ c, x, z, lc: lit ? probeLit(c.g) : undefined });
   }
   // Wachen (Soldaten mit Gewehr)
   for (const gd of m.guards || []) {
     const a = makeAvatar({ helm: 'wache', anzug: 'panzer' }); if (!a) break;
-    life.add(a.s.g); guards.push({ a, x: gd[0], z: gd[1], yaw: gd[2] });
+    life.add(a.s.g); guards.push({ a, x: gd[0], z: gd[1], yaw: gd[2], lc: lit ? probeLit(a.s.g) : undefined });
   }
   if (m.style === 'neon') buildNeon(m);
   // Ansprechpunkte zu Fuß (Weltkoordinaten)
@@ -214,6 +244,7 @@ export function updateCity(dt: number) {
       w.c.g.rotation.y += da * Math.min(1, dt * 5);
     }
     for (const v of vendors) animStep(v.c.anim, dt, false);
+    if (probe) { const k = PROBE_K * (meta(CITY.name).style === 'neon' ? AT.lm0 + (1 - AT.lm0) * atmoK : 1); for (const f of walkers) if (f.lc) probeAt(f.x, f.z, f.lc, k); for (const f of vendors) if (f.lc) probeAt(f.x, f.z, f.lc, k); for (const f of guards) if (f.lc) probeAt(f.x, f.z, f.lc, k); }
     for (const g of guards) driveAvatar(g.a, dt, { x: g.x, y: 0.18, z: g.z, yaw: g.yaw, pitch: 0, vx: 0, vz: 0, wid: 'k12', combat: false });
   }
   // Verkehr: alle 25–45 s ein Schiff, abwechselnd hinein und hinaus
@@ -234,7 +265,7 @@ function setAtmo(k: number) {
   const fog = scene.fog as THREE.FogExp2 | null; const b = atmoBase; if (!b) return;
   if (fog) { fog.color.setHex(b.fogC).lerp(NEON_FOG, k); fog.density = b.fogD + (0.0042 - b.fogD) * k; }
   if (!IN.active) { ambient.intensity = b.amb * (1 - AT.amb * k); sun.intensity = b.sun * (1 - AT.sun * k); rim.intensity = b.rim * (1 - AT.rim * k); scene.environmentIntensity = 1 - AT.env * k; }
-  setSkyDusk(AT.sky * k); setCityLight(AT.lm0 + (1 - AT.lm0) * k);
+  setSkyDusk(AT.sky * k); setCityLight(AT.lm0 + (1 - AT.lm0) * k, 'kit_lm_' + CITY.name);
   if (bloomPass) bloomPass.strength = b.bloom + 0.3 * k;
 }
 function buildNeon(m: CityMeta) {

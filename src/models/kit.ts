@@ -45,9 +45,8 @@ function dusty<T extends THREE.Material>(m: T, key: string) {
 
 export const KIT_GLOW: Record<string, number> = { light: 0xfff0d8, lamp: 0xffa030, redlamp: 0xff3a24, screen: 0x3f9fd0, green: 0x40ff80, cool: 0xc8e0ff, accent: 0x40d8c0, shopw: 0xa88c68, shopc: 0x6f8cab };   // shopw/shopc: gedämpftes Ladenlicht hinter Schaufenstern
 // Innenräume: vorberechnetes Licht (Bild über den zweiten Satz Texturkoordinaten, sonst in den Eckfarben) und Akzentfarbe der Station
-//   city: Lichtkarte einer Stadt im Freien (Licht der Schaufenster, Schilder und Laternen auf Boden und Wänden, aus bake_city_light in kit_lib.py).
-//         Sie kommt zum Tageslicht hinzu; Flächen ohne eigenen Platz in der Karte zeigen auf einen schwarzen Bildpunkt.
-export interface KitLook { lightmap?: string; intensity?: number; accent?: number; city?: string }
+// Im Freien: city, shade, amb, env, light (siehe cityLook weiter unten)
+export interface KitLook { lightmap?: string; intensity?: number; accent?: number; city?: string; shade?: string; amb?: number; env?: boolean; light?: number }
 const SETS: Record<string, Record<string, THREE.Material>> = {};
 const TEXS: Record<string, THREE.Texture | null> = {};
 const shared = (name: string, srgb: boolean) => (name in TEXS ? TEXS[name] : (TEXS[name] = tex(name, srgb)));
@@ -72,21 +71,62 @@ function decodeLight(m: THREE.Material) {
   };
   m.customProgramCacheKey = () => pk.call(m) + '|kitlm';
 }
-// Lichtkarten der Städte: ein Bild je Stadt; die Stärke folgt der Abendstimmung (setCityLight aus city.ts)
-const CITYLM: Record<string, THREE.Texture | null> = {};
-const CITYLIT: THREE.MeshStandardMaterial[] = [];
-let cityLightK = 1;
-const CITY_LIGHT = 4.0;
-function cityLit(m: THREE.MeshStandardMaterial, name: string) {
-  const lm = name in CITYLM ? CITYLM[name] : (CITYLM[name] = tex(name, true));
-  if (!lm) return m;
-  lm.channel = 1; lm.wrapS = lm.wrapT = THREE.ClampToEdgeWrapping; lm.anisotropy = 4;
-  m.lightMap = lm; m.lightMapIntensity = CITY_LIGHT * cityLightK; decodeLight(m); CITYLIT.push(m);
+// Städte und Basen im Freien: bis zu zwei vorberechnete Bilder je Ort, beide über den zweiten Satz Texturkoordinaten (kit_lib.py):
+//   city   Lichtkarte (kit_lm_<Name>): Licht der Lampen, Schilder und Schaufenster; kommt zum Tageslicht hinzu (bake_city_light)
+//   shade  Schattenkarte (kit_sh_<Name>): Rot = Anteil der Sonne, Grün = Anteil des Himmels; damit werden Sonne und Grundlicht multipliziert
+//          (bake_city_shade). Flächen ohne eigenes Feld zeigen in der Lichtkarte auf Schwarz, in der Schattenkarte auf Weiß.
+//   amb    Anteil des Grundlichts an diesem Ort (Mond ohne Lufthülle: wenig Streulicht, die Lampen sollen tragen)
+//   env    Spiegelungen aus der Stadt-Umgebung statt aus dem Weltraum (Neonstädte)
+// Die Stärke der Lichtkarte folgt in Neonstädten der Abendstimmung (setCityLight aus city.ts).
+const CITYLOOK: Record<string, { amb?: number; env?: boolean; light?: number }> = { Neonhafen: { env: true }, Schmelzwerk: { amb: 0.42, light: 1.0 } };
+export function cityLook(name: string): KitLook {
+  const T = window.TEXDATA || {}, lm = 'kit_lm_' + name, sh = 'kit_sh_' + name, c = CITYLOOK[name] || {};
+  if (!T[lm] && !T[sh]) return {};
+  return { city: T[lm] ? lm : undefined, shade: T[sh] ? sh : undefined, amb: c.amb, env: c.env, light: c.light };
+}
+const CITYTEX: Record<string, THREE.Texture | null> = {};
+const CITYLIT: { m: THREE.MeshStandardMaterial; name: string; base: number }[] = [];
+const CITY_LIGHT = 4.0, SKY_K = 0.75;
+function cityTex(name: string, srgb: boolean) {
+  if (name in CITYTEX) return CITYTEX[name];
+  const t = tex(name, srgb);
+  if (t) { t.channel = 1; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = 4; }
+  return (CITYTEX[name] = t);
+}
+function cityLit(m: THREE.MeshStandardMaterial, look: KitLook) {
+  const lm = look.city ? cityTex(look.city, true) : null, sh = look.shade ? cityTex(look.shade, false) : null;
+  if (!lm && !sh) return m;
+  m.lightMap = lm || sh;                                   // schaltet die zweiten Texturkoordinaten ein; das Licht selbst rechnet der eigene Abschnitt unten
+  const base = CITY_LIGHT * (look.light ?? 1); m.lightMapIntensity = base;
+  if (lm) CITYLIT.push({ m, name: look.city!, base });
+  const amb = { value: look.amb ?? 1 }, shade = { value: sh };
+  const prev = m.onBeforeCompile, pk = m.customProgramCacheKey;   // Staub (dusty) bleibt erhalten
+  m.onBeforeCompile = (s, r) => {
+    prev.call(m, s, r);
+    s.uniforms.kitAmb = amb; if (sh) s.uniforms.kitShade = shade;
+    s.fragmentShader = s.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float kitAmb;' + (sh ? ' uniform sampler2D kitShade;' : ''))
+      .replace('#include <lights_fragment_maps>', [
+        sh ? 'vec4 kitSh = texture2D( kitShade, vLightMapUv );' : 'vec4 kitSh = vec4( 1.0 );',
+        'float kitSky = mix( 1.0, kitSh.g, ' + SKY_K.toFixed(2) + ' ) * kitAmb;',
+        'irradiance *= kitSky;',
+        lm ? 'vec3 lmV = min( texture2D( lightMap, vLightMapUv ).rgb, vec3( 0.965 ) ); irradiance += lmV / ( 1.0 - lmV ) * lightMapIntensity;' : '',
+        '#if defined( USE_ENVMAP ) && defined( STANDARD ) && defined( ENVMAP_TYPE_CUBE_UV )',
+        '  iblIrradiance += getIBLIrradiance( geometryNormal ) * kitSky;',
+        '#endif',
+        '#if defined( USE_ENVMAP ) && defined( RE_IndirectSpecular )',
+        '  radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * mix( 1.0, kitSky, 0.6 );',
+        '#endif',
+      ].join('\n'))
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directDiffuse *= kitSh.r; reflectedLight.directSpecular *= kitSh.r;');
+  };
+  m.customProgramCacheKey = () => pk.call(m) + '|kitcity' + (lm ? 'L' : '') + (sh ? 'S' : '');
   return m;
 }
-export function setCityLight(k: number) { cityLightK = k; for (const m of CITYLIT) m.lightMapIntensity = CITY_LIGHT * k; }
+export function setCityLight(k: number, name: string) { for (const c of CITYLIT) if (c.name === name) c.m.lightMapIntensity = c.base * k; }
 export function kitMaterials(look: KitLook = {}) {
-  const key = (look.lightmap || '') + '|' + (look.accent ?? '') + '|' + (look.city || '');
+  const out = !!(look.city || look.shade), okey = out ? [look.city || '', look.shade || '', look.amb ?? 1, look.env ? 1 : 0, look.light ?? 1].join(',') : '';
+  const key = (look.lightmap || '') + '|' + (look.accent ?? '') + '|' + okey;
   if (SETS[key]) return SETS[key];
   const inside = !!look.lightmap;
   const trim = sheet('kit_trim'), int = sheet('kit_int');
@@ -112,10 +152,10 @@ export function kitMaterials(look: KitLook = {}) {
   M.kit_neon = new THREE.MeshBasicMaterial({ map: shared('kit_city', true) });
   M.kit_neon2 = new THREE.MeshBasicMaterial({ map: shared('kit_city2', true) });
   M.kit_holo = HOLO; HOLO.map = shared('kit_city2', true);
-  if (look.city) { for (const m of [trim, int, concrete]) { cityLit(m, look.city); m.envMap = cityEnv(); } glass.envMap = cityEnv(); }   // Spiegelungen aus der Stadt, nicht aus dem Weltraum
+  if (out) { for (const m of [trim, int, concrete, decal]) { cityLit(m, look); if (look.env && m !== decal) m.envMap = cityEnv(); } if (look.env) glass.envMap = cityEnv(); }
   const tw = new THREE.MeshStandardMaterial({ map: shared('kit_tower_col', true), emissiveMap: shared('kit_tower_emi', true), emissive: 0xffffff, emissiveIntensity: 1.25, roughness: 0.55, metalness: 0.25, vertexColors: true });
-  tw.envMapIntensity = 0.5; M.kit_tower = tw; if (look.city) cityLit(tw, look.city);
-  const wet = texMat(0x8e96a4, 'hangar_floor', { vertexColors: true, roughness: 0.36, metalness: 0.1 }); wet.envMap = cityEnv(); wet.envMapIntensity = 0.3; M.kit_wet = wet; if (look.city) cityLit(wet, look.city);   // spiegelt die Stadt-Umgebung statt des Weltraums (der wäre rosa)
+  tw.envMapIntensity = 0.5; M.kit_tower = tw; if (out) cityLit(tw, look);
+  const wet = texMat(0x8e96a4, 'hangar_floor', { vertexColors: true, roughness: 0.36, metalness: 0.1 }); wet.envMap = cityEnv(); wet.envMapIntensity = 0.3; M.kit_wet = wet; if (out) cityLit(wet, look);   // spiegelt die Stadt-Umgebung statt des Weltraums (der wäre rosa)
   return (SETS[key] = M);
 }
 // Umgebung für Spiegelungen in Städten: dunstiger Himmel, dunkler Grund, am Horizont die Lichter der Stadt. Die Umgebung der Szene (der Nebel des
@@ -141,14 +181,35 @@ const CITYMAT: Record<string, [number, number, number, number]> = {
   kit_hha: [1.5, 0.9, 2.4, 0.2], kit_hhb: [1.5, 0.7, 2.4, 0.2], kit_hhc: [1.5, 0.7, 2.4, 0.2], kit_sta: [0, 0.75, 1.6, 0.5], kit_stb: [2.2, 0.75, 1.6, 0.5], kit_stc: [0, 0.6, 1.6, 0.5],
 };
 const CITYSET: Record<string, THREE.Material> = {};
-function cityMat(name: string, lm = '') {
-  const key = name + '|' + lm;
+function cityMat(name: string, look: KitLook = {}) {
+  const lit = !!(look.city || look.shade), key = name + '|' + (lit ? [look.city || '', look.shade || '', look.amb ?? 1, look.light ?? 1].join(',') : '');
   if (CITYSET[key]) return CITYSET[key];
   const c = CITYMAT[name]; if (!c) return null;
   const m = sheet(name); m.envMap = cityEnv(); m.envMapIntensity = c[1]; m.color.setScalar(c[2]); m.metalness = c[3];
   if (c[0]) { m.emissiveMap = shared(name + '_emi', true); m.emissive.set(0xffffff); m.emissiveIntensity = c[0]; }
-  if (lm) cityLit(m, lm);
+  if (lit) cityLit(m, look);
   return (CITYSET[key] = m);
+}
+// Eigenes Zusatzlicht je Figur: Bewegte Figuren haben keinen Platz in der Lichtkarte. Ihre Materialien werden kopiert und bekommen eine Helligkeit,
+// die city.ts je Bild aus dem Lichtraster der Stadt (kit_pr_<Name>, bake_city_probe) am Standort der Figur setzt.
+export function probeLit(root: THREE.Object3D): THREE.Color {
+  const col = new THREE.Color(0, 0, 0), u = { value: col }, done = new Map<THREE.Material, THREE.Material>();
+  root.traverse((o: any) => {
+    const src = o.isMesh ? o.material : null;
+    if (!src || !src.isMeshStandardMaterial) return;
+    let m = done.get(src);
+    if (!m) {
+      m = src.clone() as THREE.Material; const prev = src.onBeforeCompile, pk = src.customProgramCacheKey, mm = m;
+      m.onBeforeCompile = (s, r) => {
+        prev.call(mm, s, r); s.uniforms.kitProbe = u;
+        s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 kitProbe;').replace('#include <lights_fragment_maps>', 'irradiance += kitProbe;\n#include <lights_fragment_maps>');
+      };
+      m.customProgramCacheKey = () => pk.call(src) + '|probe';
+      done.set(src, m);
+    }
+    o.material = m;
+  });
+  return col;
 }
 // Hologramme (gemeinsam für alle Städte): additiv, Schwarz bleibt durchsichtig; kitHoloFlicker lässt sie leicht flimmern
 const HOLO = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
@@ -158,7 +219,7 @@ export function applyKit(root: THREE.Object3D, look: KitLook = {}) {
   const M = kitMaterials(look);
   root.traverse((o: any) => {
     if (!o.isMesh) return;
-    const m = M[o.material?.name] || cityMat(o.material?.name, look.city);
+    const m = M[o.material?.name] || cityMat(o.material?.name, look);
     if (!m) return;
     o.material = m;
     if (m === M.kit_decal) o.renderOrder = 1;

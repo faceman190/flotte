@@ -37,3 +37,6 @@ Text im Reiter Raffinerie in `src/ui/dock.ts`). Es wird nur in ganzen Chargen ge
 1. In Blender (`Schmelzwerk.blend`): `ob, extra = schmelzwerk_kit.build(lib)`, `lib.bake_ao(ob, 6.0, 16)`, `lib.export(ob, 'Schmelzwerk', schmelzwerk_kit.meta(extra), kind='base')`;
    Bohrturm ebenso mit `build_bohrturm` und `{'R': 14}`.
 2. `node scripts/make-mond-boden.mjs` (nur wenn das Bodenbild fehlt), `npm run assets`.
+
+## Alpha 0.98: Lampenlicht und Schatten
+Das Schmelzwerk hat eine Lichtkarte (Flutlichter, Ofenglut, Lichtschlitze) und eine Schattenkarte (Sonne, Himmel). Aufruf und Werte stehen im Kopf von `schmelzwerk_kit.py` und in `docs/staedte.md` (Abschnitt „Schattenkarte, Lampenlicht und Lichtraster“). Der Bohrturm hat keine eigenen Karten.

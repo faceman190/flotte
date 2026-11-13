@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { glowMat } from '../core/engine';
 import { std } from '../core/textures';
-import { applyKit, kitMeta, loadKitMeta, KIT_GLOW } from './kit';
+import { applyKit, kitMeta, loadKitMeta, KIT_GLOW, cityLook } from './kit';
 import type { StructureModel } from './structures';
 
 // KI-generierte Stationsmodelle als GLB-Dateien aus public/assets/station (scripts/build-stations.mjs → build-assets.mjs).
@@ -180,7 +180,7 @@ export function buildBaseModel(name?: string): StructureModel | null {
   body.children[0].position.set(0, 0, 0);          // der Lader zentriert Modelle; hier gilt der Ursprung aus Blender
   body.position.y = OUTPOST_Y;
   g.add(body); g.updateMatrixWorld(true);
-  applyKit(body);
+  applyKit(body, own ? cityLook(name!) : {});     // eigene Basis: vorberechnetes Lampenlicht und Schatten, falls gebacken
   const sph = collisionSpheres(g, 7, OUTPOST_Y + (meta.collide_above ?? 1));   // Landefeld und flache Markierungen zählen nicht
   // Leuchtpunkte aus Blender: Lampen am Landefeld laufen als Lauflicht, rote als Positionslichter, der Rest glüht ruhig
   const lights: THREE.Sprite[] = [], navs: THREE.Sprite[] = [];

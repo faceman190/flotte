@@ -131,6 +131,42 @@ Zwei Schritte in Richtung der großen Vorbilder: das Licht der Schilder, Schaufe
 - Figuren und Schiffe bekommen kein Licht aus der Karte; sie sind in den Gassen nur vom gedämpften Grundlicht beleuchtet.
 - Die Lichtkarte ist fest: Schilder, die im Spiel flackern, flackern auf dem Boden nicht mit.
 
+## Schattenkarte, Lampenlicht und Lichtraster (ab Alpha 0.98: Talstadt, Schmelzwerk, Neonhafen)
+
+Der Weg aus Alpha 0.96 gilt jetzt für jeden Ort im Freien, auch für Basen (`kind='base'`). Je Ort gibt es bis zu drei vorberechnete Bilder in `asset-src/tex-world`:
+
+| Bild | Inhalt | Funktion in `kit_lib.py` | Im Spiel |
+|---|---|---|---|
+| `kit_lm_<Name>` | Licht der Lampen, Schilder, Schaufenster | `bake_city_light(ob, name, samples, bounces, ref=, emit=)` | kommt zum Tageslicht hinzu |
+| `kit_sh_<Name>` | Rot = Anteil der Sonne (Gebäudeschatten), Grün = Anteil des Himmels | `bake_city_shade(ob, name, SUN)` | multipliziert Sonne und Grundlicht |
+| `kit_pr_<Name>` | Lichtraster für Figuren (eine Zelle je 3 m) | `bake_city_probe(ob, name, x0, x1, y0, y1, ref=)` | Passanten, Händler und Wachen lesen es am Standort ab |
+
+Das Spiel erkennt die Bilder am Namen (`cityLook(name)` in `kit.ts`); eine neue Stadt oder Basis braucht dafür keinen Code. Eigenheiten je Ort stehen in `CITYLOOK` (`amb`: Anteil des Grundlichts, `env`: Spiegelungen aus der Stadt-Umgebung, `light`: Stärke der Lichtkarte).
+
+**Beim Bauen**
+- `K.lm = True; K.lm_min = …; K.lm_px = 2048 oder 4096; K.lm_inherit = True` direkt nach `lib.Kit(...)`. `lm_min` ist die kleinste Fläche in m², die einen eigenen Platz bekommt (Schmelzwerk 60, Talstadt 80).
+- `K.lm_inherit`: Markierungen, Aufkleber und flache Platten übernehmen den Platz der Fläche, auf der sie liegen. Ohne das blieben Bodenmarkierungen im Gebäudeschatten hell. Für die Rechnung werden diese Flächen weggelassen (`_bake_twin`), sonst verdecken sie das Feld darunter und tragen selbst Schwarz.
+- Sonnenrichtung `SUN` je Ort: im Spiel `sunDir` in den Rahmen der Station drehen, dann (x, y, z) → Blender (x, −z, y). Die Werte stehen als `SUN` in `stadt_kit.py` und `schmelzwerk_kit.py`. Ändert sich die Lage der Station oder die Sonne des Planeten, muss die Schattenkarte neu gerechnet werden.
+- Vor jeder Rechnung `Boden` und `Sonne` der Blender-Datei aus dem Rendern nehmen (`hide_render`), sonst verdeckt der Vorschauboden das Modell.
+- Lange Rechnungen laufen über `bpy.app.timers`; das Ausführen (`lib.export`) danach in einem eigenen Aufruf. Nach `open_mainfile` erst im nächsten Aufruf rechnen (vorher gibt es kein Fenster).
+
+**Werte**
+- Schmelzwerk: `bake_city_light(ob, 'Schmelzwerk', 256, 3, ref=0.36, emit=8.0)`. `ref` fest vorgeben, wenn nur wenige Lampen leuchten: Die Vorgabe (2,2 × Median) macht das Bild sonst viel zu hell und verrauscht. `emit=8`: Flutlichter an Masten sind viel heller als Schaufenster. Dazu `amb: 0.42` im Spiel (Mond ohne Lufthülle).
+- Talstadt: nur die Schattenkarte, 4096 px, 584 Felder, sechs Minuten. Es bleibt Tag.
+- Neonhafen: Lichtraster mit `bake_city_probe(ob, 'Neonhafen', -210, 210, -240, 255, ref=0.36)`, sechs Sekunden. Der Bereich muss den `bounds` der Stadt entsprechen (x = ±210, z = −255 … 240; Blender-y = −z).
+
+**Im Spiel**
+- `cityLit` in `kit.ts` ersetzt den Abschnitt für die Lichtkarte im Material: Grundlicht × Himmel × `amb`, dazu das Lampenlicht; nach den Lichtern Sonne × Sonnenanteil. Gilt auch für Aufkleber.
+- `probeLit(root)` kopiert die Materialien einer Figur und gibt ihr ein eigenes Zusatzlicht; `city.ts` setzt es je Bild (`probeAt`). Waffen der Wachen bekommen es nicht.
+
+**Grenzen**
+- Kleine Teile ohne eigenes Feld (Kisten, Laternen, Fässer) stehen im vorberechneten Schatten weiter im Sonnenlicht. Nahe am Spieler gleicht der Echtzeit-Schatten das aus.
+- Das Gelände um ein Modell bekommt weder Schatten noch Lampenlicht.
+
+## Texturblatt mit Scan-Details (ab Alpha 0.98)
+
+`scripts/make-trim-scan.mjs` legt Kratzer, Plattenstöße, Rauheit und Feinrelief aus Poly-Haven-Scans über das Texturblatt `kit_trim` (Wände, Dächer, Träger, glatte Flächen, Kacheln; Gitterrost und Warnstreifen bleiben). Die Rohfassung aus Blender liegt in `asset-src/tex-src/kit_trim`. Nach einem neuen Blatt aus Blender: die drei Bilder aus `asset-src/tex` dorthin kopieren, dann das Skript und `npm run assets`. Das Blatt gilt für alle Baukasten-Gebäude (Außenposten, Mine, Hangar außen, Talstadt, Schmelzwerk).
+
 ## Neue Stadt bauen
 
 1. Skript nach dem Vorbild `stadt_kit.py` (Halle und Promenadenhaus in denselben Maßen, Rest frei), `meta()` mit Tür, Tor, Andock- und Startpunkt,
