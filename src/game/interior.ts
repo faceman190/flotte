@@ -1232,6 +1232,9 @@ export function storyNpc(name: string, title: string, label: string, act: () => 
   inters.push({ x, z, r: 3.4, label: () => label, act });
   return true;
 }
+// Treffpunkt für Figuren der Geschichte: im Hangar links vom Ausgang, rund 15 m vom Platz, an dem der Pilot aussteigt.
+// Hängt nicht davon ab, wo der Pilot gerade steht (er kann auch im Stationsmenü oder auf der Promenade sein).
+export function hangarSpot(minX = -7) { const hw = shipObs[0] ? (shipObs[0][1] - shipObs[0][0]) / 2 : 5; return { x: Math.max(minX, Math.min(HW - 6, hw + 5) - 16), z: -43 }; }
 // Steht der Pilot zu Fuß bei dieser Figur der Geschichte (für die Auftragszeile „hingehen“)?
 export function nearNpc(name: string, r = 4.2) { if (!IN.active || IN.ship) return false; const p = persons.find(q => q.name === name); return !!p && Math.hypot(p.x - IN.x, p.z - IN.z) < r; }
 // Figur für die Geschichte: gewähltes Modell (Arbeiter oder Händler) mit eigenem Farbton, steht und atmet

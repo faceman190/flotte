@@ -156,7 +156,7 @@ Belohnung: 3.500 Credits, +60 Ruf bei der gewählten Seite, −15 bei der andere
 Vertonung: 41 Zeilen (docs/voice/kapitel3.md), alle eingebaut.
 
 Regeln, die beim Prüfen entstanden sind (Alpha 0.99d):
-- Figuren und Gespräche in Stationen erst, wenn der Landeablauf vorbei ist (`settled()`); beim Andocken selbst steht der Pilot noch im Schiff.
+- Figuren in Stationen erst aufstellen, wenn der Landeablauf vorbei ist (`settled()`); Gespräche beginnen erst beim Ansprechen (siehe Regel für alle Kapitel bei Kapitel 1).
 - Schritte, die mit einem Gespräch enden, warten auf dessen Ende (`dialogBusy()` aus story.ts). Ein neuer Schritt verwirft offene Zeilen.
 - Ansprechpunkte der Geschichte in Städten gehören in `footTargets` (haben Vorrang vor den Zielen der Stadt).
 - Nach dem Verlassen des Wracks führt die Bresche erst wieder hinein, wenn man 260 m weg war.
@@ -211,7 +211,12 @@ Vertonung: 29 Zeilen (docs/voice/kapitel2.md).
 - **Die Wendung:** Brummer meldet sich: Unter dem Rauschen stecken drei Sekunden eines menschlichen Transpondersignals. Die Kennung WS-07, die **„Weitsicht“**, eines der elf Schiffe, die nie ankamen. Stille im Hangar.
 - Belohnung: 1.500 Credits, Ruf bei allen drei Fraktionen.
 
-**Regel seit Alpha 0.99g (Wunsch des Spielers):** Gespräche und Szenen in Stationen beginnen nicht beim Andocken. Die Figuren stehen ein Stück vom Schiff entfernt (`meetSpot` in `chapter1.ts`), der Pilot läuft hin und spricht sie an. Legt man ohne Gespräch wieder ab, bleibt der Schritt stehen und führt zurück zur Station. In Kapitel 1 umgesetzt; Prolog (Vereidigung), Kapitel 2 und Kapitel 3 starten ihre Stationsgespräche noch von selbst, sobald der Landeablauf vorbei ist.
+**Regel für alle Kapitel (Wunsch des Spielers, Kapitel 1 seit Alpha 0.99g, Prolog, Kapitel 2 und 3 seit 0.99h):** Gespräche und Szenen in Stationen beginnen nicht beim Andocken.
+- Die Figuren warten am Treffpunkt im Hangar, links vom Ausgang, rund 15 m vom Schiff (`hangarSpot()` in `interior.ts`). Sie werden im `tick` des Schritts aufgestellt, sobald der Landeablauf vorbei ist (`settled()` in `story.ts`) und der Pilot an der richtigen Station ist.
+- Das Gespräch oder die Szene startet aus dem `act` der Figur (Taste E). Ein zweites E wiederholt bei Gesprächen die Kurzfassung des Auftrags.
+- Ob gesprochen wurde, steht im Spielstand (`c1.tamm`, `c2.kessler`, `c3.roth`, `c3.acht`). Legt man ohne Gespräch ab, bleibt der Schritt stehen und führt zurück zur Station; das gilt auch nach dem Laden.
+- Der Schritt nach einem Gespräch beginnt erst, wenn es zu Ende ist (`dialogBusy()`).
+- Betroffen: Vereidigung (Prolog), Rika Tamm und Auswertung (Kapitel 1), Kessler und Archiv-Szene (Kapitel 2), Roth, Achterberg und die Aufnahme (Kapitel 3).
 - Übergang zu Kapitel 2: Krull will wissen, was das Ferrit sagt, und der Splittergürtel ist voll davon.
 
 **Was bleibt:** Das Kernstück des Tors bleibt als Ort im Sonnenfeld sichtbar, nach dem Kapitel mit erloschenem Licht.

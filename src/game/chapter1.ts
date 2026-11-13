@@ -8,10 +8,10 @@ import { world } from './world';
 import { burst } from './fx';
 import { spawnEnemy } from './combat';
 import { SHARED } from './shared';
-import { IN, storyNpc, nearNpc } from './interior';
+import { IN, storyNpc, nearNpc, hangarSpot } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
-import { talk, playScene, registerChain, st, goto, endChain, storyCtx, storyHooks, startChain, dialogBusy, type Step, type Obj } from './story';
+import { talk, playScene, registerChain, st, goto, endChain, storyCtx, storyHooks, startChain, dialogBusy, settled, type Step, type Obj } from './story';
 
 // =====================================================================================
 // Kapitel 1: „Echo im Sonnenfeld“ (siehe docs/story.md)
@@ -22,10 +22,7 @@ import { talk, playScene, registerChain, st, goto, endChain, storyCtx, storyHook
 const SEC = 'sonnenfeld';
 const T = 'Kapitel 1 · Echo im Sonnenfeld';
 const S = { foes: [] as any[], met: false, scene: false };
-// Landeablauf vorbei, der Pilot steht neben seinem Schiff (beim Andocken selbst sitzt er noch drin)
-const settled = () => G.mode === 'walk' || G.mode === 'dock';
-// Platz für Figuren der Geschichte im Hangar: ein Stück vom Schiff weg Richtung Gang, damit der Pilot aussteigt und hinläuft
-const meetSpot = (minX: number) => ({ x: Math.max(minX, IN.x - 16), z: IN.z - 13 });
+// Gespräche in Stationen: Regel und Treffpunkt siehe settled() in story.ts und hangarSpot() in interior.ts
 const c1 = () => (st().c1 = st().c1 || {});
 const here = () => !!world.def && world.def.id === SEC && !world.surface;
 const fmtDist = (d: number) => (d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m');
@@ -73,7 +70,7 @@ const STEPS: Step[] = [
     // Rika Tamm wartet im Hangar. Sie spricht erst, wenn der Pilot ausgestiegen, zu ihr gelaufen ist und sie anspricht.
     tick: () => {
       if (!IN.active) { S.met = false; return; }      // wieder abgelegt: beim nächsten Andocken steht sie neu da
-      if (S.met || !settled() || IN.ship) return;
+      if (S.met || !settled() || IN.ship || !docked('sonnenwacht')) return;
       S.met = storyNpc('Rika Tamm', 'Sonnenwacht', 'Mit Rika Tamm sprechen', () => {
         if (c1().tamm) { if (!dialogBusy()) talk(['TAMM', 'Drei Peilpunkte, drei Scans. Den Rest rechne ich.']); return; }
         c1().tamm = true;
@@ -81,10 +78,10 @@ const STEPS: Step[] = [
           ['TAMM', 'Seit drei Tagen pfeift es aus den Trümmern. Unsere Antennen hören es, aber das Feld streut das Signal. Wir finden die Quelle nicht.'],
           ['TAMM', 'Flieg drei Peilpunkte rund um das Feld an und scanne dort mit R. Aus drei Peilungen rechne ich dir die Quelle aus.']);
         saveGame();
-      }, '#e0b030', meetSpot(-7), { model: 'merchant', tint: [1.1, 0.92, 0.68] });
+      }, '#e0b030', hangarSpot(-7), { model: 'merchant', tint: [1.1, 0.92, 0.68] });
     },
     lines: () => {
-      if (!IN.active && !c1().tamm) return [here() ? ['An der <b>Sonnenwacht</b> andocken · E', false, false] : routeLine()];
+      if (!c1().tamm && !(IN.active && docked('sonnenwacht'))) return [here() ? ['An der <b>Sonnenwacht</b> andocken · E', false, false] : routeLine()];
       return [['Aussteigen und zu <b>Rika Tamm</b> gehen', !!c1().tamm || nearNpc('Rika Tamm'), false], ['Mit Rika Tamm sprechen · <b>E</b>', !!c1().tamm, false], ['Ablegen und zum ersten Peilpunkt fliegen', false, false]];
     },
     done: () => !!c1().tamm && G.mode === 'play' && !G.dockedAt && !dialogBusy(),      // erst weiter, wenn sie ausgeredet hat (ein neuer Schritt verwirft offene Zeilen)
@@ -157,15 +154,15 @@ const STEPS: Step[] = [
     // Hollweg, Krull und Roth warten im Hangar. Die Auswertung beginnt erst, wenn der Pilot ausgestiegen, zu ihnen gelaufen ist und sie anspricht.
     tick: () => {
       if (!IN.active) { S.met = false; return; }
-      if (S.met || S.scene || !settled() || IN.ship) return;
-      const { x: hx, z: hz } = meetSpot(-4), say = 'Zur Auswertung dazutreten';
+      if (S.met || S.scene || !settled() || IN.ship || !docked('bastion')) return;
+      const { x: hx, z: hz } = hangarSpot(-4), say = 'Zur Auswertung dazutreten';
       const go = () => { if (!S.scene) { S.scene = true; IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0; auswertung(); } };
       S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
       storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx - 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [1.05, 0.95, 0.8] });
       storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [0.6, 0.85, 0.55] });
     },
     lines: () => {
-      if (!IN.active) return [P.sector === 'heimstatt' && !world.surface ? ['An der <b>Bastion</b> andocken · E', false, false] : [`Springe nach <b>Heimstatt</b>${P.route === 'heimstatt' ? ' · Route gesetzt' : ''}`, false, false]];
+      if (!(IN.active && docked('bastion'))) return [P.sector === 'heimstatt' && !world.surface ? ['An der <b>Bastion</b> andocken · E', false, false] : [`Springe nach <b>Heimstatt</b>${P.route === 'heimstatt' ? ' · Route gesetzt' : ''}`, false, false]];
       return [['Aussteigen und zu <b>Ratsherr Hollweg</b> gehen', S.scene || nearNpc('Hollweg'), false], ['Zur Auswertung dazutreten · <b>E</b>', S.scene, false]];
     },
     done: () => false,

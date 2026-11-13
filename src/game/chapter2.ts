@@ -8,10 +8,10 @@ import { world } from './world';
 import { burst } from './fx';
 import { spawnEnemy } from './combat';
 import { SHARED } from './shared';
-import { IN, storyNpc } from './interior';
+import { IN, storyNpc, nearNpc, hangarSpot } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
-import { talk, playScene, registerChain, st, endChain, storyCtx, storyHooks, startChain, type Step, type Obj } from './story';
+import { talk, playScene, registerChain, st, endChain, storyCtx, storyHooks, startChain, dialogBusy, settled, type Step, type Obj } from './story';
 import { terrainAt, liquidAt } from './surface';
 import { FOOT, footTargets } from './onfoot';
 import { addGuardDrones, guardsLeft } from './fieldfight';
@@ -25,13 +25,13 @@ import { addGuardDrones, guardsLeft } from './fieldfight';
 // =====================================================================================
 const SEC = 'splitter', PLANET = 'schlacke';
 const T = 'Kapitel 2 · Splitter der Erbauer';
-const c2 = () => (st().c2 = st().c2 || {}) as { pts?: number[][]; pi?: number; ruin?: number[]; got?: boolean; pod?: boolean; guards?: boolean; foes?: boolean; choice?: 'gilde' | 'rat' };
+const c2 = () => (st().c2 = st().c2 || {}) as { pts?: number[][]; pi?: number; ruin?: number[]; got?: boolean; pod?: boolean; guards?: boolean; foes?: boolean; choice?: 'gilde' | 'rat'; kessler?: boolean };
 const inSpace = (id: string) => !!world.def && world.def.id === id && !world.surface;
 const onPlanet = () => !!world.surface && world.surface.planet === PLANET;
 const docked = (id: string) => !!G.dockedAt && G.dockedAt.id === id;
 const fmtDist = (d: number) => (d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m');
 const route = (to: string) => { if (P.sector !== to) P.route = to; };
-const S = { foes: [] as any[] };
+const S = { foes: [] as any[], met: false, scene: false };
 
 // drei singende Ferrit-Brocken rund um das erste Feld im Splittergürtel
 function places() {
@@ -83,15 +83,26 @@ const STEPS: Step[] = [
   },
   { // 2: Kessler erzählt
     title: T,
-    enter: () => {
-      places();
-      if (IN.active && !IN.ship) storyNpc('Kessler', 'Splitter-Mine', 'Vorarbeiter Kessler', () => talk(['KESSLER', 'Drei Brocken, drei Scans. Und bleib wachsam.']), '#ffb347', undefined, { model: 'mechaniker', tint: [0.95, 0.85, 0.7] });
-      talk(['KESSLER', 'Kessler. Ich grabe seit zwanzig Jahren in diesem Gürtel, und so was hab ich noch nie gehört.'],
-        ['KESSLER', 'Drei Brocken draußen im Feld leuchten im Scanner wie Kirchenfenster. Das Muster ändert sich, wenn man hinsieht.'],
-        ['KESSLER', 'Scann alle drei mit R. Ich schick die Daten an die Gilde. Und Pilot: Die Brocken ziehen Ferrox an.']);
+    enter: () => { places(); S.met = false; },
+    // Kessler wartet im Hangar. Er redet erst, wenn der Pilot ausgestiegen, zu ihm gelaufen ist und ihn anspricht.
+    tick: () => {
+      if (!IN.active) { S.met = false; return; }      // wieder abgelegt: beim nächsten Andocken steht er neu da
+      if (S.met || !settled() || IN.ship || !docked('splittermine')) return;
+      S.met = storyNpc('Kessler', 'Splitter-Mine', 'Mit Vorarbeiter Kessler sprechen', () => {
+        if (c2().kessler) { if (!dialogBusy()) talk(['KESSLER', 'Drei Brocken, drei Scans. Und bleib wachsam.']); return; }
+        c2().kessler = true;
+        talk(['KESSLER', 'Kessler. Ich grabe seit zwanzig Jahren in diesem Gürtel, und so was hab ich noch nie gehört.'],
+          ['KESSLER', 'Drei Brocken draußen im Feld leuchten im Scanner wie Kirchenfenster. Das Muster ändert sich, wenn man hinsieht.'],
+          ['KESSLER', 'Scann alle drei mit R. Ich schick die Daten an die Gilde. Und Pilot: Die Brocken ziehen Ferrox an.']);
+        saveGame();
+      }, '#ffb347', hangarSpot(-7), { model: 'mechaniker', tint: [0.95, 0.85, 0.7] });
     },
-    lines: () => [['Vorarbeiter Kessler zuhören', false, false], ['Ablegen und zu den singenden Brocken fliegen', false, false]],
-    done: () => G.mode === 'play' && !G.dockedAt,
+    lines: () => {
+      if (!c2().kessler && !(IN.active && docked('splittermine'))) return [inSpace(SEC) ? ['An der <b>Splitter-Mine</b> andocken · E', false, false] : lineSpace(SEC, 'Splittergürtel')];
+      return [['Aussteigen und zu <b>Vorarbeiter Kessler</b> gehen', !!c2().kessler || nearNpc('Kessler'), false], ['Mit Kessler sprechen · <b>E</b>', !!c2().kessler, false], ['Ablegen und zu den singenden Brocken fliegen', false, false]];
+    },
+    done: () => !!c2().kessler && G.mode === 'play' && !G.dockedAt && !dialogBusy(),      // erst weiter, wenn er ausgeredet hat
+    markers: () => { const s = world.stations.find(x => x.id === 'splittermine'); return s && inSpace(SEC) && !c2().kessler ? [{ x: s.dock.x, y: s.dock.y, z: s.dock.z, label: 'SPLITTER-MINE · ANDOCKEN', col: '#ffb347', big: true }] : []; },
   },
   { // 3: drei Brocken scannen (beim zweiten tauchen Ferrox auf)
     title: 'Kapitel 2 · Singendes Ferrit',
@@ -188,37 +199,47 @@ const STEPS: Step[] = [
   },
   { // 8: Szene je nach Wahl
     title: 'Kapitel 2 · Das Archiv',
-    enter: () => {
-      if (G.mode === 'dock' && G.inside) closeMenu();
+    enter: () => { S.met = false; S.scene = false; },
+    // Die Runde wartet im Hangar der gewählten Station. Die Szene beginnt erst, wenn der Pilot zu ihr läuft und dazutritt.
+    tick: () => {
+      if (!IN.active) { S.met = false; return; }
       const gilde = c2().choice === 'gilde';
-      if (IN.active && !IN.ship) {
-        const hx = IN.x - 1.2, hz = IN.z - 6;
-        if (gilde) { storyNpc('Krull', 'Bergbaugilde', 'Gildemeisterin Krull', () => {}, '#ffb347', { x: hx, z: hz }, { model: 'merchant', tint: [1.05, 0.95, 0.8] }); storyNpc('Kessler', 'Splitter-Mine', 'Vorarbeiter Kessler', () => {}, '#ffb347', { x: hx + 2.4, z: hz + 1 }, { model: 'mechaniker', tint: [0.95, 0.85, 0.7] }); }
-        else { storyNpc('Hollweg', 'Flottenrat', 'Ratsherr Hollweg', () => {}, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] }); storyNpc('Roth', 'Grenzwacht', 'Wachtmeisterin Roth', () => {}, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [0.6, 0.85, 0.55] }); }
-        IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0;
-      }
-      const lines = gilde ? [
-        { who: 'KRULL', text: 'Gute Entscheidung. Der Kristall ist ein Speicher, Pilot. Ein Archiv der Erbauer. Und es ist nicht leer.' },
-        { who: 'KESSLER', text: 'Er antwortet auf das Tor-Signal. Als würde er auf etwas warten.' },
-        { who: 'HOLLWEG', text: 'Krull, das war kein Gildefund, das war Eigentum der Crew. Darüber reden wir noch.' },
-        { who: 'KRULL', text: 'Reden wir, Ratsherr. Sobald Sie verstehen, was wir in der Hand haben.' },
-      ] : [
-        { who: 'HOLLWEG', text: 'Danke, Pilot. Der Kristall bleibt in der Bastion, unter Verschluss.' },
-        { who: 'KRULL', text: 'Unter Verschluss? Hollweg, Sie sperren die wichtigste Entdeckung seit dem Riss in einen Schrank!' },
-        { who: 'ROTH', text: 'Lieber im Schrank als bei den Ferrox. Die Drohnen da unten haben ihn bewacht. Die Frage ist: wofür?' },
-      ];
-      setTimeout(() => playScene([...lines,
-        { who: 'BRUMMER', text: 'Ich hab die Kapsel ausgewertet. Die Aufnahme ist echt. Und sie ist nicht achtunddreißig Jahre alt.' },
-        { who: 'BRUMMER', text: 'Sie ist vier Monate alt.', t: 3.5 },
-        { text: 'Die Weitsicht lebt.', big: true, t: 4.5 },
-        { text: 'KAPITEL 2 ABGESCHLOSSEN', big: true, t: 3.5 },
-      ], finish), 1200);
+      if (S.met || S.scene || !settled() || IN.ship || !docked(gilde ? 'splittermine' : 'bastion')) return;
+      const { x: hx, z: hz } = hangarSpot(-4), say = 'Den Archivkristall übergeben';
+      const go = () => { if (S.scene) return; S.scene = true; IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0; archiv(gilde); };
+      if (gilde) { S.met = storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx, z: hz }, { model: 'merchant', tint: [1.05, 0.95, 0.8] }); storyNpc('Kessler', 'Splitter-Mine', say, go, '#ffb347', { x: hx + 2.4, z: hz + 1 }, { model: 'mechaniker', tint: [0.95, 0.85, 0.7] }); }
+      else { S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] }); storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [0.6, 0.85, 0.55] }); }
     },
-    lines: () => [['Was ist das Archiv?', false, false]],
+    lines: () => {
+      const gilde = c2().choice === 'gilde', who = gilde ? 'Gildemeisterin Krull' : 'Ratsherr Hollweg';
+      if (!(IN.active && docked(gilde ? 'splittermine' : 'bastion'))) return [[`An der <b>${gilde ? 'Splitter-Mine' : 'Bastion'}</b> andocken · E`, false, false]];
+      return [[`Aussteigen und zu <b>${who}</b> gehen`, S.scene || nearNpc(gilde ? 'Krull' : 'Hollweg'), false], ['Den Archivkristall übergeben · <b>E</b>', S.scene, false]];
+    },
     done: () => false,
+    markers: () => { const s = world.stations.find(x => x.id === (c2().choice === 'gilde' ? 'splittermine' : 'bastion')); return s ? [{ x: s.dock.x, y: s.dock.y, z: s.dock.z, label: 'ANDOCKEN', col: '#ffd27a', big: true }] : []; },
   },
 ];
-registerChain({ key: 'ch2', steps: STEPS, resume: n => (n === 2 ? 3 : n === 8 ? 7 : n) });
+function archiv(gilde: boolean) {
+  if (G.mode === 'dock' && G.inside) closeMenu();
+  const lines = gilde ? [
+    { who: 'KRULL', text: 'Gute Entscheidung. Der Kristall ist ein Speicher, Pilot. Ein Archiv der Erbauer. Und es ist nicht leer.' },
+    { who: 'KESSLER', text: 'Er antwortet auf das Tor-Signal. Als würde er auf etwas warten.' },
+    { who: 'HOLLWEG', text: 'Krull, das war kein Gildefund, das war Eigentum der Crew. Darüber reden wir noch.' },
+    { who: 'KRULL', text: 'Reden wir, Ratsherr. Sobald Sie verstehen, was wir in der Hand haben.' },
+  ] : [
+    { who: 'HOLLWEG', text: 'Danke, Pilot. Der Kristall bleibt in der Bastion, unter Verschluss.' },
+    { who: 'KRULL', text: 'Unter Verschluss? Hollweg, Sie sperren die wichtigste Entdeckung seit dem Riss in einen Schrank!' },
+    { who: 'ROTH', text: 'Lieber im Schrank als bei den Ferrox. Die Drohnen da unten haben ihn bewacht. Die Frage ist: wofür?' },
+  ];
+  playScene([...lines,
+    { who: 'BRUMMER', text: 'Ich hab die Kapsel ausgewertet. Die Aufnahme ist echt. Und sie ist nicht achtunddreißig Jahre alt.' },
+    { who: 'BRUMMER', text: 'Sie ist vier Monate alt.', t: 3.5 },
+    { text: 'Die Weitsicht lebt.', big: true, t: 4.5 },
+    { text: 'KAPITEL 2 ABGESCHLOSSEN', big: true, t: 3.5 },
+  ], finish);
+}
+// Schritt 2 bleibt beim Laden stehen, solange Kessler noch nicht gesprochen hat (der Schritt führt selbst zurück zur Mine)
+registerChain({ key: 'ch2', steps: STEPS, resume: n => (n === 2 ? (c2().kessler ? 3 : 2) : n === 8 ? 7 : n) });
 
 function finish() {
   endChain('ch2');

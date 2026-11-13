@@ -7,7 +7,7 @@ import { world } from './world';
 import { burst } from './fx';
 import { spawnEnemy } from './combat';
 import { SHARED } from './shared';
-import { IN, storyNpc } from './interior';
+import { IN, storyNpc, nearNpc, hangarSpot } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
 import { talk, playScene, registerChain, st, endChain, storyCtx, storyHooks, dialogBusy, type Step, type Obj, type Marker } from './story';
@@ -39,7 +39,7 @@ const WRECKS: { off: number[]; cls: ShipId; k: number; name: string }[] = [
 ];
 const BREACH = [150, 30, 40];                                        // Bresche an der Flanke, relativ zur Feldmitte (Näherung; buildField misst sie am Rumpf)
 const WRECK_ID = 'narbe:eidwacht';
-type C3 = { brandt?: boolean; damp?: boolean; pi?: number; foes?: boolean; rec?: boolean; out?: boolean; choice?: 'wacht' | 'rat' };
+type C3 = { roth?: boolean; acht?: boolean; brandt?: boolean; damp?: boolean; pi?: number; foes?: boolean; rec?: boolean; out?: boolean; choice?: 'wacht' | 'rat' };
 const c3 = () => ((st() as any).c3 = (st() as any).c3 || {}) as C3;
 const step = () => (P.story ? (st() as any).ch3 as number | 'done' : undefined);      // im Hauptmenü gibt es noch keinen Spielstand
 const inSpace = (id: string) => !!world.def && world.def.id === id && !world.surface;
@@ -50,7 +50,7 @@ const lineSpace = (id: string, name: string): Obj => [`Springe nach <b>${name}</
 const pts = () => [...WRECKS.map(w => [FIELD[0] + w.off[0], FIELD[1] + w.off[1], FIELD[2] + w.off[2]]), FIELD];
 const breach = () => [FIELD[0] + BREACH[0], FIELD[1] + BREACH[1], FIELD[2] + BREACH[2]];
 const inCity = () => !!world.surface && CITY.name === 'Neonhafen' && !!CITY.st;
-const S = { foes: [] as any[], met: false, away: true };
+const S = { foes: [] as any[], met: false, scene: false, away: true };
 // Der Landeablauf im Hangar ist vorbei (zu Fuß oder im Stationsmenü). Beim Andocken selbst läuft noch die Landung; Figuren, die dann
 // „vor den Piloten“ gestellt würden, stünden am Platz des Schiffs statt im Gang.
 const settled = () => G.mode === 'walk' || G.mode === 'dock';
@@ -93,17 +93,25 @@ const STEPS: Step[] = [
   { // 2: Roth erzählt die Fassung, die jeder kennt
     title: 'Kapitel 3 · Was jeder weiß',
     enter: () => { S.met = false; },
+    // Roth wartet im Hangar. Sie erzählt erst, wenn der Pilot ausgestiegen, zu ihr gelaufen ist und sie anspricht.
     tick: () => {
-      if (S.met || !settled()) return;
-      S.met = true;
-      if (IN.active && !IN.ship) storyNpc('Roth', 'Grenzwacht', 'Wachtmeisterin Roth', () => talk(['ROTH', 'Neonhafen, die Garküche Schleusenbräu. Frag nach Ilvar Brandt.']), '#f2d36b', undefined, { model: 'merchant', tint: [0.6, 0.85, 0.55] });
-      talk(['ROTH', 'Jahr einunddreißig. Wir hatten die Ferrox zurückgedrängt bis in die Narbe. Kommandantin Hollweg führte selbst, von der Eidwacht aus. Dem einzigen Träger, den wir je selbst gebaut haben.'],
-        ['ROTH', 'Dann kamen sie von allen Seiten. Die Linie brach, die Eidwacht blieb zurück. So steht es in jedem Schulbuch, und so hab ich es mit sechzehn geglaubt.'],
-        ['ROTH', 'Aber die, die dabei waren, reden nicht. Einer steht in Neonhafen an der Garküche Schleusenbräu. Ilvar Brandt, damals Funker der Eidwacht. Frag ihn.']);
-      route(CITYSEC);
+      if (!IN.active) { S.met = false; return; }      // wieder abgelegt: beim nächsten Andocken steht sie neu da
+      if (S.met || !settled() || IN.ship || !docked('wachtposten')) return;
+      S.met = storyNpc('Roth', 'Grenzwacht', 'Mit Wachtmeisterin Roth sprechen', () => {
+        if (c3().roth) { if (!dialogBusy()) talk(['ROTH', 'Neonhafen, die Garküche Schleusenbräu. Frag nach Ilvar Brandt.']); return; }
+        c3().roth = true;
+        talk(['ROTH', 'Jahr einunddreißig. Wir hatten die Ferrox zurückgedrängt bis in die Narbe. Kommandantin Hollweg führte selbst, von der Eidwacht aus. Dem einzigen Träger, den wir je selbst gebaut haben.'],
+          ['ROTH', 'Dann kamen sie von allen Seiten. Die Linie brach, die Eidwacht blieb zurück. So steht es in jedem Schulbuch, und so hab ich es mit sechzehn geglaubt.'],
+          ['ROTH', 'Aber die, die dabei waren, reden nicht. Einer steht in Neonhafen an der Garküche Schleusenbräu. Ilvar Brandt, damals Funker der Eidwacht. Frag ihn.']);
+        route(CITYSEC); saveGame();
+      }, '#f2d36b', hangarSpot(-7), { model: 'merchant', tint: [0.6, 0.85, 0.55] });
     },
-    lines: () => [['Wachtmeisterin Roth zuhören', false, false], ['Ablegen und nach <b>Neuhafen</b> fliegen', false, false]],
-    done: () => G.mode === 'play' && !G.dockedAt,
+    lines: () => {
+      if (!c3().roth && !(IN.active && docked('wachtposten'))) return [inSpace('wacht') ? ['Am <b>Wachtposten Ost</b> andocken · E', false, false] : lineSpace('wacht', 'Wachtposten Ost')];
+      return [['Aussteigen und zu <b>Wachtmeisterin Roth</b> gehen', !!c3().roth || nearNpc('Roth'), false], ['Mit Roth sprechen · <b>E</b>', !!c3().roth, false], ['Ablegen und nach <b>Neuhafen</b> fliegen', false, false]];
+    },
+    done: () => !!c3().roth && G.mode === 'play' && !G.dockedAt && !dialogBusy(),
+    markers: () => { const s = world.stations.find(x => x.id === 'wachtposten'); return s && inSpace('wacht') && !c3().roth ? [{ x: s.dock.x, y: s.dock.y, z: s.dock.z, label: 'WACHTPOSTEN OST · ANDOCKEN', col: '#f2d36b', big: true }] : []; },
   },
   { // 3: Brandt in Neonhafen
     title: 'Kapitel 3 · Der Funker',
@@ -138,19 +146,26 @@ const STEPS: Step[] = [
   { // 5: Achterberg weicht aus
     title: 'Kapitel 3 · Die Ausbilderin',
     enter: () => { S.met = false; },
+    // Achterberg wartet im Hangar der Bastion. Sie redet erst, wenn der Pilot ausgestiegen, zu ihr gelaufen ist und sie anspricht.
     tick: () => {
-      if (S.met || !settled()) return;
-      S.met = true;
-      if (G.mode === 'dock' && G.inside) closeMenu();
-      if (IN.active && !IN.ship) storyNpc('Achterberg', 'Ausbildung', 'Hauptfrau Achterberg', () => talk(['ACHTERBERG', 'Vier Kupferbarren, Schmelzwerk Zwölf. Dann die Narbe.']), '#ffb347', undefined, { model: 'achterberg' });
-      talk(['ACHTERBERG', 'Brandt redet also wieder. Hätte ich mir denken können.'],
-        ['ACHTERBERG', 'Ich erzähl dir nichts, Pilot. Nicht weil ich mich schäme. Du sollst nicht mir glauben, sondern dem Schreiber.'],
-        ['ACHTERBERG', 'In der Narbe frisst der Schwarm alles, was sendet. Lass dir am Schmelzwerk Zwölf einen Signaldämpfer wickeln. Vier Kupferbarren, die Leute dort wissen Bescheid.'],
-        ['ACHTERBERG', 'Hol den Schreiber. Dann reden wir.']);
-      route(WERKSEC);
+      if (!IN.active) { S.met = false; return; }
+      if (S.met || !settled() || IN.ship || !docked('bastion')) return;
+      S.met = storyNpc('Achterberg', 'Ausbildung', 'Mit Hauptfrau Achterberg sprechen', () => {
+        if (c3().acht) { if (!dialogBusy()) talk(['ACHTERBERG', 'Vier Kupferbarren, Schmelzwerk Zwölf. Dann die Narbe.']); return; }
+        c3().acht = true;
+        talk(['ACHTERBERG', 'Brandt redet also wieder. Hätte ich mir denken können.'],
+          ['ACHTERBERG', 'Ich erzähl dir nichts, Pilot. Nicht weil ich mich schäme. Du sollst nicht mir glauben, sondern dem Schreiber.'],
+          ['ACHTERBERG', 'In der Narbe frisst der Schwarm alles, was sendet. Lass dir am Schmelzwerk Zwölf einen Signaldämpfer wickeln. Vier Kupferbarren, die Leute dort wissen Bescheid.'],
+          ['ACHTERBERG', 'Hol den Schreiber. Dann reden wir.']);
+        route(WERKSEC); saveGame();
+      }, '#ffb347', hangarSpot(-7), { model: 'achterberg' });
     },
-    lines: () => [['Hauptfrau Achterberg zuhören', false, false], ['Ablegen', false, false]],
-    done: () => G.mode === 'play' && !G.dockedAt,
+    lines: () => {
+      if (!c3().acht && !(IN.active && docked('bastion'))) return [inSpace('heimstatt') ? ['An der <b>Bastion</b> andocken · E', false, false] : lineSpace('heimstatt', 'Heimstatt')];
+      return [['Aussteigen und zu <b>Hauptfrau Achterberg</b> gehen', !!c3().acht || nearNpc('Achterberg'), false], ['Mit Achterberg sprechen · <b>E</b>', !!c3().acht, false], ['Ablegen', false, false]];
+    },
+    done: () => !!c3().acht && G.mode === 'play' && !G.dockedAt && !dialogBusy(),
+    markers: () => { const b = world.stations.find(x => x.id === 'bastion'); return b && inSpace('heimstatt') && !c3().acht ? [{ x: b.dock.x, y: b.dock.y, z: b.dock.z, label: 'BASTION · ANDOCKEN', col: '#ffb347', big: true }] : []; },
   },
   { // 6: Signaldämpfer am Schmelzwerk Zwölf
     title: 'Kapitel 3 · Der Signaldämpfer',
@@ -270,42 +285,49 @@ const STEPS: Step[] = [
   },
   { // 13: die Aufnahme
     title: 'Kapitel 3 · Die Aufnahme',
-    enter: () => { S.met = false; },
+    enter: () => { S.met = false; S.scene = false; },
+    // Die Runde wartet im Hangar der gewählten Station. Die Aufnahme läuft erst, wenn der Pilot zu ihr läuft und den Schreiber übergibt.
     tick: () => {
-      if (S.met || !settled()) return;
-      S.met = true;
-      if (G.mode === 'dock' && G.inside) closeMenu();
+      if (!IN.active) { S.met = false; return; }
       const wacht = c3().choice === 'wacht';
-      if (IN.active && !IN.ship) {
-        const hx = IN.x - 1.2, hz = IN.z - 6;
-        storyNpc('Achterberg', 'Ausbildung', 'Hauptfrau Achterberg', () => {}, '#ffb347', { x: hx, z: hz }, { model: 'achterberg' });
-        if (wacht) storyNpc('Roth', 'Grenzwacht', 'Wachtmeisterin Roth', () => {}, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [0.6, 0.85, 0.55] });
-        else storyNpc('Hollweg', 'Flottenrat', 'Ratsherr Hollweg', () => {}, '#bcd8ff', { x: hx + 2.6, z: hz + 1.2 }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
-        IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0;
-      }
-      setTimeout(() => playScene([
-        { text: 'Flugschreiber der Eidwacht · Jahr 31', big: true, t: 3.2 },
-        { who: 'MAREN', text: 'Eidwacht an alle Staffeln. Das Tor läuft an. Linie halten, bis es steht.' },
-        { who: 'ACHTERBERG31', text: 'Staffel Vier an Eidwacht. Der Schwarm kommt von allen Seiten. Die Transporter liegen offen. Vierhundert Leute, Kommandantin.' },
-        { who: 'MAREN', text: 'Die Linie hält, Hauptfrau. Das ist ein Befehl.' },
-        { who: 'ACHTERBERG31', text: 'Dann ist es einer, den ich nicht befolge. Staffel Vier bricht aus. Wir holen die Transporter. Keiner wird zurückgelassen.' },
-        { text: 'Die Linie fiel in elf Minuten. Das Tor wurde gefressen. Vierhundert Menschen kamen nach Hause.', t: 6 },
-        { who: 'ACHTERBERG', text: 'Jetzt weißt du es. Ich habe den Eid gehalten und die Kommandantin verraten. Beides stimmt.' },
-        { who: 'HOLLWEG', text: 'Zwei Jahre später hat meine Mutter zu mir gesagt: Sie hatte recht, Bendix. Sag es ihr nie. Ich habe mich daran gehalten. Bis heute.' },
-        { who: 'ROTH', text: 'Wir wollten zurück in die Narbe, um ein Tor zu holen, das es nicht mehr gibt?' },
-        wacht ? { who: 'ROTH', text: 'Die Wacht hört das heute Abend, Ratsherr. Alle.' } : { who: 'HOLLWEG', text: 'Das bleibt in diesem Raum, bis ich weiß, wie ich es der Crew sage.' },
-        { who: 'KRULL', text: 'Seht auf die Zeitmarken. Das Tor läuft an, neunzig Sekunden später ist der Schwarm da. Wie im Sonnenfeld. Die Tore rufen sie.' },
-        { who: 'BRUMMER', text: 'Da ist noch etwas. Der Schreiber hat nie aufgehört mitzuhören. Sieben Jahre lang.' },
-        { who: 'BRUMMER', text: 'Vor vier Monaten zog eine Kennung durch die Narbe. Nach Osten. WS null sieben.', t: 5 },
-        { text: 'Die Weitsicht ist nicht gestrandet. Sie fliegt. Richtung Kern.', big: true, t: 5 },
-        { text: 'KAPITEL 3 ABGESCHLOSSEN', big: true, t: 3.5 },
-      ], finish), 1200);
+      if (S.met || S.scene || !settled() || IN.ship || !docked(wacht ? 'wachtposten' : 'bastion')) return;
+      const { x: hx, z: hz } = hangarSpot(-4), say = 'Den Flugschreiber übergeben';
+      const go = () => { if (S.scene) return; S.scene = true; IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0; aufnahme(wacht); };
+      S.met = storyNpc('Achterberg', 'Ausbildung', say, go, '#ffb347', { x: hx, z: hz }, { model: 'achterberg' });
+      if (wacht) storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [0.6, 0.85, 0.55] });
+      else storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx + 2.6, z: hz + 1.2 }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
     },
-    lines: () => [['Was geschah im Jahr 31?', false, false]],
+    lines: () => {
+      const wacht = c3().choice === 'wacht';
+      if (!(IN.active && docked(wacht ? 'wachtposten' : 'bastion'))) return [[`${wacht ? 'Am <b>Wachtposten Ost</b>' : 'An der <b>Bastion</b>'} andocken · E`, false, false]];
+      return [['Aussteigen und zu <b>Hauptfrau Achterberg</b> gehen', S.scene || nearNpc('Achterberg'), false], ['Den Flugschreiber übergeben · <b>E</b>', S.scene, false]];
+    },
     done: () => false,
+    markers: () => { const s = world.stations.find(x => x.id === (c3().choice === 'wacht' ? 'wachtposten' : 'bastion')); return s ? [{ x: s.dock.x, y: s.dock.y, z: s.dock.z, label: 'ANDOCKEN', col: '#ffd27a', big: true }] : []; },
   },
 ];
-registerChain({ key: 'ch3', steps: STEPS, resume: n => (n === 2 ? 1 : n === 5 ? 4 : n === 10 ? 9 : n === 13 ? 12 : n) });
+function aufnahme(wacht: boolean) {
+  if (G.mode === 'dock' && G.inside) closeMenu();
+  playScene([
+    { text: 'Flugschreiber der Eidwacht · Jahr 31', big: true, t: 3.2 },
+    { who: 'MAREN', text: 'Eidwacht an alle Staffeln. Das Tor läuft an. Linie halten, bis es steht.' },
+    { who: 'ACHTERBERG31', text: 'Staffel Vier an Eidwacht. Der Schwarm kommt von allen Seiten. Die Transporter liegen offen. Vierhundert Leute, Kommandantin.' },
+    { who: 'MAREN', text: 'Die Linie hält, Hauptfrau. Das ist ein Befehl.' },
+    { who: 'ACHTERBERG31', text: 'Dann ist es einer, den ich nicht befolge. Staffel Vier bricht aus. Wir holen die Transporter. Keiner wird zurückgelassen.' },
+    { text: 'Die Linie fiel in elf Minuten. Das Tor wurde gefressen. Vierhundert Menschen kamen nach Hause.', t: 6 },
+    { who: 'ACHTERBERG', text: 'Jetzt weißt du es. Ich habe den Eid gehalten und die Kommandantin verraten. Beides stimmt.' },
+    { who: 'HOLLWEG', text: 'Zwei Jahre später hat meine Mutter zu mir gesagt: Sie hatte recht, Bendix. Sag es ihr nie. Ich habe mich daran gehalten. Bis heute.' },
+    { who: 'ROTH', text: 'Wir wollten zurück in die Narbe, um ein Tor zu holen, das es nicht mehr gibt?' },
+    wacht ? { who: 'ROTH', text: 'Die Wacht hört das heute Abend, Ratsherr. Alle.' } : { who: 'HOLLWEG', text: 'Das bleibt in diesem Raum, bis ich weiß, wie ich es der Crew sage.' },
+    { who: 'KRULL', text: 'Seht auf die Zeitmarken. Das Tor läuft an, neunzig Sekunden später ist der Schwarm da. Wie im Sonnenfeld. Die Tore rufen sie.' },
+    { who: 'BRUMMER', text: 'Da ist noch etwas. Der Schreiber hat nie aufgehört mitzuhören. Sieben Jahre lang.' },
+    { who: 'BRUMMER', text: 'Vor vier Monaten zog eine Kennung durch die Narbe. Nach Osten. WS null sieben.', t: 5 },
+    { text: 'Die Weitsicht ist nicht gestrandet. Sie fliegt. Richtung Kern.', big: true, t: 5 },
+    { text: 'KAPITEL 3 ABGESCHLOSSEN', big: true, t: 3.5 },
+  ], finish);
+}
+// Schritte 2 und 5 bleiben beim Laden stehen, solange das Gespräch noch aussteht (sie führen selbst zurück zur Station)
+registerChain({ key: 'ch3', steps: STEPS, resume: n => (n === 2 ? (c3().roth ? 3 : 2) : n === 5 ? (c3().acht ? 6 : 5) : n === 10 ? 9 : n === 13 ? 12 : n) });
 
 function finish() {
   endChain('ch3');

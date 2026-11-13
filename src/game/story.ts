@@ -5,7 +5,7 @@ import { releaseAll, centerMouse } from '../core/input';
 import { P, G, saveGame, type Mode } from './state';
 import { world } from './world';
 import { spawnEnemy } from './combat';
-import { IN, storyNpc, npcSpeak } from './interior';
+import { IN, storyNpc, npcSpeak, hangarSpot, nearNpc } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
 import { radio } from '../ui/radio';
@@ -130,7 +130,11 @@ export function noteScan() { storyCtx.scanAt = G.time; }
 export const bastion = () => world.stations.find(s => s.id === 'bastion');
 
 // ---------- Prolog ----------
-const S = { talked: false, band: false, foes: [] as any[], docked: false };
+const S = { talked: false, band: false, foes: [] as any[], docked: false, met: false, scene: false };
+// Regel für Gespräche und Szenen in Stationen (seit Alpha 0.99g): Sie beginnen nie beim Andocken. Die Figuren warten am Treffpunkt im Hangar
+// (hangarSpot), der Pilot steigt aus, läuft hin und spricht sie an. settled(): Der Landeablauf ist vorbei, der Pilot steht neben seinem Schiff.
+export const settled = () => G.mode === 'walk' || G.mode === 'dock';
+const inBastion = () => IN.active && !!G.dockedAt && G.dockedAt.id === 'bastion';
 export const prologActive = () => !!P.story && st().prolog !== 'done';
 const STEPS: Step[] = [
   { // 0: bei der Ausbilderin melden
@@ -214,32 +218,37 @@ const STEPS: Step[] = [
   },
   { // 7: Vereidigung
     title: 'Prolog · Vereidigung',
-    enter: () => {
-      // zu Fuß: Ratsherr und Ausbilderin treten vor den Spieler, der Blick geht zu ihnen
-      if (G.mode === 'dock' && G.inside) closeMenu();
-      if (IN.active && !IN.ship) {
-        const hx = IN.x - 1.2, hz = IN.z - 5.5;
-        storyNpc('Hollweg', 'Flottenrat', 'Ratsherr Hollweg', () => {}, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
-        storyNpc('Achterberg', 'Ausbilderin', 'Hauptfrau Achterberg', () => {}, '#ffb347', { x: hx + 2.4, z: hz + 0.8 }, { model: 'achterberg' });
-        IN.yaw = Math.atan2(-(hx + 1.2 - IN.x), -(hz - IN.z)); IN.pitch = 0;
-      }
-      const go = () => playScene([
-        { who: 'ACHTERBERG', text: 'Haltung, Kadett. Der Rat ist da.', t: 3 },
-        { who: 'HOLLWEG', text: `${P.name}. Vor achtunddreißig Jahren hat meine Mutter in diesem Hangar die Crew versammelt. Hinter uns war das Tor gerade zerbrochen.` },
-        { who: 'HOLLWEG', text: 'Niemand ist gekommen, um uns zu holen. Also haben wir uns selbst gehalten. Mit jedem Schiff. Mit jeder Tonne Erz. Mit jedem Piloten.' },
-        { who: 'HOLLWEG', text: 'Sprich mit uns.', t: 2.5 },
-        { who: 'CREW', text: '„Wir sind die letzte Crew. Niemand kommt uns holen.“', big: true, t: 4.5 },
-        { who: 'CREW', text: '„Also bauen wir uns selbst eine Flotte, Schiff für Schiff, und keiner von uns wird zurückgelassen.“', big: true, t: 6 },
-        { who: 'HOLLWEG', text: 'Willkommen in der Crew, Pilot. Das Flottenband gehört jetzt dir.' },
-        { who: 'ACHTERBERG', text: 'Und jetzt raus mit dir. Da draußen wartet Arbeit.', t: 3.5 },
-        { text: 'IN DIE CREW AUFGENOMMEN', big: true, t: 3.5 },
-      ], finishPrologue);
-      setTimeout(go, 1200);
+    enter: () => { S.met = false; S.scene = false; },
+    // Ratsherr und Ausbilderin warten im Hangar. Die Vereidigung beginnt erst, wenn der Kadett zu ihnen läuft und antritt.
+    tick: () => {
+      if (!IN.active) { S.met = false; return; }
+      if (S.met || S.scene || !settled() || IN.ship || !inBastion()) return;
+      const { x: hx, z: hz } = hangarSpot(-4), say = 'Zur Vereidigung antreten';
+      const go = () => { if (S.scene) return; S.scene = true; IN.yaw = Math.atan2(-(hx + 1.2 - IN.x), -(hz - IN.z)); IN.pitch = 0; vereidigung(); };
+      S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
+      storyNpc('Achterberg', 'Ausbilderin', say, go, '#ffb347', { x: hx + 2.4, z: hz + 0.8 }, { model: 'achterberg' });
     },
-    lines: () => [['Vereidigung durch den Flottenrat', false, false]],
+    lines: () => (inBastion()
+      ? [['Im Hangar zu <b>Ratsherr Hollweg</b> und Hauptfrau Achterberg gehen', S.scene || nearNpc('Hollweg'), false], ['Zur Vereidigung antreten · <b>E</b>', S.scene, false]]
+      : [['An der Bastion andocken · <b>E</b>', false, false]]),
     done: () => false,
+    markers: () => { const b = bastion(); return b ? [{ x: b.dock.x, y: b.dock.y, z: b.dock.z, label: 'BASTION · ANDOCKEN', col: '#ffb347', big: true }] : []; },
   },
 ];
+function vereidigung() {
+  if (G.mode === 'dock' && G.inside) closeMenu();
+  playScene([
+    { who: 'ACHTERBERG', text: 'Haltung, Kadett. Der Rat ist da.', t: 3 },
+    { who: 'HOLLWEG', text: `${P.name}. Vor achtunddreißig Jahren hat meine Mutter in diesem Hangar die Crew versammelt. Hinter uns war das Tor gerade zerbrochen.` },
+    { who: 'HOLLWEG', text: 'Niemand ist gekommen, um uns zu holen. Also haben wir uns selbst gehalten. Mit jedem Schiff. Mit jeder Tonne Erz. Mit jedem Piloten.' },
+    { who: 'HOLLWEG', text: 'Sprich mit uns.', t: 2.5 },
+    { who: 'CREW', text: '„Wir sind die letzte Crew. Niemand kommt uns holen.“', big: true, t: 4.5 },
+    { who: 'CREW', text: '„Also bauen wir uns selbst eine Flotte, Schiff für Schiff, und keiner von uns wird zurückgelassen.“', big: true, t: 6 },
+    { who: 'HOLLWEG', text: 'Willkommen in der Crew, Pilot. Das Flottenband gehört jetzt dir.' },
+    { who: 'ACHTERBERG', text: 'Und jetzt raus mit dir. Da draußen wartet Arbeit.', t: 3.5 },
+    { text: 'IN DIE CREW AUFGENOMMEN', big: true, t: 3.5 },
+  ], finishPrologue);
+}
 const fmtDist = (d: number) => (d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m');
 
 // Beim Laden mitten im Prolog: Schritte zu Fuß gehen nur in der Bastion; die Szene wird wiederholt
