@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { G } from './state';
+import { buildCityModel, cityLoaded, loadCity, initCity } from './city';
+import { resetBasePad } from './basewalk';
 import { scene, glowMat } from '../core/engine';
 import { texMat, boxUV } from '../core/textures';
 import { setSky } from '../core/sky';
@@ -350,7 +353,19 @@ export function dropPick(x: number, y: number, z: number, k: ItemId, amt: number
 const Y = new THREE.Vector3(0, 1, 0);
 export function addStation(sd: StationDef, yaw: number) {
   let model: any;
-  if (sd.kind === 'carrier') {
+  if (sd.city && !cityLoaded(sd.city)) {
+    // Stadt noch nicht geladen: vorerst die Basis (14 m höher, wie üblich), danach austauschen
+    addStation({ ...sd, city: undefined, pos: [sd.pos[0], sd.pos[1] + 13.7, sd.pos[2]] }, yaw);
+    loadCity(sd.city).then(ok => {
+      const i = world.stations.findIndex(s => s.id === sd.id && !(s.def as any).city);
+      if (!ok || i < 0 || G.dockedAt === world.stations[i]) return;
+      const old = world.stations[i]; scene.remove(old.mesh); world.stations.splice(i, 1); resetBasePad();
+      addStation(sd, yaw);
+    });
+    return;
+  }
+  if (sd.city) model = buildCityModel(sd.city);
+  else if (sd.kind === 'carrier') {
     // neues Modell aus Blender, falls geladen; sonst die frühere Bastion aus Grundformen
     model = buildCarrierModel();
     if (!model) { const c = buildCarrier(); model = { g: c.g, lights: c.lights, navs: [], glows: c.glows, turrets: c.turrets, dock: CARRIER_DOCK, launch: CARRIER_LAUNCH, sph: carrierSpheres(), R: 250 }; }
@@ -377,6 +392,7 @@ export function addStation(sd: StationDef, yaw: number) {
     sph: model.sph.map(([x, y, z, r]: number[]) => { const v = new THREE.Vector3(x, y, z).applyAxisAngle(Y, yaw); return [v.x, v.y, v.z, r]; }),
     R: model.R, flak: 0,
   });
+  if (model.city) initCity(world.stations[world.stations.length - 1]);
 }
 function addGate(to: string) {
   const def = world.def!, p = gatePos(def.id, to), toDef = SECTOR[to];

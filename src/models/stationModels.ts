@@ -44,7 +44,7 @@ export const stationTemplate = (name: string) => TPL[name]?.group || null;
 export const stationClips = (name: string) => TPL[name]?.clips || [];
 
 // Kollisionskugeln: belegte Rasterzellen (lokale Koordinaten nach Skalierung); minY: Punkte darunter zählen nicht (flache Bodenteile)
-function collisionSpheres(obj: THREE.Object3D, cell: number, minY = -Infinity) {
+export function collisionSpheres(obj: THREE.Object3D, cell: number, minY = -Infinity) {
   obj.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert(), v = new THREE.Vector3(), cells = new Map<string, number[]>();
   obj.traverse((o: any) => {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { KEEP } from './keep';
 import { scene, camera, view, ux, glowMat } from '../core/engine';
 import { texMat, std, boxUV } from '../core/textures';
 import { setSky, setSurfaceSky } from '../core/sky';
@@ -77,7 +78,8 @@ export function buildSurface(sector: string) {
   curType = T;
   const R = rng(hashStr(sector + ':oberflaeche')), nz = noise2(hashStr(sector) % 1000);
   // Pseudo-Sektor: gleiche ID (für Preise/Zone), eigener Name und eigene Stationen
-  const base: StationDef | null = pd.base ? { id: planetBaseId(sector), kind: 'outpost', name: pd.base, pos: [0, 0, 0], refinery: true, prices: { erden: 0.9, helium: 0.9 } } : null;
+  const base: StationDef | null = pd.base ? { id: planetBaseId(sector), kind: pd.city ? 'station' : 'outpost', name: pd.base, pos: [0, 0, 0], refinery: true, prices: { erden: 0.9, helium: 0.9 }, city: pd.city } : null;
+  KEEP.r = pd.city ? 360 : 130;
   world.def = { ...sec, name: pd.name, danger: pd.danger, stations: base ? [base] : [], fields: [], hives: 0, links: [] };
   // Höhen
   const half = SURF.size / 2, cell = SURF.size / (N - 1);
@@ -191,7 +193,9 @@ export function buildSurface(sector: string) {
   // Bodenstation
   // Staub bzw. Schnee auf waagrechten Flächen des Außenpostens in der Bodenfarbe des Planeten
   setOutpostDust(T.ground[2], pd.type === 'eis' ? 0.45 : pd.type === 'wueste' ? 0.35 : 0.25);
-  if (base) { base.pos = [0, plateau + 14, 0]; addStation(base, R.range(0, Math.PI * 2)); }
+  // Stadt: Boden 0,3 m über dem Plateau, Tor zeigt zum Anflugpunkt (Nordwesten); Basis: Stationspunkt 14 m über dem Plateau
+  if (base && base.city) { base.pos = [0, plateau + 0.3, 0]; addStation(base, -Math.PI / 4); }
+  else if (base) { base.pos = [0, plateau + 14, 0]; addStation(base, R.range(0, Math.PI * 2)); }
   // Lagerstätten in Gruppen
   for (let g = 0; g < 6; g++) {
     let cx = 0, cz = 0;

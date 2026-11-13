@@ -45,7 +45,8 @@ import { loadStationModels } from './models/stationModels';
 import { loadCharModels } from './models/charModels';
 import type { Gate, Station } from './game/world';
 import { DUN, enterDungeon, updateDungeon, dungeonCamera, drawDungeonHUD, dungeonKey, nearEntrance, dunHooks } from './game/dungeon';
-import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover, landAtBase, leaveBaseOnFoot, nearFootTarget, drawGroundMarkers } from './game/onfoot';
+import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover, landAtBase, leaveBaseOnFoot, nearFootTarget, drawGroundMarkers, footAt } from './game/onfoot';
+import { CITY, updateCity, insideCityGate, preloadCities, cityDoorOut, hangarPadPose, cityHooks, cityWorld } from './game/city';
 import { updateChapter2 } from './game/chapter2';
 import { basePad, nearDoor } from './game/basewalk';
 import { nearCrate, openCrate as openSalvage, updateSalvage, drawSalvageHUD } from './game/salvage';
@@ -206,6 +207,34 @@ function leaveBase() {
   saveGame();
 }
 dockHooks.leaveBase = leaveBase;
+// Stadt zu Fuß (src/game/city.ts): aus der Promenade hinaus auf den Marktplatz und wieder hinein. Das Schiff bleibt im Hangar stehen
+// (man sieht es durchs Tor), angedockt bleibt man die ganze Zeit; „Ablegen“ im Menü startet direkt aus dem Hangar.
+function cityWalkOut() {
+  const st = IN.station; if (!st) return;
+  leaveInterior();
+  G.cityWalk = true; CITY.walk = true;
+  ROVER.ship = hangarPadPose(st, stats().radius * 0.55);
+  const rv = cityWorld(st, 52, 0, 4); ROVER.x = rv.x; ROVER.z = rv.z; ROVER.y = rv.y; ROVER.yaw = st.yaw;   // Rover hinten im Hangar
+  ROVER.active = true;
+  const out = cityDoorOut(); if (out) footAt(out.x, out.z, out.yaw);
+  G.mode = 'rover'; resetRoverCamera(); releaseAll();
+  $('hud').classList.remove('hidden'); document.body.classList.add('playing');
+  radio('SYSTEM', `${st.name}, Marktplatz. Die Tür hinter dir führt zurück in die Promenade.`);
+  saveGame();
+}
+function enterCityPromenade() {
+  const st = CITY.st; if (!st) return;
+  footOff(); ROVER.active = false; laserSound(false);
+  G.cityWalk = false; CITY.walk = false; G.dockedAt = st;
+  $('hud').classList.add('hidden'); releaseAll();
+  enterInterior(st, 'city');
+  saveGame();
+}
+interiorHooks.toCity = cityWalkOut;
+footHooks.enterCity = enterCityPromenade;
+dockHooks.leaveCity = () => { footOff(); ROVER.active = false; G.cityWalk = false; CITY.walk = false; };
+cityHooks.tab = (t, n) => showMenu(t, n);
+cityHooks.rest = () => { P.hull = stats().maxHull; saveGame(); radio('SYSTEM', 'Eine Nacht in der Herberge. Ausgeruht, Spielstand gesichert.'); };
 interiorHooks.leaveBase = leaveBase;
 interiorHooks.openMap = openMap;
 interiorHooks.pause = pause;
@@ -548,6 +577,9 @@ function loop(now: number, manual = false) {
   updateStory(dt);
   updateChapter1(dt);
   updateChapter2(dt);
+  updateCity(dt);
+  // Stadt: durchs offene Hallentor geflogen → andocken (Landeanflug im Hangar übernimmt)
+  if (G.mode === 'play' && !G.dead && CITY.st && insideCityGate(P.x, P.y, P.z)) openDock(CITY.st);
   G.eBusy = G.mode === 'play' && (!!nearDock() || !!world.surface);
   // Grundgeräusch zu Fuß: im Schiff ein tiefes Brummen, in der Station leiser
   // Grundgeräusch: zu Fuß Schiff, Hangar oder Station; auf einer Planetenoberfläche der Wind (je nach Planetenart)
@@ -621,6 +653,7 @@ if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterSh
 // Schiffsmodelle laden (kurz), dann Menü zeigen. Ohne Modelle laufen die eingebauten Ersatzmodelle.
 Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false)]).then(() => {
   setTimeout(preloadMeshRooms, 3000);
+  setTimeout(preloadCities, 2500);   // Städte (Hintergrund-Paket): vor dem ersten Landen auf Heimstatt II geladen
   loadRockModel();   // Felsmodell für Asteroiden (kleine Datei, ist vor dem ersten Flug geladen)
   setTimeout(preloadSfx, 1500);   // Schritte, Klicks, Türen   // begehbare Innenräume aus Modellen im Hintergrund vorladen
   setShipModel('falke', 'Orange', true);

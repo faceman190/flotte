@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CITY, cityTargets, cityDoorNear, cityDoorPos } from './city';
 import { scene, camera, view, ux, gl } from '../core/engine';
 import { keys, mouse } from '../core/input';
 import { clamp } from '../core/util';
@@ -29,10 +30,15 @@ export const FOOT = {
   active: false, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, vx: 0, vz: 0, jy: 0, jv: 0, bob: 0, walked: 0,
   locked: false, act: '' as '' | 'rover' | 'ship' | 'mine' | 'base' | 'crate' | 'story', prompt: '', warn: 0,
 };
-export const footHooks = { unlock: () => {} };
+export const footHooks = {
+  enterCity: () => {}, unlock: () => {} };
 // Ziele zu Fuß, die die Geschichte setzt (z. B. Kristall bergen): [E] in Reichweite r
 export const footTargets: { x: number; z: number; r: number; label: string; act: () => void }[] = [];
-export const nearFootTarget = () => footTargets.find(t => Math.hypot(t.x - FOOT.x, t.z - FOOT.z) < t.r) || null;
+export const nearFootTarget = () => footTargets.find(t => Math.hypot(t.x - FOOT.x, t.z - FOOT.z) < t.r)
+  || cityTargets.find(t => Math.hypot(t.x - FOOT.x, t.z - FOOT.z) < t.r)
+  || (CITY.st && cityDoorNear(FOOT.x, FOOT.z) ? { x: FOOT.x, z: FOOT.z, r: 4, label: `Promenade von ${CITY.st.name} betreten`, act: () => footHooks.enterCity() } : null)
+  || null;
+export function footAt(x: number, z: number, yaw: number) { place(x, z, yaw); }
 let me: Avatar | null = null, stepT = 0, grabT = 0;
 
 const shipR = () => stats().radius * 0.75 + 0.8;
@@ -207,7 +213,8 @@ export function drawFootHUD() {
   ux.save();
   const dS = Math.hypot(FOOT.x - ROVER.ship.x, FOOT.z - ROVER.ship.z);
   marker(ROVER.ship.x, ROVER.ship.y + 10, ROVER.ship.z, `${P.shipName.toUpperCase()} · ${Math.round(dS)} m`, '#5fd0ff', 0);
-  if (ROVER.model) { const dR = Math.hypot(FOOT.x - ROVER.x, FOOT.z - ROVER.z); if (dR > 6) marker(ROVER.x, ROVER.y + 4, ROVER.z, `ROVER · ${Math.round(dR)} m`, '#e09030', 1); }
+  { const cd = cityDoorPos(); if (cd) { const dD = Math.hypot(FOOT.x - cd.x, FOOT.z - cd.z); if (dD > 4 && dD < 500) marker(cd.x, cd.y + 4, cd.z, `PROMENADE · ${Math.round(dD)} m`, '#7fe0a0', 2); } }
+  if (ROVER.model && !CITY.walk) { const dR = Math.hypot(FOOT.x - ROVER.x, FOOT.z - ROVER.z); if (dR > 6) marker(ROVER.x, ROVER.y + 4, ROVER.z, `ROVER · ${Math.round(dR)} m`, '#e09030', 1); }
   drawSalvageHUD(FOOT.x, FOOT.z);
   drawFieldHUD();
   drawGroundMarkers();

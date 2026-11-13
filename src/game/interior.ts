@@ -40,6 +40,7 @@ interface Person { g: THREE.Group; legL: THREE.Group; legR: THREE.Group; armL: T
 interface Walker { p: Person; path: number[][]; i: number; x: number; z: number; ph: number; wait: number; rest: boolean }
 
 export const interiorHooks = {
+  toCity: () => {},
   openTab: (_tab: string, _note: string) => {},
   undock: () => {},
   openMap: () => {},
@@ -173,6 +174,16 @@ const HANGAR_LIGHT = 5;   // Stärke des vorberechneten Lichts
 // Standflächen aus data/kit_Hangar.json. Der Zweig darunter gilt nur noch für das frühere Modell ohne Baukasten-Angaben.
 const HANGAR_KIT_LIGHT = 3.4;
 let kitHangar = false;
+// Für Städte (src/game/city.ts): der Hangar als Ansicht durchs offene Tor, an derselben Stelle wie im Innenraum
+export function hangarDisplay(accent = PAL.station.accent) {
+  const tpl = stationTemplate('Hangar');
+  if (!tpl || !kitMeta('Hangar').blocks) return null;
+  const body = tpl.clone(true);
+  body.children[0].position.set(0, 0, 0);
+  applyKit(body, { lightmap: 'hangar_lightmap', intensity: HANGAR_KIT_LIGHT, accent });
+  body.traverse((o: any) => { if (o.isMesh) o.userData.shared = true; });
+  return body;
+}
 function addHangarModel(parent: THREE.Object3D, pal: { accent: number; wall: number; floor: number }) {
   const tpl = stationTemplate('Hangar');
   kitHangar = false;
@@ -608,7 +619,9 @@ export function syncParkedShip() {
 }
 
 // ---------- Betreten / Verlassen ----------
-export function enterInterior(st: Station, onFoot = false) {
+// mode: false = mit dem Schiff (Landeanflug), true = Planetenbasis zu Fuß, 'city' = aus der Stadt zu Fuß durch die Promenadentür
+export function enterInterior(st: Station, mode: boolean | 'city' = false) {
+  const onFoot = mode === true, fromCity = mode === 'city';
   if (IN.active) leaveInterior();
   IN.active = true; IN.station = st;
   group = build(st);
@@ -647,9 +660,24 @@ export function enterInterior(st: Station, onFoot = false) {
     inters.push({ x: 0, z: HZ0 - 1.4, r: 2.4, label: () => `${st.name} verlassen`, act: () => interiorHooks.leaveBase() });
     IN.x = 0; IN.z = HZ0 - 2.6; IN.yaw = 0;
     say('SYSTEM', `Willkommen in ${st.name}. Der Gang führt zur ${PAL[kind].hall}.`);
+  } else if (fromCity) {
+    IN.x = 0; IN.z = PZ0 + 2.6; IN.yaw = Math.PI;   // hinter der Tür am Ende der Promenade, Blick zum Hangar
+    say('SYSTEM', `Promenade von ${st.name}. Dein Schiff steht im Hangar.`);
   } else {
     beginSeq(-1, 4.5, null);   // Landung: das Schiff kommt durchs Tor herein und setzt auf
     say('SYSTEM', `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
+  }
+  // Stadt: Tür am Ende der Promenade hinaus auf den Marktplatz
+  if ((st.def as any).city && !onFoot) {
+    const door = new THREE.Group();
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.9, 0.14), mat(new THREE.MeshStandardMaterial({ color: 0x2c3036, roughness: 0.4, metalness: 0.8 })));
+    leaf.position.set(0, 1.45, PZ0 + 0.25); door.add(leaf);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 1.6), mat(new THREE.MeshStandardMaterial({ color: 0x9ac8e8, transparent: true, opacity: 0.25, roughness: 0.05, metalness: 0.6 })));
+    glass.position.set(0, 1.75, PZ0 + 0.33); door.add(glass);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.42), mat(new THREE.MeshBasicMaterial({ map: signTex('Stadt · Markt', PAL[kind].css), toneMapped: false })));
+    sign.position.set(0, 3.25, PZ0 + 0.34); door.add(sign);
+    group.add(door);
+    inters.push({ x: 0, z: PZ0 + 1.2, r: 2.4, label: () => `Hinaus nach ${st.name} (Marktplatz)`, act: () => interiorHooks.toCity() });
   }
 }
 export function leaveInterior() {

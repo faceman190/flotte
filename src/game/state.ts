@@ -128,6 +128,7 @@ export const G = {
   shake: 0, hitMark: 0, sinceHit: 99, roll: 0, thrust: 0, cool: 0, gunSide: 0,
   lockT: null as any,
   dockedAt: null as any,
+  cityWalk: false,    // zu Fuß in einer Stadt (Schiff steht im Hangar; Tür am Marktplatz führt in die Promenade)
   baseWalk: false,    // zu Fuß in einer Planetenbasis (kein Hangar; hinaus geht es durch die Tür)
   jumpT: 0, jumpTo: null as string | null, jumpFrom: null as string | null,
   warnT: 0,

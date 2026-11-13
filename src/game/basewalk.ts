@@ -25,6 +25,7 @@ function hitY(st: Station, x: number, z: number): number | null {
 }
 
 export function basePad(st: Station): Pad | null {
+  if ((st.def as any).city) return null;                // Stadt: kein Landefeld, man fliegt in den Hangar
   if (cache && cache.st === st) return cache;
   if (!world.surface || !st.id.endsWith('_base')) return null;
   st.mesh.updateMatrixWorld(true);
@@ -118,7 +119,7 @@ export function baseBlocked(x: number, z: number, fy: number) {
 // ---- Begehen der Basis mit Strahltests am Modell (Sockel, Stufen, Landefeld; Wände in Körperhöhe) ----
 // Die Dreiecke des Modells liegen in einem Raster (2 m in X/Z): ein Strahl prüft nur die Dreiecke seiner Zellen.
 const nearBase = (x: number, z: number) => { const st = world.stations[0]; return !!st && !!world.surface && st.id.endsWith('_base') && Math.hypot(x - st.x, z - st.z) < st.R + 12; };
-function ensureMeshes(st: Station) { if (meshOf !== st.mesh) { meshes = []; st.mesh.traverse((o: any) => { if (o.isMesh && o.visible) meshes.push(o); }); meshOf = st.mesh; } }
+function ensureMeshes(st: Station) { if (meshOf !== st.mesh) { meshes = []; ((st.mesh.userData.walkRoot as THREE.Object3D) || st.mesh).traverse((o: any) => { if (o.isMesh && o.visible) meshes.push(o); }); meshOf = st.mesh; } }
 const CELL = 2;
 let gridOf: THREE.Object3D | null = null, TRI = new Float32Array(0), GRID = new Map<number, number[]>();
 const ck = (ix: number, iz: number) => (ix + 2048) * 4096 + (iz + 2048);

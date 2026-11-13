@@ -5,6 +5,7 @@ export type PlanetType = 'fels' | 'wueste' | 'eis' | 'vulkan' | 'asche' | 'krist
 export interface PlanetDef {
   name: string; type: PlanetType; danger: number;
   base?: string;               // Name der Bodenstation (ohne = keine)
+  city?: string;                 // statt der Basis eine Stadt mit Hangar
 }
 export interface PlanetTypeDef {
   n: string;                   // Beschreibung
@@ -46,7 +47,7 @@ export const PTYPE: Record<PlanetType, PlanetTypeDef> = {
 };
 
 export const PLANETS: Record<string, PlanetDef> = {
-  heimstatt: { name: 'Heimstatt II', type: 'fels', danger: 0, base: 'Talstation Heimstatt' },
+  heimstatt: { name: 'Heimstatt II', type: 'fels', danger: 0, base: 'Talstadt', city: 'Talstadt' },   // Stadt mit Hangar (src/game/city.ts)
   lichtwall: { name: 'Lichtwall Prime', type: 'wueste', danger: 0, base: 'Sandhafen' },
   eisgarten: { name: 'Frostbiss', type: 'eis', danger: 0, base: 'Eisgrube Nord' },
   neuhafen: { name: 'Neuhafen IV', type: 'fels', danger: 1, base: 'Klippenbasis' },

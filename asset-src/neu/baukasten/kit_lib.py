@@ -22,6 +22,9 @@ TEX = os.path.join(ROOT, 'asset-src', 'tex')
 _A = json.load(open(os.path.join(HERE, 'kit_atlas.json'))); _D = json.load(open(os.path.join(HERE, 'kit_decals.json')))
 _A2 = json.load(open(os.path.join(HERE, 'kit_int_atlas.json'))); _S = json.load(open(os.path.join(HERE, 'kit_signs.json')))
 SM, DECALS, DPX, SIGNS, SPX = _A['size_m'], _D['cells'], _D['px'], _S['cells'], _S['px']
+# Leuchtschriften der Städte (scripts/make-kit-city.mjs → kit_city.json): eigene Farben, Material kit_neon
+_C = json.load(open(os.path.join(HERE, 'kit_city.json'))) if os.path.exists(os.path.join(HERE, 'kit_city.json')) else {'px': 2048, 'cells': {}}
+CITY, CPX = _C['cells'], _C['px']
 # Zwei Texturblätter: außen (kit_trim) und innen (kit_int). Jeder Streifen und jede Kachel kennt ihr Material.
 SHEET = {n: ('kit_trim', a, b) for n, (a, b) in _A['strips'].items()}; SHEET.update({n: ('kit_int', a, b) for n, (a, b) in _A2['strips'].items()})
 TILES = {n: ('kit_trim', r) for n, r in _A['tiles'].items()}; TILES.update({n: ('kit_int', r) for n, r in _A2['tiles'].items()})
@@ -66,6 +69,7 @@ class Kit:
         self.mats = []; self.stack = [Matrix.Identity(4)]; self.R = random.Random(seed); self.lights = []
         # Lichtkarte: große Flächen bekommen ein eigenes Feld (chart) im zweiten Satz Texturkoordinaten; alles Übrige trägt sein Licht in den Eckfarben
         self.uv1 = self.bm.loops.layers.uv.new('Lightmap'); self.chl = self.bm.faces.layers.int.new('chart'); self.charts = []; self.lm = False; self.lm_min = 2.5      # lm_min: Flächen ab so vielen m² bekommen ein eigenes Feld
+        self.seg = 3.0                           # Spaltenbreite großer Flächen (für ferne, große Bauten größer stellen: weniger Dreiecke)
         self.lamps = []; self.blocks = []       # zusätzliche Lichtquellen für die Berechnung; Standflächen (nicht begehbar) fürs Spiel
 
     # ------------------------------------------------------------ Grundlagen
@@ -106,9 +110,9 @@ class Kit:
         v1 = vt if fit else vb + min(1.0, H / sh) * (vt - vb)
         e = 0.002
         self.poly((bl, br, tr, tl), ((u0 / SM, vb + e), ((u0 + L) / SM, vb + e), ((u0 + L) / SM, v1 - e), (u0 / SM, v1 - e)), T(tint), SHEET[strip][0], chart, st)
-    def surf(self, bl, br, tl, strip='wall', tint='hull', seg=3.0):
-        """Rechteckige Fläche (bl, br, tl), in Reihen und Spalten geteilt: Reihen nach Streifenart, Spalten höchstens seg Meter breit."""
-        bl, br, tl = V(bl), V(br), V(tl); du, dv = br - bl, tl - bl; L, H = du.length, dv.length
+    def surf(self, bl, br, tl, strip='wall', tint='hull', seg=None):
+        """Rechteckige Fläche (bl, br, tl), in Reihen und Spalten geteilt: Reihen nach Streifenart, Spalten höchstens seg Meter breit (Vorgabe: self.seg)."""
+        seg = seg or self.seg; bl, br, tl = V(bl), V(br), V(tl); du, dv = br - bl, tl - bl; L, H = du.length, dv.length
         if L < 1e-5 or H < 1e-5: return
         nu = max(1, math.ceil(L / seg - 1e-6)); ch = 0
         if self.lm and not self._ov and L * H >= self.lm_min and min(L, H) >= 0.7:
@@ -163,6 +167,10 @@ class Kit:
         d = SIGNS[name]; h = w * d['h'] / d['w'] if h is None else h
         poster = name.startswith('ad_') if poster is None else poster
         self.tile(name, c, u, v, w, h, 'none', off=off, cells=SIGNS, scale=SPX, mat='kit_poster' if poster else 'kit_sign')
+    def neon(self, name, c, u, v, w, h=None, off=0.03):
+        """Leuchtschrift oder Leuchtkasten aus dem Stadt-Atlas (kit_city.json), selbstleuchtend in eigenen Farben."""
+        d = CITY[name]; h = w * d['h'] / d['w'] if h is None else h
+        self.tile(name, c, u, v, w, h, 'none', off=off, cells=CITY, scale=CPX, mat='kit_neon')
     def decal(self, name, c, u, v, w, h=None, tint='white', off=0.015):
         d = DECALS[name]; h = w * d['h'] / d['w'] if h is None else h
         self.tile(name, c, u, v, w, h, tint, off=off, cells=DECALS, scale=DPX, mat='kit_decal')
@@ -268,7 +276,7 @@ class Kit:
                 if j == 0: pts, uvs = pts[1:], uvs[1:]
                 elif j == rings - 1: pts, uvs = pts[:3], uvs[:3]
                 self.poly(pts, uvs, T(tint), SHEET[strip][0])
-    def prism(self, prof, y0, y1, side='wall', top='roofing', tint='hull', tint_top=None, caps=(True, True), cap_strip='wall', seg=3.0):
+    def prism(self, prof, y0, y1, side='wall', top='roofing', tint='hull', tint_top=None, caps=(True, True), cap_strip='wall', seg=None):
         """Querschnitt in der X/Z-Ebene (von vorn gesehen gegen den Uhrzeigersinn), gezogen von y0 (vorn) bis y1 (hinten)."""
         n = len(prof)
         for i in range(n):
@@ -665,6 +673,10 @@ def kit_material(name):
     m = bpy.data.materials.get(name)
     if m: return m
     m = bpy.data.materials.new(name); m.use_nodes = True; nt = m.node_tree; P = nt.nodes['Principled BSDF']; L = nt.links.new
+    if name == 'kit_neon':
+        tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img('kit_city@2048.png')
+        L(tc.outputs['Color'], P.inputs['Base Color']); L(tc.outputs['Color'], P.inputs['Emission Color']); P.inputs['Emission Strength'].default_value = 4.0
+        return m
     if name in ('kit_sign', 'kit_poster'):
         tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img('kit_signs@2048.png')
         if name == 'kit_sign':
@@ -795,7 +807,7 @@ def export(ob, name, meta=None, kind='station', extra=()):
     return {'glb_kb': round(os.path.getsize(path) / 1024), 'verts': len(ob.data.vertices), 'faces': len(ob.data.polygons), 'lights': len(d['lights'])}
 
 # Leuchtstärken der selbstleuchtenden Materialien für die Lichtberechnung (Blender)
-EMIT = {'kit_light': 10.0, 'kit_cool': 5.0, 'kit_accent': 6.0, 'kit_screen': 4.0, 'kit_lamp': 6.0, 'kit_redlamp': 4.0, 'kit_green': 2.0, 'kit_sign': 4.0, 'kit_poster': 2.2}
+EMIT = {'kit_neon': 3.0, 'kit_light': 10.0, 'kit_cool': 5.0, 'kit_accent': 6.0, 'kit_screen': 4.0, 'kit_lamp': 6.0, 'kit_redlamp': 4.0, 'kit_green': 2.0, 'kit_sign': 4.0, 'kit_poster': 2.2}
 def set_emission(scale=1.0):
     for n, v in EMIT.items():
         m = bpy.data.materials.get(n)

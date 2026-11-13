@@ -66,6 +66,7 @@ function setGlobals(m: Manifest) {
   window.PLANETDATA = { map: g('planet/map/'), ground: g('planet/ground/'), groundn: g('planet/groundn/'), groundr: g('planet/groundr/') };
   window.SHIPDATA = { models: g('ship/'), paints: g('paint/') };
   window.STATIONDATA = g('station/'); window.CHARDATA = g('char/'); window.SOUNDDATA = g('sound/');
+  (window as any).CITYDATA = g('city/');   // Städte (src/game/city.ts)
   window.SHIPINT = g('shipint/'); (window as any).DECODATA = g('deco/'); (window as any).DATAFILES = g('data/'); window.WALKMAP = g('walk/');   // begehbare Innenräume (meshRoom.ts)
 }
 async function loadManifest(): Promise<Manifest> {

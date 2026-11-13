@@ -25,7 +25,7 @@ import { statLine } from './invApp';
 type Tab = 'markt' | 'ausruester' | 'raffinerie' | 'auftraege' | 'missionen' | 'lager' | 'hangar' | 'werft' | 'werkstatt' | 'service' | 'info';
 let tab: Tab = 'markt';
 let note = '';
-export const dockHooks = { openMap: () => {}, shipChanged: () => {}, enter: (_s: Station) => {}, leave: () => {}, launch: (_done: () => void) => false, leaveBase: () => {} };
+export const dockHooks = { leaveCity: () => {}, openMap: () => {}, shipChanged: () => {}, enter: (_s: Station) => {}, leave: () => {}, launch: (_done: () => void) => false, leaveBase: () => {} };
 let launched = false;   // der Startablauf im Hangar ist durch: jetzt wirklich ablegen
 
 const CHARGE_COST = 40, PAINT_COST = 250;
@@ -70,14 +70,15 @@ export function showMenu(t?: string, n?: string) {
 }
 // Menü schließen und weiterlaufen (nur zu Fuß)
 export function closeMenu() {
-  if (G.mode !== 'dock' || !G.inside) return;
+  if (G.mode !== 'dock' || (!G.inside && !G.cityWalk)) return;
   $('dock').classList.add('hidden');
-  G.mode = 'walk';
+  G.mode = G.cityWalk ? 'rover' : 'walk';
   document.body.classList.add('playing');
   centerMouse();
 }
 export const dockTabs = (s: Station) => { const prev = G.dockedAt; G.dockedAt = s; const t = tabs(); G.dockedAt = prev; return t as string[]; };
 export function undock() {
+  if (G.cityWalk) dockHooks.leaveCity();                  // Stadt zu Fuß: direkt starten (das Schiff fliegt aus dem Hangar)
   if (G.baseWalk) { $('dock').classList.add('hidden'); dockHooks.leaveBase(); return; }   // Planetenbasis: zu Fuß hinaus
   const s = st();
   // erst der Startablauf im Hangar (abheben, durchs Tor), danach geht es hier weiter

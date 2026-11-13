@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { KEEP } from './keep';
 import { scene } from '../core/engine';
 import { texMat, std } from '../core/textures';
 import { world, rockGeo } from './world';
@@ -179,7 +180,7 @@ export function treeNear(x: number, z: number, r: number) {
     if (Math.hypot(tx - x, tz - z) > r) continue;
     const patch = hash(Math.floor(ix * L.cell / 70), Math.floor(iz * L.cell / 70), 9 + L.salt) * 0.6 + hash(Math.floor(ix * L.cell / 23), Math.floor(iz * L.cell / 23), 5 + L.salt) * 0.4;
     if (hash(ix, iz, L.salt) > L.dens * (0.25 + 1.5 * patch)) continue;
-    if (Math.hypot(tx, tz) < 130 || Math.abs(tx) > 3900 || Math.abs(tz) > 3900) continue;
+    if (Math.hypot(tx, tz) < KEEP.r || Math.abs(tx) > 3900 || Math.abs(tz) > 3900) continue;
     const h = hAt(tx, tz);
     if (h < liquid + 0.6 || Math.abs(hAt(tx + 2, tz) - h) + Math.abs(hAt(tx, tz + 2) - h) > 1.5) continue;
     return true;
@@ -201,7 +202,7 @@ export function updateFlora(cam: THREE.Vector3) {
       if (hash(ix, iz, L.salt) > L.dens * (0.25 + 1.5 * patch)) continue;
       const x = (ix + hash(ix, iz, 11 + L.salt)) * L.cell, z = (iz + hash(ix, iz, 12 + L.salt)) * L.cell;
       const d = Math.hypot(x - cam.x, z - cam.z);
-      if (d > L.rad || Math.hypot(x, z) < 130 || Math.abs(x) > 3900 || Math.abs(z) > 3900) continue;
+      if (d > L.rad || Math.hypot(x, z) < KEEP.r || Math.abs(x) > 3900 || Math.abs(z) > 3900) continue;
       const h = hAt(x, z);
       if (h < liquid + 0.6) continue;
       const sl = Math.abs(hAt(x + 2, z) - h) + Math.abs(hAt(x, z + 2) - h);

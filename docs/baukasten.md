@@ -113,3 +113,13 @@ Lichtkarte `asset-src/tex/hangar_lightmap@2048.png`. Maße wie im Spiel (184 × 
 
 `asset-src/neu/mine/mine_kit.py` baut mit dem Baukasten die Module der Minen (Ausbau, Gleis, Leitungen, Grubenlampe, Tresortor, Schaltkasten,
 Förderkorb, Förderwagen, drei Kisten mit Deckel, Stolleneingang mit Förderturm). Details und Ablauf: `docs/dungeons.md`.
+
+## Städte (ab Alpha 0.92)
+
+Städte entstehen ebenfalls mit dem Baukasten (Beispiel: `asset-src/neu/stadt/stadt_kit.py`, Talstadt). Ablauf und Einbindung: `docs/staedte.md`.
+
+- **Leuchtschriften:** eigener Atlas `kit_city` (`scripts/make-kit-city.mjs`): Neonschriften (TALSTADT, MARKT, HERBERGE, Zur Schleuse …), Leuchtkästen (FLUGLEITUNG, HAMMERWERK,
+  HANGAR 1, SANITÄT, ERSATZTEILE), Blocknummern, senkrechte Fassadenschilder (BAR, HOTEL, MARKT, KINO) und zwei Plakate. Im Skript: `K.neon(name, mitte, u, v, breite)`,
+  Material `kit_neon` (eigene Farben, nicht in der Akzentfarbe). Die Werbetafeln aus `kit_signs` (`K.sign('ad_werft', …)`) gehen auch draußen.
+- **Unterteilung:** `K.seg` (Vorgabe 3 m) bestimmt, wie breit die Spalten großer Flächen sind. Für ferne, große Bauten (Hallenhülle, Stadtmauer) 8–10 m:
+  deutlich weniger Dreiecke, kaum sichtbarer Unterschied.

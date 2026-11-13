@@ -7,6 +7,7 @@ export type Nebula = 'red' | 'blue' | 'green' | 'gold' | 'violet' | 'crimson' | 
 export interface StationDef {
   id: string;
   kind: 'carrier' | 'station' | 'outpost';
+  city?: string;                  // Stadt auf einem Planeten (Modell asset-src/glb/city/<Name>.glb, src/game/city.ts)
   name: string;
   pos: [number, number, number];
   prices?: Partial<Record<ItemId, number>>; // Faktor auf den Grundpreis

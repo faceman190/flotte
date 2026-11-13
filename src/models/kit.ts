@@ -8,6 +8,7 @@ import { texMat } from '../core/textures';
 //   kit_trim     Texturblatt (tex/kit_trim_col, _nrm, _orm: Farbe, Relief, Verdeckung/Rauheit/Metall)
 //   kit_decal    Aufkleber mit Transparenz (tex/kit_decals): Schrift, Ziffern, Schilder, Schmutz
 //   kit_concrete Beton (kachelt in Metern), kit_glass dunkle Scheiben, kit_light/lamp/redlamp/screen/green selbstleuchtend
+//   kit_neon     Leuchtschriften der Städte (tex/kit_city, eigene Farben; scripts/make-kit-city.mjs)
 // Zusatzangaben je Modell (Leuchtpunkte, Landefeld) stehen in data/kit_<Name>.json (aus Blender, export() in kit_lib.py).
 // =====================================================================================
 
@@ -87,6 +88,7 @@ export function kitMaterials(look: KitLook = {}) {
   const signs = shared('kit_signs', true);
   M.kit_sign = new THREE.MeshBasicMaterial({ map: signs, color: look.accent ?? KIT_GLOW.accent });     // Wegweiser in der Akzentfarbe der Station
   M.kit_poster = new THREE.MeshBasicMaterial({ map: signs, color: 0xd8d8d8 });
+  M.kit_neon = new THREE.MeshBasicMaterial({ map: shared('kit_city', true) });
   return (SETS[key] = M);
 }
 // Ersetzt in einem geladenen Modell alle kit_*-Materialien durch die gemeinsamen

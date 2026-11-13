@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { KEEP } from './keep';
 import { onCoop, coopSend } from './coop';
 import { scene, camera, view, ux } from '../core/engine';
 import { rng, hashStr } from '../core/util';
@@ -79,7 +80,7 @@ export function buildSalvage(sector: string) {
   };
   // vier Wracks mit Tresorkiste und zwei Kisten daneben
   for (let w = 0; w < 4; w++) {
-    const p = spot(450, 2700); if (!p) continue;
+    const p = spot(Math.max(450, KEEP.r + 140), 2700); if (!p) continue;
     const def = WRECKS[Math.floor(R.next() * WRECKS.length)], g = wreckModel(def.cls, R.next);
     const box = new THREE.Box3(); g.updateMatrixWorld(true); g.traverse((o: any) => { if (o.isMesh && o.visible && !o.isSprite) box.expandByObject(o); });   // ohne Schildkugel und Leuchtpunkte
     const size = box.getSize(new THREE.Vector3()), r = Math.max(size.x, size.z) * 0.5;
@@ -92,7 +93,7 @@ export function buildSalvage(sector: string) {
     for (let k = 0; k < 2; k++) { const b = a + R.range(0.8, 2.4) * (k ? 1 : -1); addCrate(p[0] + Math.cos(b) * (r * 0.9 + R.range(3, 8)), p[1] + Math.sin(b) * (r * 0.9 + R.range(3, 8)), false, w); }
   }
   // verstreute Versorgungskisten (abgeworfen, verloren, vergessen)
-  for (let k = 0; k < 12; k++) { const p = spot(250, 3000); if (p) addCrate(p[0], p[1], R.next() < 0.15, -1); }
+  for (let k = 0; k < 12; k++) { const p = spot(Math.max(250, KEEP.r + 30), 3000); if (p) addCrate(p[0], p[1], R.next() < 0.15, -1); }
 }
 
 function lootId(R: () => number, tierMax: number, legend: boolean): string {
