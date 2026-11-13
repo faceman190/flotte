@@ -187,6 +187,10 @@ function cityMat(name: string, look: KitLook = {}) {
   const c = CITYMAT[name]; if (!c) return null;
   const m = sheet(name); m.envMap = cityEnv(); m.envMapIntensity = c[1]; m.color.setScalar(c[2]); m.metalness = c[3];
   if (c[0]) { m.emissiveMap = shared(name + '_emi', true); m.emissive.set(0xffffff); m.emissiveIntensity = c[0]; }
+  // Fahrbahn und Metalldeck liegen nur 3 bis 16 mm über dem Pflaster. Aus der Luft (ab etwa 300 m) löst der Tiefenpuffer das nicht mehr auf, die
+  // Beläge würden gegeneinander flackern. Deshalb rücken sie in der Tiefe ein Stück vor: die Fahrbahn am weitesten, sie liegt immer oben.
+  const lift = name === 'kit_stb' ? 2 : name === 'kit_stc' ? 1 : 0;
+  if (lift) { m.polygonOffset = true; m.polygonOffsetFactor = -0.5 * lift; m.polygonOffsetUnits = -lift; }
   if (lit) cityLit(m, look);
   return (CITYSET[key] = m);
 }

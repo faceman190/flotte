@@ -17,7 +17,7 @@ import { fileURLToPath } from 'url';
 import sharp from 'sharp';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
-import { dedup, prune, textureCompress, meshopt, reorder, quantize } from '@gltf-transform/functions';
+import { dedup, prune, textureCompress, meshopt, reorder, quantize, getBounds } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -66,8 +66,13 @@ async function model(key, data, pack) {
   // Dasselbe gilt für ext_*: Modelle, deren Bilder in asset-src/tex liegen und im Spiel zugewiesen werden (Minenfelsen, Waffe im Bild).
   const kit = doc.getRoot().listMaterials().some(m => /^(kit|ext)_/.test(m.getName()));
   if (kit) {
+    // Genauigkeit der Eckpunkte: Beim Packen werden Positionen auf ein Raster gerundet. Mit der Voreinstellung (14 Bit) war das Raster einer
+    // 500 m großen Stadt 3 cm grob: Fahrbahn (21,6 cm), Pflaster (20,7 cm) und Gehweg (20 cm) landeten auf derselben Höhe und flackerten
+    // gegeneinander. Deshalb 16 Bit (Raster höchstens 1 mm bis 60 m Größe); größere Modelle (Städte, Hangars, Werke) behalten ihre Positionen ungerundet.
+    const sc = doc.getRoot().getDefaultScene() || doc.getRoot().listScenes()[0], bb = sc ? getBounds(sc) : null;
+    const ext = bb ? Math.max(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]) : 0, big = !(ext <= 60);
     await doc.transform(dedup({ keepUniqueNames: true }), prune({ keepAttributes: true }),
-      reorder({ encoder: MeshoptEncoder, target: 'size' }), quantize({ pattern: /^(POSITION|NORMAL|COLOR)(_\d+)?$/ }));
+      reorder({ encoder: MeshoptEncoder, target: 'size' }), quantize({ pattern: big ? /^(NORMAL|COLOR)(_\d+)?$/ : /^(POSITION|NORMAL|COLOR)(_\d+)?$/, quantizePosition: 16 }));
     doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });
   } else await doc.transform(
     dedup(), prune({ keepAttributes: uv2 }),

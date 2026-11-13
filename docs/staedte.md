@@ -181,3 +181,9 @@ Das Spiel erkennt die Bilder am Namen (`cityLook(name)` in `kit.ts`); eine neue 
 - Felsbrocken der Oberfläche (`src/game/flora.ts`, `updateRocks`): Von den bis zu 900 Brocken liegen nur die im Bild, die aus der Entfernung der Kamera noch zu erkennen sind (Sichtweite 260 m + 240 m je Meter Größe). Vorher waren es immer alle, 890.000 Dreiecke.
 - Gemessen über Talstadt in niedriger Qualität (F3-Anzeige): vorher 2,46 Mio. Dreiecke und 680 Zeichenaufrufe, danach 0,9 Mio. (500 m vor dem Tor) bis 1,3 Mio. (am Landepunkt).
 - Hauptmenü: Nutzt der Browser unter Windows den eingebauten Grafikchip oder gar keine Grafikkarte, steht dort ein ausblendbarer Hinweis (`gpuInfo` in `src/core/perf.ts`, Anzeige in `src/ui/menus.ts`).
+
+## Genauigkeit beim Packen (seit Alpha 0.99k)
+
+- `scripts/build-assets.mjs` rundet die Positionen der Baukasten-Modelle auf ein Raster. Bis Alpha 0.99j waren es 14 Bit: bei einer 500 m großen Stadt 3 cm. Fahrbahn (21,6 cm), Pflaster (20,7 cm), Metalldeck (21,3 cm) und Gehweg (20 cm) lagen danach auf derselben Höhe und flackerten gegeneinander (alle Straßen in Neonhafen).
+- Jetzt: 16 Bit für Modelle bis 60 m Größe (Raster höchstens 1 mm), größere Modelle (Städte, Hangar, Promenade, Schmelzwerk, Außenposten) behalten ihre Positionen ungerundet. Kostet zusammen rund 5 MB.
+- Beläge, die nur Millimeter übereinander liegen, brauchen zusätzlich einen Tiefenversatz, sonst flackern sie aus der Luft: `kit_stb` (Fahrbahn) und `kit_stc` (Metalldeck) in `cityMat` (`src/models/kit.ts`). Neue Beläge, die auf anderen aufliegen, dort eintragen.
