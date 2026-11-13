@@ -11,7 +11,7 @@ import { SHARED } from './shared';
 import { IN, storyNpc } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
-import { talk, playScene, registerChain, st, endChain, storyCtx, storyHooks, type Step, type Obj } from './story';
+import { talk, playScene, registerChain, st, endChain, storyCtx, storyHooks, startChain, type Step, type Obj } from './story';
 import { terrainAt, liquidAt } from './surface';
 import { FOOT, footTargets } from './onfoot';
 import { addGuardDrones, guardsLeft } from './fieldfight';
@@ -229,7 +229,7 @@ function finish() {
   storyHooks.banner('KAPITEL 2 ABGESCHLOSSEN', `+2.500 Credits · ${gilde ? 'Bergbaugilde' : 'Flottenrat'} dankt dir`, '#ffd27a');
   snd(523, 0.3, 'triangle', 0.06, 0); setTimeout(() => snd(659, 0.3, 'triangle', 0.06, 0), 200); setTimeout(() => snd(784, 0.5, 'triangle', 0.06, 0), 400);
   saveGame();
-  setTimeout(() => talk(['BRUMMER', 'Bastion an Pilot: Die Geschichte geht weiter. Kapitel 3 ist in Arbeit.']), 5000);
+  startChain('ch3', 30000);
 }
 
 // ---------- Ruine der Erbauer und Rettungskapsel auf Schlacke Prime ----------

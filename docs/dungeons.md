@@ -181,7 +181,17 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
   - Server: Nachricht `co` wird an alle im Raum weitergereicht (bis 6 KB).
   - Nebenbei behoben: Wer direkt aus dem Schiff ausstieg (nicht aus dem Rover), wurde dem Netz als „im Schiff“ gemeldet und war für andere unsichtbar.
 
+## Wrack (Alpha 0.99)
+- Zweite Dungeon-Art neben dem Bergwerk: `Entrance.kind = 'wrack'`. Derselbe Plan (Irrgarten, Schalter, Tor, Tresorraum, Wächterkern), aber Gänge aus Metall:
+  `buildHull` legt ebene Böden, Decken und Wände (Wände aus dem Texturblatt `kit_trim`, Streifen wall_a und wall_b), `buildWreckProps` setzt Spanten,
+  Kabelkanäle, hängende Kabel, lose Platten, Pulte und Notleuchten. Thema `wrack`: warmes Notlicht, Ferrit-Kristalle.
+- Betreten aus dem All, zurück ins Schiff: `leaveDungeon` setzt den Modus `play` und ruft `dunHooks.left(died, id)`. Statt Förderkorb eine Schleusenplatte.
+- `Entrance.danger` gibt eine eigene Gefahrenstufe vor (sonst die des Sektors). `Entrance.goal` legt einen Gegenstand der Geschichte in den Tresorraum
+  (leuchtender Kasten auf einem Pult); er ist bergbar, sobald der Wächterkern zerstört ist.
+- Erster Einsatz: das Wrack der „Eidwacht“ in Kapitel 3 (`src/game/chapter3.ts`), Größe 7, Gefahr 3.
+- Achtung: Das Texturblatt hat viel Metall. Ohne Umgebungslicht bleiben solche Wände schwarz, deshalb läuft die Kopie für das Wrack mit wenig Metall.
+
 ## Noch offen
-- Weitere Minenarten (Bunker, Wrack), Schlüssel, mehrere Ebenen, große Meteoriten im All.
+- Weitere Arten (Bunker), Schlüssel, mehrere Ebenen, große Meteoriten im All.
 - Hände/Handschuhe an Pistole und Splitterwerfer in der Ich-Sicht.
 - Werte (Leben, Schaden, Beute, Fallenschaden) sind geschätzt und nicht eingespielt.

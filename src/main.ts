@@ -50,6 +50,7 @@ import { CITY, updateCity, insideCityGate, preloadCities, cityDoorOut, hangarPad
 import { updateBaseFx } from './game/basefx';
 import { preloadBases } from './models/stationModels';
 import { updateChapter2 } from './game/chapter2';
+import { updateChapter3 } from './game/chapter3';
 import { basePad, nearDoor } from './game/basewalk';
 import { nearCrate, openCrate as openSalvage, updateSalvage, drawSalvageHUD } from './game/salvage';
 import { toggleView, toggleCrouch } from './game/avatar';
@@ -579,6 +580,7 @@ function loop(now: number, manual = false) {
   updateStory(dt);
   updateChapter1(dt);
   updateChapter2(dt);
+  updateChapter3(dt);
   updateCity(dt);
   updateBaseFx(dt);
   // Stadt: durchs offene Hallentor geflogen → andocken (Landeanflug im Hangar übernimmt)

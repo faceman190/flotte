@@ -14,6 +14,7 @@ import { SECTOR } from '../data/galaxy';
 import { PLANETS, PTYPE } from '../data/planets';
 import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
 import { droneBark } from './barks';
+import { kitMaterials } from '../models/kit';
 import { onCoop, coopSend, coopNow, pack, CoopGroup } from './coop';
 import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, type Avatar, type RemoteFig } from './avatar';
 
@@ -29,7 +30,10 @@ import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, crouchK, makeAvatar,
 const EYE = () => (STANCE.crouch ? 1.08 : 1.62);                       // Augenhöhe (geduckt tiefer)
 const TS = 3.2, BASE = new THREE.Vector3(0, -60000, 0);
 type Vec2 = [number, number];
-interface Entrance { id: string; x: number; y: number; z: number; yaw: number; size: number; name: string }
+// kind 'wrack': Schiffswrack statt Bergwerk (Metallgänge, Notlicht, Ferrit-Bewuchs; betreten aus dem All, zurück ins Schiff).
+// goal: ein Gegenstand der Geschichte auf der Brücke (im Tresorraum), bergbar, sobald der Wächterkern zerstört ist.
+interface Entrance { id: string; x: number; y: number; z: number; yaw: number; size: number; name: string; kind?: 'wrack'; danger?: number; goal?: { label: string; got: () => boolean; take: () => void } }
+export type DungeonEntrance = Entrance;
 interface Crate { tx: number; tz: number; g: THREE.Group; lid: THREE.Object3D; open: boolean; big: boolean; idx: number; a: number; med?: boolean }
 interface Foe { id: number; nx?: number; nz?: number; x: number; z: number; y: number; hp: number; max: number; g: THREE.Group; eye: THREE.MeshBasicMaterial; boss: boolean; cool: number; aim: number; alert: boolean; tx: number; tz: number; ph: number; hit: number; vis?: DroneVis | null; atk?: number }
 interface Bolt { m: THREE.Mesh; x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; dmg: number }
@@ -45,9 +49,11 @@ export const DUN = {
   sws: [] as { tx: number; tz: number; on: boolean; scr: THREE.MeshBasicMaterial; g: THREE.Group }[],   // alle Schalter (das Tor öffnet, wenn alle umgelegt sind)
   traps: [] as { tx: number; tz: number; kind: 'gas' | 'strom'; ph: number; off: number; on: boolean; g: THREE.Group; glow: THREE.MeshBasicMaterial; light: THREE.PointLight }[],
   exit: [1, 1] as Vec2, prompt: '', act: null as null | (() => void),
+  goal: null as null | { tx: number; tz: number; g: THREE.Group },
   msg: [] as { t: string; c: string; life: number }[], danger: 1, kills: 0, left: 0,
 };
 let ENTR: Entrance[] = [];
+const WR = () => DUN.e?.kind === 'wrack';
 let group: THREE.Group | null = null, lamps: THREE.Vector3[] = [], pool: THREE.PointLight[] = [], head: THREE.SpotLight | null = null, gun: THREE.Group | null = null;
 let tracer: THREE.Line | null = null, tracerT = 0, lampT = 0, pathT = 0, stepT = 0, grabT = 0;
 let vm: ViewModel | null = null, mflash: THREE.PointLight | null = null, WALL_R = 0.42;     // Waffe im Bild (eigene Ebene), Mündungslicht in der Welt, Abstand zur Wand
@@ -200,6 +206,7 @@ const THEME: Record<string, { lamp: number; fog: number; deco: 'kristall' | 'lav
   vulkan: { lamp: 0xffa070, fog: 0x0a0403, deco: 'lava', col: 0xff5010 },
   asche: { lamp: 0xd8b0ff, fog: 0x060408, deco: 'lava', col: 0xb060ff },
   kristall: { lamp: 0xd8b8ff, fog: 0x060409, deco: 'kristall', col: 0xd080ff },
+  wrack: { lamp: 0xffb08a, fog: 0x030406, deco: 'kristall', col: 0xb060ff },      // Notlicht, Ferrit wächst aus dem angefressenen Metall
 };
 function buildTheme(type: string, R: { next: () => number }) {
   const th = THEME[type] || THEME.fels; if (th.deco === 'none' || !group) return;
@@ -231,6 +238,84 @@ function buildTheme(type: string, R: { next: () => number }) {
       c.position.set(cx, 0, cz); c.rotation.y = R.next() * 6.28; c.userData.sh = false; group.add(c);
     }
   }
+}
+
+// ---------- Wrack: Gänge aus Metall (statt Felsnetz und Felsen) ----------
+// Jede Kachel bekommt ebene Flächen: Boden, Decke, Wände zu geschlossenen Kacheln und Stürze zu niedrigeren Nachbarn. Drei Materialien
+// (Bodenblech, Wandpaneele, Deckenblech), Helligkeit je Ecke leicht verschieden (Ruß, Brand).
+function buildHull(seed: number) {
+  const W = DUN.W, H = DUN.H, g = new THREE.Group(), PER = 3.2;
+  const mk = () => ({ pos: [] as number[], uv: [] as number[], col: [] as number[] }), F = mk(), C = mk(), WL = mk();
+  const quad = (o: ReturnType<typeof mk>, p: number[][], uv: number[][], sh: number[]) => { for (const k of [0, 1, 2, 0, 2, 3]) { o.pos.push(p[k][0], p[k][1], p[k][2]); o.uv.push(uv[k][0], uv[k][1]); o.col.push(sh[k], sh[k], sh[k] * 1.03); } };
+  for (let z = 0; z < H; z++) for (let x = 0; x < W; x++) {
+    if (!DUN.t[z * W + x]) continue;
+    const x0 = (x - 0.5) * TS, x1 = x0 + TS, z0 = (z - 0.5) * TS, z1 = z0 + TS, h = DUN.ceil[z * W + x], s = 0.62 + 0.38 * hash3(x, 1, z, seed);
+    quad(F, [[x0, 0, z1], [x1, 0, z1], [x1, 0, z0], [x0, 0, z0]], [[x0 / PER, z1 / PER], [x1 / PER, z1 / PER], [x1 / PER, z0 / PER], [x0 / PER, z0 / PER]], [s, s, s, s]);
+    quad(C, [[x0, h, z0], [x1, h, z0], [x1, h, z1], [x0, h, z1]], [[x0 / PER, z0 / PER], [x1 / PER, z0 / PER], [x1 / PER, z1 / PER], [x0 / PER, z1 / PER]], [s * 0.8, s * 0.8, s * 0.8, s * 0.8]);
+    const sides: [number, number, number, number, number, number][] = [[x + 1, z, x1, z0, x1, z1], [x - 1, z, x0, z1, x0, z0], [x, z + 1, x1, z1, x0, z1], [x, z - 1, x0, z0, x1, z0]];
+    for (const [nx, nz, ax, az, bx, bz] of sides) {
+      const nt = tile(nx, nz), nh = nt ? DUN.ceil[nz * W + nx] : 0;
+      if (nt && nh >= h) continue;
+      // Texturblatt kit_trim: untere 3 m = Streifen wall_a (Bildzeilen 0–0,25), darüber wall_b (0,25–0,417); 12 m je Bildbreite
+      const lo = nt ? nh : 0, u0 = (ax + az) / 12, u1 = (bx + bz) / 12, sh = (y: number) => (0.42 + 0.3 * Math.min(1, y / 3)) * s;
+      const vW = (y: number) => (y <= 3 ? 0.25 * (1 - y / 3) + 0.002 : 0.25 + 0.1667 * (1 - Math.min(1, (y - 3) / 2)) - 0.002);
+      const part = (y0: number, y1: number) => { if (y1 - y0 < 0.02) return; const e0 = y0 === 3 ? 3.0001 : y0; quad(WL, [[ax, y0, az], [bx, y0, bz], [bx, y1, bz], [ax, y1, az]], [[u0, vW(e0)], [u1, vW(e0)], [u1, vW(y1)], [u0, vW(y1)]], [sh(y0), sh(y0), sh(y1), sh(y1)]); };
+      if (lo < 3 && h > 3) { part(lo, 3); part(3, h); } else part(lo, h);
+    }
+  }
+  const mesh = (o: ReturnType<typeof mk>, m: THREE.Material) => {
+    const ge = new THREE.BufferGeometry();
+    ge.setAttribute('position', new THREE.Float32BufferAttribute(o.pos, 3)); ge.setAttribute('color', new THREE.Float32BufferAttribute(o.col, 3)); ge.setAttribute('uv', new THREE.Float32BufferAttribute(o.uv, 2));
+    ge.computeVertexNormals();
+    const me2 = new THREE.Mesh(ge, m); me2.userData.sh = false; me2.frustumCulled = false; g.add(me2);
+  };
+  mesh(F, texMat(0x8a8e96, 'hangar_floor', { roughness: 0.7, metalness: 0.4, vertexColors: true, side: THREE.DoubleSide }, 1));
+  const trim = (kitMaterials().kit_trim as THREE.MeshStandardMaterial).clone(); trim.side = THREE.DoubleSide; trim.metalness = 0.18; trim.envMapIntensity = 0.15;      // Kopie: beidseitig, ohne Staub; wenig Metall, sonst bleibt die Wand ohne Umgebung schwarz
+  mesh(WL, trim);
+  mesh(C, texMat(0x565a62, 'hangar_metal', { roughness: 0.8, metalness: 0.4, vertexColors: true, side: THREE.DoubleSide }, 1));
+  return g;
+}
+// Einbauten im Wrack: Spanten und Deckenträger in den Gängen, Kabelkanäle, herabhängende Kabel, lose Platten, Pulte in den Räumen, Notleuchten.
+function buildWreckProps(plan: Plan, R: ReturnType<typeof rng>) {
+  const st: THREE.BufferGeometry[] = [], dk: THREE.BufferGeometry[] = [], lm: THREE.BufferGeometry[] = [], sc: THREE.BufferGeometry[] = [];
+  lamps = [];
+  for (let z = 1; z < DUN.H - 1; z++) for (let x = 1; x < DUN.W - 1; x++) {
+    if (DUN.t[I(x, z)] !== 1) continue;
+    const e = tile(x + 1, z) > 0, w = tile(x - 1, z) > 0, s2 = tile(x, z + 1) > 0, n = tile(x, z - 1) > 0, h = DUN.ceil[I(x, z)], wx = x * TS, wz = z * TS;
+    const alongX = e && w && !s2 && !n, alongZ = s2 && n && !e && !w;
+    if ((alongX || alongZ) && h < 3.6) {
+      const ry = alongX ? 0 : Math.PI / 2, o = (a: number, b: number): [number, number] => (alongX ? [wx + a, wz + b] : [wx + b, wz + a]);
+      // Spant an der Kachelgrenze: zwei Stiele, ein Träger, dazu schräge Knotenbleche
+      for (const sd of [-1, 1]) {
+        const [px, pz] = o(-TS / 2, sd * (TS / 2 - 0.14)); boxG(st, alongX ? 0.3 : 0.26, h, alongX ? 0.26 : 0.3, px, h / 2, pz);
+        const [kx, kz] = o(-TS / 2, sd * (TS / 2 - 0.42)); boxG(dk, 0.2, 0.5, 0.2, kx, h - 0.36, kz, ry, 0);
+      }
+      { const [px, pz] = o(-TS / 2, 0); boxG(st, alongX ? 0.3 : TS, 0.26, alongX ? TS : 0.3, px, h - 0.13, pz); }
+      // Kabelkanal und Rohr längs unter der Decke, Bodenrost in der Mitte
+      { const [px, pz] = o(0, TS / 2 - 0.55); boxG(dk, TS, 0.12, 0.3, px, h - 0.42, pz, ry); const [qx, qz] = o(0, -(TS / 2 - 0.5)); boxG(st, TS, 0.14, 0.14, qx, h - 0.5, qz, ry); }
+      { const [px, pz] = o(0, 0); boxG(dk, TS, 0.025, 1.1, px, 0.013, pz, ry); }
+      if (R.next() < 0.16) { const [px, pz] = o(R.range(-1, 1), R.range(-0.9, 0.9)), len = 0.5 + R.next() * 1.1; boxG(dk, 0.035, len, 0.035, px, h - 0.5 - len / 2, pz, 0, R.range(-0.25, 0.25)); }
+    }
+    // lose Platten und Trümmer am Boden (flach, man steigt darüber)
+    if (R.next() < 0.14 && !(x < 3 && z < 3)) boxG(st, 0.7 + R.next() * 0.9, 0.04, 0.5 + R.next() * 0.7, wx + R.range(-0.9, 0.9), 0.03 + R.next() * 0.05, wz + R.range(-0.9, 0.9), R.next() * 6.28, R.range(-0.12, 0.12));
+    // Pulte an den Wänden der Räume (hohe Decke): Kasten mit schräger, erloschener Anzeige
+    if (h >= 3.6 && R.next() < 0.3) {
+      for (const [nx, nz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) if (tile(x + nx, z + nz) === 0) {
+        const cx = wx + nx * (TS / 2 - 0.45), cz = wz + nz * (TS / 2 - 0.45), ry = Math.atan2(-nx, -nz);
+        boxG(dk, 1.3, 0.95, 0.6, cx, 0.475, cz, ry); boxG(sc, 1.1, 0.5, 0.04, cx - nx * 0.22, 1.12, cz - nz * 0.22, ry, -0.5);
+        break;
+      }
+    }
+  }
+  for (const [x, z] of plan.lampsAt) {
+    const h = DUN.ceil[I(x, z)], wx = x * TS, wz = z * TS;
+    boxG(dk, 0.5, 0.1, 0.24, wx, h - 0.06, wz); boxG(lm, 0.4, 0.06, 0.14, wx, h - 0.14, wz);
+    lamps.push(new THREE.Vector3(wx, h - 0.5, wz));
+  }
+  const glow = new THREE.MeshBasicMaterial({ color: 0xffa070 }), scr = std(0x0c1014, { roughness: 0.25, metalness: 0.6 });
+  // eigenes Metall: die Hangar-Textur wirkt im warmen Notlicht wie Holz
+  const steelW = std(0x4a4f57, { roughness: 0.58, metalness: 0.45 }), darkW = std(0x202329, { roughness: 0.7, metalness: 0.45 });
+  for (const [list, m] of [[st, steelW], [dk, darkW], [lm, glow], [sc, scr]] as [THREE.BufferGeometry[], THREE.Material][]) { const o = merged(list, m); if (o) group!.add(o); }
 }
 
 // ---------- Felsnetz ----------
@@ -585,8 +670,8 @@ function flipSwitch(si: number, how: 'self' | 'mate' | 'sync') {
   const lv = sw.g.getObjectByName('hebel'); if (lv) lv.rotation.x = 0.7;
   const st = P.dungeons![DUN.e.id]; if (!(st.sws || []).includes(si)) st.sws = [...(st.sws || []), si];
   const left = DUN.sws.filter(q => !q.on).length, who = how === 'mate' ? 'Ein Mitspieler hat einen Schalter umgelegt. ' : 'Schalter umgelegt. ';
-  if (left === 0) { DUN.door!.open = true; st.sw = true; if (how !== 'sync') { say('Alle Schalter umgelegt. Das Tor zum Tresor fährt auf.', '#3ad06a'); sfx('door_open', 0.7, 0.7, () => snd(200, 0.6, 'sawtooth', 0.05, 80)); } }
-  else if (how !== 'sync') { say(`${who}Noch ${left} bis zum Tresor.`, '#ffb347'); snd(520, 0.2, 'square', 0.04, 200); }
+  if (left === 0) { DUN.door!.open = true; st.sw = true; if (how !== 'sync') { say(WR() ? 'Alle Schalter umgelegt. Das Schott zur Brücke fährt auf.' : 'Alle Schalter umgelegt. Das Tor zum Tresor fährt auf.', '#3ad06a'); sfx('door_open', 0.7, 0.7, () => snd(200, 0.6, 'sawtooth', 0.05, 80)); } }
+  else if (how !== 'sync') { say(`${who}Noch ${left} bis ${WR() ? 'zur Brücke' : 'zum Tresor'}.`, '#ffb347'); snd(520, 0.2, 'square', 0.04, 200); }
   saveGame();
   if (how === 'self') coopSend('msw', { e: DUN.e.id, i: si });
 }
@@ -638,7 +723,7 @@ onCoop('mst', m => {
 // ---------- Betreten und Verlassen ----------
 export function enterDungeon(e: Entrance) {
   const pl = PLANETS[P.sector], T = pl ? PTYPE[pl.type] : null;
-  DUN.danger = (SECTOR[P.sector] && SECTOR[P.sector].danger) || 1;
+  DUN.danger = e.danger ?? ((SECTOR[P.sector] && SECTOR[P.sector].danger) || 1);   // eigene Gefahrenstufe (Geschichte) oder die des Sektors
   P.dungeons = P.dungeons || {};
   let st = P.dungeons[e.id];
   if (!st || Date.now() - st.t > 20 * 60000) st = P.dungeons[e.id] = { t: Date.now(), open: [], sw: false };
@@ -646,14 +731,15 @@ export function enterDungeon(e: Entrance) {
   const seed = hashStr(e.id + ':plan'), plan = generate(seed, e.size), R = rng(seed + 7);
   group = new THREE.Group(); group.position.copy(BASE); scene.add(group);
   const tint = new THREE.Color(T ? T.ground[1] : 0x8a8270).lerp(new THREE.Color(0x777777), 0.45).multiplyScalar(1.5);
-  const rock = buildRock(seed % 1000, tint);
-  const rocksOn = buildCaveRocks(seed, new THREE.Color(0.7, 0.67, 0.62).lerp(tint.clone().multiplyScalar(1 / 1.5), 0.4));
-  if (rocksOn) (rock.material as THREE.MeshStandardMaterial).color.setScalar(0.85);     // Hintergrund hinter den Felsen
+  const wr = e.kind === 'wrack';
+  const rock: THREE.Object3D = wr ? buildHull(seed % 1000) : buildRock(seed % 1000, tint);
+  const rocksOn = !wr && buildCaveRocks(seed, new THREE.Color(0.7, 0.67, 0.62).lerp(tint.clone().multiplyScalar(1 / 1.5), 0.4));
+  if (rocksOn) ((rock as THREE.Mesh).material as THREE.MeshStandardMaterial).color.setScalar(0.85);     // Hintergrund hinter den Felsen
   group.add(rock); WALL_R = rocksOn ? 0.58 : 0.42;
   const ORE: Record<string, number> = { fels: 0x40c0ff, wueste: 0xffb040, eis: 0x9fe8ff, vulkan: 0xff6030, asche: 0xb070ff, kristall: 0xd080ff };
   mats(ORE[pl?.type || 'fels'] || 0x40c0ff);
-  if (!buildKitProps(plan, R)) buildProps(plan, R);
-  buildTheme(pl?.type || 'fels', R);
+  if (wr) buildWreckProps(plan, R); else if (!buildKitProps(plan, R)) buildProps(plan, R);
+  buildTheme(wr ? 'wrack' : pl?.type || 'fels', R);
   // Kisten (schon geöffnete bleiben offen), dazu ein Verbandskasten auf halbem Weg
   DUN.crates = plan.crates.map((c, i) => buildCrate(c[0], c[1], false, i, R.next() * 6.28, i === 1));
   DUN.crates.push(buildCrate(plan.vault[0], plan.vault[1] + 1, true, 99, Math.PI));
@@ -709,7 +795,7 @@ export function enterDungeon(e: Entrance) {
   }
   // Förderkorb am Eingang
   {
-    const kk = kitPart('korb');
+    const kk = wr ? null : kitPart('korb');      // im Wrack: Schleusenplatte statt Förderkorb
     if (kk) {
       let ox = 1, oz = 0;
       for (const [ax, az] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as Vec2[]) if (tile(plan.start[0] + ax, plan.start[1] + az) > 0) { ox = ax; oz = az; break; }
@@ -727,10 +813,23 @@ export function enterDungeon(e: Entrance) {
   DUN.foes = plan.foes.map((f, i) => { const o = buildFoe(f[0], f[1], false); o.id = i; return o; });
   if (!st.open.includes(99)) DUN.foes.push(buildFoe(plan.vault[0], plan.vault[1], true));
   DUN.bolts = [];
+  // Ziel der Geschichte (z. B. Flugschreiber): leuchtender Kasten auf einem Pult im Tresorraum
+  DUN.goal = null;
+  if (e.goal && !e.goal.got()) {
+    let tx = plan.vault[0], tz = plan.vault[1];
+    for (const [ax, az] of [[1, 0], [-1, 0], [0, -1], [1, 1], [-1, 1]] as Vec2[]) if (tile(plan.vault[0] + ax, plan.vault[1] + az) === 1 && !(ax === 0 && az === 1)) { tx += ax; tz += az; break; }
+    const gg = new THREE.Group();
+    const ped = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.85, 0.7), std(0x24272c, { roughness: 0.6, metalness: 0.7 })); ped.position.y = 0.425; gg.add(ped);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.3, 0.34), std(0xd9601c, { roughness: 0.45, metalness: 0.35, emissive: 0x802000, emissiveIntensity: 0.5 })); box.position.y = 1.0; box.name = 'ziel'; gg.add(box);
+    const lampe = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd060 })); lampe.position.set(0.18, 1.17, 0.1); lampe.name = 'blink'; gg.add(lampe);
+    const pl3 = new THREE.PointLight(0xff9040, 6, 7, 1.8); pl3.position.y = 1.5; gg.add(pl3);
+    gg.position.set(tx * TS, 0, tz * TS); gg.traverse((o: any) => { o.userData.sh = false; }); group.add(gg);
+    DUN.goal = { tx, tz, g: gg };
+  }
   // Licht: Welt aus, Stirnlampe und ein kleiner Vorrat an Lampenlichtern, die den nächsten Lampen folgen
   saved.amb = ambient.intensity; saved.sun = sun.intensity; saved.rim = rim.intensity; saved.near = camera.near; saved.far = camera.far;
   const fog = scene.fog as THREE.FogExp2 | null;
-  const TH = THEME[pl?.type || 'fels'] || THEME.fels;
+  const TH = THEME[wr ? 'wrack' : pl?.type || 'fels'] || THEME.fels;
   if (fog) { saved.fogC = fog.color.getHex(); saved.fogD = fog.density; fog.color.set(TH.fog); fog.density = 0.048; }
   pool = [];
   for (let k = 0; k < 5; k++) { const l = new THREE.PointLight(TH.lamp, 0, 13, 1.6); group.add(l); pool.push(l); }
@@ -748,7 +847,7 @@ export function enterDungeon(e: Entrance) {
   for (const [dx, dz, a] of [[1, 0, -Math.PI / 2], [0, 1, Math.PI], [-1, 0, Math.PI / 2], [0, -1, 0]] as [number, number, number][]) if (tile(1 + dx, 1 + dz)) { DUN.yaw = a; break; }
   DUN.active = true; G.mode = 'dungeon'; releaseAll(); clearParticles(); particleSize(0.3);
   document.getElementById('hud')?.classList.add('hidden');
-  say(`${e.name}: ${DUN.foes.length} Wächter gemeldet. Finde den Schalter, dann das Tor.`, '#ffb347');
+  say(wr ? `${e.name}: ${DUN.foes.length} Wächter gemeldet. Leg die Notstromschalter um, dann fährt das Schott zur Brücke auf.` : `${e.name}: ${DUN.foes.length} Wächter gemeldet. Finde den Schalter, dann das Tor.`, '#ffb347');
   sfx('door_open', 0.6, 0.8, () => snd(160, 0.5, 'sawtooth', 0.05, -60));
   reveal();
 }
@@ -767,11 +866,13 @@ export function leaveDungeon(died = false) {
   ambient.intensity = saved.amb; sun.intensity = saved.sun; rim.intensity = saved.rim;
   const fog = scene.fog as THREE.FogExp2 | null; if (fog) { fog.color.setHex(saved.fogC); fog.density = saved.fogD; }
   camera.near = saved.near; camera.far = saved.far; camera.updateProjectionMatrix();
-  DUN.active = false; G.mode = 'rover'; releaseAll(); clearParticles(); particleSize();
+  const le = DUN.e, toSpace = le?.kind === 'wrack';
+  DUN.active = false; DUN.goal = null; G.mode = toSpace ? 'play' : 'rover'; releaseAll(); clearParticles(); particleSize();
   if (document.pointerLockElement === gl) document.exitPointerLock();
   document.getElementById('hud')?.classList.remove('hidden');
   if (died) DUN.left = 6;
   saveGame();
+  if (le) dunHooks.left(died, le.id);
 }
 
 // ---------- Ablauf je Bild ----------
@@ -861,7 +962,7 @@ export function updateDungeon(dt: number) {
   // Was liegt vor mir? (Kiste, Schalter, Förderkorb)
   DUN.prompt = ''; DUN.act = null;
   const near = (tx: number, tz: number, r = 2.2) => Math.hypot(tx * TS - DUN.x, tz * TS - DUN.z) < r;
-  for (const c of DUN.crates) if (!c.open && near(c.tx, c.tz)) { DUN.prompt = c.med ? 'Verbandskasten öffnen' : c.big ? 'Tresorkiste öffnen' : 'Kiste öffnen'; DUN.act = () => openCrate(c); }
+  for (const c of DUN.crates) if (!c.open && near(c.tx, c.tz)) { DUN.prompt = c.med ? 'Verbandskasten öffnen' : c.big ? (WR() ? 'Spind der Kommandantin öffnen' : 'Tresorkiste öffnen') : WR() ? 'Spind öffnen' : 'Kiste öffnen'; DUN.act = () => openCrate(c); }
   DUN.sws.forEach((sw, si) => {
     if (sw.on || !near(sw.tx, sw.tz)) return;
     DUN.prompt = `Schalter umlegen (${DUN.sws.filter(q => q.on).length + 1}/${DUN.sws.length})`;
@@ -879,7 +980,14 @@ export function updateDungeon(dt: number) {
     if (on && Math.random() < 0.5) burst(tr.tx * TS + (Math.random() - 0.5) * 2, 0.3 + Math.random() * (tr.kind === 'gas' ? 1.6 : 0.4), tr.tz * TS + (Math.random() - 0.5) * 2, tr.kind === 'gas' ? '#7aff60' : '#9fd0ff', tr.kind === 'gas' ? 3 : 2, tr.kind === 'gas' ? 1.2 : 3, 0.4);
     if (on && Math.abs(DUN.x - tr.tx * TS) < TS * 0.42 && Math.abs(DUN.z - tr.tz * TS) < TS * 0.42) { hurtPlayer(dt * (tr.kind === 'gas' ? 14 : 22)); if (Math.random() < dt * 2) say(tr.kind === 'gas' ? 'Giftgas! Weg von der Platte.' : 'Stromschlag!', '#ff6b5b'); }
   }
-  if (near(DUN.exit[0], DUN.exit[1], 1.6)) { DUN.prompt = 'Förderkorb: zurück an die Oberfläche'; DUN.act = () => leaveDungeon(false); }
+  if (near(DUN.exit[0], DUN.exit[1], 1.6)) { DUN.prompt = WR() ? 'Schleuse: zurück zum Schiff' : 'Förderkorb: zurück an die Oberfläche'; DUN.act = () => leaveDungeon(false); }
+  if (DUN.goal && DUN.e?.goal) {
+    const bl = DUN.goal.g.getObjectByName('blink'); if (bl) bl.visible = Math.sin(performance.now() / 180) > 0;
+    if (near(DUN.goal.tx, DUN.goal.tz, 2.4)) {
+      if (DUN.foes.some(f => f.boss)) DUN.prompt = 'Erst den Wächterkern zerstören';
+      else { const gl2 = DUN.goal, en = DUN.e; DUN.prompt = en.goal!.label; DUN.act = () => { const z = gl2.g.getObjectByName('ziel'); if (z) z.visible = false; if (bl) bl.visible = false; DUN.goal = null; sfx('pickup', 0.8, 0.7, () => snd(500, 0.4, 'sine', 0.05, 400)); en.goal!.take(); }; }
+    }
+  }
   for (const c of DUN.crates) if (c.open && c.lid.rotation.x > -1.9) c.lid.rotation.x = Math.max(-1.9, c.lid.rotation.x - dt * 4);
   if (DUN.door && DUN.door.open && DUN.door.k < 1) {
     DUN.door.k = Math.min(1, DUN.door.k + dt * 0.5);
@@ -906,7 +1014,7 @@ export function updateDungeon(dt: number) {
     if (fo.hp <= 0) {
       burst(BASE.x + fo.x, BASE.y + fo.y, BASE.z + fo.z, '#ffb060', fo.boss ? 60 : 22, fo.boss ? 5 : 3.5, 0.6); sfx('explosion0', fo.boss ? 0.7 : 0.4, fo.boss ? 0.8 : 1.5, () => snd(90, 0.4, 'sawtooth', 0.07, -40));
       group.remove(fo.g); DUN.foes.splice(i, 1); DUN.kills++; droneBark('tot', Math.hypot(DUN.x - fo.x, DUN.z - fo.z));
-      if (fo.boss) say('Wächterkern zerstört. Der Tresor ist frei.', '#ffb347');
+      if (fo.boss) say(WR() ? 'Wächterkern zerstört. Die Brücke ist frei.' : 'Wächterkern zerstört. Der Tresor ist frei.', '#ffb347');
       continue;
     }
     // Ziel: der nächste Pilot, den der Wächter sieht (sonst der nächste überhaupt)
@@ -1045,7 +1153,7 @@ document.addEventListener('mousemove', e => {
   DUN.yaw -= e.movementX * k; DUN.pitch = clamp(DUN.pitch - e.movementY * k * (settings.invertY ? -1 : 1), -1.35, 1.35);
 });
 // Esc gibt im Browser zuerst nur die Maus frei: dann gleich das Pausenmenü öffnen (main.ts hängt pause() hier ein)
-export const dunHooks = { unlock: () => {} };
+export const dunHooks = { unlock: () => {}, left: (_died: boolean, _id: string) => {} };
 let wasLocked = false;
 document.addEventListener('pointerlockchange', () => {
   const now = document.pointerLockElement === gl;
@@ -1109,6 +1217,7 @@ export function drawDungeonHUD(roverX = 0, roverZ = 0, roverOn = false) {
   for (const sw of DUN.sws) dot(sw.tx, sw.tz, sw.on ? '#3ad06a' : '#ff5a40');
   for (const tr of DUN.traps) dot(tr.tx, tr.tz, tr.kind === 'gas' ? '#7aff60' : '#9fd0ff', cs * 0.22);
   dot(DUN.exit[0], DUN.exit[1], '#ffffff', cs * 0.28);
+  if (DUN.goal) dot(DUN.goal.tx, DUN.goal.tz, '#ff9040', cs * 0.4);
   for (const f of DUN.foes) if (f.alert) dot(Math.round(f.x / TS), Math.round(f.z / TS), '#ff3020', cs * 0.3);
   { const px = mx0 + (DUN.x / TS + 0.5) * cs, pz = my0 + (DUN.z / TS + 0.5) * cs, a = -DUN.yaw; ux.fillStyle = '#ffffff'; ux.beginPath(); ux.moveTo(px - Math.sin(-a) * 0 + Math.sin(DUN.yaw) * -cs * 0.75, pz - Math.cos(DUN.yaw) * cs * 0.75); ux.lineTo(px + Math.cos(DUN.yaw) * cs * 0.45 + Math.sin(DUN.yaw) * cs * 0.4, pz - Math.sin(DUN.yaw) * cs * 0.45 + Math.cos(DUN.yaw) * cs * 0.4); ux.lineTo(px - Math.cos(DUN.yaw) * cs * 0.45 + Math.sin(DUN.yaw) * cs * 0.4, pz + Math.sin(DUN.yaw) * cs * 0.45 + Math.cos(DUN.yaw) * cs * 0.4); ux.fill(); }
   ux.fillStyle = '#8fa0b0'; ux.font = '11px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'left';

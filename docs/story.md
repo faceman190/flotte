@@ -128,6 +128,37 @@ Jedes Kapitel verbindet Hauptmissionen mit dem, was das Spiel schon kann: Bergba
 
 ---
 
+## Kapitel 3: „Die Wahrheit über die Narbe“ (Alpha 0.99, `src/game/chapter3.ts`)
+
+**Worum es geht:** Die Karte im Archivkristall zeigt in die Narbe. Der Rat verbietet den Flug. Um dorthin zu dürfen, muss jemand aussprechen, was im Jahr 31 wirklich geschah.
+
+**Die Wahrheit:**
+- Die Offensive hatte ein geheimes Ziel: In der Narbe stand ein Tor der Erbauer, ein Knotentor ins Innere der Region (nicht in die Altwelten). Kommandantin Maren Hollweg wollte es sichern und befahl, die Linie um jeden Preis zu halten. Sie führte von der **„Eidwacht“** aus, dem einzigen Trägerschiff, das die Crew je selbst gebaut hat.
+- Staffelführerin **Jorun Achterberg** verweigerte den Befehl, brach mit Staffel Vier aus der Linie aus und holte die Transporter mit rund 400 Menschen heraus: „Keiner wird zurückgelassen.“
+- Die Linie fiel in elf Minuten, das Tor wurde gefressen, die Eidwacht blieb zurück. Der Rat begrub die Sache; Achterberg kam still in die Ausbildung. Maren Hollweg sagte ihrem Sohn zwei Jahre später: „Sie hatte recht, Bendix. Sag es ihr nie.“
+- Der Flugschreiber zeigt: Der Schwarm kam 90 Sekunden, nachdem das Tor hochgefahren wurde. Die Tore rufen die Ferrox, wie das Signal im Sonnenfeld.
+- Der Schreiber hat sieben Jahre weiter mitgehört: Vor vier Monaten zog die Kennung WS-07 durch die Narbe nach Osten. Die Weitsicht fliegt, Richtung Kern.
+
+| Schritt | Ort | Was passiert |
+|---|---|---|
+| 0 | überall | Szene „KAPITEL 3“. Brummer: Die Karte zeigt in die Narbe. Hollweg verbietet den Flug, Roth ruft zum Wachtposten Ost. |
+| 1–2 | Wachtposten Ost | Roth erzählt die Fassung aus dem Schulbuch und nennt den Zeugen: **Ilvar Brandt** (neue Figur), damals Funker der Eidwacht. |
+| 3 | Neonhafen, zu Fuß | Brandt steht hinter dem Tresen der Garküche „Schleusenbräu“: Die Wahrheit steckt im Flugschreiber auf der Brücke. „Frag deine Ausbilderin.“ |
+| 4–5 | Bastion | Achterberg weicht aus: „Hol den Schreiber. Dann reden wir.“ Sie schickt den Piloten zum Schmelzwerk Zwölf. |
+| 6 | Schmelzwerk Zwölf | Vier Kupferbarren abgeben, daraus wird ein Signaldämpfer (im Schmelzwerk andocken genügt). |
+| 7–8 | Die Narbe | Wrackfeld der verlorenen Linie. Drei Wracks scannen (R): Frachter „Morgenrot“, ein Jäger der vierten Staffel (danach Ferrox), dann die Eidwacht. |
+| 9–10 | Eidwacht, zu Fuß | Langsam an die Bresche heranfliegen (unter 60 m/s). Im Wrack: Notstromschalter, Schott zur Brücke, Wächterkern, **Flugschreiber bergen**. |
+| 11 | Die Narbe | Zurück im Schiff greift ein Zug Ferrox an. Aus der Narbe springen. |
+| 12 | Wahl | Schreiber zum Wachtposten Ost (**Grenzwacht**, Roth macht es öffentlich) oder zur Bastion (**Rat**, unter Verschluss). |
+| 13 | Szene | „Die Aufnahme“: die Stimmen von damals, dann Achterberg, Hollweg, Roth, Krull. Brummer: „Vor vier Monaten zog eine Kennung durch die Narbe.“ |
+
+Belohnung: 3.500 Credits, +60 Ruf bei der gewählten Seite, −15 bei der anderen, +10 Bergbaugilde. Das Wrackfeld bleibt in der Narbe stehen.
+Vertonung: 41 Zeilen, noch nicht erzeugt (docs/voice/kapitel3.md).
+
+Technik: Das Wrackfeld (`buildField`) nutzt das Modell der Bastion, verkleinert und ausgebrannt, dazu zwei Schiffswracks, Trümmer und Ferrit, das an der Rumpfoberfläche sitzt (Strahltests). Die Bresche wird am Rumpf gemessen. Das Innere ist die neue Dungeon-Art „Wrack“ (`docs/dungeons.md`). Brandt ist eine Figur der Stadt mit eigenem Ansprechpunkt (`cityTargets`).
+
+---
+
 ## Kapitel 2: „Splitter der Erbauer“ (Alpha 0.86, `src/game/chapter2.ts`)
 
 **Worum es geht:** Seit dem Signal „singt“ das Ferrit im Splittergürtel. Die Muster sind eine Karte zu einer Ruine der Erbauer auf Schlacke Prime.
