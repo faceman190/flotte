@@ -164,6 +164,22 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   }
 }
 
+// Mitspieler als Figur: Zielwerte (aus dem Netz) weich nachführen, Tempo aus der Bewegung, gleiche Clips wie die eigene Figur
+export interface RemoteFig { av: Avatar | null; x: number; y: number; z: number; tx: number; ty: number; tz: number; yaw: number; vx: number; vz: number; gear: { helm?: string; anzug?: string; rucksack?: string }; wid: string; init: boolean }
+export const newRemoteFig = (): RemoteFig => ({ av: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, vx: 0, vz: 0, gear: {}, wid: 'k12', init: false });
+export function gearFromNet(g: string[] | null | undefined) { return { gear: { helm: g?.[0] || undefined, anzug: g?.[1] || undefined, rucksack: g?.[2] || undefined }, wid: g?.[3] || 'k12' }; }
+export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {
+  f.av = syncAvatar(holder, f.av, f.gear);
+  if (!f.av) return;
+  if (!f.init) { f.x = f.tx; f.y = f.ty; f.z = f.tz; f.init = true; f.av.body = f.yaw; f.av.first = false; }
+  const k = Math.min(1, dt * 10), ox = f.x, oz = f.z;
+  f.x += (f.tx - f.x) * k; f.y += (f.ty - f.y) * k; f.z += (f.tz - f.z) * k;
+  const ivx = (f.x - ox) / Math.max(dt, 1e-3), ivz = (f.z - oz) / Math.max(dt, 1e-3), kv = Math.min(1, dt * 6);
+  f.vx += (ivx - f.vx) * kv; f.vz += (ivz - f.vz) * kv;
+  driveAvatar(f.av, dt, { x: f.x, y: f.y, z: f.z, yaw: f.yaw, pitch: 0, vx: Math.abs(f.vx) < 0.05 ? 0 : f.vx, vz: Math.abs(f.vz) < 0.05 ? 0 : f.vz, wid: f.wid });
+}
+export function dropRemote(f: RemoteFig) { if (f.av) f.av.s.g.removeFromParent(); f.av = null; f.init = false; }
+
 // Kamera der Außensicht: über der rechten Schulter, Blick wie in der Ich-Sicht. clear(x, y, z) meldet, ob dort Platz ist;
 // die Kamera rückt bis vor das erste Hindernis vor (sofort), zurück geht sie weich.
 let camD = -1;

@@ -12,6 +12,9 @@ import { SHIP } from './player';
 import { ROVER, buildRover } from './surface';
 import { IN, syncOtherPilots } from './interior';
 import { viewModelId } from './mineArt';
+import { FOOT } from './onfoot';
+import { DUN, syncMinePilots } from './dungeon';
+import { newRemoteFig, driveRemote, dropRemote, gearFromNet, type RemoteFig } from './avatar';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { SHIPS, type ShipId } from '../data/ships';
 import type { Paint } from '../models/gltfShips';
@@ -29,7 +32,7 @@ export const NET = {
 export const netHooks = { changed: () => {}, trade: (_m: any) => {}, lost: () => {} };   // Status oder Online-Liste geändert (Menüs neu zeichnen)
 export interface Remote {
   id: number; name: string; cls: string; paint: string; m: string; s: number; w: any[] | null; d: string; g: string[] | null;   // g: Aussehen zu Fuß [Helm, Anzug, Rucksack, Waffe]   // d: Station, an der er angedockt ist   // w: zu Fuß in einer Station [Station, x, z, Blick]
-  ship: ShipModel | null; rover: THREE.Group | null; tp: THREE.Vector3; tq: THREE.Quaternion; seen: number;
+  ship: ShipModel | null; rover: THREE.Group | null; tp: THREE.Vector3; tq: THREE.Quaternion; seen: number; fig?: RemoteFig;   // fig: Figur zu Fuß auf dem Planeten
 }
 export const remotes = new Map<number, Remote>();
 let room = '', retry = 0, wantOnline = false, sentName = '';
@@ -133,7 +136,7 @@ function onMsg(m: any) {
   }
 }
 function disposeObj(o: THREE.Object3D) { scene.remove(o); o.traverse((c: any) => { if (c.isMesh && !c.userData.shared) c.geometry?.dispose(); }); }
-function removeRemote(id: number) { const r = remotes.get(id); if (!r) return; if (r.ship) disposeObj(r.ship.g); if (r.rover) disposeObj(r.rover); remotes.delete(id); }
+function removeRemote(id: number) { const r = remotes.get(id); if (!r) return; if (r.fig) dropRemote(r.fig); if (r.ship) disposeObj(r.ship.g); if (r.rover) disposeObj(r.rover); remotes.delete(id); }
 function clearRemotes() { for (const id of [...remotes.keys()]) removeRemote(id); syncOtherPilots([]); }
 
 // Was gerade sichtbar ist: Schiff, Rover oder nichts (zu Fuß in der Station, angedockt)
@@ -141,8 +144,11 @@ function clearRemotes() { for (const id of [...remotes.keys()]) removeRemote(id)
 export function myStation(): string { return (G.dockedAt && G.dockedAt.id) || (IN.active && IN.station ? IN.station.id : '') || ''; }
 // andere Piloten in derselben Station
 export function pilotsHere() { const st = myStation(); return st ? [...remotes.values()].filter(r => r.d === st) : []; }
+const footObj = new THREE.Object3D();
 function myState() {
+  if (DUN.active) { footObj.position.set(DUN.x, 0, DUN.z); footObj.rotation.set(0, DUN.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'mine' }; }
   if (IN.active || G.dockedAt) return { o: SHIP.g, m: 'innen' };
+  if (ROVER.active && FOOT.active) { footObj.position.set(FOOT.x, FOOT.y, FOOT.z); footObj.rotation.set(0, FOOT.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'fuss' }; }
   if (ROVER.active && ROVER.model) return { o: ROVER.model.g, m: 'rover' };
   return { o: SHIP.g, m: 'schiff' };
 }
@@ -159,7 +165,7 @@ function sendState() {
   // im Flug die Flugposition (das Modell wird nur beim Zeichnen nachgeführt), sonst die Lage des Modells
   const s = myState(), p = s.m === 'schiff' ? P : s.o.position, q = s.o.quaternion;
   // zu Fuß in einer Station (nicht im eigenen Schiff): Position im Stationsraum mitschicken
-  const w = IN.active && IN.station && !IN.ship ? [IN.station.id, IN.x, IN.z, IN.yaw] : null;
+  const w = DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [IN.station.id, IN.x, IN.z, IN.yaw] : null;
   const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe)];
   sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g });
 }
@@ -170,6 +176,8 @@ export function netUpdate(dt: number) {
   if (SHARED.client) moveFoes(dt);
   // andere Piloten zu Fuß in derselben Station
   syncOtherPilots([...remotes.values()].filter(r => r.m === 'innen' && r.w).map(r => ({ id: r.id, name: r.name, st: String(r.w![0]), x: +r.w![1], z: +r.w![2], yaw: +r.w![3], g: r.g })));
+  // andere Piloten in derselben Mine
+  syncMinePilots([...remotes.values()].filter(r => r.m === 'mine' && r.w).map(r => ({ id: r.id, name: r.name, e: String(r.w![0]), x: +r.w![1], z: +r.w![2], yaw: +r.w![3], g: r.g })), dt);
   // andere Piloten weich nachführen
   const k = Math.min(1, dt * 8), now = performance.now();
   for (const r of [...remotes.values()]) {
@@ -178,13 +186,22 @@ export function netUpdate(dt: number) {
     ship.g.visible = onShip || r.m === 'rover';   // im Rover-Modus steht das Schiff gelandet daneben (letzter Stand)
     if (onShip) { ship.g.position.lerp(r.tp, k); ship.g.quaternion.slerp(r.tq, k); }
     for (const gl of ship.glows) gl.scale.setScalar((gl.userData.base || 1) * (0.5 + Math.min(1, r.s / 200) * 1.3) * (onShip ? 1 : 0.4));
-    if (r.rover) { r.rover.visible = r.m === 'rover'; if (r.m === 'rover') { r.rover.position.lerp(r.tp, k); r.rover.quaternion.slerp(r.tq, k); } }
+    if (r.rover) { r.rover.visible = r.m === 'rover' || r.m === 'fuss'; if (r.m === 'rover') { r.rover.position.lerp(r.tp, k); r.rover.quaternion.slerp(r.tq, k); } }
+    if (r.m === 'fuss' || r.m === 'rover' || r.m === 'mine') ship.g.visible = true;   // Schiff bleibt gelandet stehen
+    // zu Fuß auf dem Planeten: Soldat mit Laufclips
+    if (r.m === 'fuss') {
+      const f = r.fig || (r.fig = newRemoteFig()), ng = gearFromNet(r.g);
+      f.gear = ng.gear; f.wid = ng.wid; f.tx = r.tp.x; f.ty = r.tp.y; f.tz = r.tp.z;
+      f.yaw = new THREE.Euler().setFromQuaternion(r.tq, 'YXZ').y;
+      driveRemote(scene, f, dt);
+    } else if (r.fig) dropRemote(r.fig);
   }
 }
 // Für Anzeigen: wo sind die anderen gerade sichtbar?
 export function remoteMarkers() {
   const out: { name: string; x: number; y: number; z: number; m: string }[] = [];
   for (const r of remotes.values()) {
+    if (r.m === 'fuss' && r.fig?.av) { out.push({ name: r.name, x: r.fig.x, y: r.fig.y + 1.6, z: r.fig.z, m: r.m }); continue; }
     const o = r.m === 'rover' && r.rover ? r.rover : r.ship?.g;
     if (!o || !o.visible) continue;
     out.push({ name: r.name, x: o.position.x, y: o.position.y, z: o.position.z, m: r.m });

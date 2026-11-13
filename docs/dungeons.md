@@ -150,6 +150,10 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
   in der Ich-Sicht mit Waffenmodell und Händen. Leben zu Fuß wie in der Mine (Schutz-Ausrüstung), Erholung außer Gefecht; wer zusammenbricht, wacht am Schiff auf.
   Abschuss: Credits nach Gefahr, 15 % Chance auf einen kleinen Fund.
 
+- **Mitspieler am Boden und in Minen (Alpha 0.87):** Neue Netz-Rollen `fuss` (zu Fuß auf dem Planeten, Lage und Blick) und `mine` (Feld `w` = [Eingang, x, z, Blick]).
+  Andere sehen den Piloten als Soldaten mit den Laufclips (`avatar.ts` → `driveRemote`), sein Schiff und Rover bleiben geparkt sichtbar.
+  In der Mine erscheinen nur Piloten am selben Eingang; Drohnen, Kisten und Tor sind dort (noch) je Spieler getrennt.
+
 ## Noch offen
 - Nur ein Aussehen (Bergwerk). Geplant: je Planetentyp eigene Farben und Einbauten, weitere Arten (Bunker, Wrack), große Meteoriten im All.
 - Fallen, Rätsel über mehrere Schalter, Schlüssel, mehrere Ebenen.

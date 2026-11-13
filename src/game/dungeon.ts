@@ -13,7 +13,7 @@ import { addItem, canAdd, gearStat, gearFactor } from './inventory';
 import { SECTOR } from '../data/galaxy';
 import { PLANETS, PTYPE } from '../data/planets';
 import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
-import { VIEW, STANCE, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
+import { VIEW, STANCE, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
 // Dungeons auf Planeten: verlassene Minen als Labyrinth.
@@ -50,6 +50,20 @@ let vm: ViewModel | null = null, mflash: THREE.PointLight | null = null, WALL_R 
 const sway = { x: 0, y: 0, yaw: 0, pitch: 0 };
 let me: Avatar | null = null;                                              // eigene Figur (Außensicht, src/game/avatar.ts)
 export { VIEW };
+// Mitspieler in derselben Mine (Netz: Eingang, Lage, Blick); Drohnen und Kisten bleiben je Spieler getrennt
+const mates = new Map<number, RemoteFig>();
+export function syncMinePilots(list: { id: number; name: string; e: string; x: number; z: number; yaw: number; g?: string[] | null }[], dt: number) {
+  if (!DUN.active || !group || !DUN.e) { if (mates.size) { for (const f of mates.values()) dropRemote(f); mates.clear(); } return; }
+  const seen = new Set<number>();
+  for (const o of list) {
+    if (o.e !== DUN.e.id) continue;
+    seen.add(o.id);
+    const f = mates.get(o.id) || newRemoteFig(); mates.set(o.id, f);
+    const ng = gearFromNet(o.g); f.gear = ng.gear; f.wid = ng.wid; f.tx = o.x; f.ty = 0; f.tz = o.z; f.yaw = o.yaw;
+    driveRemote(group, f, dt);
+  }
+  for (const [id, f] of mates) if (!seen.has(id)) { dropRemote(f); mates.delete(id); }
+}
 let chunks: { x: number; z: number; meshes: THREE.Object3D[] }[] = [];      // Felsbereiche (4 × 4 Kacheln), nach Wegstrecke ein- und ausgeblendet
 const saved = { amb: 0, sun: 0, rim: 0, fogC: 0, fogD: 0, near: 0.5, far: 30000 };
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -598,6 +612,7 @@ export function enterDungeon(e: Entrance) {
 export function leaveDungeon(died = false) {
   if (!DUN.active) return;
   if (me) me.s.g.removeFromParent();
+  for (const f of mates.values()) dropRemote(f); mates.clear();
   if (group) { scene.remove(group); group.traverse((o: any) => { if (o.geometry) o.geometry.dispose(); }); group = null; }
   if (head) { scene.remove(head); scene.remove(head.target); head.dispose(); head = null; }
   if (gun) { scene.remove(gun); gun = null; }
