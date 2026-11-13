@@ -174,3 +174,10 @@ Das Spiel erkennt die Bilder am Namen (`cityLook(name)` in `kit.ts`); eine neue 
 2. In Blender: bauen, `kit_lib.bake_ao(ob, 6.0, 16)`, `kit_lib.export(ob, 'Name', meta, kind='city')`.
 3. In `planets.ts` beim Planeten `city: 'Name'` und `base: 'Name'` eintragen, `npm run assets`.
 4. Große, ferne Flächen mit `K.seg = 8 … 10` bauen (breitere Spalten, weniger Dreiecke); Talstadt hat so rund 307 000 Dreiecke.
+
+## Leistung (seit Alpha 0.99j)
+
+- Figuren der Stadt (Passanten, Händler, Wachen) werden nur gezeichnet und bewegt, wenn die Kamera näher als 260 m ist (Wachen 320 m): `FIG_FAR` in `src/game/city.ts`. Ist die Kamera weiter als Stadtradius + 700 m entfernt, ist die ganze Gruppe „leben“ aus. Zusammen sind es 640.000 Dreiecke; die Wachen (gekauftes Soldatenmodell) kosten je 59.000.
+- Felsbrocken der Oberfläche (`src/game/flora.ts`, `updateRocks`): Von den bis zu 900 Brocken liegen nur die im Bild, die aus der Entfernung der Kamera noch zu erkennen sind (Sichtweite 260 m + 240 m je Meter Größe). Vorher waren es immer alle, 890.000 Dreiecke.
+- Gemessen über Talstadt in niedriger Qualität (F3-Anzeige): vorher 2,46 Mio. Dreiecke und 680 Zeichenaufrufe, danach 0,9 Mio. (500 m vor dem Tor) bis 1,3 Mio. (am Landepunkt).
+- Hauptmenü: Nutzt der Browser unter Windows den eingebauten Grafikchip oder gar keine Grafikkarte, steht dort ein ausblendbarer Hinweis (`gpuInfo` in `src/core/perf.ts`, Anzeige in `src/ui/menus.ts`).

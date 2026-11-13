@@ -1,5 +1,6 @@
 import { $ } from '../core/util';
 import { setQuality } from '../core/engine';
+import { gpuInfo } from '../core/perf';
 import { audio, snd, sfx, setMusicVolume } from '../core/audio';
 import { settings, saveSettings, hasSave, G } from '../game/state';
 import { storageInfo, clearStoredAssets, ASSET_STATE, MANIFEST } from '../core/assets';
@@ -124,3 +125,20 @@ $('sClear').onclick = async () => {
 };
 $('mSettings').addEventListener('click', showStorage);
 $('pSettings').addEventListener('click', showStorage);
+
+// ---------- Hinweis zur Grafikkarte im Hauptmenü ----------
+// Geräte mit zwei Grafikkarten (die meisten Spiele-Laptops): Der Browser nimmt oft den sparsamen eingebauten Chip, das Spiel läuft dann um ein
+// Vielfaches langsamer. Das Spiel kann die Karte nicht selbst umschalten, also sagt es dem Spieler, wo er es einstellt (nur unter Windows;
+// ausblendbar, weil Geräte ohne eigene Grafikkarte daran nichts ändern können).
+{
+  const gi = gpuInfo(), el = $('mGpu'), KEY = 'lf_gpuhint';
+  let off = false; try { off = localStorage.getItem(KEY) === gi.name; } catch (e) { /* ignorieren */ }
+  if (!off && /Windows/.test(navigator.userAgent) && (gi.kind === 'chip' || gi.kind === 'soft')) {
+    el.innerHTML = (gi.kind === 'soft'
+      ? 'Dein Browser rechnet das Bild <b>ohne Grafikkarte</b> auf dem Prozessor. Schalte in den Browser-Einstellungen unter „System“ die Hardwarebeschleunigung ein und starte den Browser neu.'
+      : 'Dein Browser nutzt den eingebauten Grafikchip <b>' + gi.name.replace(/[<>&]/g, '') + '</b>, das Spiel läuft damit deutlich langsamer. Eigene Grafikkarte (NVIDIA, AMD) vorhanden? In Windows unter <b>Einstellungen → System → Bildschirm → Grafik</b> diesen Browser auf „Hohe Leistung“ stellen, dann den Browser ganz schließen und neu starten.')
+      + ' <a href="#" id="mGpuX" style="color:#8aa0b0;pointer-events:auto">Hinweis ausblenden</a>';
+    el.classList.remove('hidden');
+    $('mGpuX').onclick = e => { e.preventDefault(); el.classList.add('hidden'); try { localStorage.setItem(KEY, gi.name); } catch (err) { /* ignorieren */ } };
+  }
+}

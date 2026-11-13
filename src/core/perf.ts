@@ -36,6 +36,11 @@ function gpuKind(n: string) {
   return '';
 }
 const nf = (n: number) => Math.round(n).toLocaleString('de-DE');
+// Für das Hauptmenü: Name der benutzten Grafikkarte und ob es der eingebaute Chip ('chip'), gar keine ('soft') oder eine eigene ('own') ist
+export function gpuInfo(): { name: string; kind: 'chip' | 'soft' | 'own' | '' } {
+  const n = gpu(), k = gpuKind(n), m = /^ANGLE \([^,]*, (.+?)(?: \(0x[0-9a-fA-F]+\))?(?: Direct3D| OpenGL| Vulkan|,|\)$)/.exec(n);
+  return { name: m ? m[1] : n, kind: !k ? '' : k.startsWith('KEINE') ? 'soft' : k.startsWith('eigene') ? 'own' : 'chip' };
+}
 
 function countLights(now: number) {
   lightsAt = now;

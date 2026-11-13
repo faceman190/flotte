@@ -116,17 +116,33 @@ function treeGeo() {
 // ---------- Zustand ----------
 interface Layer { im: THREE.InstancedMesh; cell: number; rad: number; dens: number; h: [number, number]; w: number; lx: number; lz: number; salt: number; rock?: boolean }
 let layers: Layer[] = [], hAt: (x: number, z: number) => number = () => 0, liquid = -1e9, seed = 1;
+// Felsbrocken: alle Plätze werden gemerkt (m = Lage, p = Ort, far = Sichtweite je nach Größe). Gezeichnet werden nur die, die aus der
+// Entfernung der Kamera noch zu erkennen sind. Vorher lagen immer alle 900 im Bild (890.000 Dreiecke), auch die kilometerweit entfernten.
+let rocks: { im: THREE.InstancedMesh; m: Float32Array; p: Float32Array; far: Float32Array; n: number; lx: number; ly: number; lz: number } | null = null;
+function updateRocks(cam: THREE.Vector3) {
+  const r = rocks; if (!r) return;
+  if (Math.abs(cam.x - r.lx) < 20 && Math.abs(cam.y - r.ly) < 20 && Math.abs(cam.z - r.lz) < 20) return;
+  r.lx = cam.x; r.ly = cam.y; r.lz = cam.z;
+  const out = r.im.instanceMatrix.array as Float32Array; let k = 0;
+  for (let i = 0; i < r.n; i++) {
+    const dx = r.p[i * 3] - cam.x, dy = r.p[i * 3 + 1] - cam.y, dz = r.p[i * 3 + 2] - cam.z, f = r.far[i];
+    if (dx * dx + dy * dy + dz * dz > f * f) continue;
+    out.set(r.m.subarray(i * 16, i * 16 + 16), k * 16); k++;
+  }
+  r.im.count = k; r.im.instanceMatrix.needsUpdate = true;
+}
 const hash = (ix: number, iz: number, k: number) => { const s = Math.sin(ix * 127.1 + iz * 311.7 + k * 74.7 + seed * 0.37) * 43758.5453; return s - Math.floor(s); };
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _c = new THREE.Color();
 
 export function buildFlora(type: string, R: { range: (a: number, b: number) => number; next: () => number }, heightAt: (x: number, z: number) => number, liquidLevel: number, sd: number) {
   const F = FLORA[type] || FLORA.fels;
-  layers = []; hAt = heightAt; liquid = liquidLevel; seed = sd;
+  layers = []; rocks = null; hAt = heightAt; liquid = liquidLevel; seed = sd;
   const add = (o: THREE.Object3D) => { scene.add(o); world.extras.push(o); };
   // ----- Felsbrocken (fest) -----
   {
     const n = Math.round(900 * F.rock), mat = type === 'eis' ? std(0xd8ecff, { roughness: 0.3, metalness: 0.05 }) : texMat(type === 'kristall' ? 0x6a5a8a : type === 'mond' ? 0xa6a6aa : 0xb0a898, 'rock', { roughness: 0.92, metalness: 0.05 }, 1.3);
     const im = new THREE.InstancedMesh(rockGeo(1), mat, n); let k = 0;
+    const far = new Float32Array(n), pos = new Float32Array(n * 3);
     for (let i = 0; i < n * 3 && k < n; i++) {
       const cx = R.range(-3500, 3500), cz = R.range(-3500, 3500), cl = R.next() < 0.6 ? 1 + Math.floor(R.next() * 5) : 1;
       for (let j = 0; j < cl && k < n; j++) {
@@ -135,10 +151,13 @@ export function buildFlora(type: string, R: { range: (a: number, b: number) => n
         const big = R.next() < 0.1, s = big ? R.range(4, 11) : R.range(0.6, 2.8);
         _s.set(s * R.range(0.8, 1.4), s * R.range(0.5, 1.0), s * R.range(0.8, 1.4));
         _e.set(R.range(0, 6.28), R.range(0, 6.28), R.range(0, 6.28));
+        pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z; far[k] = 260 + s * 240;      // kleiner Brocken (1 m): 500 m, großer (10 m): 2,6 km
         im.setMatrixAt(k++, _m.compose(_p.set(x, h - s * 0.2, z), _q.setFromEuler(_e), _s));
       }
     }
-    im.count = k; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.castShadow = true; add(im);
+    im.count = k; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.castShadow = true; add(im);   // Hüllkugel über alle Plätze, sie bleibt gültig
+    im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    rocks = { im, m: (im.instanceMatrix.array as Float32Array).slice(0, k * 16), p: pos, far, n: k, lx: 1e9, ly: 1e9, lz: 1e9 };
   }
   // ----- Felsnadeln in Gruppen (fest): schräg stehende, kantige Spitzen -----
   if (F.spire > 0) {
@@ -199,6 +218,7 @@ export function treeNear(x: number, z: number, r: number) {
 
 // Pflanzen neu setzen, sobald sich die Kamera merklich bewegt hat
 export function updateFlora(cam: THREE.Vector3) {
+  updateRocks(cam);
   for (const L of layers) {
     if (Math.abs(cam.x - L.lx) < L.cell * 1.5 && Math.abs(cam.z - L.lz) < L.cell * 1.5) continue;
     if (L.rad < 100 && cam.y - hAt(cam.x, cam.z) > 140) { if (L.im.count) { L.im.count = 0; L.lx = 1e9; } continue; }   // aus der Höhe ist Gras nicht zu sehen

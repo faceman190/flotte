@@ -223,17 +223,22 @@ export function hangarPadPose(st: Station, lift: number) {
 }
 
 // ---------- pro Bild ----------
+const FIG_FAR = 260;                                     // Sichtweite der Figuren in Metern (Wachen 60 m mehr)
 export function updateCity(dt: number) {
   const st = CITY.st;
   if (!st) return;
   if (!world.stations.includes(st)) { clearCity(); return; }
   const visible = st.mesh.visible && !IN.active;
-  if (life) life.visible = visible;
   const near = camera.position.distanceTo(st.mesh.position) < st.R + 700;
+  if (life) life.visible = visible && near;
   if (visible && near) {
     // Passanten auf ihren Wegen (hin und zurück bzw. im Kreis), kurze Pausen an den Wegmarken
     const pl = st.mesh.worldToLocal(_w.copy(camera.position));
+    // Figuren nur zeichnen und bewegen, wenn die Kamera nah genug ist: aus der Luft und über die ganze Stadt hinweg sind sie nicht zu erkennen,
+    // kosten aber je 11.000 bis 59.000 Dreiecke (zusammen 640.000)
+    const seen = (g: THREE.Object3D, x: number, z: number, r: number) => (g.visible = (pl.x - x) * (pl.x - x) + pl.y * pl.y + (pl.z - z) * (pl.z - z) < r * r);
     for (const w of walkers) {
+      if (!seen(w.c.g, w.x, w.z, FIG_FAR)) continue;
       const p = w.path, ni = w.i + w.dir;
       if (ni < 0 || ni >= p.length) { w.dir = -w.dir; continue; }
       const tx = p[ni][0], tz = p[ni][1], dx = tx - w.x, dz = tz - w.z, d = Math.hypot(dx, dz);
@@ -246,9 +251,9 @@ export function updateCity(dt: number) {
       const ta = Math.atan2(dx, dz), da = Math.atan2(Math.sin(ta - w.c.g.rotation.y), Math.cos(ta - w.c.g.rotation.y));
       w.c.g.rotation.y += da * Math.min(1, dt * 5);
     }
-    for (const v of vendors) animStep(v.c.anim, dt, false);
+    for (const v of vendors) if (seen(v.c.g, v.x, v.z, FIG_FAR)) animStep(v.c.anim, dt, false);
     if (probe) { const k = PROBE_K * (meta(CITY.name).style === 'neon' ? AT.lm0 + (1 - AT.lm0) * atmoK : 1); for (const f of walkers) if (f.lc) probeAt(f.x, f.z, f.lc, k); for (const f of vendors) if (f.lc) probeAt(f.x, f.z, f.lc, k); for (const f of guards) if (f.lc) probeAt(f.x, f.z, f.lc, k); }
-    for (const g of guards) driveAvatar(g.a, dt, { x: g.x, y: 0.18, z: g.z, yaw: g.yaw, pitch: 0, vx: 0, vz: 0, wid: 'k12', combat: false });
+    for (const g of guards) if (seen(g.a.s.g, g.x, g.z, FIG_FAR + 60)) driveAvatar(g.a, dt, { x: g.x, y: 0.18, z: g.z, yaw: g.yaw, pitch: 0, vx: 0, vz: 0, wid: 'k12', combat: false });
   }
   // Verkehr: alle 25–45 s ein Schiff, abwechselnd hinein und hinaus
   updateFlyers(dt, st, visible);
