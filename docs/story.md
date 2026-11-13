@@ -195,13 +195,13 @@ Vertonung: 29 Zeilen (docs/voice/kapitel2.md).
 | Schritt | Ort | Was passiert |
 |---|---|---|
 | 1 | überall | Ratsherr Hollweg funkt: Das Signal aus dem Sonnenfeld wird stärker. Flieg zur Sonnenwacht. Die Route wird gesetzt. |
-| 2 | Sonnenwacht | Andocken. Rika Tamm erzählt vom Riss, den sie als Kind gesehen hat. Ihre Antennen hören das Signal, finden aber die Quelle nicht. |
+| 2 | Sonnenwacht | Andocken. Rika Tamm wartet im Hangar beim Ausgang. Erst wenn man zu ihr läuft und sie anspricht (E), erzählt sie vom Riss, den sie als Kind gesehen hat. Ihre Antennen hören das Signal, finden aber die Quelle nicht. |
 | 3 | Sonnenfeld | **Peilung:** drei Peilpunkte rund um das Trümmerfeld anfliegen und dort scannen (R). Nach jeder Peilung wird die Richtung genauer. |
 | 4 | Trümmerfeld | **Das Kernstück:** Tief im Feld treibt ein riesiges Bogenstück des Tors, an dem ein schwaches Licht pulsiert. Ferrox fressen daran. Es ist der erste Ferrox-Angriff im Kern des Menschenraums seit Jahren. |
 | 5 | Kernstück | Ferrox vertreiben. |
 | 6 | Kernstück | In den Lichtkern fliegen und den **Datenkern** des Tors bergen. |
 | 7 | Bastion | Zurück zur Bastion und andocken. |
-| 8 | Bastion | **Szene „Auswertung“** mit Hollweg, Gildemeisterin Krull und Wachtmeisterin Roth (siehe unten). |
+| 8 | Bastion | Hollweg, Gildemeisterin Krull und Wachtmeisterin Roth warten im Hangar beim Ausgang. Die **Szene „Auswertung“** (siehe unten) beginnt erst, wenn man zu ihnen läuft und dazutritt (E). |
 
 **Die Auswertung (Szene):**
 - Das Signal kommt nicht aus den Altwelten. Es ist das Tor selbst: ein uralter Ruf der Erbauer, der wieder angesprungen ist.
@@ -210,6 +210,8 @@ Vertonung: 29 Zeilen (docs/voice/kapitel2.md).
 - Hollweg will Ruhe bewahren, Roth will die Grenzwacht ins Sonnenfeld verlegen, Krull will den Splittergürtel nach Ferrit durchsuchen. Die drei Fraktionen ziehen zum ersten Mal sichtbar in verschiedene Richtungen.
 - **Die Wendung:** Brummer meldet sich: Unter dem Rauschen stecken drei Sekunden eines menschlichen Transpondersignals. Die Kennung WS-07, die **„Weitsicht“**, eines der elf Schiffe, die nie ankamen. Stille im Hangar.
 - Belohnung: 1.500 Credits, Ruf bei allen drei Fraktionen.
+
+**Regel seit Alpha 0.99g (Wunsch des Spielers):** Gespräche und Szenen in Stationen beginnen nicht beim Andocken. Die Figuren stehen ein Stück vom Schiff entfernt (`meetSpot` in `chapter1.ts`), der Pilot läuft hin und spricht sie an. Legt man ohne Gespräch wieder ab, bleibt der Schritt stehen und führt zurück zur Station. In Kapitel 1 umgesetzt; Prolog (Vereidigung), Kapitel 2 und Kapitel 3 starten ihre Stationsgespräche noch von selbst, sobald der Landeablauf vorbei ist.
 - Übergang zu Kapitel 2: Krull will wissen, was das Ferrit sagt, und der Splittergürtel ist voll davon.
 
 **Was bleibt:** Das Kernstück des Tors bleibt als Ort im Sonnenfeld sichtbar, nach dem Kapitel mit erloschenem Licht.

@@ -1232,6 +1232,8 @@ export function storyNpc(name: string, title: string, label: string, act: () => 
   inters.push({ x, z, r: 3.4, label: () => label, act });
   return true;
 }
+// Steht der Pilot zu Fuß bei dieser Figur der Geschichte (für die Auftragszeile „hingehen“)?
+export function nearNpc(name: string, r = 4.2) { if (!IN.active || IN.ship) return false; const p = persons.find(q => q.name === name); return !!p && Math.hypot(p.x - IN.x, p.z - IN.z) < r; }
 // Figur für die Geschichte: gewähltes Modell (Arbeiter oder Händler) mit eigenem Farbton, steht und atmet
 function storyPerson(look: NpcLook): Person {
   let cn: string = look.model || 'merchant', tint = look.tint || 1;

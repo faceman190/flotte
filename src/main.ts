@@ -292,7 +292,7 @@ onKey(code => {
   }
   if (code === 'KeyR' && G.mode === 'play') { scan(); noteScan(); return; }
   if (code === 'KeyJ' && G.mode === 'play') { toggleJumpDrive(); return; }
-  if ((code === 'ShiftLeft' || code === 'ShiftRight') && G.mode === 'play') { G.cruise = !G.cruise; sfx(G.cruise ? 'cruise_on' : 'cruise_off', 0.6); radio('SYSTEM', G.cruise ? 'Reiseflug: schneller, aber träge in der Lenkung.' : 'Manöverflug.'); return; }
+  if ((code === 'ShiftLeft' || code === 'ShiftRight') && G.mode === 'play') { G.cruise = !G.cruise; radio('SYSTEM', G.cruise ? 'Reiseflug: schneller, aber träge in der Lenkung.' : 'Manöverflug.'); return; }
   // Ich-Sicht / Außensicht: überall zu Fuß (Station, Hangar, Schiff, Mine, Planetenboden)
   if (code === 'KeyV' && (G.mode === 'walk' || G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { toggleView(); return; }
   if (G.mode === 'rover' && FOOT.active && code === 'Space') { footJump(); return; }

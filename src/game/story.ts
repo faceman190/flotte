@@ -18,7 +18,7 @@ import { radio } from '../ui/radio';
 // =====================================================================================
 export interface StoryState {
   prolog: number | 'done'; wp?: number[][]; wi?: number; erz0?: number;          // Prolog
-  ch1?: number | 'done'; c1?: { pts?: number[][]; pi?: number; frag?: number[] };  // Kapitel 1 (siehe chapter1.ts)
+  ch1?: number | 'done'; c1?: { pts?: number[][]; pi?: number; frag?: number[]; tamm?: boolean };  // Kapitel 1 (siehe chapter1.ts)
   ch2?: number | 'done'; c2?: Record<string, any>;                                  // Kapitel 2 (siehe chapter2.ts)
   ch3?: number | 'done'; c3?: Record<string, any>;                                  // Kapitel 3 (siehe chapter3.ts)
 }
