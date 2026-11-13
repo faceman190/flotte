@@ -572,17 +572,22 @@ function flareOccluders() {
 
 // =============== Hauptschleife ===============
 let last = performance.now(), shadowSweep = 0;
+// Zusatzabläufe (Geschichte, Stadt, Effekte) dürfen das Bild nie anhalten: Ein Fehler dort wird einmal gemeldet, der Rest des Bildes läuft weiter.
+// (Alpha 0.99 bis 0.99d: Ein Zugriff auf den fehlenden Spielstand im Hauptmenü warf hier in jedem Bild, die Schleife endete, der Schirm blieb leer.)
+const hookErr = new Set<string>();
+function hook(name: string, f: () => void) { try { f(); } catch (e) { if (!hookErr.has(name)) { hookErr.add(name); console.error('Fehler in ' + name + ':', e); } } }
 function loop(now: number, manual = false) {
+  if (!manual) requestAnimationFrame(t => loop(t));      // zuerst das nächste Bild anmelden: Ein Fehler weiter unten beendet die Schleife nicht
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
   simulate(dt);
-  updateIntro(dt);
-  updateStory(dt);
-  updateChapter1(dt);
-  updateChapter2(dt);
-  updateChapter3(dt);
-  updateCity(dt);
-  updateBaseFx(dt);
+  hook('Vorspann', () => updateIntro(dt));
+  hook('Geschichte', () => updateStory(dt));
+  hook('Kapitel 1', () => updateChapter1(dt));
+  hook('Kapitel 2', () => updateChapter2(dt));
+  hook('Kapitel 3', () => updateChapter3(dt));
+  hook('Stadt', () => updateCity(dt));
+  hook('Basis-Effekte', () => updateBaseFx(dt));
   // Stadt: durchs offene Hallentor geflogen → andocken (Landeanflug im Hangar übernimmt)
   if (G.mode === 'play' && !G.dead && CITY.st && insideCityGate(P.x, P.y, P.z)) openDock(CITY.st);
   G.eBusy = G.mode === 'play' && (!!nearDock() || !!world.surface);
@@ -646,7 +651,6 @@ function loop(now: number, manual = false) {
   if (G.mode === 'map') drawBand();
   updateControls(dt, settings.hud);
   netUpdate(dt);
-  if (!manual) requestAnimationFrame(t => loop(t));
 }
 
 // Nur im Entwicklungsmodus: Zugriff für Tests über die Browser-Konsole

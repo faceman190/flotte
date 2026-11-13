@@ -41,7 +41,7 @@ const BREACH = [150, 30, 40];                                        // Bresche 
 const WRECK_ID = 'narbe:eidwacht';
 type C3 = { brandt?: boolean; damp?: boolean; pi?: number; foes?: boolean; rec?: boolean; out?: boolean; choice?: 'wacht' | 'rat' };
 const c3 = () => ((st() as any).c3 = (st() as any).c3 || {}) as C3;
-const step = () => (st() as any).ch3 as number | 'done' | undefined;
+const step = () => (P.story ? (st() as any).ch3 as number | 'done' : undefined);      // im Hauptmenü gibt es noch keinen Spielstand
 const inSpace = (id: string) => !!world.def && world.def.id === id && !world.surface;
 const docked = (id: string) => !!G.dockedAt && G.dockedAt.id === id;
 const fmtDist = (d: number) => (d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m');
@@ -436,6 +436,7 @@ function dropField() { if (!field) return; scene.remove(field.g); field.g.traver
 
 // pro Bild: Wrackfeld zeigen, sobald das Kapitel die Narbe erreicht (und danach für immer); Brandt in Neonhafen
 export function updateChapter3(dt: number) {
+  if (!P.story) { if (field) dropField(); if (brandt) { brandt.c.g.removeFromParent(); brandt = null; } return; }   // Hauptmenü, Spielstand ohne Geschichte
   updateBrandt(dt);
   const s = P.story, v = s ? step() : undefined, show = !!s && inSpace(SEC) && (v === 'done' || (typeof v === 'number' && v >= 7));
   if (!show) { if (field && !(DUN.active && DUN.e?.id === WRECK_ID)) dropField(); return; }
