@@ -83,7 +83,7 @@ export const GEAR = {
   ruck_schwebe: { n: 'Schwebetornister', kind: 'rucksack', rar: 3, val: 6000, desc: 'Trägt sein Gewicht selbst.', st: { plaetze: 20 } },
   // ----- Waffen -----
   waffe_pistole: { n: 'Dienstpistole P-7', kind: 'waffe', rar: 0, val: 200, desc: 'Zuverlässige Seitenwaffe der Flotte.', st: { schaden: 8 }, shop: 0 },
-  waffe_karabiner: { n: 'Karabiner K-12', kind: 'waffe', rar: 1, val: 900, desc: 'Kurzes Gewehr für enge Gänge.', st: { schaden: 16 }, shop: 1 },
+  waffe_karabiner: { n: 'Sturmgewehr AR-39', kind: 'waffe', rar: 1, val: 900, desc: 'Das Standardgewehr der Flotte. Kurz genug für enge Gänge.', st: { schaden: 16 }, shop: 1 },
   waffe_flinte: { n: 'Enterflinte', kind: 'waffe', rar: 2, val: 2100, desc: 'Auf kurze Entfernung verheerend.', st: { schaden: 24 }, shop: 2 },
   waffe_impuls: { n: 'Impulsgewehr', kind: 'waffe', rar: 2, val: 3400, desc: 'Verschießt gebündelte Energiestöße.', st: { schaden: 30 }, shop: 2 },
   waffe_splitter: { n: 'Splitterwerfer', kind: 'waffe', rar: 3, val: 9000, desc: 'Ferrox-Technik. Niemand weiß genau, wie er arbeitet.', st: { schaden: 44 } },

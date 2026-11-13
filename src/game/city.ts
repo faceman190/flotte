@@ -10,6 +10,7 @@ import { hasChar, charInstance, animInit, animStep, animTalk, type CharAnim } fr
 import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { SHIPS, type ShipId } from '../data/ships';
 import { makeAvatar, driveAvatar, type Avatar } from './avatar';
+import { viewModelId } from './mineArt';
 import { staffBark } from './barks';
 import { world, type Station } from './world';
 import { IN, hangarDisplay } from './interior';
@@ -253,7 +254,7 @@ export function updateCity(dt: number) {
     }
     for (const v of vendors) if (seen(v.c.g, v.x, v.z, FIG_FAR)) animStep(v.c.anim, dt, false);
     if (probe) { const k = PROBE_K * (meta(CITY.name).style === 'neon' ? AT.lm0 + (1 - AT.lm0) * atmoK : 1); for (const f of walkers) if (f.lc) probeAt(f.x, f.z, f.lc, k); for (const f of vendors) if (f.lc) probeAt(f.x, f.z, f.lc, k); for (const f of guards) if (f.lc) probeAt(f.x, f.z, f.lc, k); }
-    for (const g of guards) if (seen(g.a.s.g, g.x, g.z, FIG_FAR + 60)) driveAvatar(g.a, dt, { x: g.x, y: 0.18, z: g.z, yaw: g.yaw, pitch: 0, vx: 0, vz: 0, wid: 'k12', combat: false });
+    for (const g of guards) if (seen(g.a.s.g, g.x, g.z, FIG_FAR + 60)) driveAvatar(g.a, dt, { x: g.x, y: 0.18, z: g.z, yaw: g.yaw, pitch: 0, vx: 0, vz: 0, wid: viewModelId(), combat: false });
   }
   // Verkehr: alle 25–45 s ein Schiff, abwechselnd hinein und hinaus
   updateFlyers(dt, st, visible);

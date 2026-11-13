@@ -12,6 +12,7 @@ import { applyKit } from '../models/kit';
 //                   korb, wagen, kiste(+_deckel), tresorkiste(+_deckel), sanikiste(+_deckel), portal, deko
 //  Mine_Drohne.glb  Wachdrohne mit Animationen (idle, attack, …), Quelle MilitaryDroneCG
 //  Mine_Waffe.glb   Karabiner K-12 für die Ich-Sicht (asset-src/neu/mine/waffe_build.py), Bilder tex/waffe_col/_nrm/_orm
+//  Mine_W_ar39.glb  Sturmgewehr AR-39, die Standardwaffe (Tripo-Modell des Nutzers, aufbereitet in asset-src/neu/mine/ar39/AR39.blend), Bilder tex/waffe_ar39_*
 // Achsen: Blender (x, y, z) → Spiel (x, z, −y). Module zeigen mit der Vorderseite nach +Z, Gänge laufen entlang X.
 // =====================================================================================
 
@@ -115,17 +116,21 @@ export interface ViewModel {
 }
 // Modelle je Waffe (Blender: waffe_build.py für den K-12, waffen_build.py für IG-3 und EF-2). Knoten: Körper, Glas, Absehen, Leuchtteile.
 // muzzle: Mündung im Spiel-Raum (Blender x, z, −y); pos: Lage vor der Kamera (rechts, unten, vorn).
-interface WDef { tpl: string; body: string; glas: string; absehen: string; licht: string; tex: string; muzzle: [number, number, number]; pos: [number, number, number]; col: number; env?: number }   // env: Spiegelung der Umgebung (viel Metall → weniger)
+interface WDef { tpl: string; body: string; glas: string; absehen: string; licht: string; tex: string; muzzle: [number, number, number]; pos: [number, number, number]; col: number; env?: number; tone?: number }   // env: Spiegelung der Umgebung (viel Metall → weniger); tone: Farbe abdunkeln (heller Lack überstrahlt sonst)
 const WDEFS: Record<string, WDef> = {
+  // AR-39: ein Netz ohne eigene Glas- und Leuchtteile (die drei Knoten fehlen und werden übersprungen). Der Lauf liegt 10,75 cm über dem Nullpunkt,
+  // weil der Nullpunkt wie bei den anderen Waffen am Griff sitzt und das Gehäuse hoch baut. Lage tiefer und weiter rechts, sonst verdeckt das Visier das Bild.
+  ar39: { tpl: 'Mine_W_ar39', body: 'ar39', glas: 'ar39_glas', absehen: 'ar39_absehen', licht: 'ar39_licht', tex: 'waffe_ar39', muzzle: [0, 0.1075, -0.4408], pos: [0.17, -0.34, -0.40], col: 0xfff2dc, env: 0.16, tone: 0.72 },
   k12: { tpl: 'Mine_Waffe', body: 'waffe', glas: 'glas', absehen: 'absehen', licht: 'lampenglas', tex: 'waffe', muzzle: [0, 0.04, -0.5585], pos: [0.118, -0.178, -0.30], col: 0xfff2dc },
   ig3: { tpl: 'Mine_W_ig3', body: 'ig3', glas: 'ig3_glas', absehen: 'ig3_absehen', licht: 'ig3_licht', tex: 'waffe_ig3', muzzle: [0, 0.046, -0.724], pos: [0.128, -0.228, -0.42], col: 0x8fd0ff },
   ef2: { tpl: 'Mine_W_ef2', body: 'ef2', glas: 'ef2_glas', absehen: 'ef2_absehen', licht: 'ef2_licht', tex: 'waffe_ef2', muzzle: [0, 0.046, -0.330], pos: [0.112, -0.168, -0.29], col: 0x6fc2ff, env: 0.07 },
   p9: { tpl: 'Mine_W_p9', body: 'p9', glas: 'p9_glas', absehen: 'p9_absehen', licht: 'p9_licht', tex: 'waffe_p9', muzzle: [0, 0.030, -0.112], pos: [0.052, -0.080, -0.185], col: 0xffe2b0 },
   sw: { tpl: 'Mine_W_sw', body: 'sw', glas: 'sw_glas', absehen: 'sw_absehen', licht: 'sw_licht', tex: 'waffe_sw', muzzle: [0, 0.038, -0.232], pos: [0.098, -0.140, -0.27], col: 0xc070ff, env: 0.12 },
 };
-// Welches Modell zur angelegten Waffe gehört (fehlt die Datei, nimmt das Spiel den K-12)
+// Welches Modell zur angelegten Waffe gehört. Standard ist das AR-39 (Gewehr der Flotte, auch ohne angelegte Waffe und für Wachen);
+// fehlt eine Datei, nimmt das Spiel den K-12.
 export function viewModelId(gear?: string) {
-  const id = gear === 'waffe_impuls' ? 'ig3' : gear === 'waffe_flinte' ? 'ef2' : gear === 'waffe_pistole' ? 'p9' : gear === 'waffe_splitter' ? 'sw' : 'k12';
+  const id = gear === 'waffe_impuls' ? 'ig3' : gear === 'waffe_flinte' ? 'ef2' : gear === 'waffe_pistole' ? 'p9' : gear === 'waffe_splitter' ? 'sw' : 'ar39';
   return stationTemplate(WDEFS[id].tpl) ? id : 'k12';
 }
 let ENV: THREE.Texture | null = null;
@@ -137,7 +142,7 @@ export function buildViewModel(id = 'k12'): ViewModel | null {
   sceneV.environment = ENV;
   const cam = new THREE.PerspectiveCamera(52, 16 / 9, 0.01, 10);
   const gun = new THREE.Group(), inner = new THREE.Group(); gun.add(inner);
-  const gm = pbr(W.tex); gm.envMapIntensity = W.env ?? 0.22;
+  const gm = pbr(W.tex); gm.envMapIntensity = W.env ?? 0.22; if (W.tone) gm.color.setScalar(W.tone);
   let lens: THREE.MeshBasicMaterial | null = null;
   for (const n of [W.body, W.glas, W.absehen, W.licht]) {
     const node = t.getObjectByName(n); if (!node) continue;
@@ -218,7 +223,7 @@ export function soldierWeapon(s: SoldierVis, id: string) {
   const W = WDEFS[id] || WDEFS.k12, t = stationTemplate(W.tpl), rel = TP.weapon_in_hand[id] || TP.weapon_in_hand.k12;
   const node = t?.getObjectByName(W.body); if (!node || !rel) return;
   const w = new THREE.Group(), c = node.clone(true); w.add(c);
-  const gm = pbr(W.tex); gm.envMapIntensity = W.env ?? 0.22;
+  const gm = pbr(W.tex); gm.envMapIntensity = W.env ?? 0.22; if (W.tone) gm.color.setScalar(W.tone);
   c.traverse((o: any) => { if (o.isMesh) { o.material = gm; o.frustumCulled = false; } o.userData.sh = false; o.userData.shared = true; });
   const R = new THREE.Matrix4(); R.set(...(rel.flat() as [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]));
   w.matrixAutoUpdate = false; w.matrix.copy(C).multiply(R).multiply(CI);

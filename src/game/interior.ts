@@ -1156,7 +1156,7 @@ export function syncOtherPilots(list: { id: number; name: string; st: string; x:
     if (o.st !== here) continue;
     seen.add(o.id);
     let r = others.get(o.id);
-    const gear = { helm: o.g?.[0] || undefined, anzug: o.g?.[1] || undefined, rucksack: o.g?.[2] || undefined }, wid = o.g?.[3] || 'k12';
+    const gear = { helm: o.g?.[0] || undefined, anzug: o.g?.[1] || undefined, rucksack: o.g?.[2] || undefined }, wid = o.g?.[3] || viewModelId();
     if (!r) {
       // Soldat wie die eigene Figur (src/game/avatar.ts); fehlt das Modell, die einfache Figur
       const av = syncAvatar(stationGroup, null, gear);

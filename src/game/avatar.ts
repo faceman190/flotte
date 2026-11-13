@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clamp } from '../core/util';
-import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, type SoldierVis } from './mineArt';
+import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, viewModelId, type SoldierVis } from './mineArt';
 
 // =====================================================================================
 // Eigene Spielerfigur in der Außensicht – gemeinsam für Mine, Station, Hangar, Schiffe und den Planetenboden.
@@ -38,7 +38,7 @@ export function readNetFlags(n: NetAct, s?: string | null) {
 }
 // Linke Hand am Vorderschaft: Anteil der Strecke Griff → Mündung, dann oben (−: darunter) und zur linken Seite, in Metern
 const GRIP: Record<string, [number, number, number]> = {
-  k12: [0.58, -0.045, 0.03], ig3: [0.55, -0.045, 0.03], ef2: [0.6, -0.045, 0.03], sw: [0.5, -0.045, 0.035],
+  ar39: [0.42, -0.058, 0.05], k12: [0.58, -0.045, 0.03], ig3: [0.55, -0.045, 0.03], ef2: [0.6, -0.045, 0.03], sw: [0.5, -0.045, 0.035],
   p9: [0.05, -0.07, 0.06],                                     // Pistole: die linke Hand stützt die rechte von unten
 };
 
@@ -236,7 +236,7 @@ function gripWeapon(a: Avatar, d: Drive) {
 // Mitspieler als Figur: Zielwerte (aus dem Netz) weich nachführen, Tempo aus der Bewegung, gleiche Clips wie die eigene Figur
 export interface RemoteFig extends NetAct { av: Avatar | null; x: number; y: number; z: number; tx: number; ty: number; tz: number; yaw: number; vx: number; vz: number; gear: { helm?: string; anzug?: string; rucksack?: string }; wid: string; init: boolean }
 export const newRemoteFig = (): RemoteFig => ({ av: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, vx: 0, vz: 0, gear: {}, wid: 'k12', init: false, crouch: false, hit: 0, fire: 0, fl: '' });
-export function gearFromNet(g: string[] | null | undefined) { return { gear: { helm: g?.[0] || undefined, anzug: g?.[1] || undefined, rucksack: g?.[2] || undefined }, wid: g?.[3] || 'k12' }; }
+export function gearFromNet(g: string[] | null | undefined) { return { gear: { helm: g?.[0] || undefined, anzug: g?.[1] || undefined, rucksack: g?.[2] || undefined }, wid: g?.[3] || viewModelId() }; }
 export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {
   f.av = syncAvatar(holder, f.av, f.gear);
   if (!f.av) return;

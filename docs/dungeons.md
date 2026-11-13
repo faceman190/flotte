@@ -196,6 +196,14 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
 - Eigene Texte: Speicherriegel statt Notstromschalter, Speicherkern statt Brücke, Schacht statt Schleuse.
 - Erster Einsatz: das Archiv der Erbauer auf Kernkristall in Kapitel 4 (`src/game/chapter4.ts`), Größe 8, Gefahr 3 (11 Wächter, Wächterkern, 3 Riegel).
 
+## Sturmgewehr AR-39: die Standardwaffe (Alpha 1.01)
+- Modell: vom Nutzer mit Tripo erzeugt (`weapon-AR39.glb`, Farbbild 2048). In der Datei lagen zwei Waffen in einem Netz; die kleinere wurde nach zusammenhängenden Teilen entfernt. Original und Arbeitsdatei: `asset-src/neu/mine/ar39/` (nicht im Repository).
+- Aufbereitung in Blender: Lauf nach +Y, oben +Z, Nullpunkt am Griff wie bei den anderen Waffen (dadurch passt die Lage in der Hand der Außensicht ohne eigene Angaben). 5.648 Dreiecke, ein Netz `ar39`, Material `ext_waffe_ar39`. Export: `asset-src/glb/station/Mine_W_ar39.glb`.
+- Texturen in `asset-src/tex`: `waffe_ar39_col` (aus dem Tripo-Bild), `waffe_ar39_orm` (aus der Helligkeit abgeleitet: heller Lack rau und kaum metallisch, dunkle Teile glatter und metallisch), `waffe_ar39_nrm` (flach; Tripo liefert keine Normalenkarte).
+- Hände: `soldat_build.py` → `POS['ar39']`, `GRIP['ar39']`, `pose_hands('ar39')`, `export_hands()` (Knoten `haende_ar39` in `Mine_Haende.glb`).
+- Im Spiel (`mineArt.ts`, `WDEFS.ar39`): Mündung 10,75 cm über dem Nullpunkt, Lage vor der Kamera tiefer und weiter rechts als beim K-12 (das Visier baut hoch), Farbe auf 72 % abgedunkelt. `viewModelId()` gibt `ar39` für das Standardgewehr (`waffe_karabiner`, jetzt „Sturmgewehr AR-39“), ohne angelegte Waffe, für Wachen und für Mitspieler ohne Angabe. Fehlt die Datei, bleibt es beim K-12; dessen Modell liegt weiter im Paket.
+- Offen: Der K-12 hatte Visierglas, Absehen und Lampenglas als eigene Leuchtteile; das AR-39 hat sie nicht. Linke Hand in der Außensicht: `GRIP.ar39` in `avatar.ts` ist geschätzt.
+
 ## Noch offen
 - Weitere Arten (Bunker), Schlüssel, mehrere Ebenen, große Meteoriten im All.
 - Hände/Handschuhe an Pistole und Splitterwerfer in der Ich-Sicht.

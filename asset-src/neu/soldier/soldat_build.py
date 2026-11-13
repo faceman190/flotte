@@ -46,12 +46,14 @@ def textures():
 
 # ------------------------------------------------------------------ Hände an der Waffe
 # Lage der Waffe vor der Kamera im Spiel (src/game/mineArt.ts, WDEFS.pos: rechts, oben, vorn) → Schultern im Raum der Waffe
-POS = {'k12': (0.118, -0.178, -0.30), 'ig3': (0.128, -0.228, -0.42), 'ef2': (0.112, -0.168, -0.29)}
+POS = {'k12': (0.118, -0.178, -0.30), 'ig3': (0.128, -0.228, -0.42), 'ef2': (0.112, -0.168, -0.29), 'ar39': (0.17, -0.34, -0.40)}
 # Griffpunkte je Waffe (Raum der Waffe): Handgelenk, Richtung Handgelenk→Knöchel, Richtung zum Daumen
 GRIP = {
     'k12': {'r': ((0.020, -0.122, -0.040), (0.0, 0.78, -0.62), (-0.35, 0.55, 0.75)), 'l': ((-0.052, 0.255, 0.030), (0.2, 0.6, -0.77), (0.15, 0.9, 0.4))},
     'ig3': {'r': ((0.022, -0.118, -0.030), (0.0, 0.78, -0.62), (-0.35, 0.55, 0.75)), 'l': ((-0.052, 0.250, 0.042), (0.2, 0.6, -0.77), (0.15, 0.9, 0.4))},
     'ef2': {'r': ((0.024, -0.120, -0.035), (0.0, 0.78, -0.62), (-0.35, 0.55, 0.75)), 'l': ((-0.050, 0.212, 0.044), (0.2, 0.6, -0.77), (0.15, 0.9, 0.4))},
+    # AR-39 (Tripo-Modell des Nutzers, asset-src/neu/mine/ar39): hohes Gehäuse, Griff sitzt tiefer unter dem Lauf, breiter Handschutz
+    'ar39': {'r': ((0.020, -0.115, 0.000), (0.0, 0.78, -0.62), (-0.35, 0.55, 0.75)), 'l': ((-0.078, 0.180, 0.050), (0.2, 0.6, -0.77), (0.15, 0.9, 0.4))},
 }
 CURL = {'index': 0.55, 'middle': 1.25, 'ring': 1.3, 'pinky': 1.35, 'thumb': 0.45}     # Fingerkrümmung (rad je Glied) rechts
 CURL_L = {'index': 1.05, 'middle': 1.15, 'ring': 1.2, 'pinky': 1.25, 'thumb': 0.35}
@@ -168,7 +170,7 @@ def material():
 
 def export_hands():
     m = material(); obs = []
-    for wid in ('k12', 'ig3', 'ef2'):
+    for wid in ('k12', 'ig3', 'ef2', 'ar39'):
         o = bpy.data.objects.get('haende_' + wid)
         if not o: continue
         o.data.materials.clear(); o.data.materials.append(m); obs.append(o)
