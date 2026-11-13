@@ -128,6 +128,27 @@ Jedes Kapitel verbindet Hauptmissionen mit dem, was das Spiel schon kann: Bergba
 
 ---
 
+## Kapitel 2: „Splitter der Erbauer“ (Alpha 0.86, )
+
+**Worum es geht:** Seit dem Signal „singt“ das Ferrit im Splittergürtel. Die Muster sind eine Karte zu einer Ruine der Erbauer auf Schlacke Prime.
+Dort liegt ein Archivkristall, bewacht von Ferrox-Drohnen, und daneben eine Rettungskapsel der verschollenen „Weitsicht“. Der Streit zwischen Gilde und Rat bricht auf.
+
+| Schritt | Ort | Was passiert |
+|---|---|---|
+| 0 | überall | Szene „KAPITEL 2“, Krull funkt: Das Ferrit singt. Route in den Splittergürtel. |
+| 1–2 | Splitter-Mine | Andocken, **Vorarbeiter Kessler** (neue Figur) erzählt von drei leuchtenden Brocken. |
+| 3 | Splittergürtel | Drei singende Brocken anfliegen und scannen (R); nach dem zweiten greifen Ferrox an. |
+| 4 | Schlackenfeld | Krull: Die Muster sind eine Karte. Auf **Schlacke Prime** landen. |
+| 5 | Schlacke Prime | Zu Fuß zur **Ruine der Erbauer** (Ferrit-Säulen, schwebender Kristall); vier Wachdrohnen ausschalten. |
+| 6 | Ruine | Archivkristall bergen (E), daneben die **Rettungskapsel WS-07**: Aufnahme von Kapitänin Varga – „Wir sind durch … Wir leben.“ |
+| 7 | Wahl | Kristall zur Splitter-Mine (**Gilde**) oder zur Bastion (**Rat**) – wo man andockt, dort bleibt er. |
+| 8 | Szene | je nach Wahl Krull und Kessler oder Hollweg und Roth; Brummer: Die Aufnahme ist **vier Monate** alt. „Die Weitsicht lebt.“ |
+
+Belohnung: 2.500 Credits, +60 Ruf bei der gewählten Seite, −15 bei der anderen, +20 Grenzwacht. Die Ruine bleibt danach auf Schlacke Prime stehen.
+Vertonung: 29 Zeilen (docs/voice/kapitel2.md).
+
+---
+
 ## Kapitel 1: „Echo im Sonnenfeld“
 
 **Worum es geht:** Zum ersten Mal seit 38 Jahren sendet das zerbrochene Halden-Tor ein Signal. Die ganze Crew hofft auf eine Nachricht der Altwelten. Der Spieler findet heraus, woher es kommt, und stößt dabei auf Ferrox, die mitten im Menschenraum an den Trümmern des Tors fressen.

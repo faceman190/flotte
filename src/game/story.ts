@@ -19,9 +19,10 @@ import { radio } from '../ui/radio';
 export interface StoryState {
   prolog: number | 'done'; wp?: number[][]; wi?: number; erz0?: number;          // Prolog
   ch1?: number | 'done'; c1?: { pts?: number[][]; pi?: number; frag?: number[] };  // Kapitel 1 (siehe chapter1.ts)
+  ch2?: number | 'done'; c2?: Record<string, any>;                                  // Kapitel 2 (siehe chapter2.ts)
 }
-const SPK: Record<string, string> = { ACHTERBERG: '#ffb347', BRUMMER: '#7cc4ff', HOLLWEG: '#bcd8ff', KOMPASS: '#d0c8f0', CREW: '#ffd27a', TAMM: '#e0b030', KRULL: '#ffb347', ROTH: '#f2d36b' };
-const NAMES: Record<string, string> = { ACHTERBERG: 'Hauptfrau Achterberg', BRUMMER: 'Lotse Brummer · Bastion', HOLLWEG: 'Ratsherr Hollweg', KOMPASS: 'Frachter „Kompass“', CREW: 'Die Crew', TAMM: 'Rika Tamm · Sonnenwacht', KRULL: 'Gildemeisterin Krull', ROTH: 'Wachtmeisterin Roth' };
+const SPK: Record<string, string> = { ACHTERBERG: '#ffb347', BRUMMER: '#7cc4ff', HOLLWEG: '#bcd8ff', KOMPASS: '#d0c8f0', CREW: '#ffd27a', TAMM: '#e0b030', KRULL: '#ffb347', ROTH: '#f2d36b', KESSLER: '#d8b080', VARGA: '#9fd8ff' };
+const NAMES: Record<string, string> = { ACHTERBERG: 'Hauptfrau Achterberg', BRUMMER: 'Lotse Brummer · Bastion', HOLLWEG: 'Ratsherr Hollweg', KOMPASS: 'Frachter „Kompass“', CREW: 'Die Crew', TAMM: 'Rika Tamm · Sonnenwacht', KRULL: 'Gildemeisterin Krull', ROTH: 'Wachtmeisterin Roth', KESSLER: 'Vorarbeiter Kessler · Splitter-Mine', VARGA: 'Aufnahme · Kapitänin Varga, „Weitsicht“' };
 export const storyHooks = { banner: (_t: string, _s: string, _c?: string) => {} };
 
 // ---------- Dialog (unten in der Mitte, läuft im Spiel weiter) ----------
@@ -102,9 +103,10 @@ export const st = () => P.story as StoryState;
 export type Obj = [string, boolean, boolean];
 export interface Marker { x: number; y: number; z: number; label: string; col: string; big?: boolean }
 export interface Step { title: string; enter: () => void; lines: () => Obj[]; done: () => boolean; markers?: () => Marker[]; tick?: (dt: number) => void }
-interface Chain { key: 'prolog' | 'ch1'; steps: Step[]; resume?: (n: number) => number }
+interface Chain { key: 'prolog' | 'ch1' | 'ch2'; steps: Step[]; resume?: (n: number) => number }
 const CHAINS: Chain[] = [];
-export function registerChain(c: Chain) { CHAINS.push(c); }
+const ORDER = ['prolog', 'ch1', 'ch2'];
+export function registerChain(c: Chain) { CHAINS.push(c); CHAINS.sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key)); }   // feste Reihenfolge, egal wann ein Modul geladen wird
 function cur(): { c: Chain; n: number } | null {
   if (!P.story) return null;
   for (const c of CHAINS) {
@@ -246,6 +248,7 @@ export function startPrologue() {
 export function resumeStory() {
   if (!P.story) return;
   if (st().prolog === 'done' && st().ch1 === undefined) st().ch1 = 0;
+  if (st().ch1 === 'done' && st().ch2 === undefined) st().ch2 = 0;
   const k = cur();
   if (k && k.c.resume) st()[k.c.key] = k.c.resume(k.n);
   entered = '';
@@ -316,6 +319,8 @@ export function storyObjective(): { title: string; lines: Obj[] } | null {
   const k = cur(), s = k && k.c.steps[k.n];
   return s ? { title: s.title, lines: s.lines() } : null;
 }
-export function storyMarkers(): Marker[] { const k = cur(), s = k && k.c.steps[k.n]; return s && s.markers && G.mode === 'play' ? s.markers() : []; }
+export function storyMarkers(ground = false): Marker[] { const k = cur(), s = k && k.c.steps[k.n]; return s && s.markers && (ground ? G.mode === 'rover' : G.mode === 'play') ? s.markers() : []; }
+// Kapitel nach dem vorigen beginnen (kurz nach dessen Abschluss)
+export function startChain(key: 'ch1' | 'ch2', ms: number) { setTimeout(() => { if (P.story && st()[key] === undefined) { st()[key] = 0; entered = ''; saveGame(); } }, ms); }
 // für das Flottenband: Kapitelname und Stand
 export function storyChapter() { const k = cur(); return k ? { key: k.c.key, n: k.n, total: k.c.steps.length } : null; }

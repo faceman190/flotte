@@ -15,6 +15,7 @@ import { viewModelId } from './mineArt';
 import { basePad, padGround, baseBlocked, nearDoor, surfaceAt, wallBetween } from './basewalk';
 import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
 import { FIGHT, updateFieldFight, fieldDown, fieldViewModel, hideFieldViewModel, drawFieldHUD } from './fieldfight';
+import { storyMarkers } from './story';
 import { landShip } from './surface';
 import type { Station } from './world';
 
@@ -26,9 +27,12 @@ import type { Station } from './world';
 
 export const FOOT = {
   active: false, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, vx: 0, vz: 0, jy: 0, jv: 0, bob: 0, walked: 0,
-  locked: false, act: '' as '' | 'rover' | 'ship' | 'mine' | 'base' | 'crate', prompt: '', warn: 0,
+  locked: false, act: '' as '' | 'rover' | 'ship' | 'mine' | 'base' | 'crate' | 'story', prompt: '', warn: 0,
 };
 export const footHooks = { unlock: () => {} };
+// Ziele zu Fuß, die die Geschichte setzt (z. B. Kristall bergen): [E] in Reichweite r
+export const footTargets: { x: number; z: number; r: number; label: string; act: () => void }[] = [];
+export const nearFootTarget = () => footTargets.find(t => Math.hypot(t.x - FOOT.x, t.z - FOOT.z) < t.r) || null;
 let me: Avatar | null = null, stepT = 0, grabT = 0;
 
 const shipR = () => stats().radius * 0.75 + 0.8;
@@ -144,9 +148,9 @@ export function updateFoot(dt: number) {
   // Was ist in Reichweite?
   const mine = nearEntrance(FOOT.x, FOOT.z);
   const door = nearDoor(FOOT.x, FOOT.z);
-  const crate = nearCrate(FOOT.x, FOOT.z);
-  FOOT.act = door ? 'base' : crate ? 'crate' : footNearShip() ? 'ship' : mine ? 'mine' : footNearRover() ? 'rover' : '';
-  FOOT.prompt = FOOT.act === 'crate' ? (crate!.big ? 'Tresorkiste öffnen' : 'Kiste öffnen') : FOOT.act === 'base' ? `${door!.st.name} betreten` : FOOT.act === 'ship' ? (settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`) : FOOT.act === 'mine' ? `${mine!.name} betreten` : FOOT.act === 'rover' ? 'In den Rover steigen' : '';
+  const crate = nearCrate(FOOT.x, FOOT.z), tgt = nearFootTarget();
+  FOOT.act = tgt ? 'story' : door ? 'base' : crate ? 'crate' : footNearShip() ? 'ship' : mine ? 'mine' : footNearRover() ? 'rover' : '';
+  FOOT.prompt = FOOT.act === 'story' ? tgt!.label : FOOT.act === 'crate' ? (crate!.big ? 'Tresorkiste öffnen' : 'Kiste öffnen') : FOOT.act === 'base' ? `${door!.st.name} betreten` : FOOT.act === 'ship' ? (settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`) : FOOT.act === 'mine' ? `${mine!.name} betreten` : FOOT.act === 'rover' ? 'In den Rover steigen' : '';
   // eigene Figur
   if (VIEW.tp) me = syncAvatar(scene, me, P.gear || {});
   if (me) {
@@ -185,6 +189,18 @@ function marker(x: number, y: number, z: number, text: string, col: string, row:
     ux.fillStyle = col; ux.font = '11px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'center'; ux.fillText(text, cx, 94);
   }
 }
+// Ziele der Geschichte am Boden (zu Fuß und im Rover)
+export function drawGroundMarkers() {
+  const W = view.W, H = view.H, px = FOOT.active ? FOOT.x : ROVER.x, pz = FOOT.active ? FOOT.z : ROVER.z;
+  ux.save(); ux.textAlign = 'center';
+  for (const mk of storyMarkers(true)) {
+    _p.set(mk.x, mk.y, mk.z).project(camera);
+    const d = Math.hypot(mk.x - px, mk.z - pz), label = `◆ ${mk.label} · ${d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m'}`;
+    if (_p.z < 1 && Math.abs(_p.x) < 1 && Math.abs(_p.y) < 1) { ux.fillStyle = mk.col; ux.font = '700 13px "Share Tech Mono",Consolas,monospace'; ux.fillText(label, (_p.x + 1) / 2 * W, (1 - _p.y) / 2 * H); }
+    else { const yaw = FOOT.active ? FOOT.yaw : ROVER.yaw, ang = Math.atan2(mk.x - px, mk.z - pz) - Math.atan2(-Math.sin(yaw), -Math.cos(yaw)); ux.save(); ux.translate(W / 2, 120); ux.rotate(-ang); ux.fillStyle = mk.col; ux.beginPath(); ux.moveTo(0, -12); ux.lineTo(7, 5); ux.lineTo(-7, 5); ux.closePath(); ux.fill(); ux.restore(); ux.fillStyle = mk.col; ux.font = '11px "Share Tech Mono",Consolas,monospace'; ux.fillText(label, W / 2, 144); }
+  }
+  ux.restore();
+}
 export function drawFootHUD() {
   if (!FOOT.active || G.mode !== 'rover') return;
   const W = view.W, H = view.H;
@@ -194,6 +210,7 @@ export function drawFootHUD() {
   if (ROVER.model) { const dR = Math.hypot(FOOT.x - ROVER.x, FOOT.z - ROVER.z); if (dR > 6) marker(ROVER.x, ROVER.y + 4, ROVER.z, `ROVER · ${Math.round(dR)} m`, '#e09030', 1); }
   drawSalvageHUD(FOOT.x, FOOT.z);
   drawFieldHUD();
+  drawGroundMarkers();
   const bs = world.stations[0], bp = bs && basePad(bs);
   if (bp) { const dD = Math.hypot(FOOT.x - bp.door.x, FOOT.z - bp.door.z); if (dD > 4 && dD < 400) { _p.set(bp.door.x, padGround(bp.door.x, bp.door.z) + 3, bp.door.z).project(camera); if (_p.z < 1 && Math.abs(_p.x) < 1 && Math.abs(_p.y) < 1) { ux.fillStyle = '#7fe0a0'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'center'; ux.fillText(`EINGANG · ${Math.round(dD)} m`, (_p.x + 1) / 2 * W, (1 - _p.y) / 2 * H); } } }
   if (FOOT.locked) { ux.fillStyle = 'rgba(255,255,255,.75)'; ux.beginPath(); ux.arc(W / 2, H / 2, 2.2, 0, 6.283); ux.fill(); }

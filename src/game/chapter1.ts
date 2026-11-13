@@ -11,7 +11,7 @@ import { SHARED } from './shared';
 import { IN, storyNpc } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
-import { talk, playScene, registerChain, st, goto, endChain, storyCtx, storyHooks, type Step, type Obj } from './story';
+import { talk, playScene, registerChain, st, goto, endChain, storyCtx, storyHooks, startChain, type Step, type Obj } from './story';
 
 // =====================================================================================
 // Kapitel 1: „Echo im Sonnenfeld“ (siehe docs/story.md)
@@ -175,8 +175,8 @@ function finish() {
   storyHooks.banner('KAPITEL 1 ABGESCHLOSSEN', '+1.500 Credits · Ruf bei allen Fraktionen', '#ffd27a');
   snd(523, 0.3, 'triangle', 0.06, 0); setTimeout(() => snd(659, 0.3, 'triangle', 0.06, 0), 200); setTimeout(() => snd(784, 0.5, 'triangle', 0.06, 0), 400);
   saveGame();
-  setTimeout(() => talk(['KRULL', 'Pilot, auf ein Wort. Die Gilde zahlt gut für jeden, der im Splittergürtel die Augen offen hält. Wenn das Ferrit spricht, will ich es hören.'],
-    ['BRUMMER', 'Bastion an Pilot: Die Geschichte geht weiter. Kapitel 2 ist in Arbeit.']), 4000);
+  setTimeout(() => talk(['KRULL', 'Pilot, auf ein Wort. Die Gilde zahlt gut für jeden, der im Splittergürtel die Augen offen hält. Wenn das Ferrit spricht, will ich es hören.']), 4000);
+  startChain('ch2', 30000);
 }
 
 // ---------- Das Kernstück des Halden-Tors im Sonnenfeld ----------

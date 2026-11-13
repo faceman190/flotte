@@ -95,3 +95,10 @@ Krull „Moreana - Dark, Charismatic, Seductive“ (`V8IDMv79XsMfnx3b9E2U`) · R
 
 Eine Zeile neu erzeugen: `creative_generate_speech` mit demselben Flow, Text aus der Sprechliste, Stimme wie oben, `generations_count` 1;
 die neue Datei unter demselben Namen ablegen und `npm run assets`.
+
+
+## Stimmen Kapitel 2 (eingebaut in Alpha 0.86, 2026-11-13)
+
+Flow , Modell , je Zeile eine Fassung, zusammen **3.124 Credits**. Texte und Regie: docs/voice/kapitel2.md, Dateien: asset-src/voice/kapitel2/<Kennung>.mp3.
+Neue Stimmen: Kessler „Leonard Berger – Rough & Resonant“ (), Varga „Irene - reflective thinking“ ().
+Fassungen (Kennung → Generierung) stehen im Flow; je Kennung genau eine Fassung.

@@ -44,7 +44,8 @@ import { loadStationModels } from './models/stationModels';
 import { loadCharModels } from './models/charModels';
 import type { Gate, Station } from './game/world';
 import { DUN, enterDungeon, updateDungeon, dungeonCamera, drawDungeonHUD, dungeonKey, nearEntrance, dunHooks } from './game/dungeon';
-import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover, landAtBase, leaveBaseOnFoot } from './game/onfoot';
+import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover, landAtBase, leaveBaseOnFoot, nearFootTarget, drawGroundMarkers } from './game/onfoot';
+import { updateChapter2 } from './game/chapter2';
 import { basePad, nearDoor } from './game/basewalk';
 import { nearCrate, openCrate as openSalvage, updateSalvage, drawSalvageHUD } from './game/salvage';
 import { toggleView, toggleCrouch } from './game/avatar';
@@ -278,6 +279,8 @@ onKey(code => {
       const mine = atShip ? null : nearEntrance(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z);
       const door = FOOT.active ? nearDoor(FOOT.x, FOOT.z) : null;
       if (door) { enterBase(door.st); return; }
+      const tgt = FOOT.active ? nearFootTarget() : null;
+      if (tgt) { tgt.act(); return; }
       const crate = FOOT.active ? nearCrate(FOOT.x, FOOT.z) : null;
       if (crate) { openSalvage(crate); return; }
       if (mine) { laserSound(false); enterDungeon(mine); }
@@ -543,6 +546,7 @@ function loop(now: number, manual = false) {
   updateIntro(dt);
   updateStory(dt);
   updateChapter1(dt);
+  updateChapter2(dt);
   G.eBusy = G.mode === 'play' && (!!nearDock() || !!world.surface);
   // Grundgeräusch zu Fuß: im Schiff ein tiefes Brummen, in der Station leiser
   // Grundgeräusch: zu Fuß Schiff, Hangar oder Station; auf einer Planetenoberfläche der Wind (je nach Planetenart)
@@ -597,7 +601,7 @@ function loop(now: number, manual = false) {
   drawHUD();
   if (world.def && G.mode !== 'map' && !IN.active && !DUN.active) drawFlare(ux, dt, flareOccluders());
   drawWalkHUD();
-  if (!FOOT.active) { drawRoverHUD(); if (G.mode === 'rover' && ROVER.active) drawSalvageHUD(ROVER.x, ROVER.z); } else drawFootHUD();
+  if (!FOOT.active) { drawRoverHUD(); if (G.mode === 'rover' && ROVER.active) { drawSalvageHUD(ROVER.x, ROVER.z); drawGroundMarkers(); } } else drawFootHUD();
   drawDungeonHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, ROVER.active);
   if (G.mode === 'rover') $('prompt').classList.add('hidden');
   if (G.mode === 'play' || G.mode === 'jump' || G.mode === 'entry') updatePanels(dt);

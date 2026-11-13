@@ -52,7 +52,37 @@ export const VOICE_LINES: [string, string][] = [
   ['Eine Transponderkennung', 'k25_brummer'],
   ['Kein Wort davon verlässt diesen Hangar', 'k26_hollweg'],
   ['Pilot, auf ein Wort', 'k27_krull'],
+  // Kapitel 2 (docs/voice/kapitel2.md, Aufnahmen in asset-src/voice/kapitel2/)
+  ['Seit dem Signal singt das Ferrit', 'c01_krull'],
+  ['sprich mit Vorarbeiter Kessler', 'c02_krull'],
+  ['Krull hat dich angekündigt', 'c03_kessler'],
+  ['Ich grabe seit zwanzig Jahren', 'c04_kessler'],
+  ['wie Kirchenfenster', 'c05_kessler'],
+  ['Scann alle drei mit R', 'c06_kessler'],
+  ['Drei Brocken, drei Scans', 'c07_kessler'],
+  ['Erstes Muster ist drin', 'c08_kessler'],
+  ['Krull flucht gerade', 'c09_kessler'],
+  ['Das ist keine Störung. Das ist eine Karte', 'c10_krull'],
+  ['Die Gilde zahlt das Doppelte', 'c11_krull'],
+  ['Das Schlackenfeld ist Grenzgebiet', 'c12_roth'],
+  ['Säulen aus reinem Ferrit', 'c13_krull'],
+  ['Wachdrohnen! Die bewachen das Ding', 'c14_roth'],
+  ['In der Mitte schwebt ein Kristall', 'c15_krull'],
+  ['neben der Ruine liegt noch etwas', 'c16_krull'],
+  ['Hier spricht Kapitänin Varga', 'c17_varga'],
+  ['Eine Kapsel der Weitsicht. Hier draußen', 'c18_roth'],
+  ['die Gilde behält ihn', 'c19_krull'],
+  ['das Archiv gehört der Crew, nicht der Gilde', 'c20_hollweg'],
+  ['Der Kristall ist ein Speicher', 'c21_krull'],
+  ['Er antwortet auf das Tor-Signal', 'c22_kessler'],
+  ['das war kein Gildefund', 'c23_hollweg'],
+  ['Reden wir, Ratsherr', 'c24_krull'],
+  ['Der Kristall bleibt in der Bastion', 'c25_hollweg'],
+  ['Unter Verschluss? Hollweg', 'c26_krull'],
+  ['Lieber im Schrank als bei den Ferrox', 'c27_roth'],
+  ['Ich hab die Kapsel ausgewertet', 'c28_brummer'],
+  ['Sie ist vier Monate alt', 'c29_brummer'],
 ];
 export const voiceIdFor = (text: string) => VOICE_LINES.find(([s]) => text.includes(s))?.[1] || null;
 // Über Funk gesprochen (bekommt im Spiel den Funkklang): Lotse und Frachter immer, alle anderen nur im Flug
-export const RADIO_VOICES = new Set(['BRUMMER', 'KOMPASS']);
+export const RADIO_VOICES = new Set(['BRUMMER', 'KOMPASS', 'VARGA']);

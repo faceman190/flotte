@@ -50,7 +50,22 @@ export function buildFieldFoes(sec: string) {
   for (let k = 0; k < 3; k++) { const a = R.range(0, 6.28), d = R.range(600, 2400); add(Math.cos(a) * d, Math.sin(a) * d, 40); }
   FIGHT.max = 100 + gearStat('schutz') * 2; FIGHT.hp = FIGHT.max; FIGHT.down = 0;
 }
+// Wachen an einem Ort (Geschichte): sofort wachsam; guardsLeft() zählt die noch lebenden
+let guards: Foe[] = [];
+export function addGuardDrones(x: number, z: number, n: number) {
+  guards = [];
+  const dg = danger();
+  for (let k = 0; k < n; k++) {
+    const { vis, g } = droneObj(), max = Math.round(55 * (1 + 0.3 * (dg - 1))), a = k / n * Math.PI * 2;
+    const fx = x + Math.cos(a) * 14, fz = z + Math.sin(a) * 14, fy = terrainAt(fx, fz) + 3;
+    g.position.set(fx, fy, fz); scene.add(g); world.extras.push(g);
+    const f: Foe = { x: fx, y: fy, z: fz, hx: x, hz: z, hr: 14, hp: max, max, alert: true, cool: 1 + k * 0.4, ph: a, hit: 0, atk: 0, vis, g, dead: false };
+    FIGHT.foes.push(f); guards.push(f);
+  }
+}
+export const guardsLeft = () => guards.filter(f => !f.dead).length;
 export function clearFieldFoes() {
+  guards = [];
   for (const b of FIGHT.bolts) { scene.remove(b.m); b.m.geometry.dispose(); }
   FIGHT.bolts = []; FIGHT.foes = []; FIGHT.msg = [];
 }
