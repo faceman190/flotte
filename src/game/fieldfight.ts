@@ -8,6 +8,7 @@ import { world } from './world';
 import { terrainAt } from './surface';
 import { buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
 import { weapon } from './dungeon';
+import { flinch, noteShot } from './avatar';
 import { gearStat, addItem, canAdd } from './inventory';
 import { GEAR_IDS, gearDef } from '../data/gear';
 import { SECTOR } from '../data/galaxy';
@@ -79,7 +80,7 @@ function los(ax: number, ay: number, az: number, bx: number, by: number, bz: num
 
 function hurt(d: number) {
   if (FIGHT.down > 0) return;
-  FIGHT.hp -= d * 100 / (100 + gearStat('schutz') * 3); FIGHT.hurt = 1;
+  FIGHT.hp -= d * 100 / (100 + gearStat('schutz') * 3); FIGHT.hurt = 1; flinch();
   sfx('hull_hit' + Math.floor(Math.random() * 3), 0.5, 1.2, () => snd(120, 0.15, 'sawtooth', 0.06, -40));
   if (FIGHT.hp <= 0) { FIGHT.hp = 0; FIGHT.down = 3; say('Du bist zusammengebrochen …', '#ff6b5b'); }
 }
@@ -87,7 +88,7 @@ function hurt(d: number) {
 const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _v = new THREE.Vector3(), _w = new THREE.Vector3();
 function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, muzzle: THREE.Vector3 | null) {
   const w = weapon();
-  FIGHT.cool = w.iv; FIGHT.kick = 1; FIGHT.flash = 0.06; FIGHT.lastShot = performance.now();
+  FIGHT.cool = w.iv; FIGHT.kick = 1; FIGHT.flash = 0.06; FIGHT.lastShot = performance.now(); noteShot();
   sfx('gun', 0.32, w.snd, () => snd(900, 0.06, 'square', 0.04, -500));
   let end: THREE.Vector3 | null = null;
   for (let s = 0; s < w.n; s++) {

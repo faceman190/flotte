@@ -13,7 +13,7 @@ import { addItem, canAdd, gearStat, gearFactor } from './inventory';
 import { SECTOR } from '../data/galaxy';
 import { PLANETS, PTYPE } from '../data/planets';
 import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
-import { VIEW, STANCE, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, type Avatar, type RemoteFig } from './avatar';
+import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
 // Dungeons auf Planeten: verlassene Minen als Labyrinth.
@@ -61,7 +61,7 @@ export function syncMinePilots(list: { id: number; name: string; e: string; x: n
     if (o.e !== DUN.e.id) continue;
     seen.add(o.id);
     const f = mates.get(o.id) || newRemoteFig(); mates.set(o.id, f);
-    const ng = gearFromNet(o.g); f.gear = ng.gear; f.wid = ng.wid; f.tx = o.x; f.ty = 0; f.tz = o.z; f.yaw = o.yaw;
+    const ng = gearFromNet(o.g); f.gear = ng.gear; f.wid = ng.wid; readNetFlags(f, o.g?.[4]); f.tx = o.x; f.ty = 0; f.tz = o.z; f.yaw = o.yaw;
     driveRemote(group, f, dt);
   }
   for (const [id, f] of mates) if (!seen.has(id)) { dropRemote(f); mates.delete(id); }
@@ -713,12 +713,12 @@ function reveal() {
 function hurtPlayer(d: number) {
   if (DUN.dead) return;
   const dmg = d * 100 / (100 + gearStat('schutz') * 3);
-  DUN.hp -= dmg; DUN.hurt = 1; sfx('hull_hit' + Math.floor(Math.random() * 3), 0.5, 1.2, () => snd(120, 0.15, 'sawtooth', 0.06, -40));
+  DUN.hp -= dmg; DUN.hurt = 1; flinch(); sfx('hull_hit' + Math.floor(Math.random() * 3), 0.5, 1.2, () => snd(120, 0.15, 'sawtooth', 0.06, -40));
   if (DUN.hp <= 0) { DUN.hp = 0; DUN.dead = 2.2; say('Du bist zusammengebrochen. Der Förderkorb bringt dich nach oben.', '#ff6b5b'); }
 }
 function shoot() {
   const w = weapon();
-  DUN.cool = w.iv; DUN.kick = 1; DUN.flash = 0.06;
+  DUN.cool = w.iv; DUN.kick = 1; DUN.flash = 0.06; noteShot();
   sfx('gun', 0.32, w.snd, () => snd(900, 0.06, 'square', 0.04, -500));
   const cp = camera.getWorldPosition(_v).clone();
   let end: THREE.Vector3 | null = null;
@@ -913,7 +913,7 @@ export function updateDungeon(dt: number) {
   // eigene Figur (Außensicht): Laufen nach Richtung, Anschlag nach Schüssen, Neigung mit dem Blick
   if (me) {
     me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14) });
+    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14) });
   }
   for (const m of DUN.msg) m.life -= dt;
   DUN.msg = DUN.msg.filter(m => m.life > 0);

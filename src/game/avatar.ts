@@ -22,6 +22,25 @@ export const crouchK = () => (STANCE.crouch ? 0.45 : 1);
 export const eyeH = () => (STANCE.crouch ? 1.12 : 1.7);
 export function toggleCrouch() { STANCE.crouch = !STANCE.crouch; }
 export function toggleView() { VIEW.tp = !VIEW.tp; try { localStorage.setItem('lf_tp', VIEW.tp ? '1' : '0'); } catch (e) { /* egal */ } }
+// Ereignisse der eigenen Figur (zählen hoch): Treffer → Zucken, Schüsse → Anschlag. Gehen auch ins Netz.
+export const ACT = { hit: 0, shot: 0 };
+export function flinch() { ACT.hit++; }
+export function noteShot() { ACT.shot++; }
+// Netzfeld g[4]: drei Zeichen [geduckt 0/1][Treffer mod 10][Schüsse mod 10]
+export const netFlags = () => (STANCE.crouch ? '1' : '0') + (ACT.hit % 10) + (ACT.shot % 10);
+export interface NetAct { crouch: boolean; hit: number; fire: number; fl: string }
+export function readNetFlags(n: NetAct, s?: string | null) {
+  if (!s || s.length < 3) return;
+  n.crouch = s[0] === '1';
+  if (n.fl && s[1] !== n.fl[1]) n.hit++;
+  if (n.fl && s[2] !== n.fl[2]) n.fire = 0.25;
+  n.fl = s;
+}
+// Linke Hand am Vorderschaft: Anteil der Strecke Griff → Mündung, dann oben (−: darunter) und zur linken Seite, in Metern
+const GRIP: Record<string, [number, number, number]> = {
+  k12: [0.58, -0.045, 0.03], ig3: [0.55, -0.045, 0.03], ef2: [0.6, -0.045, 0.03], sw: [0.5, -0.045, 0.035],
+  p9: [0.05, -0.07, 0.06],                                     // Pistole: die linke Hand stützt die rechte von unten
+};
 
 const UPPER = /^(spine_02|spine_03|neck_01|head|clavicle_|upperarm_|lowerarm_|hand_|thumb_|index_|middle_|ring_|pinky_)/;
 const MAX_CAD = 2.3;                                           // höchstens so viele Schrittzyklen je Sekunde (darüber würde es hektisch)
@@ -33,12 +52,15 @@ interface Gait { L: Loco[]; speed: number }                     // Gangart: walk
 export interface Avatar {
   s: SoldierVis; ready: boolean; gaits: Gait[]; cgait: Gait | null; idle?: A; aim?: A; cidle?: A; caim?: A; jump?: A; upAim?: A; upFire?: A; death: A[]; cdeath?: A; dying: A | null; cw: number; airW: number;
   body: number; phase: number; aimW: number; fireW: number; fireT: number; aimT: number; turning: number; first: boolean;
+  hitN: number; hitT: number; hitS: number; armL: THREE.Object3D[] | null;
 }
-export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean }
+export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number }
 
 export function makeAvatar(gear: { helm?: string; anzug?: string; rucksack?: string }): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
-  return { s, ready: false, gaits: [], cgait: null, death: [], dying: null, cw: 0, airW: 0, body: 0, phase: 0, aimW: 0, fireW: 0, fireT: 0, aimT: 0, turning: 0, first: true };
+  const arm = ['upperarm_l', 'lowerarm_l', 'hand_l'].map(n => s.root.getObjectByName(n));
+  return { s, ready: false, gaits: [], cgait: null, death: [], dying: null, cw: 0, airW: 0, body: 0, phase: 0, aimW: 0, fireW: 0, fireT: 0, aimT: 0, turning: 0, first: true,
+    hitN: -1, hitT: 0, hitS: 1, armL: arm.every(Boolean) ? arm as THREE.Object3D[] : null };
 }
 // Figur im Halter halten; bei geänderter Ausrüstung (Helm, Anzug, Rucksack) neu bauen
 export function syncAvatar(holder: THREE.Object3D, a: Avatar | null, gear: { helm?: string; anzug?: string; rucksack?: string }) {
@@ -149,24 +171,71 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
     if (!d.dead && a.dying) { a.dying.stop(); a.dying = null; }
   }
   s.mixer.update(dt);
+  // Treffer: kurzes Zucken nach hinten und zur Seite (schnell hin, langsam zurück)
+  if (d.hit !== undefined && d.hit !== a.hitN) { if (a.hitN >= 0 && a.hitT < 0.2) { a.hitT = 0.5; a.hitS = Math.random() < 0.5 ? -1 : 1; } a.hitN = d.hit; }
+  a.hitT = Math.max(0, a.hitT - dt);
+  const fl = flinchK(a);
   // Oberkörper: dreht zum Blick (Rest der Körperdrehung) und neigt sich mit dem Blick; verteilt auf zwei Wirbel
+  s.g.updateMatrixWorld(true);
+  if (s.g.parent) s.g.parent.getWorldQuaternion(_gq); else _gq.identity();
   if (!d.dead && s.spine && s.spine.parent) {
-    s.g.updateMatrixWorld(true);
-    if (s.g.parent) s.g.parent.getWorldQuaternion(_gq); else _gq.identity();
-    const tw = wrap(d.yaw - a.body), right = _ax.set(Math.cos(d.yaw), 0, -Math.sin(d.yaw)).applyQuaternion(_gq), up = _up.set(0, 1, 0).applyQuaternion(_gq);
+    const tw = wrap(d.yaw - a.body) + fl * 0.22 * a.hitS, right = _ax.set(Math.cos(d.yaw), 0, -Math.sin(d.yaw)).applyQuaternion(_gq), up = _up.set(0, 1, 0).applyQuaternion(_gq);
     for (const [b, k] of [[s.spine2, 0.45], [s.spine, 0.55]] as [THREE.Object3D | null, number][]) {
       if (!b || !b.parent) continue;
       b.parent.getWorldQuaternion(_pq); b.getWorldQuaternion(_sq);
-      _r.setFromAxisAngle(up, tw * k); _t.setFromAxisAngle(right, d.pitch * 0.8 * k);
+      _r.setFromAxisAngle(up, tw * k); _t.setFromAxisAngle(right, (d.pitch * 0.8 + fl * 0.3) * k);
       b.quaternion.copy(_pq.invert().multiply(_t.multiply(_r).multiply(_sq)));
       b.updateMatrixWorld(true);
     }
   }
+  if (!d.dead && a.ready) gripWeapon(a, d);
+}
+
+// Stärke des Treffer-Zuckens 0..1 (schnell hin, langsam zurück)
+const flinchK = (a: Avatar) => { if (a.hitT <= 0) return 0; const u = 1 - a.hitT / 0.5; return u < 0.2 ? u / 0.2 : (1 - u) / 0.8; };
+// Waffe im Anschlag auf die Blickrichtung drehen (am rechten Handgelenk) und die linke Hand an den Vorderschaft legen
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _v4 = new THREE.Vector3(), _v5 = new THREE.Vector3(), _v6 = new THREE.Vector3(), _v7 = new THREE.Vector3();
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _qh = new THREE.Quaternion();
+function rotW(b: THREE.Object3D, q: THREE.Quaternion) {            // Knochen um q drehen (Drehung in Weltachsen)
+  b.parent!.getWorldQuaternion(_pq); b.getWorldQuaternion(_sq);
+  b.quaternion.copy(_pq.invert().multiply(_t.copy(q).multiply(_sq))); b.updateMatrixWorld(true);
+}
+function gripWeapon(a: Avatar, d: Drive) {
+  const s = a.s, w = s.weapon, hand = s.hand;
+  if (!w || !hand || !hand.parent) return;
+  // 1) Anschlag: Laufrichtung der Waffe (−z) auf den Blick
+  const k = a.aimW * (1 - a.airW);
+  if (k > 0.01) {
+    w.getWorldQuaternion(_q1);
+    const pp = d.pitch + flinchK(a) * 0.35, cur = _v1.set(0, 0, -1).applyQuaternion(_q1), cp = Math.cos(pp);
+    const want = _v2.set(-Math.sin(d.yaw) * cp, Math.sin(pp), -Math.cos(d.yaw) * cp).applyQuaternion(_gq);
+    _q2.setFromUnitVectors(cur, want); _q1.identity().slerp(_q2, k);
+    rotW(hand, _q1);
+  }
+  // 2) Linke Hand: Zwei-Knochen-IK (Oberarm, Unterarm), Ellbogen bleibt auf seiner Seite, die Hand behält ihre Drehung
+  if (!a.armL) return;
+  const [ua, la, hd] = a.armL, g = GRIP[s.wid] || GRIP.k12;
+  w.getWorldQuaternion(_q1);
+  const hp = hand.getWorldPosition(_v1), mz = w.localToWorld(_v2.copy(s.muzzle));
+  const fwd = _v3.set(0, 0, -1).applyQuaternion(_q1), L = _v4.copy(mz).sub(hp).dot(fwd);
+  const T = _v5.copy(hp).addScaledVector(fwd, L * g[0]).addScaledVector(_v4.set(0, 1, 0).applyQuaternion(_q1), g[1]).addScaledVector(_v6.set(1, 0, 0).applyQuaternion(_q1), g[2]);
+  const S = ua.getWorldPosition(_v1), E = la.getWorldPosition(_v2), H = hd.getWorldPosition(_v3); hd.getWorldQuaternion(_qh);
+  T.lerp(H, a.airW * 0.6);
+  const l1 = S.distanceTo(E), l2 = E.distanceTo(H), u = _v4.copy(T).sub(S); let dl = u.length(); if (dl < 1e-4) return;
+  u.divideScalar(dl); dl = clamp(dl, Math.abs(l1 - l2) + 0.01, l1 + l2 - 0.003);
+  const pe = _v6.copy(E).sub(S); pe.addScaledVector(u, -pe.dot(u)); if (pe.lengthSq() < 1e-8) pe.set(0, -1, 0); pe.normalize();
+  const ca = clamp((l1 * l1 + dl * dl - l2 * l2) / (2 * l1 * dl), -1, 1), sa = Math.sqrt(1 - ca * ca);
+  const E2 = _v7.copy(S).addScaledVector(u, l1 * ca).addScaledVector(pe, l1 * sa);
+  _q2.setFromUnitVectors(E.sub(S).normalize(), E2.sub(S).normalize()); rotW(ua, _q2);
+  la.getWorldPosition(_v2); hd.getWorldPosition(_v3);
+  const T2 = _v5.copy(S).addScaledVector(u, dl);
+  _q2.setFromUnitVectors(_v3.sub(_v2).normalize(), T2.sub(_v2).normalize()); rotW(la, _q2);
+  hd.parent!.getWorldQuaternion(_pq); hd.quaternion.copy(_pq.invert().multiply(_qh)); hd.updateMatrixWorld(true);
 }
 
 // Mitspieler als Figur: Zielwerte (aus dem Netz) weich nachführen, Tempo aus der Bewegung, gleiche Clips wie die eigene Figur
-export interface RemoteFig { av: Avatar | null; x: number; y: number; z: number; tx: number; ty: number; tz: number; yaw: number; vx: number; vz: number; gear: { helm?: string; anzug?: string; rucksack?: string }; wid: string; init: boolean }
-export const newRemoteFig = (): RemoteFig => ({ av: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, vx: 0, vz: 0, gear: {}, wid: 'k12', init: false });
+export interface RemoteFig extends NetAct { av: Avatar | null; x: number; y: number; z: number; tx: number; ty: number; tz: number; yaw: number; vx: number; vz: number; gear: { helm?: string; anzug?: string; rucksack?: string }; wid: string; init: boolean }
+export const newRemoteFig = (): RemoteFig => ({ av: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, vx: 0, vz: 0, gear: {}, wid: 'k12', init: false, crouch: false, hit: 0, fire: 0, fl: '' });
 export function gearFromNet(g: string[] | null | undefined) { return { gear: { helm: g?.[0] || undefined, anzug: g?.[1] || undefined, rucksack: g?.[2] || undefined }, wid: g?.[3] || 'k12' }; }
 export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {
   f.av = syncAvatar(holder, f.av, f.gear);
@@ -176,7 +245,8 @@ export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {
   f.x += (f.tx - f.x) * k; f.y += (f.ty - f.y) * k; f.z += (f.tz - f.z) * k;
   const ivx = (f.x - ox) / Math.max(dt, 1e-3), ivz = (f.z - oz) / Math.max(dt, 1e-3), kv = Math.min(1, dt * 6);
   f.vx += (ivx - f.vx) * kv; f.vz += (ivz - f.vz) * kv;
-  driveAvatar(f.av, dt, { x: f.x, y: f.y, z: f.z, yaw: f.yaw, pitch: 0, vx: Math.abs(f.vx) < 0.05 ? 0 : f.vx, vz: Math.abs(f.vz) < 0.05 ? 0 : f.vz, wid: f.wid });
+  f.fire -= dt;
+  driveAvatar(f.av, dt, { x: f.x, y: f.y, z: f.z, yaw: f.yaw, pitch: 0, vx: Math.abs(f.vx) < 0.05 ? 0 : f.vx, vz: Math.abs(f.vz) < 0.05 ? 0 : f.vz, wid: f.wid, crouch: f.crouch, hit: f.hit, fire: f.fire > 0 });
 }
 export function dropRemote(f: RemoteFig) { if (f.av) f.av.s.g.removeFromParent(); f.av = null; f.init = false; }
 

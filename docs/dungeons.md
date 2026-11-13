@@ -133,8 +133,16 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
   Über die Rampe aus dem Schiff steht man zu Fuß hinter dem Schiff. [E] am Schiff = an Bord, an einem Stolleneingang = Mine betreten
   (danach steht man wieder am Eingang). Gelände folgt dem Boden, zu steile Hänge, Wasser/Lava, Lagerstätten, Schiff, Rover und Bäume halten auf.
 - **Tempo zu Fuß:** Station/Hangar/Schiff gehen 6 m/s, rennen 6,8 m/s (Alpha 0.83, vorher 10; passt zum Sprint-Clip); Mine und Planet 4,2 / 6,4 m/s.
-- **Noch offen:**
-  Nachladen, Treffer, Springen als Clip; Hände an der Waffe korrigieren (linke Hand per IK an den Handschutz).
+- **Feinschliff der Figur (Alpha 0.89, `avatar.ts` → `gripWeapon`):**
+  - **Anschlag:** Im Zielclip zeigte das Gewehr gut 30° nach oben. Im Anschlag dreht das Spiel die rechte Hand jetzt so, dass der Lauf genau in Blickrichtung zeigt
+    (gewichtet mit dem Anschlag, im Stand ohne Kampf bleibt die Haltung aus dem Clip).
+  - **Linke Hand per IK:** Zwei-Knochen-IK (Oberarm, Unterarm) legt das linke Handgelenk an den Vorderschaft; der Ellbogen bleibt auf seiner Seite, die Hand behält
+    ihre Drehung aus dem Clip. Griffpunkte je Waffe in `GRIP` (Anteil Griff → Mündung, darunter, zur Seite); bei der Pistole stützt die linke Hand die rechte von unten.
+    Im Sprung lockert sich der Griff etwas.
+  - **Treffer:** Jeder Treffer (Mine, Planet) zuckt den Oberkörper kurz nach hinten und zur Seite (0,5 s, schnell hin, langsam zurück), der Lauf geht mit hoch.
+  - **Mitspieler:** `g[4]` überträgt drei Zeichen: geduckt (0/1), Trefferzähler und Schusszähler (je mod 10). Andere sehen einen Piloten also geduckt,
+    zucken und nach Schüssen im Anschlag – in Station, Mine und auf dem Planeten. Der Server lässt das fünfte Feld durch.
+- **Noch offen:** Nachladen (braucht einen Mixamo-Clip), Blickneigung der Mitspieler, Finger exakt um den Schaft.
 
 ## Planeten zu Fuß: Basen und Bergung (Alpha 0.84)
 - **Basen ohne Hangar:** Auf Planeten fliegt man nicht mehr in die Basis. [E] am Andockpunkt landet das Schiff auf dem Landefeld (`src/game/basewalk.ts`: Feld per Strahltests vermessen),

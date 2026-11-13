@@ -24,7 +24,7 @@ import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom, interiorEnv } 
 import { stationTemplate } from '../models/stationModels';
 import { applyKit, kitMeta } from '../models/kit';
 import { HANGAR_BLOCKS } from '../data/hangarBlocks';
-import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
+import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, type Avatar, type NetAct } from './avatar';
 import { viewModelId } from './mineArt';
 
 // =====================================================================================
@@ -1118,7 +1118,7 @@ document.addEventListener('pointerlockchange', () => {
 // Sie stehen im Stationsraum (auch wenn man selbst gerade im eigenen Schiff ist: dann sieht man sie durch die Kanzel).
 // Positionen kommen vom Netzcode in Raum-Koordinaten (x, z, Blickrichtung) und werden weich nachgeführt.
 // =====================================================================================
-interface Other { p: Person | null; av: Avatar | null; x: number; z: number; ry: number; tx: number; tz: number; tyaw: number; name: string; speed: number; vx: number; vz: number; gear: { helm?: string; anzug?: string; rucksack?: string }; wid: string }
+interface Other extends NetAct { p: Person | null; av: Avatar | null; x: number; z: number; ry: number; tx: number; tz: number; tyaw: number; name: string; speed: number; vx: number; vz: number; gear: { helm?: string; anzug?: string; rucksack?: string }; wid: string }
 const others = new Map<number, Other>();
 export function syncOtherPilots(list: { id: number; name: string; st: string; x: number; z: number; yaw: number; g?: string[] | null }[]) {
   if (!IN.active || !IN.station || !stationGroup) { if (others.size) clearOthers(); return; }
@@ -1133,10 +1133,10 @@ export function syncOtherPilots(list: { id: number; name: string; st: string; x:
       const av = syncAvatar(stationGroup, null, gear);
       const p = av ? null : buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, PAL[kind].accent, 'walk');
       if (p) { p.g.position.set(o.x, 0, o.z); p.g.rotation.y = o.yaw + Math.PI; stationGroup.add(p.g); }
-      r = { p, av, x: o.x, z: o.z, ry: o.yaw + Math.PI, tx: o.x, tz: o.z, tyaw: o.yaw, name: o.name, speed: 0, vx: 0, vz: 0, gear, wid };
+      r = { p, av, x: o.x, z: o.z, ry: o.yaw + Math.PI, tx: o.x, tz: o.z, tyaw: o.yaw, name: o.name, speed: 0, vx: 0, vz: 0, gear, wid, crouch: false, hit: 0, fire: 0, fl: '' };
       others.set(o.id, r);
     }
-    r.tx = o.x; r.tz = o.z; r.tyaw = o.yaw; r.name = o.name; r.wid = wid;
+    r.tx = o.x; r.tz = o.z; r.tyaw = o.yaw; r.name = o.name; r.wid = wid; readNetFlags(r, o.g?.[4]);
     if (r.av) { r.gear = gear; r.av = syncAvatar(stationGroup, r.av, gear); }
   }
   for (const id of [...others.keys()]) if (!seen.has(id)) removeOther(id);
@@ -1158,7 +1158,8 @@ function updateOthers(dt: number) {
     r.vx += (ivx - r.vx) * Math.min(1, dt * 6); r.vz += (ivz - r.vz) * Math.min(1, dt * 6);
     if (r.av) {
       // Laufrichtung relativ zur Blickrichtung des Piloten ergibt die Richtungsclips (vor, seitlich, zurück)
-      driveAvatar(r.av, dt, { x: r.x, y: 0, z: r.z, yaw: r.tyaw, pitch: 0, vx: Math.abs(r.vx) < 0.05 ? 0 : r.vx, vz: Math.abs(r.vz) < 0.05 ? 0 : r.vz, wid: r.wid });
+      r.fire -= dt;
+      driveAvatar(r.av, dt, { x: r.x, y: 0, z: r.z, yaw: r.tyaw, pitch: 0, vx: Math.abs(r.vx) < 0.05 ? 0 : r.vx, vz: Math.abs(r.vz) < 0.05 ? 0 : r.vz, wid: r.wid, crouch: r.crouch, hit: r.hit, fire: r.fire > 0 });
       continue;
     }
     if (!r.p) continue;

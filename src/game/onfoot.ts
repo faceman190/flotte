@@ -10,7 +10,7 @@ import { updateFlora, treeNear } from './flora';
 import { gearFactor } from './inventory';
 import { radio } from '../ui/radio';
 import { nearEntrance } from './dungeon';
-import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
+import { VIEW, STANCE, ACT, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
 import { viewModelId } from './mineArt';
 import { basePad, padGround, baseBlocked, nearDoor, surfaceAt, wallBetween } from './basewalk';
 import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
@@ -155,7 +155,7 @@ export function updateFoot(dt: number) {
   if (VIEW.tp) me = syncAvatar(scene, me, P.gear || {});
   if (me) {
     me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert) });
+    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert) });
   }
   // Kampf: Schießen (Klick), Drohnen, Geschosse; in der Außensicht kommt der Leuchtstrich aus der Mündung der Figur
   const mz = VIEW.tp && me?.s.weapon ? me.s.weapon.localToWorld(new THREE.Vector3().copy(me.s.muzzle)) : null;
