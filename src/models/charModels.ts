@@ -8,12 +8,12 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 interface Tpl { scene: THREE.Group; clips: THREE.AnimationClip[]; scale: number; footY: number }
 const TPL: Record<string, Tpl> = {};
-const HEIGHT: Record<string, number> = { worker: 1.8, merchant: 1.7, achterberg: 1.72, mechaniker: 1.78, lagerarbeiter: 1.86, hollweg: 1.86, roth: 1.72, tamm: 1.7 };
+const HEIGHT: Record<string, number> = { worker: 1.8, merchant: 1.7, achterberg: 1.72, mechaniker: 1.78, lagerarbeiter: 1.86, hollweg: 1.86, roth: 1.72, tamm: 1.7, kessler: 1.8, brandt: 1.76 };
 // Figuren aus Blender (asset-src/neu/figuren/Figuren.blend) tragen das Skelett des Händlers in derselben Grundhaltung:
 // Sie nutzen dessen Bewegungen (Stehen, Gehen, Anlaufen, Abbremsen, Sprechen), solange es keine eigenen gibt.
-// Achterberg, Hollweg, Roth und Tamm kommen von Tripo (Mixamo-Aufbau mit Fingerknochen, in Blender auf die Knochennamen und die Grundhaltung
+// Achterberg, Hollweg, Roth, Tamm, Kessler und Brandt kommen von Tripo (Mixamo-Aufbau mit Fingerknochen, in Blender auf die Knochennamen und die Grundhaltung
 // des Händlers gebracht, siehe docs/assets.md). Die Fingerknochen sind dabei, werden aber von keinem Clip bewegt.
-const RIG_OF: Record<string, string> = { achterberg: 'merchant', mechaniker: 'merchant', lagerarbeiter: 'merchant', hollweg: 'merchant', roth: 'merchant', tamm: 'merchant' };
+const RIG_OF: Record<string, string> = { achterberg: 'merchant', mechaniker: 'merchant', lagerarbeiter: 'merchant', hollweg: 'merchant', roth: 'merchant', tamm: 'merchant', kessler: 'merchant', brandt: 'merchant' };
 const clipKey = (name: string, kind: string) => (EXTRA[name + '_' + kind] || !RIG_OF[name] ? name : RIG_OF[name]) + '_' + kind;
 // Zusätzliche Bewegungen aus FBX-Dateien (scripts/fbx-anim.mjs → asset-src/data/anim_<figur>_<art>.json), z. B. merchant_idle.
 // Sie sind auf das Skelett genau dieser Figur umgerechnet und ersetzen deren eingebaute Bewegung.

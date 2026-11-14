@@ -364,8 +364,8 @@ function updateBrandt(dt: number) {
   if (brandt && brandt.at !== CITY.st.mesh) { brandt.c.g.removeFromParent(); brandt = null; }
   if (!brandt) {
     const l = brandtLocal(); if (!l) return;
-    const kind = hasChar('lagerarbeiter') ? 'lagerarbeiter' : hasChar('worker') ? 'worker' : ''; if (!kind) return;
-    const c = charInstance(kind, [0.85, 0.72, 0.78]); animInit(c.anim, false);
+    const kind = hasChar('brandt') ? 'brandt' : hasChar('lagerarbeiter') ? 'lagerarbeiter' : hasChar('worker') ? 'worker' : ''; if (!kind) return;   // eigene Figur, sonst Ersatz mit Farbton
+    const c = charInstance(kind, kind === 'brandt' ? 1 : [0.85, 0.72, 0.78]); animInit(c.anim, false);
     c.g.position.set(l[0], 0.18, l[1]); c.g.rotation.y = l[0] > 0 ? -Math.PI / 2 : Math.PI / 2; CITY.st.mesh.add(c.g);      // hinter dem Tresen, Blick zum Platz
     const lc = probeLit(c.g); lc.setRGB(0.9, 0.75, 0.6);            // steht im Licht der Garküche
     brandt = { c, lc, at: CITY.st.mesh };

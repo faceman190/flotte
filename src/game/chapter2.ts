@@ -95,7 +95,7 @@ const STEPS: Step[] = [
           ['KESSLER', 'Drei Brocken draußen im Feld leuchten im Scanner wie Kirchenfenster. Das Muster ändert sich, wenn man hinsieht.'],
           ['KESSLER', 'Scann alle drei mit R. Ich schick die Daten an die Gilde. Und Pilot: Die Brocken ziehen Ferrox an.']);
         saveGame();
-      }, '#ffb347', hangarSpot(-7), { model: 'mechaniker', tint: [0.95, 0.85, 0.7] });
+      }, '#ffb347', hangarSpot(-7), { model: 'kessler' });
     },
     lines: () => {
       if (!c2().kessler && !(IN.active && docked('splittermine'))) return [inSpace(SEC) ? ['An der <b>Splitter-Mine</b> andocken · E', false, false] : lineSpace(SEC, 'Splittergürtel')];
@@ -207,7 +207,7 @@ const STEPS: Step[] = [
       if (S.met || S.scene || !settled() || IN.ship || !docked(gilde ? 'splittermine' : 'bastion')) return;
       const { x: hx, z: hz } = hangarSpot(-4), say = 'Den Archivkristall übergeben';
       const go = () => { if (S.scene) return; S.scene = true; IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0; archiv(gilde); };
-      if (gilde) { S.met = storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx, z: hz }, { model: 'merchant', tint: [1.05, 0.95, 0.8] }); storyNpc('Kessler', 'Splitter-Mine', say, go, '#ffb347', { x: hx + 2.4, z: hz + 1 }, { model: 'mechaniker', tint: [0.95, 0.85, 0.7] }); }
+      if (gilde) { S.met = storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx, z: hz }, { model: 'merchant', tint: [1.05, 0.95, 0.8] }); storyNpc('Kessler', 'Splitter-Mine', say, go, '#ffb347', { x: hx + 2.4, z: hz + 1 }, { model: 'kessler' }); }
       else { S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'hollweg' }); storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'roth' }); }
     },
     lines: () => {
