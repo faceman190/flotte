@@ -13,17 +13,26 @@ Stand: 2026-11-14, Alpha 1.10. Zwei neue Figuren stehen im Hangar der Bastion: *
 - Ein Blatt mit drei Ansichten derselben Figur: von vorn, von links, von hinten. Strenge T-Haltung, Arme waagerecht, Finger gespreizt, Füße schulterbreit.
 - Ganze Figur von Kopf bis Fuß, neutraler hellgrauer Hintergrund, gleichmäßiges Licht ohne harte Schatten.
 - Realistisch, keine Comic- oder Spielzeugoptik. Abgetragene, glaubwürdige Arbeitskleidung einer Raumflotte; keine leuchtenden Teile, keine Waffen, nichts in den Händen, keine Kopfbedeckung.
-- Keine Schrift und keine Abzeichen mit lesbarem Text.
+- Abzeichen, Rangstreifen und Aufnäher sind erwünscht, aber ohne lesbare Schrift (Tripo verzerrt Buchstaben).
 
 ## Kapitän Varga
 
-Mann, Mitte fünfzig, mittelgroß (1,80 m), aufrecht. Kurzes graues Haar, gestutzter grauer Bart, müde, freundliche Augen. Er kommandiert ein Kolonieschiff und war bis vor Kurzem im Kälteschlaf: blass, eingefallene Wangen.
+**Zweite Fassung (14.11.2026).** Die erste sah Hollweg zu ähnlich (graues kurzes Haar, dunkelblaue Uniform). Jetzt bewusst anders: Hollweg ist groß, schlank, grauhaarig, glatt rasiert und trägt Dunkelblau. Varga ist kleiner und kräftig, hat dunkles Haar und einen Schnurrbart und trägt Flaschengrün mit Kupfer.
 
-Kleidung: dunkelblaue Borduniform eines Schiffskapitäns, hochgeschlossene Jacke mit schmalem hellblauem Streifen an Kragen und Ärmeln, darunter grauer Rollkragen. Gerade Hose in derselben Farbe, schwarze Bordstiefel. Die Uniform ist alt, aber gepflegt (sie ist für ihn zehn Tage alt, der Schnitt ist seit 38 Jahren aus der Mode).
+Mann, Anfang fünfzig, 1,76 m, breite Schultern, kräftig gebaut. Schwarzes, nach hinten gekämmtes Haar mit grauen Schläfen, dichter dunkler Schnurrbart, sonst glatt rasiert. Olivfarbene Haut, vom Kälteschlaf etwas fahl, kräftige Augenbrauen, ruhiger, warmer Blick.
+
+Kleidung: zweireihige Expeditionsjacke in dunklem Flaschengrün, hüftlang, mit zwei Reihen Kupferknöpfen und offenem Stehkragen; darunter ein cremefarbener Rollkragen. Abzeichen (ohne lesbare Schrift):
+- Schulterklappen mit vier schmalen Kupferbalken (Kapitän),
+- vier Kupferringe an jedem Ärmelende,
+- am linken Oberarm das runde Abzeichen der Expedition: ein Stern über einem offenen Bogen (das Tor), kupfern auf Dunkelgrün,
+- über der linken Brusttasche eine kurze Reihe farbiger Ordensbänder, darunter ein kleines Flügelabzeichen aus Metall,
+- breiter brauner Ledergürtel mit schlichter Messingschnalle, am linken Handgelenk ein Chronometer mit Lederband.
+
+Gerade Hose im selben Grün ohne Seitenstreifen, braune Lederstiefel bis unter das Knie. Die Uniform ist altmodisch geschnitten und gepflegt, an Ellbogen und Manschetten leicht abgetragen.
 
 **Vorgabe auf Englisch:**
 
-> Character turnaround sheet, three views of the same man: front view, left side view, back view. Strict T-pose, arms horizontal, fingers spread, feet shoulder width apart. Full body from head to boots. Man in his mid fifties, 1.80 m, upright posture, short grey hair, trimmed grey beard, tired kind eyes, pale skin, slightly hollow cheeks. Dark navy ship captain uniform: high-collared jacket with a thin light blue stripe on collar and cuffs, grey turtleneck underneath, straight navy trousers, black deck boots. Old-fashioned but well-kept uniform. Realistic, photographic, hard-surface science fiction, no cartoon style, no toy look. No hat, no weapon, empty hands, no glowing parts, no text or readable insignia. Neutral light grey background, even studio lighting, no hard shadows.
+> Character turnaround sheet, three views of the same man: front view, left side view, back view. Strict T-pose, arms horizontal, fingers spread, feet shoulder width apart. Full body from head to boots. Man in his early fifties, 1.76 m, stocky, broad shoulders. Black hair combed back with grey temples, thick dark moustache, otherwise clean shaven, olive skin slightly pale, strong eyebrows, calm warm eyes. Dark bottle green double-breasted expedition captain jacket, hip length, two rows of copper buttons, open stand-up collar, cream turtleneck underneath. Shoulder boards with four thin copper bars, four copper rings on each cuff, round expedition patch on the left upper arm showing a star above an open arch in copper on dark green, a short row of coloured medal ribbons and a small metal wing badge above the left chest pocket. Wide brown leather belt with a plain brass buckle, leather-strap chronometer on the left wrist. Straight trousers in the same green without side stripes, brown leather boots reaching below the knee. Old-fashioned, well-kept uniform, slightly worn at elbows and cuffs. Realistic, photographic, hard-surface science fiction, no cartoon style, no toy look. No hat, no weapon, empty hands, no glowing parts, no readable text or letters anywhere. Neutral light grey background, even studio lighting, no hard shadows.
 
 ## Navigator Emil Sander
 
@@ -37,4 +46,4 @@ Kleidung: graublauer Bordoverall der Navigation mit aufgekrempelten Ärmeln, dar
 
 ## Größen im Spiel
 
-Varga 1,80 m, Sander 1,84 m (trage ich beim Umrechnen ein).
+Varga 1,76 m, Sander 1,84 m (trage ich beim Umrechnen ein). Zum Vergleich: Hollweg 1,86 m.
