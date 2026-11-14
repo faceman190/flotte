@@ -35,6 +35,16 @@ function groundExtra(cache: Record<string, THREE.Texture>, uri: string | undefin
 }
 export const groundNormal = (type: string) => groundExtra(GROUNDN, window.PLANETDATA?.groundn?.[type], type);
 export const groundRough = (type: string) => groundExtra(GROUNDR, window.PLANETDATA?.groundr?.[type], type);
+// Weitere Böden eines Materialsatzes (surface.ts, GROUNDSET): Farbe und Relief des Bodenbilds eines anderen Planetentyps. Eigener Vorrat ohne
+// Verdrängung, damit der Hauptboden des Planeten nicht aus dem Speicher fällt, solange der Satz in Gebrauch ist.
+const LAYERS: Record<string, { map: THREE.Texture; nrm: THREE.Texture | null }> = {};
+export function groundLayer(type: string) {
+  if (LAYERS[type]) return LAYERS[type];
+  const uri = window.PLANETDATA?.ground[type], un = window.PLANETDATA?.groundn?.[type];
+  if (!uri) return null;
+  const mk = (u: string, srgb: boolean) => { const t = loader.load(u); t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = ANISO_G; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
+  return (LAYERS[type] = { map: mk(uri, true), nrm: un ? mk(un, false) : null });
+}
 export function groundTexture(type: string) {
   if (GROUNDS[type]) return GROUNDS[type];
   const uri = window.PLANETDATA?.ground[type];

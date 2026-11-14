@@ -3,7 +3,7 @@ import { KEEP } from './keep';
 import { scene, camera, view, ux, glowMat } from '../core/engine';
 import { texMat, std, boxUV } from '../core/textures';
 import { setSky, setSurfaceSky } from '../core/sky';
-import { groundTexture, groundNormal, groundRough } from '../core/planetVis';
+import { groundTexture, groundNormal, groundRough, groundLayer } from '../core/planetVis';
 import { setAmbience } from '../core/ambience';
 import { keys, mouse } from '../core/input';
 import { rng, hashStr, clamp, d3, rand, fmtN } from '../core/util';
@@ -147,7 +147,7 @@ export function buildSurface(sector: string) {
   geo.setAttribute('slope', new THREE.BufferAttribute(slp, 1));
   const tm = texMat(0xffffff, 'rock', { vertexColors: true, roughness: 0.95, metalness: 0.05, flatShading: false }, 1.4);
   tm.envMapIntensity = 0.25;
-  if (gTex) groundShader(tm, gTex, c1, pd.type, T.fog, liquidLevel > -1e8 ? liquidLevel : mn);
+  if (gTex) groundShader(tm, gTex, c1, pd.type, T.fog, liquidLevel > -1e8 ? liquidLevel : mn, GROUNDSET[sector]);
   const terrain = new THREE.Mesh(geo, tm);
   scene.add(terrain);
   world.extras.push(terrain);
@@ -245,6 +245,16 @@ const GROUND: Record<string, { m: number; tint: number; nrm: number }> = {
   fels: { m: 2, tint: 0.45, nrm: 1 }, wueste: { m: 1.5, tint: 0.55, nrm: 0.8 }, eis: { m: 2, tint: 0.35, nrm: 0.7 },
   vulkan: { m: 2.4, tint: 0.75, nrm: 1 }, asche: { m: 3.1, tint: 0.85, nrm: 1 }, kristall: { m: 2, tint: 0.9, nrm: 1 }, mond: { m: 2.6, tint: 0.25, nrm: 1.15 },
 };
+// Materialsatz (Probe, nur wo hier eingetragen; zurzeit nirgends): Statt eines Bodenbilds liegen drei Böden nebeneinander, die zusammenpassen:
+// feiner Grund auf flachen Stellen, das bisherige Geröll dazwischen, Schutt an den Hängen, darüber wie bisher der Fels der Steilwände.
+// Die Grenzen folgen der Hangneigung und groben Flecken; im Übergang entscheidet die Höhe im Bild (helle Steine ragen aus dem Sand).
+// tex: Bodenbild eines anderen Planetentyps (liegt schon im Spiel), m: Kachelgröße in Metern, col/tint: Zielfarbe und wie stark dorthin gefärbt wird.
+interface GroundLayer { tex: string; m: number; col: number; tint: number }
+const GROUNDSET: Record<string, { fine: GroundLayer; scree: GroundLayer }> = {
+  // Probe vom 14.11.2026 (Heimstatt II), abgeschaltet: Mit den vorhandenen Bildern (Mondstaub als Erde, dunkler Fels als Schutt) wird die Ebene
+  // nur eintönig braun und der Hang kaum anders. Der Satz braucht eigens passende Böden mit Höhenkarte (siehe docs/assets.md).
+  // heimstatt: { fine: { tex: 'asche', m: 2.2, col: 0x6a5d4c, tint: 0.8 }, scree: { tex: 'kristall', m: 3.0, col: 0x86837c, tint: 0.65 } },
+};
 // Gelände-Shader: flache Stellen mit Bodenbild, Steilhänge mit Fels.
 // Das Bodenbild wird aus drei Richtungen projiziert (von oben und von zwei Seiten, gewichtet nach der Flächenneigung), damit es an Hängen
 // nicht zu Streifen gezogen wird. Nah liegt es in echter Größe, mit der Entfernung gröber (7,3- und 41-fach); ein grobes Muster bricht die
@@ -267,8 +277,11 @@ function skyBody(sector: string) {
   const h = hashStr(sector + ':himmel'), a = (h % 628) / 100, el = 0.3 + ((h >> 4) % 30) / 100, cols = [0xe8d8b8, 0xc8d0e8, 0xe0b090, 0xb8c8b0, 0xd8b8d8];
   return { dir: [Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)] as [number, number, number], rad: 0.07 + ((h >> 8) % 60) / 1000, col: cols[h % cols.length], ring: (h >> 3) % 5 < 3 ? 1 : 0 };
 }
-function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: THREE.Color, type: string, fogCol: number, lowY: number) {
+function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: THREE.Color, type: string, fogCol: number, lowY: number, setDef?: { fine: GroundLayer; scree: GroundLayer }) {
   const gn = groundNormal(type), gr = groundRough(type), P = GROUND[type] || { m: 24, tint: 0, nrm: 0 };
+  // Materialsatz: nur wenn beide weiteren Böden samt Relief vorhanden sind
+  const lf = setDef ? groundLayer(setDef.fine.tex) : null, ls = setDef ? groundLayer(setDef.scree.tex) : null;
+  const set = setDef && lf && ls && lf.nrm && ls.nrm ? setDef : null;
   if (gn && !m.normalMap) m.normalMap = gn;          // sorgt für Relief im Shader, auch bevor das Felsrelief fertig ist
   m.onBeforeCompile = (sh) => {
     m.userData.sh = sh;                               // Uniforms zum Nachstellen im Spiel erreichbar
@@ -286,11 +299,18 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
     sh.uniforms.vegCol = { value: new THREE.Color(SL.veg ? SL.veg[0] : 0) }; sh.uniforms.vegK = { value: SL.veg ? SL.veg[1] : 0 };
     sh.uniforms.mistK = { value: SL.mist }; sh.uniforms.mistY = { value: lowY + 25 };
     sh.uniforms.bShMap = groundShade.map; sh.uniforms.bShMat = groundShade.mat; sh.uniforms.bShOn = groundShade.on; sh.uniforms.bShPx = groundShade.px;   // Gebäudeschatten (groundShade.ts)
+    if (set) {
+      sh.uniforms.gFineMap = { value: lf!.map }; sh.uniforms.gFineNrm = { value: lf!.nrm }; sh.uniforms.gScreeMap = { value: ls!.map }; sh.uniforms.gScreeNrm = { value: ls!.nrm };
+      sh.uniforms.gFineCol = { value: new THREE.Color(set.fine.col) }; sh.uniforms.gScreeCol = { value: new THREE.Color(set.scree.col) };
+      sh.uniforms.gSetP = { value: new THREE.Vector4(1 / set.fine.m, set.fine.tint, 1 / set.scree.m, set.scree.tint) };
+      sh.uniforms.gSetK = { value: 1 };      // 0 schaltet den Satz ab (Vergleich; später für eine sparsame Grafikstufe)
+    }
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float slope; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlope = slope; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz; vWNrm = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
+        ${set ? '#define GSET\n        uniform sampler2D gFineMap; uniform sampler2D gFineNrm; uniform sampler2D gScreeMap; uniform sampler2D gScreeNrm; uniform vec3 gFineCol; uniform vec3 gScreeCol; uniform vec4 gSetP; uniform float gSetK;' : ''}
         uniform sampler2D groundMap; uniform sampler2D groundNrm; uniform sampler2D groundRgh; uniform vec3 cliffCol; uniform vec3 gCol;
         uniform float gScale; uniform float gTint; uniform float gNrmK; uniform float gHasR; uniform vec3 snowCol; uniform float snowK; uniform float snowY; uniform float mistK; uniform float mistY; uniform vec3 vegCol; uniform float vegK; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;
         ${GROUND_SHADE_PARS}
@@ -324,6 +344,31 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
         float gL2 = dot(texture2D(groundMap, gP.xz / 523.0 + 0.61).rgb, vec3(0.3, 0.59, 0.11)) / gLum;
         gC *= mix(1.0, gL, 0.4) * mix(1.0, gL2, 0.3);                   // grobe Flecken in zwei Größen gegen sichtbare Wiederholung
         gC = gC / gMean * mix(gMean, gCol, gTint);                       // Farbe zur Planetenfarbe ziehen, Muster bleibt
+        #ifdef GSET
+          // Materialsatz: Anteile nach Hangneigung, von groben Flecken verschoben (x fein, y Geröll, z Schutt)
+          // feiner Grund in Flecken auf flachen Stellen, und zwar dort, wo keine Wiese liegt (die Wiese nimmt die hellen Flecken des groben Musters)
+          // vSlope ist 1 - Normale.y: 0,004 sind 5 Grad, 0,012 sind 9 Grad, 0,05 sind 18 Grad, 0,1 sind 26 Grad (die Steilwand beginnt bei 0,2 = 37 Grad)
+          float gWf = (1.0 - smoothstep(0.004, 0.014, vSlope)) * smoothstep(0.0, 0.2, (1.0 - gL2) * 1.5 + (1.0 - gL) * 0.8);
+          float gWs = smoothstep(0.045, 0.1, vSlope + (gL - 1.0) * 0.03);
+          gWf *= gSetK; gWs *= gSetK;
+          vec3 gHW = vec3(gWf, max(0.0, 1.0 - gWf - gWs), gWs);
+          float gCon = mix(1.0, 0.5, gB.x) * mix(1.0, 0.55, gB.y) * mix(0.4, 1.0, gGraz);
+          vec3 gFc = vec3(0.0), gSc = vec3(0.0); float gHf = 0.5, gHs = 0.5;
+          if (gHW.x > 0.01) {
+            vec3 mF = max(textureLod(gFineMap, vec2(0.5), 12.0).rgb, vec3(0.02)), s = mix(mF, gS(gFineMap, vWPos.xz * gSetP.x, gB), gCon);
+            gHf = 0.5 * dot(s, vec3(0.34)) / dot(mF, vec3(0.34)); gFc = s / mF * mix(mF, gFineCol, gSetP.y) * mix(1.0, gL2, 0.25);
+          }
+          if (gHW.z > 0.01) {
+            vec3 mS = max(textureLod(gScreeMap, vec2(0.5), 12.0).rgb, vec3(0.02)), s = mix(mS, gS(gScreeMap, vWPos.xz * gSetP.z, gB), gCon);
+            gHs = 0.5 * dot(s, vec3(0.34)) / dot(mS, vec3(0.34)); gSc = s / mS * mix(mS, gScreeCol, gSetP.w) * mix(1.0, gL, 0.3);
+          }
+          // Höhenmischung: Der Anteil hebt einen Boden an, im Übergang gewinnt, was im Bild höher liegt (scharfe, natürliche Ränder statt Überblendung)
+          float gHb = 0.5 * dot(gC, vec3(0.34)) / max(dot(mix(gMean, gCol, gTint), vec3(0.34)), 0.02);
+          vec3 gHH = vec3(gHf, gHb, gHs) + gHW * 1.6;
+          vec3 gMix = max(gHH - (max(gHH.x, max(gHH.y, gHH.z)) - 0.22), 0.0) * step(0.01, gHW);
+          gMix /= max(gMix.x + gMix.y + gMix.z, 1e-4);
+          gC = gFc * gMix.x + gC * gMix.y + gSc * gMix.z;
+        #endif
         float sm = smoothstep(0.2, 0.4, vSlope);
         diffuseColor.rgb *= mix(gC, rockC.rgb * cliffCol * 2.4, sm);
         // Auflage in Flecken (Schnee, Sand, Asche): auf flachen Stellen, nach grobem Muster, mit der Höhe zunehmend
@@ -335,7 +380,10 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
         diffuseColor.rgb = mix(diffuseColor.rgb, snowCol * (0.5 + 0.16 * gL), sn);`)
       .replace('#include <roughnessmap_fragment>', `
         float roughnessFactor = roughness;
-        if (gHasR > 0.5) roughnessFactor = mix(mix(0.6, 1.0, gT(groundRgh, gP, gw, gB).r), roughness, sm);   // matt halten: glatte Stellen spiegelten sonst den Himmel`)
+        if (gHasR > 0.5) roughnessFactor = mix(mix(0.6, 1.0, gT(groundRgh, gP, gw, gB).r), roughness, sm);   // matt halten: glatte Stellen spiegelten sonst den Himmel
+        #ifdef GSET
+          roughnessFactor = mix(roughnessFactor, 0.93, (gMix.x + gMix.z) * (1.0 - sm));      // feiner Grund und Schutt: matt, ohne eigenes Rauheitsbild
+        #endif`)
       .replace('#include <normal_fragment_maps>', `
         #ifdef USE_NORMALMAP_TANGENTSPACE
           vec3 nRock = texture2D(normalMap, vNormalMapUv).xyz * 2.0 - 1.0; nRock.xy *= normalScale;
@@ -347,6 +395,13 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
             if (gw.y > 0.01) { q = gS(groundNrm, gP.xz, gB) * 2.0 - 1.0; q.xy *= k; acc += gw.y * normalize(tbn * q); }
             if (gw.x > 0.01) { q = gS(groundNrm, gP.zy + 0.19, gB) * 2.0 - 1.0; q.xy *= k; acc += gw.x * normalize(fX * q); }
             if (gw.z > 0.01) { q = gS(groundNrm, gP.xy + 0.53, gB) * 2.0 - 1.0; q.xy *= k; acc += gw.z * normalize(fZ * q); }
+            #ifdef GSET
+              // Relief der weiteren Böden (von oben projiziert), gewichtet wie die Farbe
+              vec3 nSet = normalize(acc) * gMix.y;
+              if (gMix.x > 0.02) { q = gS(gFineNrm, vWPos.xz * gSetP.x, gB) * 2.0 - 1.0; q.xy *= k; nSet += gMix.x * normalize(tbn * q); }
+              if (gMix.z > 0.02) { q = gS(gScreeNrm, vWPos.xz * gSetP.z, gB) * 2.0 - 1.0; q.xy *= k; nSet += gMix.z * normalize(tbn * q); }
+              if (dot(nSet, nSet) > 1e-4) acc = nSet;
+            #endif
             nView = normalize(mix(normalize(acc), nView, sm));
           }
           normal = nView;
@@ -364,7 +419,7 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
           gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
         #endif`);
   };
-  m.customProgramCacheKey = () => 'ground';
+  m.customProgramCacheKey = () => (set ? 'ground-set' : 'ground');
 }
 
 // ---------------- Anflugzone im Orbit ----------------
