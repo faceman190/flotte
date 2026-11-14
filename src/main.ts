@@ -15,6 +15,7 @@ import { initFerrox, updateSpawning, updateEnemies, updateProjectiles, updateSta
 import { initTraffic, updateTraffic, initAllies, updateAllies } from './game/npc';
 import { updateMissions } from './game/missions';
 import { playIntro, updateIntro, skipIntro, INTRO } from './game/intro';
+import { updateGroundShade } from './game/groundShade';
 import { updateStory, startPrologue, resumePrologue, skipPrologue, prologActive, sceneNext, storyHooks, noteScan } from './game/story';
 import { updateChapter1 } from './game/chapter1';
 import { preloadMeshRooms } from './game/meshRoom';
@@ -54,7 +55,7 @@ import { updateChapter2 } from './game/chapter2';
 import { updateChapter3 } from './game/chapter3';
 import { updateChapter4 } from './game/chapter4';
 import { basePad, nearDoor } from './game/basewalk';
-import { nearCrate, openCrate as openSalvage, updateSalvage, drawSalvageHUD } from './game/salvage';
+import { nearCrate, openCrate as openSalvage, updateSalvage, drawSalvageHUD, legendRumor } from './game/salvage';
 import { toggleView, toggleCrouch } from './game/avatar';
 
 loadSettings();
@@ -93,6 +94,7 @@ function enterSector(id: string, arrive: { gateFrom?: string; station?: string; 
   if (P.route === id) { P.route = null; setTimeout(() => radio('SYSTEM', 'Ziel erreicht. Route beendet.'), 1500); }
   if (first && id !== 'heimstatt') setTimeout(() => radio('SYSTEM', `Neuer Sektor erkundet: ${def.name}. Kartendaten aktualisiert.`), 2200);
   if (first && PLANETS[id]) setTimeout(() => radio('SYSTEM', `Der Planet ${PLANETS[id].name} ist landbar. Die Anflugzone ist markiert.`), 5000);
+  legendRumor(id);                                                      // Hinweis auf ein Wrack mit versiegeltem Tresor (feste Fundorte)
   if (def.faction === 'ferrox') setTimeout(() => radio('SYSTEM', 'Warnung: Ferrox-Gebiet. Keine Stationen, keine Hilfe. Ferrit-Kristalle sind hier viel wert.'), 3500);
   else if (def.danger >= 2 && first) setTimeout(() => radio(world.stations[0]?.name.toUpperCase() || 'SYSTEM', 'Willkommen im Grenzgebiet. Hier zahlen wir mehr, aber die Ferrox kommen oft vorbei.'), 3500);
 }
@@ -594,6 +596,7 @@ function loop(now: number, manual = false) {
   hook('Kapitel 4', () => updateChapter4(dt));
   hook('Stadt', () => updateCity(dt));
   hook('Basis-Effekte', () => updateBaseFx(dt));
+  hook('Geländeschatten', () => updateGroundShade(dt));
   // Stadt: durchs offene Hallentor geflogen → andocken (Landeanflug im Hangar übernimmt)
   if (G.mode === 'play' && !G.dead && CITY.st && insideCityGate(P.x, P.y, P.z)) openDock(CITY.st);
   G.eBusy = G.mode === 'play' && (!!nearDock() || !!world.surface);

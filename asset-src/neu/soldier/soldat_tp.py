@@ -187,3 +187,35 @@ def export(rels):
     data = {'weapon_in_hand': {k: [list(r) for r in v] for k, v in rels.items()}, 'heads': [o.name for o in meshes if o.name.startswith('Head')]}
     json.dump(data, open(os.path.join(ROOT, 'asset-src', 'data', 'soldat_tp.json'), 'w'))
     return {'kb': round(os.path.getsize(path) / 1024)}
+
+
+# Fernmodell für Wachen (ab Alpha 1.09): dieselbe Figur mit rund einem Viertel der Dreiecke, gleiches Skelett, keine Bewegungen.
+# Das Spiel tauscht ab 45 m die Geometrie der sichtbaren Teile (buildSoldier in src/game/mineArt.ts). Die Blender-Datei wird
+# dabei nicht verändert: Die Kopien entstehen nur für den Export und werden danach gelöscht.
+#   export_lod()       asset-src/glb/station/Soldat_lod.glb (Netze <Name>_lod)
+LOD_RATIO = {'Body': 0.22, 'Head': 0.25, 'Armor': 0.4, 'Bags': 0.2}
+def export_lod():
+    arm, meshes = rig(); sc = bpy.context.scene
+    arm.animation_data.action = None
+    for pb in arm.pose.bones: pb.matrix_basis = Matrix.Identity(4)
+    tmp, out = [], {}
+    for o in meshes:
+        ratio = next((r for k, r in LOD_RATIO.items() if o.name.startswith(k)), 0.25)
+        c = o.copy(); c.data = o.data.copy(); c.name = o.name + '_lod'
+        for col in o.users_collection: col.objects.link(c)
+        # Decimate vor dem Skelett anwenden: Gewichte und Texturlage bleiben erhalten
+        m = c.modifiers.new('lod', 'DECIMATE'); m.ratio = ratio; m.use_collapse_triangulate = True
+        while c.modifiers[0].name != 'lod':
+            with bpy.context.temp_override(**_ctx(), active_object=c, object=c): bpy.ops.object.modifier_move_up(modifier='lod')
+        with bpy.context.temp_override(**_ctx(), active_object=c, object=c, selected_objects=[c]): bpy.ops.object.modifier_apply(modifier='lod')
+        tmp.append(c); out[c.name] = sum(len(p.vertices) - 2 for p in c.data.polygons)
+    for q in sc.objects: q.select_set(False)
+    objs = [arm] + tmp
+    for o in objs: o.select_set(True)
+    path = os.path.join(ROOT, 'asset-src', 'glb', 'station', 'Soldat_lod.glb')
+    with bpy.context.temp_override(**_ctx(), active_object=arm, selected_objects=objs):
+        bpy.ops.export_scene.gltf(filepath=path, use_selection=True, export_format='GLB', export_yup=True, export_texcoords=True, export_normals=True,
+                                  export_image_format='NONE', export_materials='EXPORT', export_skins=True, export_animations=False, export_def_bones=True)
+    for c in tmp:
+        me = c.data; bpy.data.objects.remove(c, do_unlink=True); bpy.data.meshes.remove(me)
+    return {'kb': round(os.path.getsize(path) / 1024), 'tris': out, 'total': sum(out.values())}

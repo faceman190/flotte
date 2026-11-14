@@ -53,6 +53,7 @@ export interface Player {
   gear: Partial<Record<GearSlot, string>>;      // angelegte Ausrüstung
   locker: InvItem[];                            // Spind, von jeder Station aus erreichbar
   shipGear: Partial<Record<ShipSlot, string>>;  // Module des aktiven Schiffs
+  legends?: string[];                                       // gefundene legendäre Stücke (feste Fundorte, src/game/salvage.ts): jedes gibt es je Spielstand einmal
   salvage?: Record<string, { t: number; open: number[] }>;   // je Planet: Zeitpunkt, geöffnete Kisten (Wracks und Versorgungskisten, src/game/salvage.ts)
   dungeons?: Record<string, { t: number; open: number[]; sw?: boolean; sws?: number[] }>;   // je Mine: Zeitpunkt des letzten frischen Besuchs, geöffnete Kisten, Schalter
 }

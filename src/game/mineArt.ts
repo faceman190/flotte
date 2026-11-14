@@ -175,7 +175,7 @@ export function buildViewModel(id = 'k12'): ViewModel | null {
 // ---------- Spielerfigur in der Außensicht (Soldat.glb aus asset-src/neu/soldier/soldat_tp.py) ----------
 // Ausrüstung bestimmt das Aussehen: Helm → einer der 8 Köpfe, Anzug → Rüstungsplatten und Uniformfarbe, Rucksack → Taschen.
 // Die Waffe hängt an der rechten Hand; ihre Lage dort steht in data/soldat_tp.json (aus der Gewehrhaltung in Blender).
-export interface SoldierVis { g: THREE.Group; root: THREE.Object3D; mixer: THREE.AnimationMixer; clips: THREE.AnimationClip[]; hand: THREE.Object3D | null; spine: THREE.Object3D | null; spine2: THREE.Object3D | null; weapon: THREE.Object3D | null; muzzle: THREE.Vector3; wid: string; gearKey: string }
+export interface SoldierVis { g: THREE.Group; root: THREE.Object3D; mixer: THREE.AnimationMixer; clips: THREE.AnimationClip[]; hand: THREE.Object3D | null; spine: THREE.Object3D | null; spine2: THREE.Object3D | null; weapon: THREE.Object3D | null; muzzle: THREE.Vector3; wid: string; gearKey: string; lod?: (far: boolean) => void }
 // Clipdaten aus Blender (soldat_anim.py): Laufclips mit Tempo (m/s), Richtung [vor, rechts], Schrittlänge je Zyklus und Phase (linker Fuß setzt auf)
 export interface ClipMeta { frames: number; loop: boolean; speed?: number; dir?: [number, number]; stride?: number; phase?: number }
 let TP: { weapon_in_hand: Record<string, number[][]>; clips?: Record<string, ClipMeta> } | null = null, tpLoading = false;
@@ -189,6 +189,19 @@ function loadTP() {
 const hashS = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
 const C = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1);         // Blender (z oben) → glTF (y oben)
 const CI = C.clone().invert();
+// Fernmodell (Soldat_lod.glb aus soldat_tp.py, export_lod): dieselben Netze mit rund einem Viertel der Dreiecke am selben Skelett.
+// Je Netz die einfache Geometrie; nur wenn die Knochenliste genau der des vollen Modells entspricht (sonst säßen die Gewichte am falschen Knochen).
+let LODGEO: Record<string, THREE.BufferGeometry> | null = null;
+function lodGeo(): Record<string, THREE.BufferGeometry> {
+  if (LODGEO) return LODGEO;
+  const hi = stationTemplate('Soldat'), lo = stationTemplate('Soldat_lod');
+  if (!hi || !lo) return {};                                  // noch nicht geladen: später erneut versuchen
+  const bones = (t: THREE.Object3D) => { let s = ''; t.traverse((o: any) => { if (!s && o.isSkinnedMesh) s = o.skeleton.bones.map((b: THREE.Bone) => b.name).join(','); }); return s; };
+  LODGEO = {};
+  if (bones(hi) && bones(hi) === bones(lo)) lo.traverse((o: any) => { if (o.isSkinnedMesh) LODGEO![o.name.replace(/_lod$/, '')] = o.geometry; });
+  else console.warn('Fernmodell des Soldaten passt nicht zum Skelett, es bleibt beim vollen Modell');
+  return LODGEO;
+}
 export function buildSoldier(gear: { helm?: string; anzug?: string; rucksack?: string; waffe?: string }): SoldierVis | null {
   loadTP();
   const t = stationTemplate('Soldat'); if (!t) return null;
@@ -214,7 +227,14 @@ export function buildSoldier(gear: { helm?: string; anzug?: string; rucksack?: s
   const g = new THREE.Group(); g.add(root);
   const mixer = new THREE.AnimationMixer(root);
   const hand = root.getObjectByName('hand_r') || null, spine = root.getObjectByName('spine_03') || null, spine2 = root.getObjectByName('spine_02') || null;
-  return { g, root, mixer, clips: stationClips('Soldat'), hand, spine, spine2, weapon: null, muzzle: new THREE.Vector3(), wid: '', gearKey: soldierGearKey(gear) };
+  // Wechsel zwischen vollem und einfachem Netz (Wachen in der Stadt ab 45 m, siehe city.ts)
+  let far = false, pairs: { o: THREE.SkinnedMesh; hi: THREE.BufferGeometry; lo: THREE.BufferGeometry }[] | null = null;
+  const lod = (f: boolean) => {
+    if (f === far) return;
+    if (!pairs) { const L = lodGeo(); if (!LODGEO) return; pairs = []; root.traverse((o: any) => { if (o.isSkinnedMesh && L[o.name]) pairs!.push({ o, hi: o.geometry, lo: L[o.name] }); }); }
+    far = f; for (const p of pairs) p.o.geometry = f ? p.lo : p.hi;
+  };
+  return { g, root, mixer, clips: stationClips('Soldat'), hand, spine, spine2, weapon: null, muzzle: new THREE.Vector3(), wid: '', gearKey: soldierGearKey(gear), lod };
 }
 // Waffe an die rechte Hand hängen (sobald die Lage aus data/soldat_tp.json geladen ist)
 export function soldierWeapon(s: SoldierVis, id: string) {

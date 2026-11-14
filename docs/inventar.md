@@ -35,7 +35,7 @@ Verbrauchsgüter wirken auf das Schiff (Hülle, Schild).
 
 ## Noch offen
 - Gegenstände sind nicht am Körper sichtbar (Ego-Ansicht, Figur fehlt).
-- Fundorte fehlen noch: Legendäre Gegenstände gibt es in keinem Laden und bisher an keinem Fundort (außer zwei Fundstücken aus Abschüssen). Geplant: Belohnungen für Aufträge, Missionen und Geschichte, Kisten auf Planeten und in Wracks, Dungeons.
+- Fundorte: Die vier besonderen legendären Stücke (Ferrox-Lanze, Orakel-Kern, Splitterwerfer, Kristallvisier) haben seit Alpha 1.09 feste Fundorte in Wracks auf vier Planeten, siehe docs/dungeons.md („Bergung“). In Läden gibt es sie weiterhin nicht.
 - Kein Handel von Gegenständen zwischen Spielern.
 - Der Server prüft Gegenstände nicht; der Spielstand wird als Ganzes gespeichert.
 

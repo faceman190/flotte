@@ -18,14 +18,30 @@ import type { ShipId } from '../data/ships';
 // =====================================================================================
 // Bergung auf Planeten (Alpha 0.84): abgestürzte Schiffe (Wracks) und Versorgungskisten in der Landschaft.
 // Fest je Planet (Zufall aus dem Sektornamen), geöffnete Kisten bleiben 60 Minuten leer (P.salvage).
-// Wracks tragen eine Tresorkiste: dort liegen auch die legendären Gegenstände, die es sonst nirgends gibt.
+// Wracks tragen eine Tresorkiste. Die vier legendären Gegenstände haben feste Fundorte (ab Alpha 1.09, LEGEND_AT):
+// je einer im versiegelten Tresor eines benannten Wracks auf einem der gefährlichen Planeten, einmal je Spielstand (P.legends).
+// Bis Alpha 1.08 lag in jeder vierten Tresorkiste irgendeines davon, beliebig oft.
 // =====================================================================================
 
 interface Crate { x: number; y: number; z: number; big: boolean; idx: number; g: THREE.Group; lid: THREE.Object3D; open: boolean; wreck: number }
-interface Wreck { x: number; z: number; r: number; name: string; g: THREE.Group; smoke: number }
+interface Wreck { x: number; z: number; r: number; name: string; g: THREE.Group; smoke: number; legend?: boolean }
 const S = { sector: '', crates: [] as Crate[], wrecks: [] as Wreck[], msg: [] as { t: string; c: string; life: number }[] };
 export const SALV = S;
 const LEGEND = ['sw_lanze', 'sy_orakel', 'waffe_splitter', 'helm_kristall'];
+// Fester Fundort je Stück: Planet (Sektor) → Stück und Name des Wracks. Das Wrack ist immer das erste des Planeten.
+export const LEGEND_AT: Record<string, { id: string; ship: string }> = {
+  nebeltor: { id: 'helm_kristall', ship: 'Wrack der Lerche' },      // Nebelfrost, Gefahr 3
+  schlacke: { id: 'waffe_splitter', ship: 'Wrack der Martha' },     // Schlacke Prime, Gefahr 3
+  aschewelt: { id: 'sy_orakel', ship: 'Wrack der Orion' },          // Aschewelt, Gefahr 4
+  ferroxkern: { id: 'sw_lanze', ship: 'Wrack der Polaris' },        // Kernkristall, Gefahr 5
+};
+// liegt das legendäre Stück dieses Planeten noch im Tresor?
+const legendHere = () => { const L = LEGEND_AT[S.sector]; return L && !(P.legends || []).includes(L.id) ? L : null; };
+// Hinweis im All: beim Eintritt in den Sektor, solange das Stück nicht gefunden ist
+export function legendRumor(sector: string) {
+  const L = LEGEND_AT[sector]; if (!L || (P.legends || []).includes(L.id)) return;
+  setTimeout(() => { if (P.sector === sector) radio('SYSTEM', `Bergungsfunk: Auf dem Planeten liegt das ${L.ship}. Der Tresor an Bord wurde nie geöffnet.`); }, 8000);
+}
 const TIERC = ['#aab4c0', '#5fd0ff', '#c070ff', '#ffb347'];
 const WRECKS: { cls: ShipId; n: string }[] = [{ cls: 'falke', n: 'Wrack eines Falken' }, { cls: 'elster', n: 'Wrack einer Elster' }, { cls: 'kaerrner', n: 'Wrack eines Kärrners' }, { cls: 'habicht', n: 'Wrack eines Habichts' }, { cls: 'maulwurf', n: 'Wrack eines Maulwurfs' }];
 
@@ -87,7 +103,8 @@ export function buildSalvage(sector: string) {
     const y = terrainAt(p[0], p[1]);
     g.position.set(p[0], y - size.y * 0.18, p[1]); g.rotation.set(R.range(-0.25, 0.25), R.range(0, 6.28), R.range(0.35, 0.85) * (R.next() < 0.5 ? -1 : 1));
     scene.add(g); world.extras.push(g);
-    S.wrecks.push({ x: p[0], z: p[1], r: r * 0.75, name: def.n, g, smoke: R.next() * 3 });
+    const fix = w === 0 ? LEGEND_AT[sector] : undefined;                // das erste Wrack trägt auf vier Planeten einen versiegelten Tresor
+    S.wrecks.push({ x: p[0], z: p[1], r: r * 0.75, name: fix ? fix.ship : def.n, g, smoke: R.next() * 3, legend: !!fix });
     const a = R.range(0, Math.PI * 2);
     addCrate(p[0] + Math.cos(a) * (r * 0.8 + 3), p[1] + Math.sin(a) * (r * 0.8 + 3), true, w);
     for (let k = 0; k < 2; k++) { const b = a + R.range(0.8, 2.4) * (k ? 1 : -1); addCrate(p[0] + Math.cos(b) * (r * 0.9 + R.range(3, 8)), p[1] + Math.sin(b) * (r * 0.9 + R.range(3, 8)), false, w); }
@@ -116,16 +133,17 @@ export function nearCrate(x: number, z: number) {
 export function openCrate(c: Crate, shared = false) {
   if (c.open) return;
   const st = state(), R = rng(hashStr(S.sector + ':' + c.idx + ':' + st.t)), wreck = c.wreck >= 0;
-  // Tresorkiste im Wrack: jede vierte etwa enthält ein legendäres Stück, sonst Stufe 2–3
-  const legend = c.big && wreck && R.next() < 0.25;
-  const id = lootId(R.next, c.big ? 3 : 1, legend), d = gearDef(id)!;
+  // Tresorkiste im benannten Wrack: das legendäre Stück dieses Planeten, solange es nicht gefunden ist; sonst Stufe 2–3
+  const fix = c.big && c.wreck === 0 && S.wrecks[0]?.legend ? legendHere() : null, legend = !!fix;
+  R.next();                                                             // (früher die Losziehung fürs Legendäre: Die Folge der übrigen Funde bleibt gleich)
+  const id = fix ? fix.id : lootId(R.next, c.big ? 3 : 1, false), d = gearDef(id)!;
   if (!canAdd(id) && !shared) { say('Rucksack voll. Die Kiste bleibt zu.', '#ff6b5b'); snd(180, 0.2, 'square', 0.04, -60); return; }
   if (!canAdd(id)) say('Ein Mitspieler hat eine Kiste geöffnet – dein Rucksack ist voll, dein Anteil verfällt.', '#ff6b5b');
   else {
     const cr = Math.round((c.big ? 450 : 50) * (wreck ? 1.4 : 1) * (0.7 + R.next() * 0.6));
     addItem(id, 1); P.credits += cr; P.earned += cr;
     say(`${shared ? 'Geteilte Beute: ' : ''}${d.n} (${RARITY[d.rar].n})`, TIERC[Math.min(3, d.rar)]); say(`+${cr} Credits`, '#ffb347');
-    if (legend) radio('SYSTEM', `Legendärer Fund im Wrack: ${d.n}.`);
+    if (legend) { (P.legends = P.legends || []).push(id); radio('SYSTEM', `Legendärer Fund im ${S.wrecks[0].name}: ${d.n}. Dieses Stück gibt es nur einmal.`); }
     if (c.big && R.next() < 0.5) { const f = R.next() < 0.5 ? 'fund_relikt' : 'fund_datenkern'; if (addItem(f, 1)) say(gearDef(f)!.n, TIERC[Math.min(3, gearDef(f)!.rar)]); }
   }
   c.open = true; if (!st.open.includes(c.idx)) st.open.push(c.idx);
@@ -166,7 +184,13 @@ export function drawSalvageHUD(px: number, pz: number) {
     if (_p.z > 1 || Math.abs(_p.x) > 1 || Math.abs(_p.y) > 1) return;
     ux.fillStyle = col; ux.fillText(t, (_p.x + 1) / 2 * W, (1 - _p.y) / 2 * H);
   };
-  for (const w of S.wrecks) { const d = Math.hypot(w.x - px, w.z - pz); if (d < 1200 && d > 12) mark(w.x, terrainAt(w.x, w.z) + 9, w.z, `◇ ${w.name.toUpperCase()} · ${Math.round(d)} m`, '#e0b030'); }
+  const sealed = !!legendHere();
+  for (const w of S.wrecks) {
+    const d = Math.hypot(w.x - px, w.z - pz);
+    // das Wrack mit dem versiegelten Tresor ist über die ganze Karte zu sehen, die anderen aus 1,2 km
+    if (w.legend && sealed) { if (d > 12) mark(w.x, terrainAt(w.x, w.z) + 9, w.z, `◆ ${w.name.toUpperCase()} · VERSIEGELTER TRESOR · ${d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m'}`, '#ffb347'); }
+    else if (d < 1200 && d > 12) mark(w.x, terrainAt(w.x, w.z) + 9, w.z, `◇ ${w.name.toUpperCase()} · ${Math.round(d)} m`, '#e0b030');
+  }
   for (const c of S.crates) { if (c.open) continue; const d = Math.hypot(c.x - px, c.z - pz); if (d < 60 && d > 2.5) mark(c.x, c.y + 1.4, c.z, c.big ? `▣ TRESORKISTE · ${Math.round(d)} m` : `▪ KISTE · ${Math.round(d)} m`, c.big ? '#ffb347' : '#9fd8ff'); }
   ux.textAlign = 'left'; ux.font = '600 14px "Share Tech Mono",Consolas,monospace';
   S.msg.forEach((m, i) => { ux.globalAlpha = Math.min(1, m.life); ux.fillStyle = m.c; ux.fillText(m.t, 24, H * 0.42 + i * 20); });

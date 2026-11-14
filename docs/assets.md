@@ -304,3 +304,7 @@ Alles entsteht im Spiel, ohne neue Dateien.
 ### Was noch fehlt (braucht neue Mixamo-Dateien)
 Ein gemächlicher Gehclip (rund 1,4 m/s), Joggen und Rennen für die Figuren anderer Piloten, Drehen auf der Stelle, Sitzen, Anlehnen,
 Arbeiten an der Konsole, Kiste tragen, weitere Gesprächsgesten. Herunterladen als FBX „mit Skin“, 30 Bilder je Sekunde, bei Gehclips „In Place“ aus.
+
+## Fernmodell des Soldaten (Alpha 1.09)
+
+Wachen in Städten sind die Soldatenfigur des Spielers (`buildSoldier`, sichtbar rund 17.500 Dreiecke; die 59.000 der Datei zählen alle acht Köpfe mit). Ab 45 m tauscht das Spiel die Netze gegen eine einfache Fassung mit rund 4.400 Dreiecken (`lod` an `SoldierVis`, Aufruf in `city.ts`; zurück unter 45 m, hin über 50 m). Die einfache Fassung kommt aus derselben Blender-Datei: `export_lod()` in `asset-src/neu/soldier/soldat_tp.py` schreibt `asset-src/glb/station/Soldat_lod.glb` (Decimate je Netz, gleiches Skelett, keine Bewegungen; die Blender-Datei bleibt unverändert). Das Spiel prüft beim ersten Wechsel, ob die Knochenliste beider Dateien gleich ist, und bleibt sonst beim vollen Modell. Nach einem neuen Export des Soldaten auch `export_lod()` neu ausführen.

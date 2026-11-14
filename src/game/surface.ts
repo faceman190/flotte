@@ -24,6 +24,7 @@ import { P, G, stats, cargoUsed, settings } from './state';
 import { SHIP, hurtPlayer } from './player';
 import { burst, puff } from './fx';
 import { radio } from '../ui/radio';
+import { groundShade, GROUND_SHADE_PARS } from './groundShade';
 
 // =====================================================================================
 // Planetenoberflächen: Gelände, Atmosphäre, Lagerstätten, Bodenstation und Bergbau-Rover.
@@ -284,6 +285,7 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
     sh.uniforms.snowCol = { value: new THREE.Color(SL.snow[0]) }; sh.uniforms.snowK = { value: SL.snow[1] }; sh.uniforms.snowY = { value: SL.snow[2] };
     sh.uniforms.vegCol = { value: new THREE.Color(SL.veg ? SL.veg[0] : 0) }; sh.uniforms.vegK = { value: SL.veg ? SL.veg[1] : 0 };
     sh.uniforms.mistK = { value: SL.mist }; sh.uniforms.mistY = { value: lowY + 25 };
+    sh.uniforms.bShMap = groundShade.map; sh.uniforms.bShMat = groundShade.mat; sh.uniforms.bShOn = groundShade.on; sh.uniforms.bShPx = groundShade.px;   // Gebäudeschatten (groundShade.ts)
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float slope; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlope = slope; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz; vWNrm = normalize(mat3(modelMatrix) * objectNormal);');
@@ -291,6 +293,7 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
       .replace('#include <common>', `#include <common>
         uniform sampler2D groundMap; uniform sampler2D groundNrm; uniform sampler2D groundRgh; uniform vec3 cliffCol; uniform vec3 gCol;
         uniform float gScale; uniform float gTint; uniform float gNrmK; uniform float gHasR; uniform vec3 snowCol; uniform float snowK; uniform float snowY; uniform float mistK; uniform float mistY; uniform vec3 vegCol; uniform float vegK; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;
+        ${GROUND_SHADE_PARS}
         // ein Bild in drei Maßstäben, nach Entfernung überblendet (B.x: nah → mittel, B.y: mittel → fern)
         vec3 gS(sampler2D t, vec2 p, vec2 B){
           float wa = (1.0 - B.x) * (1.0 - B.y), wb = B.x * (1.0 - B.y), wc = B.y, n = 0.0; vec3 r = vec3(0.0);
@@ -348,6 +351,9 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
           }
           normal = nView;
         #endif`);
+    // Gebäudeschatten der Bodenstation: nimmt das direkte Licht weg (das Himmelslicht bleibt)
+    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+        { float bS = bShade(vWPos); reflectedLight.directDiffuse *= bS; reflectedLight.directSpecular *= bS; }`);
     // Dunst sammelt sich in tiefen Lagen und wächst mit der Entfernung
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <fog_fragment>', `

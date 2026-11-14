@@ -150,7 +150,7 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
   der Hangar ist abgesperrt; [E] an der Ausgangstür oder „Ablegen“ im Menü führt wieder hinaus. Größere Städte/Stationen mit Hangar kommen später.
 - **Begehen der Basis:** Boden und Wände kommen aus den Dreiecken des Modells (Raster 2 m, eigener Strahltest): Sockel und Stufen bis 1,7 m werden erstiegen.
 - **Bergung (`src/game/salvage.ts`):** je Planet 4 Wracks (verkohlte Schiffsmodelle) mit Tresorkiste und 2 Kisten, dazu 12 verstreute Versorgungskisten.
-  Beute wie in Minen (Ausrüstung nach Gefahr, Credits); die Tresorkiste im Wrack enthält mit 25 % ein legendäres Stück (Sonnenlanze, Orakel, Splitterwerfer, Kristallhelm).
+  Beute wie in Minen (Ausrüstung nach Gefahr, Credits). **Feste Fundorte (ab Alpha 1.09, `LEGEND_AT`):** Die vier besonderen legendären Stücke liegen je einmal im versiegelten Tresor eines benannten Wracks (immer das erste Wrack des Planeten): Kristallvisier im Wrack der Lerche auf Nebelfrost, Splitterwerfer im Wrack der Martha auf Schlacke Prime, Orakel-Kern im Wrack der Orion auf Aschewelt, Ferrox-Lanze im Wrack der Polaris auf Kernkristall. Jedes gibt es je Spielstand einmal (`P.legends`); danach enthält der Tresor gewöhnliche Beute. Hinweise: ein Funkspruch beim Eintritt in den Sektor und eine Marke über dem Wrack, die über die ganze Karte zu sehen ist. Bis Alpha 1.08 lag in jeder vierten Tresorkiste irgendeines der vier, beliebig oft.
   Geöffnet bleibt 60 Minuten (P.salvage). Wracks qualmen, sind auf Sicht markiert und halten Rover und Fußgänger auf.
 
 - **Kampf zu Fuß (Alpha 0.85, `src/game/fieldfight.ts`):** Ferrox-Wachdrohnen (Modell der Minendrohne): 2–3 an jedem Wrack, 3 auf Streife; sie bemerken den Spieler

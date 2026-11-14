@@ -161,7 +161,7 @@ Das Spiel erkennt die Bilder am Namen (`cityLook(name)` in `kit.ts`); eine neue 
 
 **Grenzen**
 - Kleine Teile ohne eigenes Feld (Kisten, Laternen, Fässer) stehen im vorberechneten Schatten weiter im Sonnenlicht. Nahe am Spieler gleicht der Echtzeit-Schatten das aus.
-- Das Gelände um ein Modell bekommt weder Schatten noch Lampenlicht.
+- Das Gelände um ein Modell bekommt kein Lampenlicht. Den Schatten der Gebäude bekommt es seit Alpha 1.09 aus einer eigenen Schattenkarte, die das Spiel selbst zeichnet (`src/game/groundShade.ts`): Das Stationsmodell wird einmal aus Richtung der Sonne als Tiefenkarte gezeichnet (2048 px, neu nur wenn sich das Modell ändert), der Geländeshader nimmt im Schatten das direkte Licht weg. Das gilt für jede Bodenstation ohne Zutun, auch für neue. Nur das Gelände empfängt diesen Schatten (Felsen, Bewuchs und Figuren nicht), und nur das Stationsmodell wirft ihn. Nahe am Piloten liegt weiterhin der Echtzeit-Schatten darüber.
 
 ## Texturblatt mit Scan-Details (ab Alpha 0.98)
 
