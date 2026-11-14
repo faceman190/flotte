@@ -109,6 +109,9 @@ Diese drei Spannungen tragen die spätere Geschichte: **Sicherheit** (Rat), **Ka
 | **Wachtmeisterin Sanna Roth** | Grenzwacht, Wachtposten Ost | Direkt, laut, mutig. Will die Narbe zurückerobern. |
 | **Gildemeisterin Hedda Krull** | Bergbaugilde, Talstation Heimstatt | Rechnet in Tonnen und Credits, aber ehrlich. Hat als Erste vermutet, dass Ferrit mehr ist als Kristall. |
 | **Lotse „Brummer“** | Funk der Bastion | Die Stimme im Funk, wenn man ablegt oder andockt. Kennt jeden Piloten beim Rufzeichen. |
+| **Kapitän Varga** | Kapitän der Weitsicht | Seit Kapitel 4 in Heimstatt, ab Kapitel 5 als Figur im Hangar der Bastion. Förmlich, warm, siezt den Piloten. Für ihn liegt der Abflug Tage zurück, nicht Jahrzehnte. |
+| **Navigator Emil Sander** | Navigator der Weitsicht | Von Varga als Erster geweckt (Kapitel 5). Ruhig, genau, rechnet mit Sternkarten, die keiner mehr kennt. Er sagt voraus, wo und wann die Schiffe aus dem Sprung fallen. |
+| **Kapitänin Brandes** | Kapitänin der Anna | Nur über Funk (Kapitel 5): wacht auf, als der Pilot ihren Sprungkern abschaltet. |
 | **Rika Tamm** | Leiterin der Sonnenwacht | Hütet seit 20 Jahren den kleinen Außenposten am Trümmerfeld. Hat als Kind den Riss miterlebt. Ruhig, genau, abergläubisch, was das Tor angeht. |
 
 ---
@@ -122,12 +125,58 @@ Diese drei Spannungen tragen die spätere Geschichte: **Sicherheit** (Rat), **Ka
 | 2 | **Splitter der Erbauer** | Spurensuche im Splittergürtel und in der Grauzone: Ruinen der Erbauer, Ferrit mit lesbaren Daten. Der Streit zwischen Gilde und Rat bricht auf. |
 | 3 | **Die Wahrheit über die Narbe** | Was beim Fall der Narbe wirklich geschah, und wer damals Befehle verweigert hat. |
 | 4 | **Ins Herz** | Der Weg in den Ferrox-Kern: das Archiv der Erbauer, die Wahrheit über die Ferrox und den Riss, die Rettung der Weitsicht. Am Ende geht der Leitkristall an Rat, Grenzwacht oder Gilde. Gebaut, siehe unten. |
+| 5 | **Die Zehn** | Die zehn übrigen Schiffe der Flotte fallen aus dem zerbrochenen Sprung, und jede Ankunft ruft den Schwarm. Die Anna im Lichtwall, der Kranich in der Narbe, die Schlacht um Heimstatt. Am Ende meldet sich eine elfte Kennung: „Halden hört euch.“ Gebaut, siehe unten. |
 | später | **Die Altwelten** | Langfristig können die Altwelten zurückkehren: ein neu geöffnetes Tor, ein Schiff der elf, die nie ankamen, oder etwas ganz anderes. Bewusst offen, damit die Geschichte über Jahre wachsen kann. |
 
 Jedes Kapitel verbindet Hauptmissionen mit dem, was das Spiel schon kann: Bergbau, Bergung, Kampf, Handel, Planeten.
 
 ---
 
+## Kapitel 5: „Die Zehn“ (Alpha 1.10, `src/game/chapter5.ts`)
+
+**Worum es geht:** Brummers letzter Satz in Kapitel 4 war „Zehn Kennungen. Alle noch unterwegs.“ Die zehn Schiffe hängen im selben zerbrochenen Sprung fest wie die Weitsicht und fallen jetzt heraus. Jede Ankunft wirkt wie ein anlaufendes Tor: Neunzig Sekunden später ist der Schwarm da. Die Crew muss sie einsammeln, bevor die Ferrox es tun, und am Ende kommt der Schwarm zum ersten Mal nach Heimstatt.
+
+**Entscheidungen (freigegeben am 14.11.2026, Entwurf in `docs/kapitel5-entwurf.md`):**
+- Jede Ankunft ruft den Schwarm.
+- Heimstatt wird angegriffen, aber nur in diesem Kapitel; danach ist der Sektor wieder ruhig.
+- Ein Schiff geht verloren (der Kranich), kein Mensch: Der Pilot zieht den Schlafkern, die Schlafmodule sprengen sich ab, Staffel Vier schleppt sie heraus.
+- Neue Figuren: Navigator Emil Sander; Kapitän Varga bekommt eine Figur; Kapitänin Brandes von der Anna spricht nur über Funk.
+- Die Wahl aus Kapitel 4 wirkt weiter, ohne eigene Missionen: Der Rat legt einen Schirm um die Bastion (2,2 km, darin nimmt kein Schiff Schaden), die Wacht eine Falle an den Ankunftspunkt (aus jeder Welle fliegen zwei in die Minen), die Gilde stört den Ruf (erste Welle nach 85 statt 60 Sekunden, größerer Abstand).
+- Am Ende eine elfte Kennung, die nicht zur Flotte gehört: „Halden hört euch.“ Damit beginnt der Bogen zu den Altwelten.
+- Schiffsnamen schlicht: Anna, Kranich, Sirius, Ida, Bussard, Wega, Emma, Reiher, Atair, Klara.
+
+**Ablauf (zwölf Schritte im Code, keine Aufgabe „drei Punkte scannen“):**
+
+| Nr. | Ort | Was passiert |
+|---|---|---|
+| 0 | Funk | Titelkarte. Brummer: Varga hat einen Navigator geweckt, beide warten im Hangar. An der Bastion andocken. |
+| 1 | Bastion, Hangar | Zu Sander und Varga gehen, E. Sander erklärt den zerfallenden Sprung und gibt dem Piloten seinen Sprungschreiber mit. |
+| 2 | Sonnenwacht | Rika Tamm den Schreiber geben (hingehen, E). Ihre Antennen hören einen Takt im Rauschen, der schneller wird. |
+| 3 | Lichtwall | Am berechneten Punkt warten (auf 900 m heran, dann acht Sekunden). Die **Anna** fällt aus dem Sprung, die Frist läuft: 90 Sekunden. An der Schleuse langsam anlegen, an Bord zwei Sicherungen ziehen und den Sprungkern abschalten. Rechtzeitig: kein einziger Ferrox. Zu spät: drei Jäger sofort, alle 45 Sekunden Nachschub (höchstens sechs zugleich), bis der Kern aus ist; danach müssen die übrigen weg. |
+| 4 | Talstadt | Krull braucht für die Weckanlage zwölf Wassereis und sechs Helium-3 (Helium-3 gibt es im Markt der Planetenstützpunkte oder im Eis kalter Planeten). |
+| 5 | Die Narbe | Der **Kranich** ist in ein Trümmerfeld gefallen und gebrochen. Achterberg und Staffel Vier kämpfen am Wrack. An der Bresche langsam anlegen. |
+| 6 | Im Wrack | Notstrom, Wächterkern, dann den Schlafkern ziehen (E). |
+| 7 | Im Wrack, Narbe | Rückweg unter Druck: Drei Wächter erscheinen zwischen Pilot und Schleuse, der Rumpf bricht in 150 Sekunden; danach entweicht die Luft (Schaden in Schüben). Draußen vier Angreifer; aus der Narbe springen. |
+| 8 | Bastion, Hangar | Szene „Sanders Rechnung“ mit Sander, Varga, Hollweg, Achterberg: Die übrigen acht kommen zusammen, am alten Ankunftspunkt der Flotte, fünf Kilometer von der Bastion. Eine Zeile je nach Leitkristall. |
+| 9 | Heimstatt | Zum Sammelpunkt fliegen. Je Fraktion kommt ein Jäger ab Rufstufe 1, zwei ab Stufe 3. Achterberg und Staffel Vier sind immer dabei. |
+| 10 | Heimstatt | **Die Schlacht um Heimstatt.** Acht Schiffe fallen im Abstand von 34 Sekunden aus dem Sprung und fliegen zu ihrem Ankerplatz. Der Schwarm kommt in sechs Wellen. Mindestens sechs müssen ankommen. |
+| 11 | Bastion, Hangar | Szene „Vollzählig“. Brummer zählt (drei Fassungen je nach Ausgang), dann Sanders elfte Kennung. |
+
+**Die Schlacht in Zahlen (abgestimmt im Test, 14.11.2026):** Rumpf je Schiff 2.400, Tempo 46 m/s, Flugweg rund 3 km. Wellen nach 60 s, dann alle 42 s (Gilde: 85 s und 50 s): zwei bis vier Jäger, ab der zweiten Welle ein Bomber, ab der vierten zwei. Die Angreifer sind so stark wie an der Grenze (Gefahr 3), obwohl Heimstatt Gefahr 0 hat. Bomber und die ersten beiden Jäger jeder Welle gehen zuerst auf das zuletzt angekommene Schiff. Ein Schiff mit leerem Rumpf treibt antriebslos („lahmgelegt“) und zählt nicht; bei mehr als zwei beginnt die Schlacht neu, ebenso wenn der Pilot andockt, den Sektor verlässt oder abgeschossen wird. Messung ohne Zutun des Piloten: drei lahmgelegt nach gut drei Minuten, also Neustart. Messung mit einem Abschuss alle acht Sekunden: sechs am Ankerplatz, zwei lahmgelegt, gewonnen.
+
+**Was bleibt:** Der Kranich liegt als Wrack in der Narbe. Nach der Schlacht liegen die acht Schiffe bei der Bastion vor Anker, nach dem Kapitel auch die Anna (neun Schiffe und die Weitsicht). Belohnung: 6.000 Credits, je 40 Ruf bei Rat, Grenzwacht und Gilde, und ein Jäger der Sirius („SIRIUS EINS“) fliegt in Heimstatt dauerhaft Patrouille.
+
+**Menschen:** Die Crew zählte 6.000, mit der Weitsicht 9.000. Jedes der zehn Schiffe trägt rund 3.000 Schläfer; am Ende sind es über 30.000.
+
+**Technik:** Die Anna ist ein Dungeon der neuen Art `schiff` (siehe `docs/dungeons.md`): Gänge wie im Wrack, aber ohne Wächter, Fallen, Kisten und Ferrit. Die Schiffe der Schlacht sind `spawnStoryShip` mit einem Ankerplatz als Ziel; am Ziel übernimmt das Kapitel ihr Modell als Kulisse. Laden mitten im Kapitel: Gesprächsschritte bleiben stehen, bis das Gespräch geführt ist; wer im Wrack gespeichert hat, legt neu an; die Schlacht beginnt beim Laden von vorn.
+
+**Vertonung:** 61 Zeilen, 7.639 Credits, noch nicht aufgenommen (`docs/voice/kapitel5.md`). Neue Stimmen: Sander, Brandes, die Kennung aus Halden.
+
+**Figuren:** Sander und Varga stehen vorerst als Ersatzfiguren im Hangar (Mechaniker und Lagerarbeiter mit Farbton). Sobald `sander.glb` und `varga.glb` in `asset-src/glb/char/` liegen, nimmt das Spiel sie von selbst (`NPC_FALLBACK` in `src/game/interior.ts`). Bildvorgaben: `docs/figuren-kapitel5.md`.
+
+**Nicht geprüft:** Die Flugwege zwischen den Schritten und die Kämpfe wurden im Testfenster mit gesetzten Positionen durchlaufen, nicht von Hand geflogen. Die Zeit für den Weg durch die Anna (rund 100 m Laufweg) ist gerechnet, nicht gespielt.
+
+---
 ## Kapitel 4: „Ins Herz“ (Alpha 1.0, `src/game/chapter4.ts`)
 
 **Worum es geht:** Die Weitsicht zog vor vier Monaten durch die Narbe nach Osten. Der Rat gibt den Flug frei. Der Pilot folgt der Spur durch das Stummfeld in den Ferrox-Kern, holt im Archiv der Erbauer den Leitkristall und bringt die Weitsicht nach Hause.

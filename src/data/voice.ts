@@ -171,4 +171,4 @@ export const VOICE_LINES: [string, string][] = [
 ];
 export const voiceIdFor = (text: string) => VOICE_LINES.find(([s]) => text.includes(s))?.[1] || null;
 // Über Funk gesprochen (bekommt im Spiel den Funkklang): Lotse und Frachter immer, alle anderen nur im Flug
-export const RADIO_VOICES = new Set(['BRUMMER', 'KOMPASS', 'VARGA', 'VARGAL', 'LESER', 'MAREN', 'ACHTERBERG31', 'WERK']);
+export const RADIO_VOICES = new Set(['BRUMMER', 'KOMPASS', 'VARGA', 'VARGAL', 'LESER', 'MAREN', 'ACHTERBERG31', 'WERK', 'BRANDES', 'HALDEN']);

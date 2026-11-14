@@ -13,7 +13,7 @@ import { hidden } from './player';
 import { IN, storyNpc, nearNpc, hangarSpot } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
-import { talk, playScene, registerChain, st, endChain, storyHooks, dialogBusy, settled, type Step, type Obj, type Marker } from './story';
+import { talk, playScene, registerChain, st, endChain, storyHooks, dialogBusy, settled, startChain, type Step, type Obj, type Marker } from './story';
 import { terrainAt, liquidAt } from './surface';
 import { FOOT, footTargets } from './onfoot';
 import { DUN, enterDungeon, type DungeonEntrance } from './dungeon';
@@ -462,6 +462,7 @@ function finish() {
   storyHooks.banner('KAPITEL 4 ABGESCHLOSSEN', `+5.000 Credits · ${PERK[ch]}`, '#ffd27a');
   snd(523, 0.3, 'triangle', 0.06, 0); setTimeout(() => snd(659, 0.3, 'triangle', 0.06, 0), 200); setTimeout(() => snd(784, 0.5, 'triangle', 0.06, 0), 400);
   saveGame();
+  startChain('ch5', 30000);
 }
 
 // ---------- Kulissen ----------

@@ -32,8 +32,11 @@ const TS = 3.2, BASE = new THREE.Vector3(0, -60000, 0);
 type Vec2 = [number, number];
 // kind 'wrack': Schiffswrack statt Bergwerk (Metallgänge, Notlicht, Ferrit-Bewuchs; betreten aus dem All, zurück ins Schiff).
 // kind 'archiv': Anlage der Erbauer (Kapitel 4): gebaut wie das Wrack, kaltes Licht, betreten von der Oberfläche und dorthin zurück.
+// kind 'schiff': bewohntes Schiff (Kapitel 5, die „Anna“): Gänge wie im Wrack, aber ohne Ferrit, ohne Wächter, Fallen und Kisten. Statt der
+// Notstromschalter zieht man Sicherungen; hinter dem Schott liegt das Ziel. Betreten aus dem All, zurück ins Schiff.
+// note: eine Zeile oben in der Mitte (z. B. eine laufende Frist), solange sie Text liefert.
 // goal: ein Gegenstand der Geschichte auf der Brücke (im Tresorraum), bergbar, sobald der Wächterkern zerstört ist.
-interface Entrance { id: string; x: number; y: number; z: number; yaw: number; size: number; name: string; kind?: 'wrack' | 'archiv'; danger?: number; goal?: { label: string; got: () => boolean; take: () => void } }
+interface Entrance { id: string; x: number; y: number; z: number; yaw: number; size: number; name: string; kind?: 'wrack' | 'archiv' | 'schiff'; danger?: number; note?: () => string; goal?: { label: string; got: () => boolean; take: () => void } }
 export type DungeonEntrance = Entrance;
 interface Crate { tx: number; tz: number; g: THREE.Group; lid: THREE.Object3D; open: boolean; big: boolean; idx: number; a: number; med?: boolean }
 interface Foe { id: number; nx?: number; nz?: number; x: number; z: number; y: number; hp: number; max: number; g: THREE.Group; eye: THREE.MeshBasicMaterial; boss: boolean; cool: number; aim: number; alert: boolean; tx: number; tz: number; ph: number; hit: number; vis?: DroneVis | null; atk?: number }
@@ -54,7 +57,8 @@ export const DUN = {
   msg: [] as { t: string; c: string; life: number }[], danger: 1, kills: 0, left: 0,
 };
 let ENTR: Entrance[] = [];
-const WR = () => DUN.e?.kind === 'wrack';
+const WR = () => DUN.e?.kind === 'wrack' || DUN.e?.kind === 'schiff';
+const SH = () => DUN.e?.kind === 'schiff';
 const AR = () => DUN.e?.kind === 'archiv';
 let group: THREE.Group | null = null, lamps: THREE.Vector3[] = [], pool: THREE.PointLight[] = [], head: THREE.SpotLight | null = null, gun: THREE.Group | null = null;
 let tracer: THREE.Line | null = null, tracerT = 0, lampT = 0, pathT = 0, stepT = 0, grabT = 0;
@@ -209,6 +213,7 @@ const THEME: Record<string, { lamp: number; fog: number; deco: 'kristall' | 'lav
   asche: { lamp: 0xd8b0ff, fog: 0x060408, deco: 'lava', col: 0xb060ff },
   kristall: { lamp: 0xd8b8ff, fog: 0x060409, deco: 'kristall', col: 0xd080ff },
   wrack: { lamp: 0xffb08a, fog: 0x030406, deco: 'kristall', col: 0xb060ff },      // Notlicht, Ferrit wächst aus dem angefressenen Metall
+  schiff: { lamp: 0xffc8a0, fog: 0x030406, deco: 'none', col: 0 },                 // Notlicht eines Schiffs ohne Antrieb, kein Bewuchs
   archiv: { lamp: 0xa8d4ff, fog: 0x03050a, deco: 'kristall', col: 0x9a60ff },     // kaltes Licht der Erbauer, Ferrit an den Wänden
 };
 function buildTheme(type: string, R: { next: () => number }) {
@@ -645,6 +650,27 @@ function lootId(R: () => number, big: boolean): string {
   return poolIds[Math.floor(R() * poolIds.length)] || 'fund_datenkern';
 }
 function say(t: string, c = '#dfe8f0') { DUN.msg.unshift({ t, c, life: 6 }); if (DUN.msg.length > 5) DUN.msg.pop(); }
+export const dungeonSay = say;
+export const dungeonHurt = (d: number) => hurtPlayer(d);
+// Alarm (Geschichte): n Wächter erscheinen auf dem Weg zwischen Pilot und Ausgang und wissen, wo er ist. Gibt zurück, wie viele es wurden.
+export function dungeonAlarm(n: number) {
+  if (!DUN.active || !group) return 0;
+  const dE = new Int16Array(DUN.W * DUN.H); flood(DUN.exit[0], DUN.exit[1], dE, true);
+  const px = Math.round(DUN.x / TS), pz = Math.round(DUN.z / TS), dP = inb(px, pz) ? dE[I(px, pz)] : -1, cand: Vec2[] = [];
+  for (let z = 1; z < DUN.H - 1; z++) for (let x = 1; x < DUN.W - 1; x++) {
+    if (DUN.t[I(x, z)] !== 1 || dE[I(x, z)] < 3) continue;
+    const far = Math.abs(x - px) + Math.abs(z - pz);
+    if (far < 4 || (dP > 0 && dE[I(x, z)] > dP - 2)) continue;      // nicht direkt am Piloten, und näher am Ausgang als er
+    cand.push([x, z]);
+  }
+  const got: Vec2[] = [];
+  for (let k = 0; k < n * 12 && got.length < n && cand.length; k++) {
+    const c = cand[Math.floor(Math.random() * cand.length)];
+    if (got.every(g => Math.abs(g[0] - c[0]) + Math.abs(g[1] - c[1]) > 3)) got.push(c);
+  }
+  got.forEach((c, i) => { const f = buildFoe(c[0], c[1], false); f.id = 200 + DUN.foes.length + i; f.alert = true; DUN.foes.push(f); });
+  return got.length;
+}
 // shared: ein Mitspieler hat die Kiste geöffnet – Deckel geht auf, man bekommt seinen eigenen Anteil (Verbandskasten heilt nur den Öffner)
 function openCrate(c: Crate, shared = false) {
   if (c.open) return;
@@ -672,9 +698,9 @@ function flipSwitch(si: number, how: 'self' | 'mate' | 'sync') {
   sw.on = true; sw.scr.color.set(0x3ad06a);
   const lv = sw.g.getObjectByName('hebel'); if (lv) lv.rotation.x = 0.7;
   const st = P.dungeons![DUN.e.id]; if (!(st.sws || []).includes(si)) st.sws = [...(st.sws || []), si];
-  const left = DUN.sws.filter(q => !q.on).length, who = how === 'mate' ? 'Ein Mitspieler hat einen Schalter umgelegt. ' : 'Schalter umgelegt. ';
-  if (left === 0) { DUN.door!.open = true; st.sw = true; if (how !== 'sync') { say(AR() ? 'Alle Riegel gelöst. Das Tor zum Speicherkern fährt auf.' : WR() ? 'Alle Schalter umgelegt. Das Schott zur Brücke fährt auf.' : 'Alle Schalter umgelegt. Das Tor zum Tresor fährt auf.', '#3ad06a'); sfx('door_open', 0.7, 0.7, () => snd(200, 0.6, 'sawtooth', 0.05, 80)); } }
-  else if (how !== 'sync') { say(`${who}Noch ${left} bis ${AR() ? 'zum Speicherkern' : WR() ? 'zur Brücke' : 'zum Tresor'}.`, '#ffb347'); snd(520, 0.2, 'square', 0.04, 200); }
+  const left = DUN.sws.filter(q => !q.on).length, who = how === 'mate' ? 'Ein Mitspieler hat einen Schalter umgelegt. ' : SH() ? 'Sicherung gezogen. ' : 'Schalter umgelegt. ';
+  if (left === 0) { DUN.door!.open = true; st.sw = true; if (how !== 'sync') { say(AR() ? 'Alle Riegel gelöst. Das Tor zum Speicherkern fährt auf.' : SH() ? 'Alle Sicherungen gezogen. Das Schott zum Sprungkern fährt auf.' : WR() ? 'Alle Schalter umgelegt. Das Schott zur Brücke fährt auf.' : 'Alle Schalter umgelegt. Das Tor zum Tresor fährt auf.', '#3ad06a'); sfx('door_open', 0.7, 0.7, () => snd(200, 0.6, 'sawtooth', 0.05, 80)); } }
+  else if (how !== 'sync') { say(`${who}Noch ${left} bis ${AR() ? 'zum Speicherkern' : SH() ? 'zum Sprungkern' : WR() ? 'zur Brücke' : 'zum Tresor'}.`, '#ffb347'); snd(520, 0.2, 'square', 0.04, 200); }
   saveGame();
   if (how === 'self') coopSend('msw', { e: DUN.e.id, i: si });
 }
@@ -734,7 +760,7 @@ export function enterDungeon(e: Entrance) {
   const seed = hashStr(e.id + ':plan'), plan = generate(seed, e.size), R = rng(seed + 7);
   group = new THREE.Group(); group.position.copy(BASE); scene.add(group);
   const tint = new THREE.Color(T ? T.ground[1] : 0x8a8270).lerp(new THREE.Color(0x777777), 0.45).multiplyScalar(1.5);
-  const wr = e.kind === 'wrack' || e.kind === 'archiv', thKey = e.kind === 'archiv' ? 'archiv' : wr ? 'wrack' : pl?.type || 'fels';
+  const calm = e.kind === 'schiff', wr = e.kind === 'wrack' || e.kind === 'archiv' || calm, thKey = e.kind === 'archiv' ? 'archiv' : calm ? 'schiff' : wr ? 'wrack' : pl?.type || 'fels';
   const rock: THREE.Object3D = wr ? buildHull(seed % 1000) : buildRock(seed % 1000, tint);
   const rocksOn = !wr && buildCaveRocks(seed, new THREE.Color(0.7, 0.67, 0.62).lerp(tint.clone().multiplyScalar(1 / 1.5), 0.4));
   if (rocksOn) ((rock as THREE.Mesh).material as THREE.MeshStandardMaterial).color.setScalar(0.85);     // Hintergrund hinter den Felsen
@@ -744,8 +770,8 @@ export function enterDungeon(e: Entrance) {
   if (wr) buildWreckProps(plan, R); else if (!buildKitProps(plan, R)) buildProps(plan, R);
   buildTheme(thKey, R);
   // Kisten (schon geöffnete bleiben offen), dazu ein Verbandskasten auf halbem Weg
-  DUN.crates = plan.crates.map((c, i) => buildCrate(c[0], c[1], false, i, R.next() * 6.28, i === 1));
-  DUN.crates.push(buildCrate(plan.vault[0], plan.vault[1] + 1, true, 99, Math.PI));
+  DUN.crates = calm ? [] : plan.crates.map((c, i) => buildCrate(c[0], c[1], false, i, R.next() * 6.28, i === 1));
+  if (!calm) DUN.crates.push(buildCrate(plan.vault[0], plan.vault[1] + 1, true, 99, Math.PI));
   for (const c of DUN.crates) if (st.open.includes(c.idx)) { c.open = true; c.lid.rotation.x = -1.9; }
   // Tor und Schalter
   {
@@ -785,7 +811,7 @@ export function enterDungeon(e: Entrance) {
     });
     DUN.sw = DUN.sws[0] || null;
     // Fallen: Bodenplatte mit Leuchtrand; Gas (grün, Schwaden) oder Strom (blau, Funken), pulsierend
-    DUN.traps = plan.traps.map((tp, ti) => {
+    DUN.traps = (calm ? [] : plan.traps).map((tp, ti) => {
       const kind: 'gas' | 'strom' = ti % 2 ? 'strom' : 'gas', g = new THREE.Group();
       const plate = new THREE.Mesh(new THREE.BoxGeometry(TS * 0.8, 0.06, TS * 0.8), std(0x2a2c30, { roughness: 0.6, metalness: 0.8 })); plate.position.y = 0.03; g.add(plate);
       const glow = new THREE.MeshBasicMaterial({ color: kind === 'gas' ? 0x2a6a20 : 0x20406a });
@@ -813,8 +839,8 @@ export function enterDungeon(e: Entrance) {
     DUN.exit = plan.start;
   }
   // Wächter und der Wächterkern im Tresor
-  DUN.foes = plan.foes.map((f, i) => { const o = buildFoe(f[0], f[1], false); o.id = i; return o; });
-  if (!st.open.includes(99)) DUN.foes.push(buildFoe(plan.vault[0], plan.vault[1], true));
+  DUN.foes = calm ? [] : plan.foes.map((f, i) => { const o = buildFoe(f[0], f[1], false); o.id = i; return o; });
+  if (!calm && !st.open.includes(99)) DUN.foes.push(buildFoe(plan.vault[0], plan.vault[1], true));
   DUN.bolts = [];
   // Ziel der Geschichte (z. B. Flugschreiber): leuchtender Kasten auf einem Pult im Tresorraum
   DUN.goal = null;
@@ -850,7 +876,7 @@ export function enterDungeon(e: Entrance) {
   for (const [dx, dz, a] of [[1, 0, -Math.PI / 2], [0, 1, Math.PI], [-1, 0, Math.PI / 2], [0, -1, 0]] as [number, number, number][]) if (tile(1 + dx, 1 + dz)) { DUN.yaw = a; break; }
   DUN.active = true; G.mode = 'dungeon'; releaseAll(); clearParticles(); particleSize(0.3);
   document.getElementById('hud')?.classList.add('hidden');
-  say(e.kind === 'archiv' ? `${e.name}: ${DUN.foes.length} Wächter gemeldet. Löse die Speicherriegel, dann fährt das Tor zum Speicherkern auf.` : wr ? `${e.name}: ${DUN.foes.length} Wächter gemeldet. Leg die Notstromschalter um, dann fährt das Schott zur Brücke auf.` : `${e.name}: ${DUN.foes.length} Wächter gemeldet. Finde den Schalter, dann das Tor.`, '#ffb347');
+  say(calm ? `${e.name}: Antrieb tot, nur Notlicht. Zieh die Sicherungen, dann fährt das Schott zum Sprungkern auf.` : e.kind === 'archiv' ? `${e.name}: ${DUN.foes.length} Wächter gemeldet. Löse die Speicherriegel, dann fährt das Tor zum Speicherkern auf.` : wr ? `${e.name}: ${DUN.foes.length} Wächter gemeldet. Leg die Notstromschalter um, dann fährt das Schott zur Brücke auf.` : `${e.name}: ${DUN.foes.length} Wächter gemeldet. Finde den Schalter, dann das Tor.`, '#ffb347');
   sfx('door_open', 0.6, 0.8, () => snd(160, 0.5, 'sawtooth', 0.05, -60));
   reveal();
 }
@@ -869,7 +895,7 @@ export function leaveDungeon(died = false) {
   ambient.intensity = saved.amb; sun.intensity = saved.sun; rim.intensity = saved.rim;
   const fog = scene.fog as THREE.FogExp2 | null; if (fog) { fog.color.setHex(saved.fogC); fog.density = saved.fogD; }
   camera.near = saved.near; camera.far = saved.far; camera.updateProjectionMatrix();
-  const le = DUN.e, toSpace = le?.kind === 'wrack';
+  const le = DUN.e, toSpace = le?.kind === 'wrack' || le?.kind === 'schiff';
   DUN.active = false; DUN.goal = null; G.mode = toSpace ? 'play' : 'rover'; releaseAll(); clearParticles(); particleSize();
   if (document.pointerLockElement === gl) document.exitPointerLock();
   document.getElementById('hud')?.classList.remove('hidden');
@@ -968,7 +994,7 @@ export function updateDungeon(dt: number) {
   for (const c of DUN.crates) if (!c.open && near(c.tx, c.tz)) { DUN.prompt = c.med ? 'Verbandskasten öffnen' : c.big ? (AR() ? 'Großen Behälter öffnen' : WR() ? 'Spind der Kommandantin öffnen' : 'Tresorkiste öffnen') : AR() ? 'Behälter öffnen' : WR() ? 'Spind öffnen' : 'Kiste öffnen'; DUN.act = () => openCrate(c); }
   DUN.sws.forEach((sw, si) => {
     if (sw.on || !near(sw.tx, sw.tz)) return;
-    DUN.prompt = `Schalter umlegen (${DUN.sws.filter(q => q.on).length + 1}/${DUN.sws.length})`;
+    DUN.prompt = `${SH() ? 'Sicherung ziehen' : 'Schalter umlegen'} (${DUN.sws.filter(q => q.on).length + 1}/${DUN.sws.length})`;
     DUN.act = () => flipSwitch(si, 'self');
   });
   // Fallen: alle 5 s für 1,8 s aktiv (vorher kurzes Warnblinken); wer darauf steht, nimmt Schaden
@@ -988,7 +1014,7 @@ export function updateDungeon(dt: number) {
     const bl = DUN.goal.g.getObjectByName('blink'); if (bl) bl.visible = Math.sin(performance.now() / 180) > 0;
     if (near(DUN.goal.tx, DUN.goal.tz, 2.4)) {
       if (DUN.foes.some(f => f.boss)) DUN.prompt = 'Erst den Wächterkern zerstören';
-      else { const gl2 = DUN.goal, en = DUN.e; DUN.prompt = en.goal!.label; DUN.act = () => { const z = gl2.g.getObjectByName('ziel'); if (z) z.visible = false; if (bl) bl.visible = false; DUN.goal = null; sfx('pickup', 0.8, 0.7, () => snd(500, 0.4, 'sine', 0.05, 400)); en.goal!.take(); }; }
+      else { const gl2 = DUN.goal, en = DUN.e; DUN.prompt = en.goal!.label; DUN.act = () => { const z = gl2.g.getObjectByName('ziel'); if (z && !SH()) z.visible = false; if (SH()) gl2.g.traverse((o: any) => { if (o.isLight) o.intensity = 0; }); if (bl) bl.visible = false; DUN.goal = null; sfx('pickup', 0.8, 0.7, () => snd(500, 0.4, 'sine', 0.05, 400)); en.goal!.take(); }; }
     }
   }
   for (const c of DUN.crates) if (c.open && c.lid.rotation.x > -1.9) c.lid.rotation.x = Math.max(-1.9, c.lid.rotation.x - dt * 4);
@@ -1204,6 +1230,8 @@ export function drawDungeonHUD(roverX = 0, roverZ = 0, roverOn = false) {
   ux.textAlign = 'left'; ux.font = '15px Rajdhani,"Segoe UI",sans-serif';
   DUN.msg.forEach((m, i) => { ux.globalAlpha = clamp(m.life, 0, 1); ux.fillStyle = 'rgba(6,16,26,.7)'; const tw = ux.measureText(m.t).width + 16; ux.fillRect(22, 24 + i * 26, tw, 22); ux.fillStyle = m.c; ux.fillText(m.t, 30, 40 + i * 26); });
   ux.globalAlpha = 1;
+  // Zeile der Geschichte (z. B. eine Frist)
+  { const nt = DUN.e?.note?.(); if (nt) { ux.textAlign = 'center'; ux.font = '600 19px Rajdhani,"Segoe UI",sans-serif'; const tw = ux.measureText(nt).width + 30; ux.fillStyle = 'rgba(6,16,26,.82)'; ux.fillRect(W / 2 - tw / 2, H * 0.17, tw, 34); ux.fillStyle = '#ffb347'; ux.fillText(nt, W / 2, H * 0.17 + 23); } }
   // Hinweis
   if (DUN.prompt) { const t = `[E]  ${DUN.prompt}`; ux.textAlign = 'center'; ux.font = '16px Rajdhani,"Segoe UI",sans-serif'; const tw = ux.measureText(t).width + 30; ux.fillStyle = 'rgba(6,16,26,.8)'; ux.fillRect(W / 2 - tw / 2, H * 0.68, tw, 32); ux.fillStyle = '#ffb347'; ux.fillText(t, W / 2, H * 0.68 + 21); }
   // Karte: deckt sich beim Erkunden auf, dreht nicht mit

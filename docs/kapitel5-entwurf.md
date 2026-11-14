@@ -1,6 +1,8 @@
 # Kapitel 5 · Entwurf zum Freigeben
 
-Stand: 2026-11-14. Noch nichts gebaut. Erst nach deinem Okay zu den Entscheidungen unten wird daraus `chapter5.ts`.
+Stand: 2026-11-14. **Freigegeben („Passt so, bauen“) und in Alpha 1.10 gebaut:** `src/game/chapter5.ts`, beschrieben in `docs/story.md`. Dieser Entwurf bleibt als Beleg der Entscheidungen stehen.
+
+Abweichungen vom Entwurf: Im Code sind es zwölf Schritte statt neun (Hin- und Rückwege sind eigene Schritte). Den Schlafkern bringt der Pilot nicht selbst nach Talstadt; Staffel Vier schleppt die Schlafmodule. Die Anna hat eine Kapitänin mit einer Funkzeile bekommen (Brandes). Die Vertonung umfasst 61 Zeilen und 7.639 Credits statt der geschätzten 6.000.
 
 ## Arbeitstitel: „Die Zehn“
 

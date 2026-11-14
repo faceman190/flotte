@@ -204,6 +204,13 @@ Grundlage ist der gekaufte Soldat (CGTrader, Royalty Free; Rohdaten in `asset-sr
 - Im Spiel (`mineArt.ts`, `WDEFS.ar39`): Mündung 10,75 cm über dem Nullpunkt, Lage vor der Kamera tiefer und weiter rechts als beim K-12 (das Visier baut hoch), Farbe auf 72 % abgedunkelt. `viewModelId()` gibt `ar39` für das Standardgewehr (`waffe_karabiner`, jetzt „Sturmgewehr AR-39“), ohne angelegte Waffe, für Wachen und für Mitspieler ohne Angabe. Fehlt die Datei, bleibt es beim K-12; dessen Modell liegt weiter im Paket.
 - Offen: Der K-12 hatte Visierglas, Absehen und Lampenglas als eigene Leuchtteile; das AR-39 hat sie nicht. Linke Hand in der Außensicht: `GRIP.ar39` in `avatar.ts` ist geschätzt.
 
+## Bewohntes Schiff und Alarm (Kapitel 5, Alpha 1.10)
+- **Art `schiff`** (`kind: 'schiff'` am Eingang): die „Anna“ im Lichtwall. Gebaut wie das Wrack (Metallgänge, Notlicht), aber ohne Ferrit, Wächter, Wächterkern, Fallen und Kisten. Die Schalter heißen hier Sicherungen („Sicherung ziehen“), das Schott führt zum Sprungkern. Betreten aus dem All, zurück ins Schiff. Das Ziel bleibt nach dem Benutzen stehen und erlischt.
+- **`note`** am Eingang: eine Funktion, die eine Zeile für die Bildmitte oben liefert (Frist der Anna, brechender Rumpf des Kranich). Leerer Text: keine Zeile.
+- **`dungeonAlarm(n)`**: stellt bis zu n Wächter auf den Weg zwischen Pilot und Ausgang; sie wissen sofort, wo er ist. Kapitel 5 ruft es beim Ziehen des Schlafkerns im Kranich.
+- **`dungeonHurt(d)`** und **`dungeonSay(text, farbe)`**: Schaden und Meldungen aus der Geschichte heraus.
+- Stimmen im Dungeon klingen seit Alpha 1.10 immer nach Funk (vorher nur Sprecher aus `RADIO_VOICES`).
+
 ## Noch offen
 - Weitere Arten (Bunker), Schlüssel, mehrere Ebenen, große Meteoriten im All.
 - Hände/Handschuhe an Pistole und Splitterwerfer in der Ich-Sicht.
