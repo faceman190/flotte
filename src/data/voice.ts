@@ -69,7 +69,8 @@ export const VOICE_LINES: [string, string][] = [
   ['Wachdrohnen! Die bewachen das Ding', 'c14_roth'],
   ['In der Mitte schwebt ein Kristall', 'c15_krull'],
   ['neben der Ruine liegt noch etwas', 'c16_krull'],
-  ['Hier spricht Kapitänin Varga', 'c17_varga'],
+  // c17_varga fehlt hier mit Absicht: Varga ist seit Alpha 1.04 ein Mann („Hier spricht Kapitän Varga“). Die alte Aufnahme (Frauenstimme, „Kapitänin“)
+  // passt nicht mehr; die Zeile bleibt stumm, bis sie mit einer Männerstimme neu erzeugt ist. Dann wieder eintragen: ['Hier spricht Kapitän Varga', 'c17_varga'].
   ['Eine Kapsel der Weitsicht. Hier draußen', 'c18_roth'],
   ['die Gilde behält ihn', 'c19_krull'],
   ['das Archiv gehört der Crew, nicht der Gilde', 'c20_hollweg'],

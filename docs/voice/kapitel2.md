@@ -14,10 +14,10 @@ Ablage der Aufnahmen: `asset-src/voice/kapitel2/<Kennung>.mp3`, danach `npm run 
 | Ratsherr Hollweg | „Commander Blake“ (`Z2yQ1EdlDmcIgh9Pn4Lw`) wie Prolog |
 | Lotse Brummer | eigene Stimme „Brummer“ (`qrAVdiuWINwZUeJuzGA1`) |
 | Vorarbeiter Kessler (Splitter-Mine), neu | „Leonard Berger – Rough & Resonant“ (`Lpl4mdZ3QP3R1V6iShDZ`) |
-| Kapitänin Varga („Weitsicht“, nur Aufnahme), neu | „Irene - reflective thinking“ (`ZswvODxwIaNVszyBPqBF`) |
+| Kapitän Varga („Weitsicht“, nur Aufnahme) | bis Alpha 1.03 „Irene - reflective thinking“ (`ZswvODxwIaNVszyBPqBF`). Seit Alpha 1.04 ist Varga ein Mann: Die Zeile ist stumm, bis sie mit einer Männerstimme neu erzeugt ist. |
 
 **Kessler** – Ende fünfzig, gräbt seit zwanzig Jahren im Splittergürtel. Rau, trocken, unaufgeregt, ein wenig abergläubisch.
-**Varga** – Kapitänin der verschollenen „Weitsicht“. Erschöpft, gefasst, spricht in eine Kapsel-Aufzeichnung, Störungen im Signal.
+**Varga** – Kapitän der verschollenen „Weitsicht“ (bis Alpha 1.03 Kapitänin). Erschöpft, gefasst, spricht in eine Kapsel-Aufzeichnung, Störungen im Signal.
 
 ## Zeilen
 

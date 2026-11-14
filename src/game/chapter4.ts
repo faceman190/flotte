@@ -185,7 +185,7 @@ const STEPS: Step[] = [
           ['KRULL', 'Und Pilot: Was immer er findet, ich will es als Erste sehen.']);
         storyHooks.banner('FERRIT-LESER EINGEBAUT', 'Sechs Ferrit verbraucht · Kurs: Stummfeld', '#c070ff');
         route(STUMM);
-      }, '#ffb347', hangarSpot(-7), { model: 'merchant', tint: [1.05, 0.95, 0.8] });
+      }, '#ffb347', hangarSpot(-7), { model: 'krull' });
     },
     lines: () => {
       const d = c4(), n = Math.min(FERRIT, P.cargo.ferrit || 0), here = IN.active && docked(TAL);
@@ -313,7 +313,7 @@ const STEPS: Step[] = [
       // Die Träger schalten ab: alle Drohnen und Bomber im Sektor fallen aus (die Bienenstöcke bleiben)
       if (!SHARED.client) for (let i = world.enemies.length - 1; i >= 0; i--) if (world.enemies[i].type !== 'mother') killEnemy(world.enemies[i], i, false, false);
       talk(['LESER', 'Befehl gesendet: Fracht freigeben. Die Träger schalten ab.'],
-        ['VARGAL', 'Hier Weitsicht, Kapitänin Varga. Die Klammern lösen sich. Wer immer das war: Ich fahre die Triebwerke hoch. Sagen Sie mir, wohin.']);
+        ['VARGAL', 'Hier Weitsicht, Kapitän Varga. Die Klammern lösen sich. Wer immer das war: Ich fahre die Triebwerke hoch. Sagen Sie mir, wohin.']);
     },
     done: () => !!c4().free && !dialogBusy(),
     markers: () => { if (!inSpace(KERN) || c4().free) return []; const h = hold(); return [{ x: h[0], y: h[1], z: h[2], label: 'WEITSICHT · LANGSAM HERAN', col: '#ffb347', big: true }]; },
@@ -418,7 +418,7 @@ const STEPS: Step[] = [
       const go = () => { if (S.scene) return; S.scene = true; IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0; ankunft(ch); };
       if (ch === 'rat') S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'hollweg' });
       else if (ch === 'wacht') S.met = storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx, z: hz }, { model: 'roth' });
-      else S.met = storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx, z: hz }, { model: 'merchant', tint: [1.05, 0.95, 0.8] });
+      else S.met = storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx, z: hz }, { model: 'krull' });
       storyNpc('Achterberg', 'Ausbildung', say, go, '#ffb347', { x: hx + 2.6, z: hz + 1.2 }, { model: 'achterberg' });
     },
     lines: () => {

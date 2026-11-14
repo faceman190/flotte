@@ -158,7 +158,7 @@ const STEPS: Step[] = [
       const { x: hx, z: hz } = hangarSpot(-4), say = 'Zur Auswertung dazutreten';
       const go = () => { if (!S.scene) { S.scene = true; IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0; auswertung(); } };
       S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'hollweg' });
-      storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx - 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [1.05, 0.95, 0.8] });
+      storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx - 2.6, z: hz + 1.2 }, { model: 'krull' });
       storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'roth' });
     },
     lines: () => {

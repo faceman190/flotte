@@ -164,6 +164,8 @@ Danach liegt die Weitsicht vor Anker bei der Bastion; das Frachtmodul im Stummfe
 
 Vertonung: 43 Zeilen, noch nicht erzeugt. Neue Sprecherrolle: der Ferrit-Leser (sechs Zeilen, sachliche Maschinenstimme). Varga spricht drei Zeilen als Aufnahme (wie in Kapitel 2) und vier Zeilen über Funk.
 
+**Varga ist ein Mann (Entscheidung vom 14.11.2026, Alpha 1.04):** Dem Spieleentwickler waren es zu viele weibliche Figuren. Im Spiel heißt er überall „Kapitän Varga“. Die eine vertonte Zeile aus Kapitel 2 (`c17_varga`, Frauenstimme) ist aus der Zuordnung genommen und bleibt stumm, bis sie mit einer Männerstimme neu erzeugt ist.
+
 Technik:
 - **Tarnung** (`hidden` in `player.ts`, gesetzt in `updateChapter4`): Schritte 3 bis 10, im All eines Ferrox-Sektors, nach 2,5 Sekunden unter 60 m/s. Die Ferrox wählen den Spieler dann nicht als Ziel (`playerVisible` in `combat.ts`). Nach dem Kapitel gibt es sie nicht mehr.
 - **Schiff der Geschichte** (`spawnStoryShip` in `npc.ts`): die Weitsicht ist ein vergrößertes Passagierschiff im Verkehr. Die Ferrox greifen sie an wie jeden Frachter; sie bleibt bei 1 Rumpfpunkt stehen statt zu explodieren. `spawnStoryAlly` stellt Achterberg und Staffel Vier als Patrouillenjäger.
@@ -224,7 +226,7 @@ Dort liegt ein Archivkristall, bewacht von Ferrox-Drohnen, und daneben eine Rett
 | 3 | Splittergürtel | Drei singende Brocken anfliegen und scannen (R); nach dem zweiten greifen Ferrox an. |
 | 4 | Schlackenfeld | Krull: Die Muster sind eine Karte. Auf **Schlacke Prime** landen. |
 | 5 | Schlacke Prime | Zu Fuß zur **Ruine der Erbauer** (Ferrit-Säulen, schwebender Kristall); vier Wachdrohnen ausschalten. |
-| 6 | Ruine | Archivkristall bergen (E), daneben die **Rettungskapsel WS-07**: Aufnahme von Kapitänin Varga – „Wir sind durch … Wir leben.“ |
+| 6 | Ruine | Archivkristall bergen (E), daneben die **Rettungskapsel WS-07**: Aufnahme von Kapitän Varga – „Wir sind durch … Wir leben.“ |
 | 7 | Wahl | Kristall zur Splitter-Mine (**Gilde**) oder zur Bastion (**Rat**) – wo man andockt, dort bleibt er. |
 | 8 | Szene | je nach Wahl Krull und Kessler oder Hollweg und Roth; Brummer: Die Aufnahme ist **vier Monate** alt. „Die Weitsicht lebt.“ |
 

@@ -173,7 +173,7 @@ const STEPS: Step[] = [
       } });
       else if (!c2().pod) { const p = podPos(r); footTargets.push({ x: p[0], z: p[1], r: 3.5, label: 'Rettungskapsel untersuchen', act: () => {
         c2().pod = true; sfx('door_open', 0.5, 0.8);
-        talk(['VARGA', 'Hier spricht Kapitänin Varga, Weitsicht. Wir sind durch. Das Tor hat uns nicht zerrissen, es hat uns verschoben. Wer das hört: Wir leben.'],
+        talk(['VARGA', 'Hier spricht Kapitän Varga, Weitsicht. Wir sind durch. Das Tor hat uns nicht zerrissen, es hat uns verschoben. Wer das hört: Wir leben.'],
           ['ROTH', 'Eine Kapsel der Weitsicht. Hier draußen. Bring alles zurück. Sofort.']); saveGame();
       } }); }
     },
@@ -207,7 +207,7 @@ const STEPS: Step[] = [
       if (S.met || S.scene || !settled() || IN.ship || !docked(gilde ? 'splittermine' : 'bastion')) return;
       const { x: hx, z: hz } = hangarSpot(-4), say = 'Den Archivkristall übergeben';
       const go = () => { if (S.scene) return; S.scene = true; IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0; archiv(gilde); };
-      if (gilde) { S.met = storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx, z: hz }, { model: 'merchant', tint: [1.05, 0.95, 0.8] }); storyNpc('Kessler', 'Splitter-Mine', say, go, '#ffb347', { x: hx + 2.4, z: hz + 1 }, { model: 'kessler' }); }
+      if (gilde) { S.met = storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx, z: hz }, { model: 'krull' }); storyNpc('Kessler', 'Splitter-Mine', say, go, '#ffb347', { x: hx + 2.4, z: hz + 1 }, { model: 'kessler' }); }
       else { S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'hollweg' }); storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'roth' }); }
     },
     lines: () => {

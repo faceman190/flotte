@@ -27,5 +27,5 @@ Vorher in Blender:
 Nur Modelle verwenden, an denen du die Rechte hast (selbst gemacht, gekauft oder mit passender freier Lizenz).
 Bei fremden Modellen bitte Quelle und Lizenz dazuschreiben, z. B. in eine Textdatei mit gleichem Namen.
 
-- `figuren/*_tripo.glb`: Achterberg, Hollweg, Roth (Sanna Roth), Tamm (Rika Tamm), Kessler, Brandt (Ilvar Brandt). Vom Spieleentwickler am 14.11.2026 selbst mit Tripo erzeugt (mit Skelett), aus seinem OneDrive-Ordner. Nutzungsrechte nach den Bedingungen seines Tripo-Kontos.
+- `figuren/*_tripo.glb`: Achterberg, Hollweg, Roth (Sanna Roth), Tamm (Rika Tamm), Kessler, Brandt (Ilvar Brandt), Krull. Vom Spieleentwickler am 14.11.2026 selbst mit Tripo erzeugt (mit Skelett), aus seinem OneDrive-Ordner. Nutzungsrechte nach den Bedingungen seines Tripo-Kontos.
 - `mine/ar39/`: Sturmgewehr AR-39. Vom Spieleentwickler am 13.11.2026 selbst mit Tripo erzeugt (Datei `weapon-AR39.glb` aus seinem OneDrive-Ordner). Nutzungsrechte nach den Bedingungen seines Tripo-Kontos.

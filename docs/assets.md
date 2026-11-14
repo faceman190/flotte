@@ -190,7 +190,7 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   src/models/charModels.ts, `NpcLook.model` und der Ersatz `NPC_FALLBACK` in src/game/interior.ts.
 - Stand Alpha 1.02: Achterberg (neu, ersetzt die Meshy-Fassung), Hollweg (1,86 m), Roth (1,72 m), Tamm (1,70 m).
 - Alpha 1.03: Kessler (1,80 m; Kapitel 2) und Ilvar Brandt (1,76 m; steht in Neonhafen hinter dem Tresen, `updateBrandt` in src/game/chapter3.ts).
-  Krull und Varga nutzen weiter die Grundfiguren mit Farbton. Bilder: `docs/bilder/figuren-102-reihe.jpg`, `figuren-102-hangar.jpg`.
+- Alpha 1.04: Krull (1,66 m; Kapitel 1, 2 und 4). Varga hat keine Figur im Spiel (nur Funk und Aufnahme). Bilder: `docs/bilder/figuren-102-reihe.jpg`, `figuren-102-hangar.jpg`.
 - Nach mehreren Läufen in Blender `bpy.data.orphans_purge(do_recursive=True)` aufrufen, bevor gespeichert wird: Sonst bleiben die Bilder
   verworfener Läufe in der Datei (90 MB statt 34 MB; GitHub nimmt höchstens 100 MB je Datei).
 
