@@ -191,6 +191,11 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
 - Stand Alpha 1.02: Achterberg (neu, ersetzt die Meshy-Fassung), Hollweg (1,86 m), Roth (1,72 m), Tamm (1,70 m).
 - Alpha 1.03: Kessler (1,80 m; Kapitel 2) und Ilvar Brandt (1,76 m; steht in Neonhafen hinter dem Tresen, `updateBrandt` in src/game/chapter3.ts).
 - Alpha 1.04: Krull (1,66 m; Kapitel 1, 2 und 4). Varga hat keine Figur im Spiel (nur Funk und Aufnahme). Bilder: `docs/bilder/figuren-102-reihe.jpg`, `figuren-102-hangar.jpg`.
+- Alpha 1.05: **Gesicht fest am Kopfknochen** (`rigid_head` in `figur_tripo`, läuft in `tripo_to_merchant` nach dem Vereinfachen). Tripo verteilt das Gesicht als
+  langen Übergang auf Kopf und Hals (Kinn und Mund 12 bis 27 % Hals, Nase und Augen 3 bis 13 %). Die Kopfdrehung des Spiels (`lookStep`, bis 60°,
+  40 % Hals und 60 % Kopf) zog dadurch Kinn und Stirn auseinander. Jetzt hängt jeder Punkt mit Kopfanteil ab 45 % ganz am Kopf, unter 18 % bleibt er,
+  dazwischen ein weicher Übergang am Hals. Bärte und Haare gehen mit, Kragen bleiben stehen. Alle sieben Figuren neu exportiert (`export_figur`).
+  Vergleich vorher/nachher: `docs/bilder/figuren-105-gesicht.jpg` (Zeilen 1 und 3 vorher, 2 und 4 nachher).
 - Nach mehreren Läufen in Blender `bpy.data.orphans_purge(do_recursive=True)` aufrufen, bevor gespeichert wird: Sonst bleiben die Bilder
   verworfener Läufe in der Datei (90 MB statt 34 MB; GitHub nimmt höchstens 100 MB je Datei).
 
