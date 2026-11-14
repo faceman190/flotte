@@ -127,7 +127,7 @@ const STEPS: Step[] = [
       else lines();
     },
     lines: () => [inSpace(HOME) ? ['An der <b>Bastion</b> andocken · E', false, false] : lineSpace(HOME, 'Heimstatt')],
-    done: () => docked('bastion'),
+    done: () => docked('bastion') && !dialogBusy(),      // wer schon in der Bastion steht, hört Brummer erst zu Ende
     markers: () => (inSpace(HOME) ? dockMark('bastion', 'BASTION · ANDOCKEN', '#ffb347') : []),
   },
   { // 1: Hollweg und Achterberg im Hangar der Bastion

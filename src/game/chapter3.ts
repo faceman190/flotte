@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { scene, glowMat } from '../core/engine';
+import { scene, glowMat, camera } from '../core/engine';
 import { d3, rng, hashStr } from '../core/util';
 import { snd, sfx } from '../core/audio';
 import { P, G, saveGame } from './state';
@@ -81,7 +81,7 @@ const STEPS: Step[] = [
       else lines();
     },
     lines: () => [lineSpace('wacht', 'Wachtposten Ost')],
-    done: () => inSpace('wacht'),
+    done: () => inSpace('wacht') && !dialogBusy(),
   },
   { // 1: Wachtposten Ost anfliegen
     title: T,
@@ -366,6 +366,7 @@ function updateBrandt(dt: number) {
     const l = brandtLocal(); if (!l) return;
     const kind = hasChar('brandt') ? 'brandt' : hasChar('lagerarbeiter') ? 'lagerarbeiter' : hasChar('worker') ? 'worker' : ''; if (!kind) return;   // eigene Figur, sonst Ersatz mit Farbton
     const c = charInstance(kind, kind === 'brandt' ? 1 : [0.85, 0.72, 0.78]); animInit(c.anim, false);
+    c.anim.look = camera.position;                                    // schaut den Piloten an, wenn der an den Tresen tritt
     c.g.position.set(l[0], 0.18, l[1]); c.g.rotation.y = l[0] > 0 ? -Math.PI / 2 : Math.PI / 2; CITY.st.mesh.add(c.g);      // hinter dem Tresen, Blick zum Platz
     const lc = probeLit(c.g); lc.setRGB(0.9, 0.75, 0.6);            // steht im Licht der Garküche
     brandt = { c, lc, at: CITY.st.mesh };

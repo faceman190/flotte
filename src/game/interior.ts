@@ -882,6 +882,11 @@ export function npcSpeak(who: string, seconds: number) {
   const k = who.toUpperCase();
   for (const q of persons) if (q.name && q.p.anim && q.name.toUpperCase().includes(k)) animTalk(q.p.anim, seconds);
 }
+// Eine neue Zeile beginnt: Alle anderen Figuren im Raum hören auf zu gebärden (wer eine Zeile überspringt, sah sonst zwei zugleich reden)
+export function npcHush(who?: string) {
+  const k = (who || '').toUpperCase();
+  for (const q of persons) if (q.p.anim && !(k && q.name && q.name.toUpperCase().includes(k))) q.p.anim.talkT = Math.min(q.p.anim.talkT, 0.25);
+}
 function talk(name: string, tab: string) {
   npcSpeak(name, 3.2); staffBark(name, tab);
   say(name, GREET[tab] || '');
@@ -993,7 +998,13 @@ export function updateWalk(dt: number) {
     if (d < bd) { bd = d; best = it; }
   }
   IN.target = best;
-  // Animationen
+  updateRoomLife(dt);
+}
+// Leben im Raum: Figuren atmen, gebärden und schauen, Läufer gehen ihre Wege. Läuft auch, wenn der Pilot gerade nicht selbst läuft
+// (Kinoszene, Stationsmenü, Start und Landung): Bis Alpha 1.07 standen die Figuren dort eingefroren, in den Szenen der Geschichte
+// also ausgerechnet dann, wenn sie sprechen.
+export function updateRoomLife(dt: number) {
+  if (!IN.active) return;
   const t = G.time;
   if (field) (field.material as THREE.MeshBasicMaterial).opacity = 0.055 + Math.sin(t * 2.2) * 0.02;
   if (holo) holo.rotation.y += dt * 0.25;

@@ -72,7 +72,7 @@ const STEPS: Step[] = [
       else lines();
     },
     lines: () => [lineSpace(SEC, 'Splittergürtel')],
-    done: () => inSpace(SEC),
+    done: () => inSpace(SEC) && !dialogBusy(),
   },
   { // 1: Splitter-Mine anfliegen
     title: T,
@@ -177,7 +177,7 @@ const STEPS: Step[] = [
           ['ROTH', 'Eine Kapsel der Weitsicht. Hier draußen. Bring alles zurück. Sofort.']); saveGame();
       } }); }
     },
-    done: () => !!c2().got && !!c2().pod,
+    done: () => !!c2().got && !!c2().pod && !dialogBusy(),      // erst die Aufnahme aus der Kapsel zu Ende hören
     markers: () => { const r = ruinPos(); if (!r || !onPlanet()) return []; const p = c2().got ? podPos(r) : r; return [{ x: p[0], y: terrainAt(p[0], p[1]) + 6, z: p[1], label: c2().got ? 'RETTUNGSKAPSEL' : 'ARCHIVKRISTALL', col: c2().got ? '#ffb347' : '#c070ff', big: true }]; },
   },
   { // 7: Gilde oder Rat?

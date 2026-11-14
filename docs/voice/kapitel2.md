@@ -14,7 +14,7 @@ Ablage der Aufnahmen: `asset-src/voice/kapitel2/<Kennung>.mp3`, danach `npm run 
 | Ratsherr Hollweg | „Commander Blake“ (`Z2yQ1EdlDmcIgh9Pn4Lw`) wie Prolog |
 | Lotse Brummer | eigene Stimme „Brummer“ (`qrAVdiuWINwZUeJuzGA1`) |
 | Vorarbeiter Kessler (Splitter-Mine), neu | „Leonard Berger – Rough & Resonant“ (`Lpl4mdZ3QP3R1V6iShDZ`) |
-| Kapitän Varga („Weitsicht“, nur Aufnahme) | bis Alpha 1.03 „Irene - reflective thinking“ (`ZswvODxwIaNVszyBPqBF`). Seit Alpha 1.04 ist Varga ein Mann: Die Zeile ist stumm, bis sie mit einer Männerstimme neu erzeugt ist. |
+| Kapitän Varga („Weitsicht“, nur Aufnahme) | „Leander - Warm, Calm, Thoughtful“ (`EFMWG4bgYSD1vaE3P8OS`), neu aufgenommen am 2026-11-14. Bis Alpha 1.03 sprach die Frauenstimme „Irene“ (`ZswvODxwIaNVszyBPqBF`), von Alpha 1.04 bis 1.07 war die Zeile stumm. |
 
 **Kessler** – Ende fünfzig, gräbt seit zwanzig Jahren im Splittergürtel. Rau, trocken, unaufgeregt, ein wenig abergläubisch.
 **Varga** – Kapitän der verschollenen „Weitsicht“ (bis Alpha 1.03 Kapitänin). Erschöpft, gefasst, spricht in eine Kapsel-Aufzeichnung, Störungen im Signal.
@@ -39,7 +39,7 @@ Ablage der Aufnahmen: `asset-src/voice/kapitel2/<Kennung>.mp3`, danach `npm run 
 | c14_roth | ROTH | [shouting, urgent] Wachdrohnen! Die bewachen das Ding. Räum sie weg! |
 | c15_krull | KRULL | [tense, careful] In der Mitte schwebt ein Kristall. Nimm ihn mit, vorsichtig. |
 | c16_krull | KRULL | [relieved, then stunned] Du hast ihn! [pause] Moment … neben der Ruine liegt noch etwas. Eine Rettungskapsel. Menschlich. |
-| c17_varga | VARGA | [exhausted, distant recording, static] Hier spricht Kapitänin Varga, Weitsicht. [pause] Wir sind durch. Das Tor hat uns nicht zerrissen, es hat uns verschoben. [quiet] Wer das hört: Wir leben. |
+| c17_varga | VARGA | [exhausted, distant recording, static] Hier spricht Kapitän Varga, Weitsicht. [pause] Wir sind durch. Das Tor hat uns nicht zerrissen, es hat uns verschoben. [quiet] Wer das hört: Wir leben. |
 | c18_roth | ROTH | [shaken, then commanding] Eine Kapsel der Weitsicht. Hier draußen. Bring alles zurück. Sofort. |
 | c19_krull | KRULL | [possessive, cool] Bring den Kristall zur Splitter-Mine. Die Gilde hat ihn gefunden, die Gilde behält ihn. |
 | c20_hollweg | HOLLWEG | [firm, over comms] Pilot, das Archiv gehört der Crew, nicht der Gilde. Bring es zur Bastion. |

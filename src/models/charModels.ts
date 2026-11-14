@@ -143,6 +143,7 @@ export function animInit(a: CharAnim, moving: boolean) {
   if (!to) return;
   to.reset(); to.time = Math.random() * to.getClip().duration; to.play();
   a.cur = to; a.mode = moving && a.walk ? 'walk' : 'idle';
+  a.mixer.update(0);   // Haltung sofort einnehmen: Die Ruhehaltung der Tripo-Figuren ist die T-Haltung
 }
 export function animTalk(a: CharAnim, seconds: number) { if (a.talk.length) a.talkT = Math.max(a.talkT, seconds); }
 // Pro Bild: move = die Figur soll gehen, speed = ihr Gehtempo in m/s. Rückgabe: das Tempo, mit dem sie sich in diesem Bild

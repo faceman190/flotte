@@ -55,7 +55,7 @@ const STEPS: Step[] = [
       else lines();
     },
     lines: () => [routeLine()],
-    done: () => here(),
+    done: () => here() && !dialogBusy(),
   },
   { // 1: Sonnenwacht anfliegen
     title: T,
@@ -114,7 +114,11 @@ const STEPS: Step[] = [
   { // 4: zum Kernstück
     title: 'Kapitel 1 · Das Kernstück',
     enter: () => talk(['TAMM', 'Ich hab sie! Mitten im Feld treibt ein Bogenstück des Tors, so groß wie die Bastion. Und Pilot … da bewegt sich was.']),
-    lines: () => { if (!here()) return [routeLine()]; const f = places().frag; return [[`Fliege zum Kernstück des Tors · <b>${fmtDist(d3(f[0], f[1], f[2], P.x, P.y, P.z))}</b>`, false, false]]; },
+    lines: () => {
+      if (!here()) return [routeLine()];
+      if (S.foes.length) { const all = S.foes.filter(Boolean), left = all.filter(e => world.enemies.includes(e)).length; return [[`Ferrox am Kernstück vertreiben · <b>${all.length - left}/${all.length}</b>`, left === 0, false]]; }   // Tamm und Hollweg reden noch
+      const f = places().frag; return [[`Fliege zum Kernstück des Tors · <b>${fmtDist(d3(f[0], f[1], f[2], P.x, P.y, P.z))}</b>`, false, false]];
+    },
     tick: () => {
       if (!here() || S.foes.length) return;
       const f = places().frag;
@@ -125,7 +129,7 @@ const STEPS: Step[] = [
       talk(['TAMM', 'Ferrox! Im Sonnenfeld! Sie fressen am Tor!'], ['HOLLWEG', 'Pilot, vertreib sie. Die Bastion schickt Verstärkung, aber du bist zuerst da.']);
       snd(440, 0.25, 'square', 0.04); setTimeout(() => snd(440, 0.25, 'square', 0.04), 350);
     },
-    done: () => S.foes.length > 0,
+    done: () => S.foes.length > 0 && !dialogBusy(),      // Tamm und Hollweg ausreden lassen
     markers: () => { if (!here()) return []; const f = places().frag; return [{ x: f[0], y: f[1] + 160, z: f[2], label: 'KERNSTÜCK DES HALDEN-TORS', col: '#e0b030', big: true }]; },
   },
   { // 5: Ferrox vertreiben

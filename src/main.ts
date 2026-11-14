@@ -24,7 +24,7 @@ import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
 import { drawHUD, updatePanels, showBanner, nextHop } from './ui/hud';
 import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
-import { startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, leaveInterior, updateWalk, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
+import { startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
 import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, ROVER, SURF } from './game/surface';
@@ -547,7 +547,8 @@ function simulate(dt: number) {
   } else if (m === 'jump') updateJump(dt);
   else if (m === 'walk') updateWalk(dt);
   else if (m === 'dungeon') updateDungeon(dt);
-  else if ((m as string) === 'launch') updateHangarSequence(dt);
+  else if ((m as string) === 'launch') { updateHangarSequence(dt); updateRoomLife(dt); }
+  else if (m === 'dock' && IN.active) updateRoomLife(dt);
   else if (m === 'entry') updateEntry(dt);
   else if (m === 'rover') { if (G.dead) updatePlayer(dt); else if (FOOT.active) updateFoot(dt); else updateRover(dt); }
   if (world.surface && !IN.active && !DUN.active) updateSalvage(dt, (x, y, z) => puff(x, y, z, (Math.random() - 0.5) * 1.5, 2 + Math.random() * 2, (Math.random() - 0.5) * 1.5, '#2a2622', 2.2));
@@ -584,6 +585,7 @@ function loop(now: number, manual = false) {
   last = now;
   perfFrameStart();
   simulate(dt);
+  if (G.mode === 'scene' && IN.active) updateRoomLife(dt);   // in Kinoszenen steht die Welt, die Figuren im Raum sprechen aber weiter
   hook('Vorspann', () => updateIntro(dt));
   hook('Geschichte', () => updateStory(dt));
   hook('Kapitel 1', () => updateChapter1(dt));

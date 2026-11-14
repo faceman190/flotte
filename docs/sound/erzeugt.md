@@ -119,7 +119,7 @@ Neue Stimmen: Kessler „Leonard Berger – Rough & Resonant“ (`Lpl4mdZ3QP3R1V
 | c14_roth | q7TTvfGOFI171OvbBKAU |
 | c15_krull | rFZ07V4dkO3hJsb8p9WI |
 | c16_krull | 5MwYj85dTMBWZJ6IbCuZ |
-| c17_varga | 8SlYHEjChajl9YsveO4u |
+| c17_varga | pvkH8AswaPC39IUhue42 (neu am 2026-11-14 mit „Leander“, 190 Credits; die erste Fassung 8SlYHEjChajl9YsveO4u war die Frauenstimme „Irene“) |
 | c18_roth | sFjOevG7MmcZCEwkh2Pk |
 | c19_krull | lN3ZUqrOp6uUnKKiXuwV |
 | c20_hollweg | W3KdbICsWT8Bw7Cb5CN7 |
@@ -195,3 +195,56 @@ neuen Stimme eine Zeile mit `estimate_only` und genau dieser Stimme prüfen. Die
 | d39_krull | z0RErnWx21ngSeMorxgu |
 | d40_brummer | 0OVqCy4esEpft05thLrs |
 | d41_brummer | AOHmORTNLwo0g8yZj3Jz |
+
+## Stimmen Kapitel 4 (eingebaut in Alpha 1.08, 2026-11-14)
+
+Flow `o5kmPSSAOZAHzoKW6amP`, Modell `eleven_v4`, je Zeile eine Fassung. Alle 43 Zeilen erzeugt, zusammen **5483 Credits** (wie berechnet).
+Texte und Regie: docs/voice/kapitel4.md, Dateien: asset-src/voice/kapitel4/<Kennung>.mp3.
+Neue Stimmen: Varga „Leander - Warm, Calm, Thoughtful“ (`EFMWG4bgYSD1vaE3P8OS`), Ferrit-Leser „Rocco Robot“ (`ee2pDOfqzj2pBerZvUCH`), beide 1 Credit je Zeichen.
+Dazu neu aufgenommen: c17_varga aus Kapitel 2 (190 Credits, im Flow von Kapitel 2).
+
+| Kennung | Fassung |
+|---|---|
+| e01_brummer | BvpQlVYWkRlowpg4XXRt |
+| e02_hollweg | mJVLFVldLH0In1PRMK2m |
+| e03_hollweg | Ma6tIqBnXxReOxNSOo1r |
+| e04_hollweg | YPZHFDf5DNgmPSaV9Nlv |
+| e05_achterberg | LXLMbXEu9r6QBtSup6sT |
+| e06_achterberg | 7aqpQmzF8VdFGFZJ01XK |
+| e07_hollweg | iOBfMPNP3KlgZ3TeYgLx |
+| e08_achterberg | MQS8geoIyUMLdhoiQSXt |
+| e09_krull | 81P5SYfB0fIVuNN2HSfF |
+| e10_krull | U5I2SkVr8nk5lSvRLtLE |
+| e11_krull | R7TNJzflAZHZ8vJ9RqIv |
+| e12_krull | w3utuMAxG7PU42NWDNl8 |
+| e13_krull | 0DunHHZGPCiVXFj4zeqI |
+| e14_krull | RlZrK6oEuhmCg8I9WrEP |
+| e15_krull | mo11UBItJxs5FuicF6R7 |
+| e16_achterberg | t1P6yzeMtJqyigUWjtcu |
+| e17_varga | QBOm8X0DMSjBc2X5NpWL |
+| e18_varga | 0nS8YjL82WKSBbHRDOog |
+| e19_varga | ZS6Nh7X9RDzrPaTeLHQp |
+| e20_leser | 9F4zWKESd0TYGGL0LzBi |
+| e21_leser | Htyl4RizjpWN7pKdB129 |
+| e22_leser | r4gdjL1fBYYu3ZvOWMX2 |
+| e23_leser | 0HXE8rIhm5NZWGVqy65u |
+| e24_leser | WHHBNuGELxbGNt1FwnVh |
+| e25_leser | Du3JWcidrO0tgQuNHaTG |
+| e26_varga | UltSMqjF62NjQgI6hG08 |
+| e27_varga | bJ1H0RGW0uy83raRjuG5 |
+| e28_achterberg | 3Hy3n91PrDdXFxsUEhaN |
+| e29_achterberg | tEGi8hYX2kAa0xkVrVXT |
+| e30_hollweg | 7jgavdabOwBVPQIJgcao |
+| e31_roth | TN1iyLZFMUMCjG22qi1w |
+| e32_krull | ZemVS90YSlYwgskdvlKw |
+| e33_brummer | 64lkgYmpoHZTiiz2r1Nw |
+| e34_varga | 5CJxuJbbqx8bntquYdEf |
+| e35_hollweg | xqWE31kFz6aNvb5QwEFG |
+| e36_varga | GBNCPJDtg1UaFgft4fbg |
+| e37_achterberg | 7HWd250B2Lu9jm1lsEyq |
+| e38_krull | nDvWWtIL7YEAZyU0ccJb |
+| e39_krull | 9cT997igeX1v1DG3vikE |
+| e40_hollweg | YEHiqTOwawXLP5w7z15D |
+| e41_roth | vPznlzzx1cePy1iLOwQt |
+| e42_krull | rz7Fm7nAQ8u5KF8qqwUw |
+| e43_brummer | C7XR77orwkJGq82FIOod |

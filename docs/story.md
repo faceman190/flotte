@@ -310,6 +310,15 @@ Kamerafahrten in der Spielwelt, dazu eingeblendete Texttafeln:
 
 ---
 
+## Regeln für Schritte und Szenen (Stand Alpha 1.08)
+
+Am 2026-11-14 wurden alle Stationsszenen von Prolog bis Kapitel 4 im Testfenster durchgespielt (Platz, Haltung, Ansprechen, Ablauf bis zum Ende). Daraus:
+
+- **Figuren leben auch, wenn der Pilot nicht läuft.** `updateRoomLife` (interior.ts) bewegt die Figuren im Raum auch in Kinoszenen, im Stationsmenü und während Start und Landung. Bis Alpha 1.07 lief das nur im Modus `walk`: In jeder Szene (Vereidigung, alle Kapitelabschlüsse) standen die Figuren eingefroren.
+- **Nur wer spricht, gebärdet.** `speak()` ruft `npcHush(who)`: Beginnt eine Zeile, hören alle anderen Figuren auf. Aufnahmen (MAREN, ACHTERBERG31) bewegen niemanden.
+- **Ein Schritt, der mit einem Gespräch endet, wartet auf `!dialogBusy()`.** Ein neuer Schritt verwirft offene Zeilen. Nachgezogen in Alpha 1.08: Kapitel 1 Schritt 4 (Hollwegs „Pilot, vertreib sie“ war nie zu hören), Kapitel 2 Schritt 6 (Vargas Aufnahme brach nach gut einer Sekunde ab, Roths Zeile fiel weg) und der jeweils erste Schritt der Kapitel 1 bis 4 (wer beim Kapitelbeginn schon am Ziel ist, hörte den Funkspruch nicht zu Ende).
+- **Neue Figuren nehmen ihre Haltung sofort ein** (`animInit` ruft `mixer.update(0)`). Sonst stehen die Tripo-Figuren bis zum ersten Bild in der T-Haltung, zum Beispiel Achterberg beim Spielstart während der Landung.
+
 ## Texte im Spiel, die angepasst werden müssen
 
 - Spieltitel überall: „Letzte Flotte“ → **„Letzte Crew“**; „Pilot der Letzten Flotte“ → „Pilot der Crew“.
