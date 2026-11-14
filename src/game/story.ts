@@ -226,7 +226,7 @@ const STEPS: Step[] = [
       if (S.met || S.scene || !settled() || IN.ship || !inBastion()) return;
       const { x: hx, z: hz } = hangarSpot(-4), say = 'Zur Vereidigung antreten';
       const go = () => { if (S.scene) return; S.scene = true; IN.yaw = Math.atan2(-(hx + 1.2 - IN.x), -(hz - IN.z)); IN.pitch = 0; vereidigung(); };
-      S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
+      S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'hollweg' });
       storyNpc('Achterberg', 'Ausbilderin', say, go, '#ffb347', { x: hx + 2.4, z: hz + 0.8 }, { model: 'achterberg' });
     },
     lines: () => (inBastion()

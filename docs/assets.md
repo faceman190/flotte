@@ -168,6 +168,31 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
 - Umrechner `fbx-anim.mjs`: Mit `--limbs` übernimmt die Hand jetzt die Ausrichtung des Unterarms. Vorher knickte das Handgelenk um
   rund 10°, weil nur der Unterarm nachgerichtet wurde.
 
+## Figuren von Tripo (Alpha 1.02)
+- Der Spieleentwickler erzeugt die Figuren selbst mit Tripo (Bildvorlage: Blatt mit Vorder-, Seiten- und Rückansicht in T-Haltung) und legt sie
+  als GLB in seinen OneDrive-Ordner `Dokumente/Blender`. Arbeitskopie: `asset-src/neu/figuren/<name>_tripo.glb` (nicht im Repository).
+- Was Tripo liefert: Körperhöhe 1, ein Netz mit 30.000 bis 46.000 Dreiecken, ein Bild 2048 px (bei Tamm zusätzlich Relief und Rauheit),
+  Skelett im Mixamo-Aufbau (`mixamorig:…`, 65 Knochen mit Fingern), meist T-Haltung (Achterberg kam in A-Haltung).
+- Umstellen und Export: `tripo_to_merchant(Name, Größe, tris=30000)` im Textblock `figur_tripo` von `Figuren.blend`
+  (vorher `figur_lib` und `figur_build` ausführen). Schritte:
+  1. Knochen umbenennen: `Spine → Spine02`, `Spine1 → Spine01`, `Spine2 → Spine`, `Neck → neck`, `HeadTop_End → head_end`, sonst nur die Vorsilbe weg.
+     Finger- und Zehenspitzen (Endknochen) entfallen. Die übrigen Fingerknochen bleiben (54 Knochen); kein Clip bewegt sie bisher.
+  2. Auf höchstens 30.000 Dreiecke vereinfachen, auf die Körpergröße bringen (Angaben in Zentimetern, Skelett-Objekt mit Maßstab 0,01).
+  3. Nur Arme und Beine schwenken. Rumpf, Kopf, Schultern und Füße bleiben, wie sie sind: Dort setzt Tripo die Gelenke anders als Meshy,
+     und ein Angleichen der Gelenkrichtungen würde die Hülle verbiegen. **Arme:** Die Richtung wird an der Hülle gemessen (Mitte des Ärmels in zwei
+     Abschnitten, `limb_line`), bei der Figur und bei der Händlerin, nicht an den Gelenken. Tripo setzt das Schultergelenk hinten und das Handgelenk
+     vorn an; nach den Gelenken ausgerichtet standen die Arme 8° zu tief und zu weit hinten. Der Schwerpunkt der Punkte taugt auch nicht (bei Tamm
+     12° daneben, weil das Netz an Handschuhen dichter ist). `arm_drop=6` legt die Arme 6° tiefer als bei der Händlerin: Deren Bewegungen halten die
+     Arme für einen weiten Mantel vom Körper weg. **Beine:** nur die Spreizung nach den Gelenken, von vorn gesehen; der Fuß dreht zurück und bleibt flach.
+  4. Finger entspannen: je Gelenk ein kleiner Knick zur Handfläche (14°, 18°, 12°; Daumen 8°).
+  5. Haltung einfrieren, Knochenachsen der Händlerin setzen, Hilfsknochen `headfront` ergänzen. Kontrolle: `rest_deviation_deg` muss 0 sein.
+- Export nach `asset-src/glb/char/<name>.glb`, dann `npm run assets` (gepackt 0,6 bis 1 MB je Figur). Im Spiel: `HEIGHT` und `RIG_OF` in
+  src/models/charModels.ts, `NpcLook.model` und der Ersatz `NPC_FALLBACK` in src/game/interior.ts.
+- Stand Alpha 1.02: Achterberg (neu, ersetzt die Meshy-Fassung), Hollweg (1,86 m), Roth (1,72 m), Tamm (1,70 m). Krull, Kessler, Brandt und Varga
+  nutzen weiter die Grundfiguren mit Farbton. Bilder: `docs/bilder/figuren-102-reihe.jpg`, `figuren-102-hangar.jpg`.
+- Nach mehreren Läufen in Blender `bpy.data.orphans_purge(do_recursive=True)` aufrufen, bevor gespeichert wird: Sonst bleiben die Bilder
+  verworfener Läufe in der Datei (90 MB statt 34 MB; GitHub nimmt höchstens 100 MB je Datei).
+
 ## Hangar (Alpha 0.62)
 - Quelle: `asset-src/neu/hangar/Hangar.blend` (per Skript gebaut; Textblöcke `hangar_lib` und `hangar_build` mit `build_shell`, `build_details`, `build_props`).
   Gebaut in den Maßen aus `src/game/interior.ts` (184 × 162 × 42 m, Tor 124 × 32 m, drei Stellplätze). Koordinaten im Skript sind Spielkoordinaten.

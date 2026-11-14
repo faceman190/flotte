@@ -1220,7 +1220,11 @@ export function nearestOther(max = 3.2): { id: number; name: string } | null {
 // Story: eine benannte Figur in den Stationsraum stellen (z. B. die Ausbilderin im Prolog).
 // Steht neben dem Spieler, schaut ihn an und lässt sich mit E ansprechen.
 // model: 'merchant' ist die Frauenfigur (Mantel), 'worker' die Männerfigur (Arbeitsanzug): passend zur Rolle wählen
-export interface NpcLook { model?: 'worker' | 'merchant' | 'achterberg' | 'mechaniker' | 'lagerarbeiter'; tint?: [number, number, number] }
+// Eigene Figuren der Geschichte: 'achterberg', 'hollweg', 'roth', 'tamm'. Fehlt die Datei, steht dort ersatzweise eine der beiden Grundfiguren mit Farbton.
+export interface NpcLook { model?: 'worker' | 'merchant' | 'achterberg' | 'mechaniker' | 'lagerarbeiter' | 'hollweg' | 'roth' | 'tamm'; tint?: [number, number, number] }
+const NPC_FALLBACK: Record<string, [string, [number, number, number]]> = {
+  achterberg: ['merchant', [0.82, 0.86, 0.95]], hollweg: ['worker', [0.72, 0.8, 1.05]], roth: ['merchant', [0.6, 0.85, 0.55]], tamm: ['merchant', [1.1, 0.92, 0.68]],
+};
 export function storyNpc(name: string, title: string, label: string, act: () => void, col = '#ffb347', at?: { x: number; z: number }, look: NpcLook = {}) {
   if (!IN.active || !stationGroup || IN.ship) return false;
   const x = at ? at.x : IN.x - 2.5, z = at ? at.z : IN.z - 7, face = Math.atan2(IN.x - x, IN.z - z);   // vor dem Spieler (Blick zum Korridor)
@@ -1240,7 +1244,7 @@ export function nearNpc(name: string, r = 4.2) { if (!IN.active || IN.ship) retu
 // Figur für die Geschichte: gewähltes Modell (Arbeiter oder Händler) mit eigenem Farbton, steht und atmet
 function storyPerson(look: NpcLook): Person {
   let cn: string = look.model || 'merchant', tint = look.tint || 1;
-  if (cn === 'achterberg' && !hasChar(cn)) { cn = 'merchant'; tint = [0.82, 0.86, 0.95]; }   // eigene Figur fehlt: Frauenfigur mit Farbton
+  if (NPC_FALLBACK[cn] && !hasChar(cn)) [cn, tint] = NPC_FALLBACK[cn];   // eigene Figur fehlt: Grundfigur mit Farbton
   if (!hasChar(cn)) return buildPerson(0x2c3440, 0xc89474, 0x3a2a1c, 0xffb347);
   const c = charInstance(cn, tint);
   c.g.traverse((o: any) => { if (o.isMesh) { o.userData.shared = true; if (o.material !== undefined) disposables.push(o.material); } });

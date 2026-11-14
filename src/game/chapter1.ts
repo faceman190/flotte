@@ -78,7 +78,7 @@ const STEPS: Step[] = [
           ['TAMM', 'Seit drei Tagen pfeift es aus den Trümmern. Unsere Antennen hören es, aber das Feld streut das Signal. Wir finden die Quelle nicht.'],
           ['TAMM', 'Flieg drei Peilpunkte rund um das Feld an und scanne dort mit R. Aus drei Peilungen rechne ich dir die Quelle aus.']);
         saveGame();
-      }, '#e0b030', hangarSpot(-7), { model: 'merchant', tint: [1.1, 0.92, 0.68] });
+      }, '#e0b030', hangarSpot(-7), { model: 'tamm' });
     },
     lines: () => {
       if (!c1().tamm && !(IN.active && docked('sonnenwacht'))) return [here() ? ['An der <b>Sonnenwacht</b> andocken · E', false, false] : routeLine()];
@@ -157,9 +157,9 @@ const STEPS: Step[] = [
       if (S.met || S.scene || !settled() || IN.ship || !docked('bastion')) return;
       const { x: hx, z: hz } = hangarSpot(-4), say = 'Zur Auswertung dazutreten';
       const go = () => { if (!S.scene) { S.scene = true; IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0; auswertung(); } };
-      S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
+      S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'hollweg' });
       storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx - 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [1.05, 0.95, 0.8] });
-      storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [0.6, 0.85, 0.55] });
+      storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'roth' });
     },
     lines: () => {
       if (!(IN.active && docked('bastion'))) return [P.sector === 'heimstatt' && !world.surface ? ['An der <b>Bastion</b> andocken · E', false, false] : [`Springe nach <b>Heimstatt</b>${P.route === 'heimstatt' ? ' · Route gesetzt' : ''}`, false, false]];

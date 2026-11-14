@@ -150,7 +150,7 @@ const STEPS: Step[] = [
           ['HOLLWEG', 'Flieg vorher zu Krull nach Talstadt. Sie baut etwas, das Ferrit lesen kann.']);
         saveGame();
       };
-      S.met = storyNpc('Hollweg', 'Flottenrat', 'Mit Ratsherr Hollweg sprechen', go, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
+      S.met = storyNpc('Hollweg', 'Flottenrat', 'Mit Ratsherr Hollweg sprechen', go, '#bcd8ff', { x: hx, z: hz }, { model: 'hollweg' });
       storyNpc('Achterberg', 'Ausbildung', 'Mit Hauptfrau Achterberg sprechen', go, '#ffb347', { x: hx + 2.6, z: hz + 1.2 }, { model: 'achterberg' });
     },
     lines: () => {
@@ -416,8 +416,8 @@ const STEPS: Step[] = [
       if (S.met || S.scene || !settled() || IN.ship || !docked(at)) return;
       const { x: hx, z: hz } = hangarSpot(-4), say = 'Den Leitkristall übergeben';
       const go = () => { if (S.scene) return; S.scene = true; IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0; ankunft(ch); };
-      if (ch === 'rat') S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
-      else if (ch === 'wacht') S.met = storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx, z: hz }, { model: 'merchant', tint: [0.6, 0.85, 0.55] });
+      if (ch === 'rat') S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'hollweg' });
+      else if (ch === 'wacht') S.met = storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx, z: hz }, { model: 'roth' });
       else S.met = storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx, z: hz }, { model: 'merchant', tint: [1.05, 0.95, 0.8] });
       storyNpc('Achterberg', 'Ausbildung', say, go, '#ffb347', { x: hx + 2.6, z: hz + 1.2 }, { model: 'achterberg' });
     },

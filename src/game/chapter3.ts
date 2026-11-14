@@ -104,7 +104,7 @@ const STEPS: Step[] = [
           ['ROTH', 'Dann kamen sie von allen Seiten. Die Linie brach, die Eidwacht blieb zurück. So steht es in jedem Schulbuch, und so hab ich es mit sechzehn geglaubt.'],
           ['ROTH', 'Aber die, die dabei waren, reden nicht. Einer steht in Neonhafen an der Garküche Schleusenbräu. Ilvar Brandt, damals Funker der Eidwacht. Frag ihn.']);
         route(CITYSEC); saveGame();
-      }, '#f2d36b', hangarSpot(-7), { model: 'merchant', tint: [0.6, 0.85, 0.55] });
+      }, '#f2d36b', hangarSpot(-7), { model: 'roth' });
     },
     lines: () => {
       if (!c3().roth && !(IN.active && docked('wachtposten'))) return [inSpace('wacht') ? ['Am <b>Wachtposten Ost</b> andocken · E', false, false] : lineSpace('wacht', 'Wachtposten Ost')];
@@ -294,8 +294,8 @@ const STEPS: Step[] = [
       const { x: hx, z: hz } = hangarSpot(-4), say = 'Den Flugschreiber übergeben';
       const go = () => { if (S.scene) return; S.scene = true; IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0; aufnahme(wacht); };
       S.met = storyNpc('Achterberg', 'Ausbildung', say, go, '#ffb347', { x: hx, z: hz }, { model: 'achterberg' });
-      if (wacht) storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [0.6, 0.85, 0.55] });
-      else storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx + 2.6, z: hz + 1.2 }, { model: 'worker', tint: [0.72, 0.8, 1.05] });
+      if (wacht) storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'roth' });
+      else storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx + 2.6, z: hz + 1.2 }, { model: 'hollweg' });
     },
     lines: () => {
       const wacht = c3().choice === 'wacht';

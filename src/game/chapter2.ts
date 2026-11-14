@@ -208,7 +208,7 @@ const STEPS: Step[] = [
       const { x: hx, z: hz } = hangarSpot(-4), say = 'Den Archivkristall übergeben';
       const go = () => { if (S.scene) return; S.scene = true; IN.yaw = Math.atan2(-(hx - IN.x), -(hz - IN.z)); IN.pitch = 0; archiv(gilde); };
       if (gilde) { S.met = storyNpc('Krull', 'Bergbaugilde', say, go, '#ffb347', { x: hx, z: hz }, { model: 'merchant', tint: [1.05, 0.95, 0.8] }); storyNpc('Kessler', 'Splitter-Mine', say, go, '#ffb347', { x: hx + 2.4, z: hz + 1 }, { model: 'mechaniker', tint: [0.95, 0.85, 0.7] }); }
-      else { S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'worker', tint: [0.72, 0.8, 1.05] }); storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'merchant', tint: [0.6, 0.85, 0.55] }); }
+      else { S.met = storyNpc('Hollweg', 'Flottenrat', say, go, '#bcd8ff', { x: hx, z: hz }, { model: 'hollweg' }); storyNpc('Roth', 'Grenzwacht', say, go, '#f2d36b', { x: hx + 2.6, z: hz + 1.2 }, { model: 'roth' }); }
     },
     lines: () => {
       const gilde = c2().choice === 'gilde', who = gilde ? 'Gildemeisterin Krull' : 'Ratsherr Hollweg';
