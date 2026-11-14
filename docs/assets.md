@@ -200,6 +200,24 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   Im Spiel standen sie deshalb seitlich neben ihrem Standort: Achterberg 4,75 m, Hollweg 2,85 m, Roth 0,95 m, Tamm 0,95 m, Kessler 2,85 m, Brandt 4,75 m, Krull 6,65 m.
   `export_figur` stellt die Figur jetzt für den Export in den Ursprung, und `loadCharModels` setzt die Lage der obersten Knoten zusätzlich auf null.
   Prüfen nach jedem Export: `charInstance(name)`, Kopfknochen in der Welt muss bei x ≈ 0 liegen.
+
+## Mixamo-Skelett der Tripo-Figuren (Alpha 1.07)
+- **Warum:** Bis 1.06 trugen die Tripo-Figuren das Skelett der Händlerin (24 Knochen) und liehen sich deren Bewegungen. Diese stammen zwar von Mixamo,
+  sind aber für den Händler-Körper gerechnet; dazu musste die Ruhehaltung jeder Figur umgebogen werden, und die Finger blieben starr.
+- **Hindernis:** Tripo liefert jedes Skelett mit denselben Namen (mixamorig, 65 Knochen), aber mit anders gedrehten Knochenachsen (rechter Arm bis 170°
+  Unterschied zwischen zwei Figuren). Eine Mixamo-Bewegung passt deshalb nur auf die Figur, für die sie bei Mixamo geladen wurde.
+- **Lösung:** `tripo_to_mixamo(Name, Größe)` (Text `figur_mixamo` in Figuren.blend) gibt jeder Figur die Knochenachsen und die Grundhaltung des Vorbilds
+  `Arm_MixamoRef`. Das ist das Skelett aus den Bewegungsdateien des Mixamo-Pakets „Female Basic Locomotion Pack“ (hochgeladen wurde Tamm), also Mixamos
+  eigene T-Haltung. Angeglichen werden nur Arme, Hände, Finger und Beine nach den Gelenken (3 bis 18°, bei Achterberg 64° wegen der A-Haltung);
+  Rumpf, Kopf, Schultern und Füße bleiben. Ergebnis: 53 Knochen mit Fingern, Namen wie bei Mixamo ohne Vorsilbe, nur der Hals heißt `neck`.
+- **Bewegungen:** Familie `tamm` in `RIG_OF` (src/models/charModels.ts). `tamm_idle` und `tamm_walk` kommen unverändert aus dem Paket:
+  `export_clip('mx_idle', pfad)` schreibt eine GLB, `node scripts/glb-anim.mjs` macht daraus den Clip. `tamm_talk1/2` sind mit
+  `scripts/fbx-anim.mjs --rig=mixamo --limbs` von den Händler-Dateien übertragen (Finger fest aus dem Stehen). Alles zusammen: `sh scripts/anims.sh`.
+  Die Hüftspur steht in Tamms Maßstab; andere Figuren rechnet `fit()` über die Hüfthöhe um.
+- **Offen:** Anlaufen und Abbremsen fehlen für diese Familie (animStep blendet direkt). Die Männer (Hollweg, Kessler, Brandt) nutzen das weibliche Paket.
+  Eigene Sprech-Animationen von Mixamo für Tamm würden die übertragenen ersetzen. Neue Mixamo-Dateien müssen für Tamm geladen sein (gleiches Skelett).
+- Der alte Weg `tripo_to_merchant` bleibt im Text `figur_tripo`, wird aber nicht mehr benutzt. Bild: `docs/bilder/figuren-107-mixamo.jpg`
+  (Zeilen: Stehen, Gehen von vorn, Gehen von der Seite, Sprechen).
 - Nach mehreren Läufen in Blender `bpy.data.orphans_purge(do_recursive=True)` aufrufen, bevor gespeichert wird: Sonst bleiben die Bilder
   verworfener Läufe in der Datei (90 MB statt 34 MB; GitHub nimmt höchstens 100 MB je Datei).
 

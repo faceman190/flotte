@@ -14,3 +14,10 @@ for F in merchant worker; do
   node scripts/fbx-anim.mjs "$N/Talking.fbx" ${F}_talk1 --figure=$F --limbs
   node scripts/fbx-anim.mjs "$N/Talking (1).fbx" ${F}_talk2 --figure=$F --limbs
 done
+# Figuren mit dem einheitlichen Mixamo-Skelett (Vorbild tamm, seit Alpha 1.07): Stehen und Gehen kommen unverändert aus dem Mixamo-Paket
+# (GLB aus Blender: export_clip im Text figur_mixamo von Figuren.blend). Sprechen ist von den Händler-Dateien übertragen; die Finger dafür
+# kommen aus dem ersten Bild des Stehens, deshalb muss tamm_idle zuerst entstehen.
+node scripts/glb-anim.mjs "$N/figuren/mx_idle.glb" tamm_idle --fps=15
+node scripts/glb-anim.mjs "$N/figuren/mx_walk.glb" tamm_walk --inplace
+node scripts/fbx-anim.mjs "$N/Talking.fbx" tamm_talk1 --rig=mixamo --limbs
+node scripts/fbx-anim.mjs "$N/Talking (1).fbx" tamm_talk2 --rig=mixamo --limbs

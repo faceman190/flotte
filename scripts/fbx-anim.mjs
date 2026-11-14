@@ -7,6 +7,11 @@
 //   --alt=s    zweiter Einstiegspunkt (Sekunden nach dem Zuschnitt), z. B. beim Abbremsen für den anderen Fuß
 //   --align    siehe unten
 //   --limbs    Arme und Beine nach der Knochenrichtung der Quelle ausrichten (siehe unten); bei allen Mixamo-Dateien angeben
+//   --rig=mixamo  Ziel ist eine Figur mit dem einheitlichen Mixamo-Skelett (asset-src/glb/char/<figure>.glb, Vorbild tamm; seit Alpha 1.07).
+//              Die Knochen heißen dort wie in der Quelle, die Zuordnung entsteht von selbst. Zusammen mit --limbs angeben, NICHT mit --align:
+//              Mixamo und Tripo setzen die Gelenke verschieden in den Körper (Fuß 40°, Schulter 34°, Unterschenkel 18°); --align würde
+//              die Füße um diesen Unterschied kippen. Die Finger kommen nicht aus der Quelle (deren Hand ruht gekrümmt, unsere gestreckt),
+//              sondern als feste Haltung aus dem ersten Bild von anim_tamm_idle.json (entspannte Hand).
 // Alle Clips einer Figur neu erzeugen: scripts/anims.sh
 // align: nur angeben, wenn die FBX auf einem FREMDEN Körper beruht (z. B. der Mixamo-Standardfigur in T-Haltung). Wurde
 // unsere eigene Figur bei Mixamo hochgeladen, steht die Hülle in beiden Skeletten gleich da: dann darf Schritt 1 nicht laufen,
@@ -32,16 +37,16 @@ const { io } = await import('./glb-lib.mjs');
 
 const args = process.argv.slice(2), flag = Object.fromEntries(args.filter(a => a.startsWith('--')).map(a => { const [k, v = '1'] = a.slice(2).split('='); return [k, v]; }));
 const [inp, name] = args.filter(a => !a.startsWith('--'));
-const figure = flag.figure || 'merchant', ALIGN = !!flag.align, LIMBS = !!flag.limbs, FPS = +(flag.fps || 20), INPLACE = !!flag.inplace;
+const RIG = flag.rig === 'mixamo', figure = flag.figure || (RIG ? 'tamm' : 'merchant'), ALIGN = !!flag.align, LIMBS = !!flag.limbs, FPS = +(flag.fps || 20), INPLACE = !!flag.inplace;
 // Zielknochen → Quellknochen (ohne Vorsilbe "mixamorig") und der Kindknochen, der die Richtung angibt
-const MAP = {
+let MAP = {
   Hips: ['Hips', 'Spine02'], Spine02: ['Spine', 'Spine01'], Spine01: ['Spine1', 'Spine'], Spine: ['Spine2', 'neck'], neck: ['Neck', 'Head'], Head: ['Head', 'head_end'],
   LeftShoulder: ['LeftShoulder', 'LeftArm'], LeftArm: ['LeftArm', 'LeftForeArm'], LeftForeArm: ['LeftForeArm', 'LeftHand'], LeftHand: ['LeftHand', null],
   RightShoulder: ['RightShoulder', 'RightArm'], RightArm: ['RightArm', 'RightForeArm'], RightForeArm: ['RightForeArm', 'RightHand'], RightHand: ['RightHand', null],
   LeftUpLeg: ['LeftUpLeg', 'LeftLeg'], LeftLeg: ['LeftLeg', 'LeftFoot'], LeftFoot: ['LeftFoot', 'LeftToeBase'], LeftToeBase: ['LeftToeBase', null],
   RightUpLeg: ['RightUpLeg', 'RightLeg'], RightLeg: ['RightLeg', 'RightFoot'], RightFoot: ['RightFoot', 'RightToeBase'], RightToeBase: ['RightToeBase', null],
 };
-const SRC_CHILD = { head_end: 'HeadTop_End' };   // Zielkind → Quellkind, wo die Namen nicht über MAP laufen
+const SRC_CHILD = RIG ? {} : { head_end: 'HeadTop_End' };   // Zielkind → Quellkind, wo die Namen nicht über MAP laufen
 const clean = n => n.replace(/^.*[:|]/, '').replace(/^mixamorig/, '');
 
 // ---------- Quelle ----------
@@ -55,7 +60,7 @@ console.log(`Quelle: ${Object.keys(S).length} Knochen, ${skinned ? 'mit' : 'ohne
 for (const c of fbx.animations) console.log(`  Clip "${c.name}": ${c.duration.toFixed(2)} s, ${c.tracks.length} Spuren`);
 
 // ---------- Ziel: Skelett der Figur als Objektbaum ----------
-const doc = await io.read(`assets/chars/${figure}.glb`);
+const doc = await io.read(RIG ? `asset-src/glb/char/${figure}.glb` : `assets/chars/${figure}.glb`);
 const T = {}, order = [];
 const build = (n, parent) => {
   const o = new THREE.Object3D(); o.name = n.getName();
@@ -67,6 +72,15 @@ const troot = new THREE.Group();
 for (const s of doc.getRoot().listScenes()) for (const n of s.listChildren()) build(n, troot);
 troot.updateMatrixWorld(true);
 const joints = doc.getRoot().listSkins()[0].listJoints().map(j => j.getName());
+if (RIG) {   // gleiche Namen wie die Quelle (nur der Hals heißt 'neck'); Kind = der Knochen, der die Richtung angibt
+  const CH = { Hips: 'Spine', Spine: 'Spine1', Spine1: 'Spine2', Spine2: 'neck', neck: 'Head', Head: 'HeadTop_End' };
+  for (const sd of ['Left', 'Right']) {
+    Object.assign(CH, { [sd + 'Shoulder']: sd + 'Arm', [sd + 'Arm']: sd + 'ForeArm', [sd + 'ForeArm']: sd + 'Hand',
+      [sd + 'UpLeg']: sd + 'Leg', [sd + 'Leg']: sd + 'Foot', [sd + 'Foot']: sd + 'ToeBase' });
+  }
+  MAP = {};
+  for (const n of joints) if (!/Hand(Thumb|Index|Middle|Ring|Pinky)/.test(n)) MAP[n] = [n === 'neck' ? 'Neck' : n, CH[n] || null];
+}
 const unmapped = joints.filter(n => !MAP[n] || !S[MAP[n][0]]);
 console.log(`Ziel "${figure}": ${joints.length} Knochen, ohne Gegenstück (bleiben in Ruhe): ${unmapped.join(', ') || '–'}`);
 
@@ -138,7 +152,7 @@ const qS = tRestP.Hips.clone().sub(foot(tBox)).divideScalar(K).add(foot(sBox)); 
 const offZ = qS.z - sRestP.Hips.z;
 console.log(`Körpergröße: Quelle ${(sBox.max.y - sBox.min.y).toFixed(4)} → Figur ${(tBox.max.y - tBox.min.y).toFixed(3)} (Faktor ${K.toFixed(2)})`);
 let sAnkleMin = Infinity;
-if (LIMBS) for (let f = 0; f < frames; f++) { mixer.setTime(Math.min(T0 + Math.min(DUR, f / FPS), clip.duration - 1e-4)); fbx.updateMatrixWorld(true); sAnkleMin = Math.min(sAnkleMin, wp(S.LeftFoot).y, wp(S.RightFoot).y); }
+if (LIMBS || RIG) for (let f = 0; f < frames; f++) { mixer.setTime(Math.min(T0 + Math.min(DUR, f / FPS), clip.duration - 1e-4)); fbx.updateMatrixWorld(true); sAnkleMin = Math.min(sAnkleMin, wp(S.LeftFoot).y, wp(S.RightFoot).y); }
 const tAnkleFlat = Math.min(tRestP.LeftFoot.y, tRestP.RightFoot.y);   // Knöchelhöhe unserer Figur, wenn sie flach steht (Ruhelage)
 let liftMin = Infinity, liftMax = -Infinity;
 for (const n of Object.keys(A)) rot[n] = [];
@@ -168,7 +182,7 @@ for (let f = 0; f < frames; f++) {
   T.Hips.position.copy(tp);
   for (const n of Object.keys(A)) { const v = rot[n]; T[n].quaternion.set(v[v.length - 4], v[v.length - 3], v[v.length - 2], v[v.length - 1]); }
   troot.updateMatrixWorld(true);
-  if (LIMBS) {
+  if (LIMBS || RIG) {
     // Hüfte nachführen: Der tiefere Fuß der Quelle gibt vor, wie hoch der Knöchel unserer Figur stehen soll
     const sL = wp(S.LeftFoot).y, sR = wp(S.RightFoot).y, want = v => tAnkleFlat + (v - sAnkleMin) * K;
     const eL = want(sL) - wp(T.LeftFoot).y, eR = want(sR) - wp(T.RightFoot).y;
@@ -186,6 +200,11 @@ console.log(`Zehengelenk des tieferen Fußes: im Median ${(off * 100).toFixed(1)
 if (LIMBS) console.log(`Hüfte nachgeführt: ${(liftMin * 100).toFixed(1)} bis ${(liftMax * 100).toFixed(1)} cm`);
 const tracks = Object.entries(rot).map(([n, values]) => ({ name: `${n}.quaternion`, type: 'quaternion', times, values }));
 tracks.push({ name: 'Hips.position', type: 'vector', times, values: hipPos });
+if (RIG && fs.existsSync('asset-src/data/anim_tamm_idle.json')) {   // Knochen ohne Gegenstück in der Quelle (meist Finger): Haltung aus dem Stehen
+  const idle = JSON.parse(fs.readFileSync('asset-src/data/anim_tamm_idle.json', 'utf8')); let n = 0;
+  for (const tr of idle.tracks) if (tr.type === 'quaternion' && !rot[tr.name.split('.')[0]]) { tracks.push({ name: tr.name, type: 'quaternion', times: [0], values: tr.values.slice(0, 4) }); n++; }
+  console.log(`Aus dem Stehen übernommen (feste Haltung): ${n} Knochen`);
+}
 const file = `asset-src/data/anim_${name}.json`;
 fs.mkdirSync('asset-src/data', { recursive: true });
 // Tempo je Bild (m/s, leicht geglättet) und mittleres Tempo: Damit läuft die Figur im Spiel so schnell, wie die Füße greifen
