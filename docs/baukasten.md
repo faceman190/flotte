@@ -46,6 +46,17 @@ Mit `with K.at((x, y, z), drehung):` wird alles darin verschoben und um Z gedreh
 Streifen (`side=`, `top=`): `wall` (Paneele, reihenweise), `siding` (Lamellen), `roofing` (Dachbahnen), `floor` (Gitterrost), `beam`, `girder`,
 `hazard` (Warnstreifen, Tönung `none`), `pipe`, `hose`, `plain`, `edge`. Tönungen stehen in `TINT` (linear: 0,06 ist dunkelgrau, 0,3 hellgrau).
 
+## Drittes Texturblatt: die Ferrox (`kit_fx`, Alpha 1.11)
+
+- Quelle: `asset-src/neu/ferrox/trim_ferrox.py` in `Trimsheet_Ferrox.blend` (nutzt die Werkzeuge aus `trim_build.py` wie `trim_int.py`). Aufruf: `build()`, `render()`, `compose()`, `veins()`.
+- Bilder: `asset-src/tex/kit_fx_col/_nrm/_orm/_emi@2048.png`; Lage der Streifen in `baukasten/kit_fx_atlas.json`. `kit_lib.py` lädt das Blatt von selbst, wenn die Datei da ist.
+- Streifen: `fx_plate` (große Platten der Erbauer), `fx_fine` (Lamellen), `fx_rib` (Rippen), `fx_seam` (Naht mit Bolzen), `fx_plain`. Kacheln: `fx_ring`, `fx_lens`, `fx_vent`, `fx_cut`, `fx_noz`, `fx_hatch`.
+- Das Blatt ist schon dunkel; die Tönungen `fx`, `fx_dim`, `fx_light`, `fx_rust` hellen nur ab oder färben. `veins()` schreibt das Leuchtbild (Adern, Linse, Düse).
+- Kästen und Rohre aus diesem Blatt bekommen ihre Fasen und Deckel ebenfalls daraus (`fx_seam`, `fx_plain`) statt der lackierten Kante der Menschenbauten.
+- Materialien im Spiel: `ferroxMaterials()` in `src/models/kit.ts` (eigene Fassung von `kit_trim` ohne Staub, `kit_fx` mit Leuchtbild, `kit_ferrit`).
+- **Die Rendezeit sprengt die Abfrage über das Blender-Werkzeug:** `render()` läuft trotzdem zu Ende; auf die fünf Dateien `_tmp/kit_fx_*.npy` warten, dann `compose()`.
+- **Sichtseite beachten:** Eigene Flächen (`K.face`, `K.ngon`) müssen gegen den Uhrzeigersinn von außen gesehen angelegt sein. Blender zeigt beide Seiten, das Spiel nur die vordere. Prüfen: Anteil der Flächen, deren Normale zur Körperachse zeigt.
+
 ## Texturblatt und Aufkleber ändern
 
 - **Texturblatt:** `Trimsheet.blend` öffnen, Textblock `trim_build` ausführen: `build()` (Geometrie), `render()` (fünf Durchgänge, dauert

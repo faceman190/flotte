@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { scene, camera, basicAdd, glowMat } from '../core/engine';
 import { rand, ri, pick, d3, clamp, rng, hashStr } from '../core/util';
 import { snd, sfx, boom } from '../core/audio';
-import { DRONE_T, BOMBER_T, buildMother } from '../models/ferrox';
+import { ferroxDrone, BOMBER_T, buildMother } from '../models/ferrox';
 import { MK } from '../models/ships';
 import { world, dropPick, breakAst, SECTOR_RADIUS } from './world';
 import { burst, puff } from './fx';
@@ -66,15 +66,15 @@ function enemyStats(type: string, d: number) {
 }
 export function spawnEnemy(type: 'drone' | 'bomber' | 'mother', x: number, y: number, z: number, home?: { x: number; y: number; z: number }) {
   const d = world.def?.danger ?? 2, es = enemyStats(type, d);
-  const m = type === 'drone' ? DRONE_T.clone() : type === 'bomber' ? BOMBER_T.clone() : buildMother();
+  const m = type === 'drone' ? ferroxDrone() : type === 'bomber' ? BOMBER_T.clone() : buildMother();
   // Jäger und Bomber größer als maßstabsgetreu, damit man sie im Kampf sieht; dazu Triebwerksspur und Glühpunkt
   let glow: THREE.Sprite | null = null;
   const big = type === 'drone' ? 1.6 : type === 'bomber' ? 1.4 : 1;
   if (type !== 'mother') {
     m.scale.multiplyScalar(big);
     const gk = 1 / m.scale.x;   // Kinder in Metern angeben
-    glow = new THREE.Sprite(glowMat(0xb060ff, 0.75)); glow.position.set(0, 0, -5 * gk * big); glow.scale.setScalar(9 * gk); m.add(glow);
-    const tm = basicAdd(0xa050ff); tm.opacity = 0.45; tm.side = THREE.DoubleSide;
+    glow = new THREE.Sprite(glowMat(0xc0b0ff, 0.6));      // blass violett-weiß (Entwurf: weniger Leuchten) glow.position.set(0, 0, -5 * gk * big); glow.scale.setScalar(9 * gk); m.add(glow);
+    const tm = basicAdd(0xa890ff); tm.opacity = 0.28; tm.side = THREE.DoubleSide;
     const trail = new THREE.Mesh(TRAIL_GEO, tm); trail.scale.setScalar(gk * big * (type === 'bomber' ? 1.5 : 1)); trail.position.set(0, 0, -4 * gk * big); m.add(trail);
   }
   m.position.set(x, y, z);
@@ -83,6 +83,7 @@ export function spawnEnemy(type: 'drone' | 'bomber' | 'mother', x: number, y: nu
   const e = {
     type, x, y, z, vx: 0, vy: 0, vz: 0, hp: es.hp, maxhp: es.hp, es, cool: rand(1, 2.5), strafe: Math.random() < 0.5 ? 1 : -1, bob: rand(0, 6),
     target: null as any, rt: 0, launch: 8, mesh: m, home: home || { x, y, z }, wp: null as any, hive: -1, glow, big,
+    arms: (type === 'drone' ? [m.getObjectByName('arm_r'), m.getObjectByName('arm_l')] : null) as (THREE.Object3D | undefined)[] | null, armK: 0,
   };
   world.enemies.push(e);
   return e;
@@ -298,6 +299,12 @@ export function updateEnemies(dt: number) {
     if (world.ground) { const gy = world.ground(e.x, e.z) + 30; if (e.y < gy) { e.y = gy; e.vy = Math.max(0, e.vy); } }
     e.mesh.position.set(e.x, e.y, e.z);
     e.mesh.lookAt(tx, ty, tz);
+    if (e.arms && e.arms[0]) {      // Greifer: im Angriff weit offen und schnappend, sonst fast geschlossen und träge pendelnd
+      e.armK += ((attacking ? 1 : 0) - e.armK) * Math.min(1, dt * 2.5);
+      const snap = attacking ? Math.max(0, Math.sin(e.bob * 5.5)) * 0.16 : 0, sway = Math.sin(e.bob * 0.9) * 0.05;
+      e.arms[0].rotation.y = 0.06 + e.armK * 0.3 - snap + sway;
+      if (e.arms[1]) e.arms[1].rotation.y = -(0.08 + e.armK * 0.26 - snap * 0.8) + sway;
+    }
     if (e.glow) e.glow.scale.setScalar(Math.max(10, d3(e.x, e.y, e.z, camera.position.x, camera.position.y, camera.position.z) * 0.02) / e.mesh.scale.x);
     e.cool -= dt;
     if (!attacking) continue;

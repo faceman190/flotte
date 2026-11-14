@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { glowMat } from '../core/engine';
 import { texMat, boxUV, buildEmissive } from '../core/textures';
 import { mesh, alongZ, extrude } from './helpers';
+import { stationTemplate } from './stationModels';
+import { ferroxMaterials, kitMeta } from './kit';
 
 // Ferrox: schwarzes, kantiges Metall mit leuchtend violetten Adern
 export const FX = {
@@ -54,6 +56,25 @@ export function buildMother() {
   boxUV(g, 1 / 60);
   g.userData.ring = ring;
   return g;
+}
+// Jäger nach dem Entwurf „Werkzeug, nicht Waffe“ (Alpha 1.11): verwilderte Schürfdrohne aus Blender (asset-src/neu/ferrox/jaeger_kit.py →
+// station/Ferrox_Jaeger). Rumpf und zwei Greifarme als eigene Knoten (arm_r, arm_l, Ursprung an der Schulter; combat.ts bewegt sie).
+// Solange das Modell nicht geladen ist, fliegt der alte Jäger aus Grundformen.
+let JAEGER: THREE.Group | null = null;
+export function ferroxDrone(): THREE.Object3D {
+  if (!JAEGER) {
+    const t = stationTemplate('Ferrox_Jaeger');
+    if (t && t.children[0]) {
+      const M = ferroxMaterials(), inner = t.children[0].clone(true);
+      inner.position.set(0, 0, 0);                                   // die Vorlage ist auf ihre Mitte gerückt; hier zählt der Ursprung der Datei (Schwerpunkt des Rumpfs)
+      inner.traverse((o: any) => { if (o.isMesh && M[o.material?.name]) o.material = M[o.material.name]; });
+      const g = new THREE.Group(); g.add(inner);
+      const eye = (kitMeta('Ferrox_Jaeger').lights || []).find(l => l.k === 'fxeye');
+      const sp = new THREE.Sprite(glowMat(0xb070ff, 0.55)); sp.position.set(eye ? eye.p[0] : 0.15, eye ? eye.p[1] : 0.1, eye ? eye.p[2] : 4.8); sp.scale.setScalar(2.4); g.add(sp);
+      JAEGER = g;
+    }
+  }
+  return (JAEGER || DRONE_T).clone();
 }
 export const DRONE_T = buildDrone();
 export const BOMBER_T = buildBomber();

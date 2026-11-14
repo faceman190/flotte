@@ -158,6 +158,28 @@ export function kitMaterials(look: KitLook = {}) {
   const wet = texMat(0x8e96a4, 'hangar_floor', { vertexColors: true, roughness: 0.36, metalness: 0.1 }); wet.envMap = cityEnv(); wet.envMapIntensity = 0.3; M.kit_wet = wet; if (out) cityLit(wet, look);   // spiegelt die Stadt-Umgebung statt des Weltraums (der wäre rosa)
   return (SETS[key] = M);
 }
+// Ferrox (src/models/ferrox.ts, Entwurf in docs/ferrox-entwurf.md): Platten der Erbauer aus dem eigenen Blatt kit_fx mit Leuchtbild (Adern, Linsen,
+// Düsen), Flickwerk aus dem Blatt der Menschenschiffe (ohne den Staub der Planeten, der sonst im All auf den Flächen bliebe) und Ferrit.
+let FXSET: Record<string, THREE.Material> | null = null;
+export function ferroxMaterials() {
+  if (FXSET) return FXSET;
+  const fx = sheet('kit_fx'); fx.emissiveMap = shared('kit_fx_emi', true); fx.emissive.set(0xffffff); fx.emissiveIntensity = 1.4; fx.envMapIntensity = 0.7;
+  // Das Blatt ist sehr dunkel (für Blender mit Umgebungslicht gemacht). Im All gibt es nichts zu spiegeln: etwas aufhellen, kühl tönen, weniger Metall.
+  fx.color.setRGB(1.3, 1.36, 1.6); fx.metalness = 0.35;      // mit vollem Metall brennt die Sonne auf glatten Flächen weiß aus
+  const trim = sheet('kit_trim'); trim.envMapIntensity = 0.5; trim.metalness = 0.4;
+  // Auf der Schattenseite bliebe der Rumpf ganz schwarz und verschwände vor dem Himmel: ein schwaches Eigenlicht in der Farbe der Oberfläche
+  for (const m of [fx, trim]) {
+    m.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * 0.25 + vec3(0.010, 0.010, 0.016);')
+        // rauer als im Blatt: Die glatten Platten spiegelten die Sonne sonst als breites weißes Band (Überstrahlung)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = min(1.0, roughnessFactor + 0.3);');
+    };
+    m.customProgramCacheKey = () => 'ferrox-floor';
+  }
+  const ferrit = new THREE.MeshStandardMaterial({ color: 0x1a1226, metalness: 0.55, roughness: 0.28, emissive: 0x6a30c0, emissiveIntensity: 0.55, flatShading: true });
+  return (FXSET = { kit_fx: fx, kit_trim: trim, kit_ferrit: ferrit });
+}
 // Umgebung für Spiegelungen in Städten: dunstiger Himmel, dunkler Grund, am Horizont die Lichter der Stadt. Die Umgebung der Szene (der Nebel des
 // Sektors, oft rötlich) taugt dafür nicht, und ihre Stärke lässt sich je Material nicht regeln (three: envMapIntensity wirkt nur mit eigener envMap).
 let CITYENV: THREE.Texture | null = null;

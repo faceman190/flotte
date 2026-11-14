@@ -31,6 +31,9 @@ CITY2, CPX2 = _C2['cells'], _C2['px']
 # Zwei Texturblätter: außen (kit_trim) und innen (kit_int). Jeder Streifen und jede Kachel kennt ihr Material.
 SHEET = {n: ('kit_trim', a, b) for n, (a, b) in _A['strips'].items()}; SHEET.update({n: ('kit_int', a, b) for n, (a, b) in _A2['strips'].items()})
 TILES = {n: ('kit_trim', r) for n, r in _A['tiles'].items()}; TILES.update({n: ('kit_int', r) for n, r in _A2['tiles'].items()})
+# Drittes Texturblatt: die Ferrox (kit_fx, asset-src/neu/ferrox/trim_ferrox.py), mit eigenem Leuchtbild (Adern, Linse, Düse)
+_A3 = json.load(open(os.path.join(HERE, 'kit_fx_atlas.json'))) if os.path.exists(os.path.join(HERE, 'kit_fx_atlas.json')) else {'strips': {}, 'tiles': {}}
+SHEET.update({n: ('kit_fx', a, b) for n, (a, b) in _A3['strips'].items()}); TILES.update({n: ('kit_fx', r) for n, r in _A3['tiles'].items()})
 X, Y, Z = Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1))
 TAU = math.tau
 TINT = {   # linear; im Bild wirken die Werte deutlich heller (0,06 ist ein dunkles Grau, 0,3 ein helles)
@@ -41,10 +44,12 @@ TINT = {   # linear; im Bild wirken die Werte deutlich heller (0,06 ist ein dunk
     'i_wall': (0.12, 0.125, 0.14), 'i_wall_light': (0.3, 0.31, 0.33), 'i_dark': (0.045, 0.048, 0.055), 'i_floor': (0.2, 0.205, 0.215), 'i_floor_dark': (0.085, 0.09, 0.1),
     'i_ceil': (0.05, 0.053, 0.06), 'i_rib': (0.075, 0.08, 0.09), 'i_red': (0.3, 0.06, 0.04), 'i_fabric': (0.1, 0.16, 0.2), 'i_leaf': (0.05, 0.2, 0.06), 'i_soil': (0.05, 0.035, 0.025),
     # Hangar
+    # Ferrox: das Blatt ist schon dunkel, die Tönung hellt nur ab oder färbt (Rost)
+    'fx': (1, 1, 1), 'fx_dim': (0.62, 0.62, 0.66), 'fx_light': (1.5, 1.5, 1.6), 'fx_rust': (1.5, 0.85, 0.5),
     'h_sand': (0.2, 0.17, 0.12), 'h_wall': (0.1, 0.105, 0.1), 'h_dark': (0.05, 0.053, 0.058), 'h_floor': (0.06, 0.063, 0.068), 'h_olive': (0.11, 0.12, 0.08),
 }
 GLOW = {'kit_light': (1.0, 0.93, 0.8), 'kit_lamp': (1.0, 0.55, 0.12), 'kit_redlamp': (1.0, 0.1, 0.05), 'kit_screen': (0.2, 0.6, 0.9), 'kit_green': (0.2, 1.0, 0.4),
-        'kit_accent': (0.25, 0.85, 0.75), 'kit_cool': (0.75, 0.88, 1.0),
+        'kit_accent': (0.25, 0.85, 0.75), 'kit_cool': (0.75, 0.88, 1.0), 'kit_fxglow': (0.5, 0.25, 1.0),
         'kit_shopw': (0.62, 0.5, 0.36), 'kit_shopc': (0.4, 0.52, 0.66)}      # gedämpftes Ladenlicht (Schaufenster): warm und kalt      # kit_accent: im Spiel die Akzentfarbe der Station
 
 def V(p): return p if isinstance(p, Vector) else Vector(p)
@@ -99,7 +104,7 @@ class Kit:
         vs = [self.bm.verts.new(self.M @ V(p)) for p in pts]
         try: f = self.bm.faces.new(vs)
         except ValueError: return None
-        f.material_index = self._mi(mat); f.smooth = True; f[self.ovl] = 1 if (self._ov or mat not in ('kit_trim', 'kit_int', 'kit_concrete')) else 0
+        f.material_index = self._mi(mat); f.smooth = True; f[self.ovl] = 1 if (self._ov or mat not in ('kit_trim', 'kit_int', 'kit_fx', 'kit_concrete')) else 0
         f[self.chl] = chart
         for i, (l, uv) in enumerate(zip(f.loops, uvs)):
             l[self.uv].uv = uv; l[self.col] = (tint[0], tint[1], tint[2], 1.0)
@@ -237,6 +242,7 @@ class Kit:
                     if along == 'z': bl, br, tr, tl = br, tr, tl, bl
                     self.surf(bl, br, tl, side, tint)
             if b < 1e-4: return
+            es = 'fx_seam' if SHEET[side][0] == 'kit_fx' else 'edge'
             for a, bb, c in ((0, 1, 2), (1, 2, 0), (2, 0, 1)):
                 for sa in (-1, 1):
                     for sb in (-1, 1):
@@ -245,14 +251,14 @@ class Kit:
                         q = [P(0, b, -1), P(0, b, 1), P(b, 0, 1), P(b, 0, -1)]
                         o = Vector((0, 0, 0)); o[a] = sa; o[bb] = sb
                         if (q[1] - q[0]).cross(q[3] - q[0]).dot(o) < 0: q = [q[1], q[0], q[3], q[2]]
-                        self.face(q[0], q[1], q[2], q[3], 'edge', tint_top if (tint_top and 2 in (a, bb) and (sa if a == 2 else sb) > 0) else tint)
-            vb, vt, sh = vband('edge'); vm = (vb + vt) / 2
+                        self.face(q[0], q[1], q[2], q[3], es, tint_top if (tint_top and 2 in (a, bb) and (sa if a == 2 else sb) > 0) else tint)
+            vb, vt, sh = vband(es); vm = (vb + vt) / 2
             for s1 in (-1, 1):
                 for s2 in (-1, 1):
                     for s3 in (-1, 1):
                         p1 = Vector((s1 * e.x, s2 * (e.y - b), s3 * (e.z - b))); p2 = Vector((s1 * (e.x - b), s2 * e.y, s3 * (e.z - b))); p3 = Vector((s1 * (e.x - b), s2 * (e.y - b), s3 * e.z))
                         if (p2 - p1).cross(p3 - p1).dot(Vector((s1, s2, s3))) < 0: p2, p3 = p3, p2
-                        self.poly((p1, p2, p3), ((0.3, vm), (0.31, vm), (0.305, vm + 0.004)), T(tint))
+                        self.poly((p1, p2, p3), ((0.3, vm), (0.31, vm), (0.305, vm + 0.004)), T(tint), SHEET[es][0])
     def beam(self, a, b, w=0.3, h=0.3, strip='beam', tint='yellow', bevel=0.025):
         a, b = V(a), V(b); d = b - a
         if d.length < 1e-5: return
@@ -280,9 +286,9 @@ class Kit:
                         pp, uu = (p0, p1, p2, p3), ((ua, vb + 0.001), (uc, vb + 0.001), (uc, v1 - 0.001), (ua, v1 - 0.001))
                         self.poly(pp[::-1] if flip else pp, uu[::-1] if flip else uu, T(tint), SHEET[name][0])
             if caps:
-                ct = cap_tint or tint
-                if r > 1e-4: self.ngon([(cs[i][0] * r, cs[i][1] * r, 0) for i in range(seg - 1, -1, -1)], 'plain', ct)
-                if r2 > 1e-4: self.ngon([(cs[i][0] * r2, cs[i][1] * r2, L) for i in range(seg)], 'plain', ct)
+                ct = cap_tint or tint; cp = 'fx_plain' if SHEET[strip][0] == 'kit_fx' else 'plain'
+                if r > 1e-4: self.ngon([(cs[i][0] * r, cs[i][1] * r, 0) for i in range(seg - 1, -1, -1)], cp, ct)
+                if r2 > 1e-4: self.ngon([(cs[i][0] * r2, cs[i][1] * r2, L) for i in range(seg)], cp, ct)
     def sphere(self, r, loc, tint='white', strip='wall_b', seg=16, rings=8, squash=1.0):
         loc = V(loc); vb, vt, sh = vband(strip); u0 = self.R.randrange(12); c = TAU * r
         P = lambda i, j: loc + Vector((math.cos(i / seg * TAU) * math.sin(j / rings * math.pi) * r, math.sin(i / seg * TAU) * math.sin(j / rings * math.pi) * r, -math.cos(j / rings * math.pi) * r * squash))
@@ -755,14 +761,20 @@ def kit_material(name):
     if name in GLOW:
         c = GLOW[name]; P.inputs['Base Color'].default_value = (*c, 1); P.inputs['Emission Color'].default_value = (*c, 1); P.inputs['Emission Strength'].default_value = 8.0
         return m
+    if name == 'kit_ferrit':      # Ferrit-Kristall: dunkel, glatt, schwaches violettes Eigenleuchten
+        P.inputs['Base Color'].default_value = (0.03, 0.015, 0.06, 1); P.inputs['Roughness'].default_value = 0.25; P.inputs['Metallic'].default_value = 0.5
+        P.inputs['Emission Color'].default_value = (0.3, 0.12, 0.8, 1); P.inputs['Emission Strength'].default_value = 1.2
+        return m
     if name == 'kit_glass':
         P.inputs['Base Color'].default_value = (0.012, 0.025, 0.04, 1); P.inputs['Roughness'].default_value = 0.08; P.inputs['Metallic'].default_value = 0.6
         return m
     va = nt.nodes.new('ShaderNodeVertexColor'); va.layer_name = 'Col'
     mix = nt.nodes.new('ShaderNodeMix'); mix.data_type = 'RGBA'; mix.blend_type = 'MULTIPLY'; mix.inputs[0].default_value = 1.0
     L(va.outputs['Color'], mix.inputs[7]); L(mix.outputs[2], P.inputs['Base Color'])
-    if name in ('kit_trim', 'kit_int'):
+    if name in ('kit_trim', 'kit_int', 'kit_fx'):
         tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img(name + '_col@2048.png'); L(tc.outputs['Color'], mix.inputs[6])
+        if name == 'kit_fx':
+            te = nt.nodes.new('ShaderNodeTexImage'); te.image = _img('kit_fx_emi@2048.png'); L(te.outputs['Color'], P.inputs['Emission Color']); P.inputs['Emission Strength'].default_value = 3.0
         tn = nt.nodes.new('ShaderNodeTexImage'); tn.image = _img(name + '_nrm@2048.png', True); nm = nt.nodes.new('ShaderNodeNormalMap'); L(tn.outputs['Color'], nm.inputs['Color']); L(nm.outputs['Normal'], P.inputs['Normal'])
         to = nt.nodes.new('ShaderNodeTexImage'); to.image = _img(name + '_orm@2048.png', True); sp = nt.nodes.new('ShaderNodeSeparateColor'); L(to.outputs['Color'], sp.inputs[0])
         L(sp.outputs[1], P.inputs['Roughness']); L(sp.outputs[2], P.inputs['Metallic'])

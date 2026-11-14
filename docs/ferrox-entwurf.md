@@ -1,6 +1,6 @@
 # Aussehen der Ferrox · Entwurf zum Freigeben
 
-Stand: 2026-11-14. **Freigegeben („Passt so“):** alle sieben Entscheidungen gelten wie vorgeschlagen. Als Erstes entstehen die vier Konzeptbilder (`docs/bilder/ferrox-konzept-*.png`); Modelle werden erst gebaut, wenn die Richtung der Bilder bestätigt ist.
+Stand: 2026-11-14. **Freigegeben („Passt so“):** alle sieben Entscheidungen gelten wie vorgeschlagen. Die vier Konzeptbilder sind bestätigt („Ja, Jäger bauen“). **Stand der Umsetzung:** Texturblatt und Jäger sind gebaut und seit Alpha 1.11 im Spiel; Bomber, Bienenstock und Wächter stehen noch aus.
 
 ## Ausgangslage
 
@@ -89,6 +89,20 @@ Erzeugt mit den Vorgaben oben über Higgsfield (`gpt_image_2_6`, vier Bilder, 1 
 | Wächter | ![Wächter](bilder/ferrox-konzept-waechter.jpg) | Flache Scheibe mit drei Armen: Brenner, Greifer, Linsen. Ein Arm aus Schrott. |
 
 Die Bilder zeigen die Richtung, nicht das Ergebnis im Spiel: Ein Jäger mit 3.000 Dreiecken trägt diese Einzelheiten in der Textur, nicht in der Form.
+
+## Der Jäger im Spiel (Alpha 1.11)
+
+![Jäger von vorn](bilder/ferrox-jaeger-111-vorn.jpg)
+
+![Jäger von hinten](bilder/ferrox-jaeger-111-hinten.jpg)
+
+- 1.456 Dreiecke (Rumpf 846, rechter Arm 300, linker Arm 310), drei Knoten: Rumpf, `arm_r`, `arm_l`. Datei 137 KB.
+- Rechts der Arm der Erbauer mit zwei Zangen, links ein kürzerer Ersatz aus Schiffsstahl mit einem Schild (hell mit rotem Streifen), einem Haken und einem Dorn.
+- Die Greifer bewegen sich: Auf Patrouille sind sie fast geschlossen und pendeln träge, im Angriff stehen sie weit offen und schnappen.
+- Fünf Linsen über dem Schneidkopf, zwei ungleiche Düsen, vier Gruppen Ferrit, auf dem Dach ein aufgenietetes Schiffsblech.
+- Triebwerksschein und Schweif sind blasser als bisher (gilt vorerst auch für den alten Bomber).
+- Abweichungen vom Bild: Der Rumpf ist kantiger (ein Keil aus vier Abschnitten), der Schneidkopf dreht sich nicht, die Zangen haben keine Zähne.
+- Nicht geprüft: das Aussehen im Gefecht aus der Sicht des Piloten bei voller Bildrate, und Mitspieler (dort bleiben die Greifer in Ruhelage).
 
 ## Technik (für die Umsetzung)
 
