@@ -1,6 +1,6 @@
 # Aussehen der Ferrox · Entwurf zum Freigeben
 
-Stand: 2026-11-14. Noch nichts gebaut. Erst nach deinem Okay zu den Entscheidungen unten entstehen Konzeptbilder und Modelle.
+Stand: 2026-11-14. **Freigegeben („Passt so“):** alle sieben Entscheidungen gelten wie vorgeschlagen. Als Erstes entstehen die vier Konzeptbilder (`docs/bilder/ferrox-konzept-*.png`); Modelle werden erst gebaut, wenn die Richtung der Bilder bestätigt ist.
 
 ## Ausgangslage
 
@@ -76,6 +76,19 @@ Gemeinsamer Schluss für alle vier:
 **Wächter**
 
 > A small hovering maintenance robot, flat oval body about one metre wide, three thin articulated arms: a welding torch, a small gripper, a cluster of lenses. Ancient precise dark plating with thin violet veins, one arm replaced by a mismatched scrap part. Tiny crystals at the joints.
+
+## Konzeptbilder (14.11.2026)
+
+Erzeugt mit den Vorgaben oben über Higgsfield (`gpt_image_2_6`, vier Bilder, 1 Credit):
+
+| Typ | Bild | Was vom Bild gilt |
+|---|---|---|
+| Jäger | ![Jäger](bilder/ferrox-konzept-jaeger.jpg) | Keil, zwei ungleiche Greifer, Linsenbündel über dem Schneidkopf, ein Blech mit rotem Streifen als Menschenschrott. |
+| Bomber | ![Bomber](bilder/ferrox-konzept-bomber.jpg) | Trommel mit Bohrkrone, zwei Tanks, Wurfschacht unten. Die rot-weißen Flicken sind hier zu viele; im Modell deutlich weniger. |
+| Bienenstock | ![Bienenstock](bilder/ferrox-konzept-bienenstock.jpg) | Ofenrumpf mit glühendem Maul, Startschächte an der Flanke, Ferrit-Spitzen am Heck, Rümpfe an Trossen. |
+| Wächter | ![Wächter](bilder/ferrox-konzept-waechter.jpg) | Flache Scheibe mit drei Armen: Brenner, Greifer, Linsen. Ein Arm aus Schrott. |
+
+Die Bilder zeigen die Richtung, nicht das Ergebnis im Spiel: Ein Jäger mit 3.000 Dreiecken trägt diese Einzelheiten in der Textur, nicht in der Form.
 
 ## Technik (für die Umsetzung)
 
