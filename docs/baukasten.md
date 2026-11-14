@@ -57,6 +57,28 @@ Streifen (`side=`, `top=`): `wall` (Paneele, reihenweise), `siding` (Lamellen), 
 - **Die Rendezeit sprengt die Abfrage über das Blender-Werkzeug:** `render()` läuft trotzdem zu Ende; auf die fünf Dateien `_tmp/kit_fx_*.npy` warten, dann `compose()`.
 - **Sichtseite beachten:** Eigene Flächen (`K.face`, `K.ngon`) müssen gegen den Uhrzeigersinn von außen gesehen angelegt sein. Blender zeigt beide Seiten, das Spiel nur die vordere. Prüfen: Anteil der Flächen, deren Normale zur Körperachse zeigt.
 
+## Relief-Blatt: aufgesetzte Bauteile (`kit_relief`, Alpha 1.13)
+
+Vorbild sind die „Floater“-Decals aus Star Citizen (Studie von Magnus Tellmann auf ArtStation): Kleine Bauteile werden einmal als echte Geometrie gebaut, in Bilder gebacken und im Spiel als flache Vierecke mit weicher Maske auf die Wände gelegt. Ein Teil kostet zwei Dreiecke.
+
+![Relief-Blatt](bilder/relief-113-blatt.jpg)
+
+- **Quelle:** `asset-src/neu/baukasten/trim_relief.py` in `Trimsheet_Relief.blend` (Werkzeuge aus `trim_build.py`). Aufruf: `build()`, `render()`, `compose()`, `mask()`. Maßstab 4 m über das Blatt (512 px je Meter, viermal so fein wie das Wandblatt).
+- **Bilder:** `asset-src/tex/kit_relief_col/_nrm/_orm/_mask@2048.png`. Maske: Grün = Deckkraft (das Bauteil und ein schmaler Hof für den Schatten an seinem Fuß), Rot = Höhe von 0 bis 10 cm (für eine spätere Tiefenwirkung). Lage der Felder: `kit_relief_atlas.json`.
+- **34 Motive:** Schrauben und Nieten (`b_round`, `b_hex`, `b_washer`, `b_dome`, `b_flat`, `rivet`, `rivets`, `cap`, `latch`), Griffe und Beschläge (`handle`, `hinge`, `bracket`, `lock`, `keypad`, `nameplate`, `lamp`), Anschlüsse (`port`, `socket`, `valve`, `cable`), Lüfter (`vent_slot`, `vent_grid`, `fan`, `grille`), Mulden und Deckel (`pan_sq`, `pan_rect`, `pan_pill`, `cover`), Klappen und Kästen (`hatch_s`, `hatch_l`, `panel_big`, `junction`, `duct`, `rungs`).
+- **Fünf Streifen** (kacheln längs): `r_seam` (Fuge), `r_weld` (Naht mit Nieten), `r_rib` (Rippe), `r_lip` (verschraubte Leiste), `r_groove` (Rillen).
+- **Im Skript:** `K.relief(name, mitte, rechts, oben, tint=…)` setzt ein Teil in echter Größe (mit Breite und Höhe wird es gestreckt), `K.seam(a, b, normale, name, tint)` zieht einen Streifen. `tint` ist die Lackfarbe der Fläche darunter.
+- **Von selbst** bekommen Türen einen Griff, ein Tastenfeld und ein Schild, Wandkästen Schrauben in den Ecken, Baukörper eine verschraubte Leiste über dem Sockel. Das greift bei jedem Gebäude, sobald es neu gebaut wird.
+- **Im Spiel:** Material `kit_relief` in `src/models/kit.ts` (durchscheinend nach Maske, schreibt keine Tiefe, liegt in der Zeichenfolge vor den Aufklebern).
+
+**Warum die Lackfarbe mitgegeben wird:** Star Citizen mischt bei einem Decal nur die Oberflächenrichtung in die Fläche darunter. Das braucht einen Renderweg mit Zwischenspeicher für Normalen, den das Spiel nicht hat. Unsere Flächen sind aber immer „Blatt mal Lackfarbe“; trägt das aufgesetzte Teil dieselbe Farbe, wirkt es wie ein Teil der Fläche. Schmutzfahnen des Untergrunds laufen nicht über das Teil weiter.
+
+**Probe am Außenposten (81 Teile, 162 Dreiecke mehr bei 36.000):** `docs/bilder/relief-113-turm.jpg` und `relief-113-tuer.jpg`, je links ohne und rechts mit Relief.
+
+**Offen:** die Tiefenwirkung (Parallaxe aus der Höhe im Rotkanal), eine Abnutzung je Bauteil über Eckfarben, und das Nachziehen der übrigen Gebäude (Bastion, Hangar, Städte, Schmelzwerk): jedes muss mit seinem Skript neu gebaut und neu berechnet werden.
+
+**Merken:** Helfer, die im Feld zeichnen, müssen die Ecke des Felds kennen (`Br` statt `bar`); beim ersten Durchgang lagen alle Rundstäbe oben links im Blatt. Und: Flächen, die auf einer strukturierten Wand liegen, fallen wenig auf; am meisten bringen die Teile auf ruhigen Flächen.
+
 ## Texturblatt und Aufkleber ändern
 
 - **Texturblatt:** `Trimsheet.blend` öffnen, Textblock `trim_build` ausführen: `build()` (Geometrie), `render()` (fünf Durchgänge, dauert

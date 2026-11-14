@@ -38,6 +38,19 @@ def build(lib):
     K.number('07', (20.5, -6.5, S + 0.9), X, Z, 1.0, 'white', 0.03)
     K.panel('hatch', (27.0, -6.5, S + 0.2), w=1.3, h=1.3, depth=0.12)
     K.decal('rust1', (16.8, -6.5, S + 1.3), X, Z, 1.6, 2.6, off=0.03); K.decal('leak3', (-21.0, -6.5, S + 1.4), X, Z, 1.6, 2.6, off=0.03)
+    # ---------- Relief an der Front der Flügel (Wand bei y = -6,5): Lüfter, Klappen, Anschlüsse, Leitungen, Nähte
+    for s in (-1, 1):
+        F = lambda x, z: (s * x, -6.5, S + z)
+        K.seam(F(9.3, 0.78), F(31.0, 0.78), -Y, 'r_weld', 'hull')
+        K.seam(F(9.3, 3.75), F(21.0, 3.75), -Y, 'r_seam', 'hull')
+        K.relief('vent_slot', F(12.0, 4.7), X, Z, tint='hull'); K.relief('vent_slot', F(13.3, 4.7), X, Z, tint='hull')
+        K.relief('duct', F(9.95, 2.2), X, Z, tint='hull'); K.relief('pan_rect', F(12.6, 1.6), X, Z, tint='hull')
+        K.relief('port', F(19.2, 2.3), X, Z, tint='hull'); K.relief('junction', F(22.4, 1.55), X, Z, tint='hull')
+        K.relief('cover', F(18.6, 1.3), X, Z, tint='hull'); K.relief('grille', F(29.2, 0.95), X, Z, 0.6, 0.6, tint='hull')
+        for k in range(5): K.relief('b_washer', F(15.2 + k * 0.5, 2.2), X, Z, 0.16, 0.16, tint='hull')
+        K.relief('cable', F(25.6, 1.25), X, Z, tint='hull'); K.relief('lamp', F(20.9, 3.4), X, Z, tint='hull')
+    K.relief('hatch_s', (24.4, -6.5, S + 2.45), X, Z, tint='hull'); K.relief('rungs', (-24.8, -6.5, S + 1.35), X, Z, tint='hull')
+    K.relief('pan_pill', (-19.6, -6.5, S + 3.3), X, Z, tint='hull'); K.relief('valve', (-12.4, -6.5, S + 0.95), X, Z, tint='hull')
     # ---------- Turm mit Streben, Fenstern, Antennen
     T0 = S + 12
     K.block(9, 9, 10, (0, 9, T0), tint='hull', plinth=0.5)
@@ -47,6 +60,13 @@ def build(lib):
     for k in range(3): K.windows(5.6, (0, 4.5, T0 + 4.6 + k * 1.5), 0, 0.6, 4)
     K.windows(4.6, (0, 6.25, T0 + 13.2), 0, 0.9, 3, kind='screen')
     K.decal('emblem', (0, 4.5, T0 + 2.4), X, Z, 2.6, off=0.03)
+    # Relief am Turm: Wartungsfelder neben dem Emblem, Lüfter und Anschlüsse an den Seiten
+    K.relief('panel_big', (-3.0, 4.5, T0 + 1.75), X, Z, tint='hull'); K.relief('hatch_l', (3.2, 4.5, T0 + 1.6), X, Z, tint='hull')
+    K.relief('lamp', (0, 4.5, T0 + 8.9), X, Z, 1.0, 0.5, tint='hull'); K.seam((-4.3, 4.5, T0 + 3.9), (4.3, 4.5, T0 + 3.9), -Y, 'r_rib', 'hull')
+    for sx_ in (-1, 1):
+        n_ = X * sx_; u_ = Y * sx_
+        K.relief('vent_slot', (sx_ * 4.5, 8.0, T0 + 6.4), u_, Z, tint='hull'); K.relief('cover', (sx_ * 4.5, 10.6, T0 + 2.0), u_, Z, tint='hull')
+        K.relief('cable', (sx_ * 4.5, 7.0, T0 + 1.6), u_, Z, tint='hull'); K.seam((sx_ * 4.5, 4.9, T0 + 3.9), (sx_ * 4.5, 13.1, T0 + 3.9), n_, 'r_rib', 'hull')
     K.antenna(12, (2.0, 11.0, T0 + 17)); K.antenna(6, (-2.2, 8.4, T0 + 17)); K.dish(2.0, (-1.2, 11.6, T0 + 17), 0.0, 0.6)
     K.turret((0, -1.2, T0), 0.0)
     K.vent_unit((5.6, 14.6, T0)); K.vent_unit((-5.4, 0.5, T0), sx=1.8, sy=1.8, sz=1.0); K.vent_unit((5.4, 1.5, T0), sx=1.6, sy=2.6, sz=1.1)

@@ -8,6 +8,8 @@ import { renderer } from '../core/engine';
 // (Lackfarbe × vorberechnete Verdeckung). Ein Material reicht deshalb für alle Gebäude; neue Modelle brauchen hier keinen Code.
 //   kit_trim     Texturblatt (tex/kit_trim_col, _nrm, _orm: Farbe, Relief, Verdeckung/Rauheit/Metall)
 //   kit_decal    Aufkleber mit Transparenz (tex/kit_decals): Schrift, Ziffern, Schilder, Schmutz
+//   kit_relief   aufgesetzte Bauteile (tex/kit_relief_col, _nrm, _orm, _mask): Schrauben, Griffe, Lüfter, Klappen, Fugen als flache Vierecke mit
+//                weicher Maske. Sie tragen die Lackfarbe der Fläche darunter und wirken dadurch wie ein Teil von ihr (Vorbild: Star Citizen)
 //   kit_concrete Beton (kachelt in Metern), kit_glass dunkle Scheiben, kit_light/lamp/redlamp/screen/green selbstleuchtend
 //   kit_neon     Leuchtschriften der Städte (tex/kit_city, eigene Farben; scripts/make-kit-city.mjs), kit_neon2 zweiter Atlas (kit_city2)
 //   kit_holo     Hologramme (kit_city2, additiv, flackert: kitHoloFlicker), kit_tower Turmfassade (kachelnd, leuchtende Fenster), kit_wet nasser Boden
@@ -134,17 +136,24 @@ export function kitMaterials(look: KitLook = {}) {
     map: shared('kit_decals', true), transparent: true, depthWrite: false, vertexColors: true, roughness: 0.75, metalness: 0,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
   });
+  // Relief: Deckkraft aus dem Grünkanal der Maske (three liest alphaMap dort), Höhe im Rotkanal (für spätere Tiefenwirkung)
+  const rorm = shared('kit_relief_orm', false);
+  const relief = new THREE.MeshStandardMaterial({
+    map: shared('kit_relief_col', true), normalMap: shared('kit_relief_nrm', false), aoMap: rorm, roughnessMap: rorm, metalnessMap: rorm, alphaMap: shared('kit_relief_mask', false),
+    roughness: 1, metalness: 1, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  relief.normalScale.set(1, -1); relief.envMapIntensity = 0.35;
   const concrete = texMat(0xffffff, 'hangar_floor', { vertexColors: true, roughness: 0.92, metalness: 0.04 });
   concrete.envMapIntensity = 0.3;
   const glass = new THREE.MeshStandardMaterial({ color: 0x070b10, roughness: 0.08, metalness: 0.7, envMapIntensity: 1.6 });
   if (inside) {
     const lm = tex(look.lightmap!, true);
     if (lm) { lm.channel = 1; lm.wrapS = lm.wrapT = THREE.ClampToEdgeWrapping; lm.anisotropy = 2; }
-    for (const m of [trim, int, concrete, decal]) { m.lightMap = lm; m.lightMapIntensity = look.intensity ?? 1; decodeLight(m); }
+    for (const m of [trim, int, concrete, decal, relief]) { m.lightMap = lm; m.lightMapIntensity = look.intensity ?? 1; decodeLight(m); }
   }
   const M: Record<string, THREE.Material> = inside
-    ? { kit_trim: trim, kit_int: int, kit_decal: decal, kit_concrete: concrete, kit_glass: glass }
-    : { kit_trim: dusty(trim, 'trim'), kit_int: dusty(int, 'int'), kit_decal: decal, kit_concrete: dusty(concrete, 'concrete'), kit_glass: glass };
+    ? { kit_trim: trim, kit_int: int, kit_decal: decal, kit_relief: relief, kit_concrete: concrete, kit_glass: glass }
+    : { kit_trim: dusty(trim, 'trim'), kit_int: dusty(int, 'int'), kit_decal: decal, kit_relief: relief, kit_concrete: dusty(concrete, 'concrete'), kit_glass: glass };
   for (const [k, c] of Object.entries(KIT_GLOW)) M['kit_' + k] = new THREE.MeshBasicMaterial({ color: k === 'accent' && look.accent !== undefined ? look.accent : c });
   const signs = shared('kit_signs', true);
   M.kit_sign = new THREE.MeshBasicMaterial({ map: signs, color: look.accent ?? KIT_GLOW.accent });     // Wegweiser in der Akzentfarbe der Station
@@ -152,7 +161,7 @@ export function kitMaterials(look: KitLook = {}) {
   M.kit_neon = new THREE.MeshBasicMaterial({ map: shared('kit_city', true) });
   M.kit_neon2 = new THREE.MeshBasicMaterial({ map: shared('kit_city2', true) });
   M.kit_holo = HOLO; HOLO.map = shared('kit_city2', true);
-  if (out) { for (const m of [trim, int, concrete, decal]) { cityLit(m, look); if (look.env && m !== decal) m.envMap = cityEnv(); } if (look.env) glass.envMap = cityEnv(); }
+  if (out) { for (const m of [trim, int, concrete, decal, relief]) { cityLit(m, look); if (look.env && m !== decal) m.envMap = cityEnv(); } if (look.env) glass.envMap = cityEnv(); }
   const tw = new THREE.MeshStandardMaterial({ map: shared('kit_tower_col', true), emissiveMap: shared('kit_tower_emi', true), emissive: 0xffffff, emissiveIntensity: 1.25, roughness: 0.55, metalness: 0.25, vertexColors: true });
   tw.envMapIntensity = 0.5; M.kit_tower = tw; if (out) cityLit(tw, look);
   const wet = texMat(0x8e96a4, 'hangar_floor', { vertexColors: true, roughness: 0.36, metalness: 0.1 }); wet.envMap = cityEnv(); wet.envMapIntensity = 0.3; M.kit_wet = wet; if (out) cityLit(wet, look);   // spiegelt die Stadt-Umgebung statt des Weltraums (der wäre rosa)
@@ -248,7 +257,8 @@ export function applyKit(root: THREE.Object3D, look: KitLook = {}) {
     const m = M[o.material?.name] || cityMat(o.material?.name, look);
     if (!m) return;
     o.material = m;
-    if (m === M.kit_decal) o.renderOrder = 1;
+    if (m === M.kit_relief) o.renderOrder = 1;      // erst das Relief, dann die Aufkleber darüber
+    if (m === M.kit_decal) o.renderOrder = 2;
     if (m === M.kit_holo) o.renderOrder = 3;
   });
 }

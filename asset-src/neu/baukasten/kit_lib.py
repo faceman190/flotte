@@ -34,6 +34,9 @@ TILES = {n: ('kit_trim', r) for n, r in _A['tiles'].items()}; TILES.update({n: (
 # Drittes Texturblatt: die Ferrox (kit_fx, asset-src/neu/ferrox/trim_ferrox.py), mit eigenem Leuchtbild (Adern, Linse, Düse)
 _A3 = json.load(open(os.path.join(HERE, 'kit_fx_atlas.json'))) if os.path.exists(os.path.join(HERE, 'kit_fx_atlas.json')) else {'strips': {}, 'tiles': {}}
 SHEET.update({n: ('kit_fx', a, b) for n, (a, b) in _A3['strips'].items()}); TILES.update({n: ('kit_fx', r) for n, r in _A3['tiles'].items()})
+# Relief-Blatt (kit_relief, trim_relief.py): kleine Bauteile und Fugen zum Aufsetzen auf Flächen, mit weicher Maske. Eigener Maßstab (4 m über das Blatt).
+_A4 = json.load(open(os.path.join(HERE, 'kit_relief_atlas.json'))) if os.path.exists(os.path.join(HERE, 'kit_relief_atlas.json')) else {'size_m': 4.0, 'strips': {}, 'tiles': {}}
+RSM = _A4['size_m']; RELIEF = {n: {'x': r[0], 'y': r[1], 'w': r[2] - r[0], 'h': r[3] - r[1]} for n, r in _A4['tiles'].items()}; RSTRIP = _A4['strips']
 X, Y, Z = Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1))
 TAU = math.tau
 TINT = {   # linear; im Bild wirken die Werte deutlich heller (0,06 ist ein dunkles Grau, 0,3 ein helles)
@@ -196,6 +199,19 @@ class Kit:
     def decal(self, name, c, u, v, w, h=None, tint='white', off=0.015):
         d = DECALS[name]; h = w * d['h'] / d['w'] if h is None else h
         self.tile(name, c, u, v, w, h, tint, off=off, cells=DECALS, scale=DPX, mat='kit_decal')
+    def relief(self, name, c, u, v, w=None, h=None, tint='hull', off=0.012):
+        """Aufgesetztes Bauteil aus dem Relief-Blatt (Schraube, Griff, Lüfter, Klappe …): Mitte c, Richtungen u (rechts) und v (oben).
+        Ohne w/h in seiner echten Größe. tint = Lackfarbe der Fläche darunter, damit es wie ein Teil von ihr wirkt."""
+        if name not in RELIEF: return
+        r = RELIEF[name]; self.tile(name, c, u, v, w or r['w'], h or r['h'], tint, off=off, cells=RELIEF, scale=RSM, mat='kit_relief')
+    def seam(self, a, b, n, name='r_seam', tint='hull', off=0.008, width=None):
+        """Fuge, Naht oder Rippe als Band von a nach b auf einer Fläche mit der Normalen n (Streifen des Relief-Blatts: r_seam, r_weld, r_rib, r_lip, r_groove; kachelt längs)."""
+        if name not in RSTRIP: return
+        a, b, n = V(a), V(b), V(n).normalized(); d = b - a; L = d.length
+        if L < 1e-5: return
+        y0, y1 = RSTRIP[name]; s = n.cross(d.normalized()) * ((width or (y1 - y0)) / 2); o = n * off; u0 = self.R.randrange(4)
+        vb, vt = 1 - y1 / RSM, 1 - y0 / RSM
+        with self.overlay(): self.poly((a - s + o, b - s + o, b + s + o, a + s + o), ((u0 / RSM, vb), ((u0 + L) / RSM, vb), ((u0 + L) / RSM, vt), (u0 / RSM, vt)), T(tint), 'kit_relief')
     def lamp(self, pos, color=(1.0, 0.93, 0.8), power=400.0, radius=0.3):
         """Zusätzliche Lichtquelle nur für die Lichtberechnung in Blender (Punktlicht in Watt)."""
         p = self.M @ V(pos); self.lamps.append(((p.x, p.y, p.z), tuple(color), power, radius))
@@ -242,7 +258,7 @@ class Kit:
                     if along == 'z': bl, br, tr, tl = br, tr, tl, bl
                     self.surf(bl, br, tl, side, tint)
             if b < 1e-4: return
-            es = 'fx_seam' if SHEET[side][0] == 'kit_fx' else 'edge'
+            es = 'fx_seam' if SHEET.get(side, ('',))[0] == 'kit_fx' else 'edge'      # side kann auch eine Reihenfolge sein ('wall'), die steht nicht in SHEET
             for a, bb, c in ((0, 1, 2), (1, 2, 0), (2, 0, 1)):
                 for sa in (-1, 1):
                     for sb in (-1, 1):
@@ -286,7 +302,7 @@ class Kit:
                         pp, uu = (p0, p1, p2, p3), ((ua, vb + 0.001), (uc, vb + 0.001), (uc, v1 - 0.001), (ua, v1 - 0.001))
                         self.poly(pp[::-1] if flip else pp, uu[::-1] if flip else uu, T(tint), SHEET[name][0])
             if caps:
-                ct = cap_tint or tint; cp = 'fx_plain' if SHEET[strip][0] == 'kit_fx' else 'plain'
+                ct = cap_tint or tint; cp = 'fx_plain' if SHEET.get(strip, ('',))[0] == 'kit_fx' else 'plain'
                 if r > 1e-4: self.ngon([(cs[i][0] * r, cs[i][1] * r, 0) for i in range(seg - 1, -1, -1)], cp, ct)
                 if r2 > 1e-4: self.ngon([(cs[i][0] * r2, cs[i][1] * r2, L) for i in range(seg)], cp, ct)
     def sphere(self, r, loc, tint='white', strip='wall_b', seg=16, rings=8, squash=1.0):
@@ -332,10 +348,14 @@ class Kit:
             self.box((sx + w, w, h), (0, s * sy / 2, z), side=strip, tint=tint, bevel=bevel, bottom=True)
             self.box((w, sy - w, h), (s * sx / 2, 0, z), side=strip, tint=tint, bevel=bevel, bottom=True)
     def block(self, sx, sy, sz, loc=(0, 0, 0), tint='hull', top='roofing', tint_top=None, plinth=0.6, cornice=0.45, trim='hull_dark', rz=0.0):
-        """Baukörper: Wände mit Paneelen, Dach, Sockelband und Attika."""
+        """Baukörper: Wände mit Paneelen, Dach, Sockelband und Attika. Über dem Sockel läuft eine verschraubte Leiste um (Relief-Blatt)."""
         with self.at(loc, rz):
             self.box((sx, sy, sz), side='wall', top=top, tint=tint, tint_top=tint_top or tint, bevel=0.06)
             if plinth: self.box((sx + 0.3, sy + 0.3, plinth), side='girder', tint=trim, bevel=0.05)
+            if plinth and sz > plinth + 1.5:
+                zl = plinth + 0.09; ex, ey = sx / 2, sy / 2
+                for a, b, n in (((-ex + 0.1, -ey, zl), (ex - 0.1, -ey, zl), -Y), ((ex, -ey + 0.1, zl), (ex, ey - 0.1, zl), X), ((ex - 0.1, ey, zl), (-ex + 0.1, ey, zl), Y), ((-ex, ey - 0.1, zl), (-ex, -ey + 0.1, zl), -X)):
+                    self.seam(a, b, n, 'r_lip', tint)
             if cornice: self.ring(sx, sy, sz - cornice + 0.18, 0.34, cornice, 'beam', trim)
     def wing(self, length, run, z_hi, z_lo, loc=(0, 0, 0), side=1, tint='hull', tint_top=None, base=0.0, rafters=3, rafter_tint='yellow'):
         """Flügel mit Pultdach: beginnt bei x = 0 (hoch) und fällt nach außen (x = side * run) ab; Tiefe = length (y von -length/2 bis +length/2)."""
@@ -376,6 +396,9 @@ class Kit:
             for s in (-1, 1): self.box((0.22, 0.3, h + 0.2), (s * (w / 2 + 0.11), 0, 0), side='beam', tint=frame, bevel=0.03, along='z')
             self.box((w + 0.44, 0.3, 0.24), (0, 0, h + 0.1), side='beam', tint=frame, bevel=0.03, bottom=True)
             self.tile('door', (0, -0.06, h / 2), X, Z, w, h, tint, sub=(0.37, 0.15, 1.63, 1.98))
+            # Relief: Griff am Türblatt (senkrecht), Tastenfeld und Namensschild an der Wand daneben
+            self.relief('handle', (w * 0.33, -0.064, 1.05), Z, -X, tint=tint, off=0.006)
+            self.relief('keypad', (-(w / 2 + 0.5), 0, 1.3), X, Z, tint='hull_light'); self.relief('nameplate', (-(w / 2 + 0.5), 0, 1.85), X, Z, 0.5, 0.25, tint='hull_light')
             self.glow('redlamp', (w / 2 + 0.11, -0.16, 1.4), X, Z, 0.08, 0.08)
             self.glowbox('light', (w * 0.7, 0.16, 0.08), (0, -0.2, h + 0.28)); self.light('light', (0, -0.5, h + 0.2), 2.0)
     def windows(self, length, loc=(0, 0, 0), rz=0.0, h=0.7, n=None, frame='hull_dark', kind='light'):
@@ -456,6 +479,8 @@ class Kit:
         with self.at(loc, rz):
             self.box((w, depth, h), (0, -depth / 2, 0), side='plain', tint=tint, bevel=0.03, bottom=True)
             self.tile(name, (0, -depth, h / 2), X, Z, w - 0.06, h - 0.06, tint, off=0.004)
+            for sx_ in (-1, 1):      # Relief: Sechskantschrauben in den Ecken
+                for z_ in (0.07, h - 0.07): self.relief('b_hex', (sx_ * (w / 2 - 0.07), -depth, z_), X, Z, 0.13, 0.13, tint=tint, off=0.01)
             if glow: self.glow(glow, (-w * 0.125, -depth - 0.012, h * 0.69), X, Z, w * 0.38, h * 0.25)
     def vent_unit(self, loc=(0, 0, 0), rz=0.0, sx=2.2, sy=2.2, sz=1.3, tint='hull_mid'):
         """Lüftungsgerät fürs Dach: Ventilator oben, Lamellen an den Seiten."""
@@ -765,6 +790,15 @@ def kit_material(name):
         P.inputs['Base Color'].default_value = (0.03, 0.015, 0.06, 1); P.inputs['Roughness'].default_value = 0.25; P.inputs['Metallic'].default_value = 0.5
         P.inputs['Emission Color'].default_value = (0.3, 0.12, 0.8, 1); P.inputs['Emission Strength'].default_value = 1.2
         return m
+    if name == 'kit_relief':      # Relief-Blatt: Farbe × Lackfarbe der Fläche, Relief, Rauheit/Metall; Deckkraft aus dem Grünkanal der Maske
+        va = nt.nodes.new('ShaderNodeVertexColor'); va.layer_name = 'Col'; mix = nt.nodes.new('ShaderNodeMix'); mix.data_type = 'RGBA'; mix.blend_type = 'MULTIPLY'; mix.inputs[0].default_value = 1.0
+        tc = nt.nodes.new('ShaderNodeTexImage'); tc.image = _img('kit_relief_col@2048.png'); L(tc.outputs['Color'], mix.inputs[6]); L(va.outputs['Color'], mix.inputs[7]); L(mix.outputs[2], P.inputs['Base Color'])
+        tn = nt.nodes.new('ShaderNodeTexImage'); tn.image = _img('kit_relief_nrm@2048.png', True); nm = nt.nodes.new('ShaderNodeNormalMap'); L(tn.outputs['Color'], nm.inputs['Color']); L(nm.outputs['Normal'], P.inputs['Normal'])
+        to = nt.nodes.new('ShaderNodeTexImage'); to.image = _img('kit_relief_orm@2048.png', True); sp = nt.nodes.new('ShaderNodeSeparateColor'); L(to.outputs['Color'], sp.inputs[0]); L(sp.outputs[1], P.inputs['Roughness']); L(sp.outputs[2], P.inputs['Metallic'])
+        tm = nt.nodes.new('ShaderNodeTexImage'); tm.image = _img('kit_relief_mask@2048.png', True); sm = nt.nodes.new('ShaderNodeSeparateColor'); L(tm.outputs['Color'], sm.inputs[0]); L(sm.outputs[1], P.inputs['Alpha'])
+        try: m.surface_render_method = 'BLENDED'
+        except Exception: pass
+        return m
     if name == 'kit_glass':
         P.inputs['Base Color'].default_value = (0.012, 0.025, 0.04, 1); P.inputs['Roughness'].default_value = 0.08; P.inputs['Metallic'].default_value = 0.6
         return m
@@ -826,7 +860,7 @@ def bake_ao(ob, dist=5.0, samples=24, strength=0.75, ground=True):
     if g: bpy.data.objects.remove(g, do_unlink=True)
     # Aufkleber sind durchsichtig und bekommen von Cycles keine Verdeckung: Wert der nächstgelegenen festen Ecken übernehmen
     from mathutils import kdtree
-    di = {i for i, m in enumerate(me.materials) if m and m.name == 'kit_decal'}
+    di = {i for i, m in enumerate(me.materials) if m and m.name in ('kit_decal', 'kit_relief')}
     if di:
         lv = np.empty(nl, np.int32); me.loops.foreach_get('vertex_index', lv)
         st = np.zeros(nl, bool); st[ids] = True
