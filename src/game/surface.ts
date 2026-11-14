@@ -245,15 +245,16 @@ const GROUND: Record<string, { m: number; tint: number; nrm: number }> = {
   fels: { m: 2, tint: 0.45, nrm: 1 }, wueste: { m: 1.5, tint: 0.55, nrm: 0.8 }, eis: { m: 2, tint: 0.35, nrm: 0.7 },
   vulkan: { m: 2.4, tint: 0.75, nrm: 1 }, asche: { m: 3.1, tint: 0.85, nrm: 1 }, kristall: { m: 2, tint: 0.9, nrm: 1 }, mond: { m: 2.6, tint: 0.25, nrm: 1.15 },
 };
-// Materialsatz (Probe, nur wo hier eingetragen; zurzeit nirgends): Statt eines Bodenbilds liegen drei Böden nebeneinander, die zusammenpassen:
-// feiner Grund auf flachen Stellen, das bisherige Geröll dazwischen, Schutt an den Hängen, darüber wie bisher der Fels der Steilwände.
-// Die Grenzen folgen der Hangneigung und groben Flecken; im Übergang entscheidet die Höhe im Bild (helle Steine ragen aus dem Sand).
+// Materialsatz (nur wo hier eingetragen): Statt eines Bodenbilds liegen drei Böden nebeneinander, die zusammenpassen:
+// „fine“ in Flecken auf flachen Stellen, „scree“ als Decke des sanften Geländes, das bisherige Geröll an den Hängen und in Flecken dazwischen,
+// darüber wie bisher der Fels der Steilwände. Die Grenzen folgen der Hangneigung und groben Flecken; im Übergang entscheidet die Höhenkarte
+// der Bilder (Alphakanal, siehe build-assets.mjs): Steine ragen aus dem Gras, statt zu verlaufen. Oberhalb der Schneegrenze endet der Bewuchs.
 // tex: Bodenbild eines anderen Planetentyps (liegt schon im Spiel), m: Kachelgröße in Metern, col/tint: Zielfarbe und wie stark dorthin gefärbt wird.
 interface GroundLayer { tex: string; m: number; col: number; tint: number }
 const GROUNDSET: Record<string, { fine: GroundLayer; scree: GroundLayer }> = {
-  // Probe vom 14.11.2026 (Heimstatt II), abgeschaltet: Mit den vorhandenen Bildern (Mondstaub als Erde, dunkler Fels als Schutt) wird die Ebene
-  // nur eintönig braun und der Hang kaum anders. Der Satz braucht eigens passende Böden mit Höhenkarte (siehe docs/assets.md).
-  // heimstatt: { fine: { tex: 'asche', m: 2.2, col: 0x6a5d4c, tint: 0.8 }, scree: { tex: 'kristall', m: 3.0, col: 0x86837c, tint: 0.65 } },
+  // Heimstatt II: saftige Wiese mit Steinnestern in den Ebenen (Luftbild, hier auf 12 m gelegt), Waldboden mit Gras und Zweigen als Decke
+  // (beide zur selben Grasfarbe gezogen: Aus der Luft stünden die Wiesenflecken sonst als dunkle Dreiecke im helleren Waldboden)
+  heimstatt: { fine: { tex: 'l_gras', m: 12, col: 0x626a30, tint: 0.55 }, scree: { tex: 'l_wald', m: 2, col: 0x626a30, tint: 0.4 } },
 };
 // Gelände-Shader: flache Stellen mit Bodenbild, Steilhänge mit Fels.
 // Das Bodenbild wird aus drei Richtungen projiziert (von oben und von zwei Seiten, gewichtet nach der Flächenneigung), damit es an Hängen
@@ -348,22 +349,24 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
           // Materialsatz: Anteile nach Hangneigung, von groben Flecken verschoben (x fein, y Geröll, z Schutt)
           // feiner Grund in Flecken auf flachen Stellen, und zwar dort, wo keine Wiese liegt (die Wiese nimmt die hellen Flecken des groben Musters)
           // vSlope ist 1 - Normale.y: 0,004 sind 5 Grad, 0,012 sind 9 Grad, 0,05 sind 18 Grad, 0,1 sind 26 Grad (die Steilwand beginnt bei 0,2 = 37 Grad)
-          float gWf = (1.0 - smoothstep(0.004, 0.014, vSlope)) * smoothstep(0.0, 0.2, (1.0 - gL2) * 1.5 + (1.0 - gL) * 0.8);
-          float gWs = smoothstep(0.045, 0.1, vSlope + (gL - 1.0) * 0.03);
+          float gAlt = 1.0 - smoothstep(snowY - 60.0, snowY + 160.0, vWPos.y);      // oben wächst nichts mehr
+          float gWf = (1.0 - smoothstep(0.004, 0.03, vSlope)) * smoothstep(0.0, 0.2, (1.0 - gL2) * 1.5 + (1.0 - gL) * 0.8) * gAlt;
+          // Decke des sanften Geländes bis etwa 20 Grad; in Flecken schaut das Geröll durch
+          float gWs = (1.0 - smoothstep(0.05, 0.11, vSlope + (gL - 1.0) * 0.03)) * (1.0 - 0.9 * smoothstep(0.1, 0.28, (gL - 1.0) * 1.7)) * gAlt * (1.0 - gWf);
           gWf *= gSetK; gWs *= gSetK;
           vec3 gHW = vec3(gWf, max(0.0, 1.0 - gWf - gWs), gWs);
           float gCon = mix(1.0, 0.5, gB.x) * mix(1.0, 0.55, gB.y) * mix(0.4, 1.0, gGraz);
           vec3 gFc = vec3(0.0), gSc = vec3(0.0); float gHf = 0.5, gHs = 0.5;
           if (gHW.x > 0.01) {
             vec3 mF = max(textureLod(gFineMap, vec2(0.5), 12.0).rgb, vec3(0.02)), s = mix(mF, gS(gFineMap, vWPos.xz * gSetP.x, gB), gCon);
-            gHf = 0.5 * dot(s, vec3(0.34)) / dot(mF, vec3(0.34)); gFc = s / mF * mix(mF, gFineCol, gSetP.y) * mix(1.0, gL2, 0.25);
+            gHf = mix((texture2D(gFineMap, vWPos.xz * gSetP.x).a - 0.094) / 0.906, 0.5, gB.x); gFc = s / mF * mix(mF, gFineCol, gSetP.y) * mix(1.0, gL2, 0.25);
           }
           if (gHW.z > 0.01) {
             vec3 mS = max(textureLod(gScreeMap, vec2(0.5), 12.0).rgb, vec3(0.02)), s = mix(mS, gS(gScreeMap, vWPos.xz * gSetP.z, gB), gCon);
-            gHs = 0.5 * dot(s, vec3(0.34)) / dot(mS, vec3(0.34)); gSc = s / mS * mix(mS, gScreeCol, gSetP.w) * mix(1.0, gL, 0.3);
+            gHs = mix((texture2D(gScreeMap, vWPos.xz * gSetP.z).a - 0.094) / 0.906, 0.5, gB.x); gSc = s / mS * mix(mS, gScreeCol, gSetP.w) * mix(1.0, gL, 0.3);
           }
           // Höhenmischung: Der Anteil hebt einen Boden an, im Übergang gewinnt, was im Bild höher liegt (scharfe, natürliche Ränder statt Überblendung)
-          float gHb = 0.5 * dot(gC, vec3(0.34)) / max(dot(mix(gMean, gCol, gTint), vec3(0.34)), 0.02);
+          float gHb = mix((texture2D(groundMap, gP.xz).a - 0.094) / 0.906, 0.5, gB.x);      // Höhe aus dem Alphakanal; ohne Höhenkarte ist sie überall 1, dann entscheiden allein die Anteile
           vec3 gHH = vec3(gHf, gHb, gHs) + gHW * 1.6;
           vec3 gMix = max(gHH - (max(gHH.x, max(gHH.y, gHH.z)) - 0.22), 0.0) * step(0.01, gHW);
           gMix /= max(gMix.x + gMix.y + gMix.z, 1e-4);
@@ -375,6 +378,9 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
         float gPat = gL2 * 0.3 + gL * 0.22;
         // Wiese: flache, tiefe Lagen bekommen die Farbe des Bewuchses (aus der Ferne wirkt das Gras so geschlossen)
         float vg = vegK * smoothstep(0.36, 0.5, gPat) * (1.0 - smoothstep(0.1, 0.24, vSlope)) * (1.0 - smoothstep(snowY - 60.0, snowY + 160.0, vWPos.y));
+        #ifdef GSET
+          vg *= 1.0 - 0.85 * gSetK;      // mit Materialsatz bringen die Böden ihr Grün selbst mit
+        #endif
         diffuseColor.rgb = mix(diffuseColor.rgb, vegCol * (0.55 + 0.5 * gL) * (0.6 + 0.4 * dot(gC, vec3(0.34))), vg);
         float sn = snowK * smoothstep(0.5, 0.64, gPat + clamp((vWPos.y - snowY) * 0.0009, -0.4, 0.2)) * (1.0 - smoothstep(0.14, 0.32, vSlope));
         diffuseColor.rgb = mix(diffuseColor.rgb, snowCol * (0.5 + 0.16 * gL), sn);`)

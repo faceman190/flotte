@@ -101,7 +101,14 @@ if (fs.existsSync(path.join(PH, 'ground.json'))) {
       const src = fs.readFileSync(f);
       let img = sharp(src).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true });
       if (grey) img = img.greyscale();
-      put(`planet/${key}/${typ}`, 'webp', await img.webp({ quality: q, effort: 5 }).toBuffer(), 'world', src.length);
+      // Höhenkarte (disp.jpg, falls vorhanden) in den Alphakanal des Farbbilds: Der Geländeshader mischt Böden eines Materialsatzes danach.
+      // Auf 24 bis 255 gestaucht, weil WebP die Farbe unter Alpha 0 verwirft (im Shader zurückgerechnet).
+      const dispF = path.join(PH, id, 'disp.jpg');
+      if (part === 'col' && fs.existsSync(dispF)) {
+        const a = await sharp(dispF).resize(1024, 1024, { fit: 'fill' }).greyscale().linear(231 / 255, 24).raw().toBuffer();
+        img = sharp(await img.removeAlpha().resize(1024, 1024, { fit: 'fill' }).raw().toBuffer(), { raw: { width: 1024, height: 1024, channels: 3 } }).joinChannel(a, { raw: { width: 1024, height: 1024, channels: 1 } });
+      }
+      put(`planet/${key}/${typ}`, 'webp', await img.webp({ quality: q, alphaQuality: 88, effort: 5 }).toBuffer(), 'world', src.length);
     }
   }
 }

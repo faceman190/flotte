@@ -6,5 +6,8 @@
   "vulkan": "dark_rock",
   "asche": "moon_01",
   "kristall": "dark_rock_02",
-  "mond": "mond_kies"
+  "mond": "mond_kies",
+  "_info2": "Schlüssel mit l_ sind weitere Böden für Materialsätze (surface.ts, GROUNDSET), keine Planetentypen. Liegt im Ordner eine disp.jpg, kommt sie als Höhe in den Alphakanal des Farbbilds.",
+  "l_wald": "forrest_ground_01",
+  "l_gras": "rocky_terrain_02"
 }
