@@ -333,3 +333,9 @@ Anlass: der Artikel über Gelände und Texturen von Star Citizen (Bodenmaterial 
 - Vor dem Laden die Maße eines Poly-Haven-Materials prüfen (`api.polyhaven.com/info/<id>`, `dimensions` in Millimetern): `rocky_terrain_02` ist ein Luftbild und in echter Größe aus der Nähe unscharf.
 
 **Nicht geprüft:** die Bildrate auf schwächeren Grafikkarten (in gemischten Bereichen liest der Shader bis zu einem Dutzend Bildpunkte mehr), und die übrigen Felsplaneten mit eigenem Satz (dort gilt weiter das eine Bodenbild).
+
+## Testschiff „Sperber“ (Alpha 1.14)
+
+Eigener Entwurf aus dem Baukasten als Probe für Schiffe: `station/Testschiff` (4.708 Dreiecke, 471 KB, keine eigene Textur), Zusatzangaben `data/kit_Testschiff.json`. Liegt als Schaustück vor der Lichtwall-Werft (`src/game/testship.ts`, Materialien `shipMaterials()` in `src/models/kit.ts`). Bauweise und Lehren: `docs/baukasten.md`, Abschnitt „Schiffe mit dem Baukasten“.
+
+![Sperber von hinten](bilder/testschiff-114-heck.jpg)

@@ -79,6 +79,33 @@ Vorbild sind die „Floater“-Decals aus Star Citizen (Studie von Magnus Tellma
 
 **Merken:** Helfer, die im Feld zeichnen, müssen die Ecke des Felds kennen (`Br` statt `bar`); beim ersten Durchgang lagen alle Rundstäbe oben links im Blatt. Und: Flächen, die auf einer strukturierten Wand liegen, fallen wenig auf; am meisten bringen die Teile auf ruhigen Flächen.
 
+## Schiffe mit dem Baukasten: Testschiff „Sperber“ (Alpha 1.14)
+
+Ein eigener Entwurf als Probe, ob die Bauweise der Gebäude (Texturblatt, Lackfarben je Fläche, Relief-Decals) auch für Schiffe trägt. Der Sperber ist ein kleiner Kurier, 24 m lang und 16 m breit. Er liegt als Schaustück 370 m neben der Lichtwall-Werft (nicht fliegbar, ohne Kollision).
+
+![Sperber im Spiel](bilder/testschiff-114-vorn.jpg)
+
+- **Quelle:** `asset-src/neu/testschiff/testschiff_kit.py` in `Testschiff.blend`. Aufruf wie bei den Gebäuden: `build(lib)`, `lib.bake_ao(ob, dist=3.0, ground=False)`, `lib.export(ob, 'Testschiff', meta())`. Ergebnis: `asset-src/glb/station/Testschiff.glb` (471 KB) und `asset-src/data/kit_Testschiff.json` (acht Leuchtpunkte).
+- **Umfang:** 4.708 Dreiecke, davon 4.188 Rumpf und Anbauten, 432 Relief (216 Teile), 32 Aufkleber, 44 Triebwerksglut, 12 Glas. Keine eigene Textur: alles kommt aus `kit_trim`, `kit_relief` und `kit_decals`.
+- **Rumpf aus Spanten:** Eine Liste von Querschnitten (`ST0`: Lage, halbe Breite, Höhe, Mitte) wird geglättet verdichtet; jeder Querschnitt hat sieben Punkte je Seite. Jedes Band zwischen zwei Punkten hat seinen Streifen und seine Lackart (`SEG`): helle Flanken, ein blaues Band, dunkler Bauch.
+- **Lackarten:** `PRIM` (hell), `SEC` (mittelgrau), `DARK`, `ACC` (blau), `METAL`. Die Farbe steckt in den Eckfarben, nicht in der Textur; ein anderes Farbschema ist eine Zeile.
+- **Helfer für gekrümmte Flächen:** `frame(y, k, t, seite)` liefert zu einer Stelle am Rumpf den Punkt, zwei Richtungen in der Fläche und die Normale. Darauf setzen `rel(...)` (Relief-Teil), `dec(...)` (Aufkleber), `slab(...)` (aufgesetzte Platte mit Fase), `ring(y)` (Spantfuge rundum) und `stringer(...)` (Längsfuge).
+- **Im Spiel:** `shipMaterials()` in `src/models/kit.ts` (Blatt ohne Planetenstaub, weniger Metall, etwas rauer, schwaches Eigenlicht für die Schattenseite; Blatt und Relief gleich behandelt). Aufgestellt wird das Schiff in `src/game/testship.ts`.
+
+**Was das Relief bringt** (links ohne, rechts mit; 432 Dreiecke):
+
+| ohne | mit |
+|---|---|
+| ![ohne](bilder/testschiff-114-ohne.jpg) | ![mit](bilder/testschiff-114-relief.jpg) |
+
+**Merken:**
+- Eine Drehmatrix für `box(rot=…)` aus drei Richtungen baut man mit `Matrix((u, v, n)).transposed().to_4x4()`. Mit `to_4d()` je Zeile steht in der vierten Spalte eine Eins, und der Kasten wird zu meterlangen Zacken verzerrt.
+- Zusammengesetzte Streifennamen (`siding`, `roofing`, `wall`) gehen nicht in `face` und `ngon`; dort `wall_b`, `roof` und die anderen echten Streifen nehmen.
+- Leuchtpunkte an Triebwerken im Spiel klein halten: Ein großer Schein hellt die dunklen Düsen auf, bis sie weiß wirken.
+- Heller Lack brennt in der Sonne des Alls schnell aus; `shipMaterials()` nimmt deshalb die Farbe auf 78 % zurück.
+
+**Offen:** Das Schiff ist kein Spielerschiff (kein Cockpit, keine Werte, keine Kollision). Die Kanzel ist kantig, die Tiefenwirkung des Reliefs fehlt wie an den Gebäuden. Für eine Flotte in dieser Bauweise müsste jedes Schiff der bisherigen Reihe neu gebaut werden.
+
 ## Texturblatt und Aufkleber ändern
 
 - **Texturblatt:** `Trimsheet.blend` öffnen, Textblock `trim_build` ausführen: `build()` (Geometrie), `render()` (fünf Durchgänge, dauert

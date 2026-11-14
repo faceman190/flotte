@@ -189,6 +189,37 @@ export function ferroxMaterials() {
   const ferrit = new THREE.MeshStandardMaterial({ color: 0x1a1226, metalness: 0.55, roughness: 0.28, emissive: 0x6a30c0, emissiveIntensity: 0.55, flatShading: true });
   return (FXSET = { kit_fx: fx, kit_trim: trim, kit_ferrit: ferrit });
 }
+// Schiffe aus dem Baukasten (zuerst das Testschiff, src/game/testship.ts): Blatt der Menschenschiffe ohne den Staub der Planeten, Relief und
+// Aufkleber wie an den Gebäuden. Im All spiegelt sich nichts: weniger Metall, etwas rauer, und ein schwaches Eigenlicht für die Schattenseite.
+// Blatt und Relief bekommen dieselbe Behandlung, damit ein aufgesetztes Teil den Ton der Fläche darunter behält.
+let SHIPSET: Record<string, THREE.Material> | null = null;
+export function shipMaterials() {
+  if (SHIPSET) return SHIPSET;
+  const trim = sheet('kit_trim');
+  const rorm = shared('kit_relief_orm', false);
+  const relief = new THREE.MeshStandardMaterial({
+    map: shared('kit_relief_col', true), normalMap: shared('kit_relief_nrm', false), aoMap: rorm, roughnessMap: rorm, metalnessMap: rorm, alphaMap: shared('kit_relief_mask', false),
+    roughness: 1, metalness: 1, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  relief.normalScale.set(1, -1);
+  for (const m of [trim, relief]) {
+    m.envMapIntensity = 0.5; m.metalness = 0.4; m.color.setScalar(0.78);      // heller Lack brennt in der Sonne sonst weiß aus
+    m.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>' + String.fromCharCode(10) + 'totalEmissiveRadiance += diffuseColor.rgb * 0.10 + vec3(0.004, 0.004, 0.006);')
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>' + String.fromCharCode(10) + 'roughnessFactor = min(1.0, roughnessFactor + 0.2);');
+    };
+    m.customProgramCacheKey = () => 'ship-floor';
+  }
+  const decal = new THREE.MeshStandardMaterial({
+    map: shared('kit_decals', true), transparent: true, depthWrite: false, vertexColors: true, roughness: 0.75, metalness: 0,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x070b10, roughness: 0.08, metalness: 0.7, envMapIntensity: 1.6 });
+  const M: Record<string, THREE.Material> = { kit_trim: trim, kit_relief: relief, kit_decal: decal, kit_glass: glass };
+  for (const [k, c] of Object.entries(KIT_GLOW)) M['kit_' + k] = new THREE.MeshBasicMaterial({ color: c });
+  return (SHIPSET = M);
+}
 // Umgebung für Spiegelungen in Städten: dunstiger Himmel, dunkler Grund, am Horizont die Lichter der Stadt. Die Umgebung der Szene (der Nebel des
 // Sektors, oft rötlich) taugt dafür nicht, und ihre Stärke lässt sich je Material nicht regeln (three: envMapIntensity wirkt nur mit eigener envMap).
 let CITYENV: THREE.Texture | null = null;
