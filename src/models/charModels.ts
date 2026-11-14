@@ -48,6 +48,9 @@ export async function loadCharModels() {
         m.envMapIntensity = 0.3;
         m.metalness = Math.min(m.metalness, 0.2);
       });
+      // Lage des Skelett-Objekts aus der Quelldatei nicht mitnehmen: Von Alpha 1.02 bis 1.05 standen die Tripo-Figuren um ihren Platz in der
+      // Blender-Reihe (bis 6,65 m) neben ihrem Standort. Der Export stellt sie jetzt in den Ursprung; das hier fängt es zusätzlich ab.
+      for (const c of g.scene.children) { c.position.x = 0; c.position.z = 0; }
       g.scene.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(g.scene), h = box.max.y - box.min.y || 1;
       const scale = (HEIGHT[name] || 1.75) / h;

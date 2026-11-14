@@ -196,6 +196,10 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
   40 % Hals und 60 % Kopf) zog dadurch Kinn und Stirn auseinander. Jetzt hängt jeder Punkt mit Kopfanteil ab 45 % ganz am Kopf, unter 18 % bleibt er,
   dazwischen ein weicher Übergang am Hals. Bärte und Haare gehen mit, Kragen bleiben stehen. Alle sieben Figuren neu exportiert (`export_figur`).
   Vergleich vorher/nachher: `docs/bilder/figuren-105-gesicht.jpg` (Zeilen 1 und 3 vorher, 2 und 4 nachher).
+- Alpha 1.06: **Fehler behoben, der seit 1.02 bestand:** Der Export nahm die Lage des Skelett-Objekts in Blender mit (die Figuren stehen dort in einer Reihe).
+  Im Spiel standen sie deshalb seitlich neben ihrem Standort: Achterberg 4,75 m, Hollweg 2,85 m, Roth 0,95 m, Tamm 0,95 m, Kessler 2,85 m, Brandt 4,75 m, Krull 6,65 m.
+  `export_figur` stellt die Figur jetzt für den Export in den Ursprung, und `loadCharModels` setzt die Lage der obersten Knoten zusätzlich auf null.
+  Prüfen nach jedem Export: `charInstance(name)`, Kopfknochen in der Welt muss bei x ≈ 0 liegen.
 - Nach mehreren Läufen in Blender `bpy.data.orphans_purge(do_recursive=True)` aufrufen, bevor gespeichert wird: Sonst bleiben die Bilder
   verworfener Läufe in der Datei (90 MB statt 34 MB; GitHub nimmt höchstens 100 MB je Datei).
 
