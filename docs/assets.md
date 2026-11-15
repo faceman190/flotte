@@ -334,6 +334,28 @@ Anlass: der Artikel über Gelände und Texturen von Star Citizen (Bodenmaterial 
 
 **Nicht geprüft:** die Bildrate auf schwächeren Grafikkarten (in gemischten Bereichen liest der Shader bis zu einem Dutzend Bildpunkte mehr), und die übrigen Felsplaneten mit eigenem Satz (dort gilt weiter das eine Bodenbild).
 
+## Materialsätze je Planetentyp (Alpha 1.16)
+
+Der Materialsatz von Heimstatt II gilt jetzt als Regel für alle Planeten: `TYPESET` in `src/game/surface.ts` nennt je Planetentyp zwei weitere Böden (flache Senken, Decke des sanften Geländes); der bisherige Boden bleibt an den Hängen. Ein Eintrag in `GROUNDSET` für einen Sektor geht vor. `veg: true` heißt Bewuchs, der an der Schneegrenze endet; ohne `veg` gilt der Satz in jeder Höhe. Fehlt ein Bild, bleibt der Planet beim einen Bodenbild.
+
+| Typ | Planeten | Senken | Decke | Stand |
+|---|---|---|---|---|
+| fels | Heimstatt II, Neuhafen IV | Wiese (`l_gras`) | Waldboden (`l_wald`) | im Spiel; Neuhafen fahler gefärbt |
+| wueste | Lichtwall Prime, Glutsand | rissiger Lehm (`l_lehm`, dry_ground_01) | Kiesebene (`l_kies`, sandy_gravel_02) | Bilder fehlen |
+| eis | Frostbiss, Nebelfrost | Eisfeld (`l_eisfeld`, snow_field_aerial auf 30 m) | Harsch (`l_harsch`, snow_01) | Bilder fehlen |
+| vulkan | Rotkessel, Schlacke Prime | Lavakruste (`l_kruste`, mud_cracked_dry_03) | Schlacke (`l_schlacke`, rock_ground) | Bilder fehlen |
+| asche | Aschewelt | Asche (`l_asche`, ground_grey) | verkohlter Schutt (`l_brand`, burned_ground_01) | Bilder fehlen |
+| kristall | Kernkristall | gesprungene Flächen (`l_sprung`, mud_cracked_dry_riverbed_002) | Bruchstücke (`l_bruch`, rocks_ground_06) | Bilder fehlen |
+| mond | Brocken | Staub mit Einschlägen (`l_einschlag`, moon_meteor_01) | Regolith (`l_regolith`, moon_02) | Bilder fehlen |
+
+Die fehlenden Bilder lädt `scripts/fetch-boden-saetze.mjs` von Poly Haven (CC0, 1k-JPG, 41 Dateien, 24,8 MB; darunter die Höhenkarten der fünf Hauptböden) und trägt sie in `ground.json` ein. Danach `npm run assets`. Die Farben und Kachelgrößen in `TYPESET` sind Startwerte und müssen je Planet am Bild eingestellt werden.
+
+Neuhafen IV, links ohne und rechts mit Satz:
+
+| ohne | mit |
+|---|---|
+| ![ohne](bilder/boden-116-neuhafen-ohne.jpg) | ![mit](bilder/boden-116-neuhafen-mit.jpg) |
+
 ## Testschiff „Sperber“ (Alpha 1.14)
 
 Eigener Entwurf aus dem Baukasten als Probe für Schiffe: `station/Testschiff` (4.708 Dreiecke, 471 KB, keine eigene Textur), Zusatzangaben `data/kit_Testschiff.json`. Liegt als Schaustück vor der Lichtwall-Werft (`src/game/testship.ts`, Materialien `shipMaterials()` in `src/models/kit.ts`). Bauweise und Lehren: `docs/baukasten.md`, Abschnitt „Schiffe mit dem Baukasten“.

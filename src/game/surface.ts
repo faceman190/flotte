@@ -147,7 +147,7 @@ export function buildSurface(sector: string) {
   geo.setAttribute('slope', new THREE.BufferAttribute(slp, 1));
   const tm = texMat(0xffffff, 'rock', { vertexColors: true, roughness: 0.95, metalness: 0.05, flatShading: false }, 1.4);
   tm.envMapIntensity = 0.25;
-  if (gTex) groundShader(tm, gTex, c1, pd.type, T.fog, liquidLevel > -1e8 ? liquidLevel : mn, GROUNDSET[sector]);
+  if (gTex) groundShader(tm, gTex, c1, pd.type, T.fog, liquidLevel > -1e8 ? liquidLevel : mn, GROUNDSET[sector] || TYPESET[pd.type]);
   const terrain = new THREE.Mesh(geo, tm);
   scene.add(terrain);
   world.extras.push(terrain);
@@ -251,10 +251,31 @@ const GROUND: Record<string, { m: number; tint: number; nrm: number }> = {
 // der Bilder (Alphakanal, siehe build-assets.mjs): Steine ragen aus dem Gras, statt zu verlaufen. Oberhalb der Schneegrenze endet der Bewuchs.
 // tex: Bodenbild eines anderen Planetentyps (liegt schon im Spiel), m: Kachelgröße in Metern, col/tint: Zielfarbe und wie stark dorthin gefärbt wird.
 interface GroundLayer { tex: string; m: number; col: number; tint: number }
-const GROUNDSET: Record<string, { fine: GroundLayer; scree: GroundLayer }> = {
+// veg: Der Satz ist Bewuchs und endet an der Schneegrenze (Felsplaneten). Ohne veg gilt er in jeder Höhe (Sand, Schnee, Asche, Staub).
+interface GroundSet { fine: GroundLayer; scree: GroundLayer; veg?: boolean }
+// Je Planetentyp (Alpha 1.16); ein Eintrag in GROUNDSET für einen Sektor geht vor. Fehlt eines der Bilder, bleibt es beim einen Bodenbild.
+const TYPESET: Record<string, GroundSet> = {
+  // Felsplaneten: Wiese und Waldboden wie auf Heimstatt II
+  fels: { fine: { tex: 'l_gras', m: 12, col: 0x626a30, tint: 0.55 }, scree: { tex: 'l_wald', m: 2, col: 0x626a30, tint: 0.4 }, veg: true },
+  // Wüste: rissige Lehmpfannen in den Senken, Kiesebene als Decke, der bisherige Sand an den Hängen und in Verwehungen
+  wueste: { fine: { tex: 'l_lehm', m: 5, col: 0xc0a078, tint: 0.6 }, scree: { tex: 'l_kies', m: 2.5, col: 0xb48a5c, tint: 0.55 } },
+  // Eiswelt: verwehtes Eisfeld mit dunklen Stellen (Luftbild, hier auf 30 m gelegt), harschiger Schnee als Decke, Pulverschnee an den Hängen
+  eis: { fine: { tex: 'l_eisfeld', m: 30, col: 0xb8cede, tint: 0.6 }, scree: { tex: 'l_harsch', m: 2.5, col: 0xd0deea, tint: 0.5 } },
+  // Vulkan: erstarrte Lavakruste in Schollen auf den Ebenen, Schlackekies als Decke
+  vulkan: { fine: { tex: 'l_kruste', m: 3.5, col: 0x2e2622, tint: 0.8 }, scree: { tex: 'l_schlacke', m: 1.8, col: 0x40342e, tint: 0.75 } },
+  // Aschewelt: feine Asche in den Senken, verkohlter Schutt als Decke
+  asche: { fine: { tex: 'l_asche', m: 2.2, col: 0x5a4c58, tint: 0.85 }, scree: { tex: 'l_brand', m: 1.6, col: 0x3c3238, tint: 0.8 } },
+  // Kristallwüste: dicht gesprungene Glasflächen, Bruchstücke als Decke
+  kristall: { fine: { tex: 'l_sprung', m: 3, col: 0x4a3a70, tint: 0.9 }, scree: { tex: 'l_bruch', m: 3, col: 0x3a3058, tint: 0.9 } },
+  // Mond: Staubflächen mit kleinen Einschlägen, feiner Regolith als Decke, das bisherige Geröll an den Hängen
+  mond: { fine: { tex: 'l_einschlag', m: 6, col: 0x8a8a8e, tint: 0.4 }, scree: { tex: 'l_regolith', m: 3.1, col: 0x7a7a7e, tint: 0.35 } },
+};
+const GROUNDSET: Record<string, GroundSet> = {
   // Heimstatt II: saftige Wiese mit Steinnestern in den Ebenen (Luftbild, hier auf 12 m gelegt), Waldboden mit Gras und Zweigen als Decke
   // (beide zur selben Grasfarbe gezogen: Aus der Luft stünden die Wiesenflecken sonst als dunkle Dreiecke im helleren Waldboden)
-  heimstatt: { fine: { tex: 'l_gras', m: 12, col: 0x626a30, tint: 0.55 }, scree: { tex: 'l_wald', m: 2, col: 0x626a30, tint: 0.4 } },
+  heimstatt: { fine: { tex: 'l_gras', m: 12, col: 0x626a30, tint: 0.55 }, scree: { tex: 'l_wald', m: 2, col: 0x626a30, tint: 0.4 }, veg: true },
+  // Neuhafen IV: dieselben Böden, aber fahl und feucht statt saftig (Regenwelt mit Industrie)
+  neuhafen: { fine: { tex: 'l_gras', m: 12, col: 0x55583a, tint: 0.7 }, scree: { tex: 'l_wald', m: 2, col: 0x4c4c36, tint: 0.6 }, veg: true },
 };
 // Gelände-Shader: flache Stellen mit Bodenbild, Steilhänge mit Fels.
 // Das Bodenbild wird aus drei Richtungen projiziert (von oben und von zwei Seiten, gewichtet nach der Flächenneigung), damit es an Hängen
@@ -278,7 +299,7 @@ function skyBody(sector: string) {
   const h = hashStr(sector + ':himmel'), a = (h % 628) / 100, el = 0.3 + ((h >> 4) % 30) / 100, cols = [0xe8d8b8, 0xc8d0e8, 0xe0b090, 0xb8c8b0, 0xd8b8d8];
   return { dir: [Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)] as [number, number, number], rad: 0.07 + ((h >> 8) % 60) / 1000, col: cols[h % cols.length], ring: (h >> 3) % 5 < 3 ? 1 : 0 };
 }
-function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: THREE.Color, type: string, fogCol: number, lowY: number, setDef?: { fine: GroundLayer; scree: GroundLayer }) {
+function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: THREE.Color, type: string, fogCol: number, lowY: number, setDef?: GroundSet) {
   const gn = groundNormal(type), gr = groundRough(type), P = GROUND[type] || { m: 24, tint: 0, nrm: 0 };
   // Materialsatz: nur wenn beide weiteren Böden samt Relief vorhanden sind
   const lf = setDef ? groundLayer(setDef.fine.tex) : null, ls = setDef ? groundLayer(setDef.scree.tex) : null;
@@ -305,13 +326,14 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
       sh.uniforms.gFineCol = { value: new THREE.Color(set.fine.col) }; sh.uniforms.gScreeCol = { value: new THREE.Color(set.scree.col) };
       sh.uniforms.gSetP = { value: new THREE.Vector4(1 / set.fine.m, set.fine.tint, 1 / set.scree.m, set.scree.tint) };
       sh.uniforms.gSetK = { value: 1 };      // 0 schaltet den Satz ab (Vergleich; später für eine sparsame Grafikstufe)
+      sh.uniforms.gSetVeg = { value: set.veg ? 1 : 0 };
     }
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float slope; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlope = slope; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz; vWNrm = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-        ${set ? '#define GSET\n        uniform sampler2D gFineMap; uniform sampler2D gFineNrm; uniform sampler2D gScreeMap; uniform sampler2D gScreeNrm; uniform vec3 gFineCol; uniform vec3 gScreeCol; uniform vec4 gSetP; uniform float gSetK;' : ''}
+        ${set ? '#define GSET\n        uniform sampler2D gFineMap; uniform sampler2D gFineNrm; uniform sampler2D gScreeMap; uniform sampler2D gScreeNrm; uniform vec3 gFineCol; uniform vec3 gScreeCol; uniform vec4 gSetP; uniform float gSetK; uniform float gSetVeg;' : ''}
         uniform sampler2D groundMap; uniform sampler2D groundNrm; uniform sampler2D groundRgh; uniform vec3 cliffCol; uniform vec3 gCol;
         uniform float gScale; uniform float gTint; uniform float gNrmK; uniform float gHasR; uniform vec3 snowCol; uniform float snowK; uniform float snowY; uniform float mistK; uniform float mistY; uniform vec3 vegCol; uniform float vegK; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;
         ${GROUND_SHADE_PARS}
@@ -349,7 +371,7 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
           // Materialsatz: Anteile nach Hangneigung, von groben Flecken verschoben (x fein, y Geröll, z Schutt)
           // feiner Grund in Flecken auf flachen Stellen, und zwar dort, wo keine Wiese liegt (die Wiese nimmt die hellen Flecken des groben Musters)
           // vSlope ist 1 - Normale.y: 0,004 sind 5 Grad, 0,012 sind 9 Grad, 0,05 sind 18 Grad, 0,1 sind 26 Grad (die Steilwand beginnt bei 0,2 = 37 Grad)
-          float gAlt = 1.0 - smoothstep(snowY - 60.0, snowY + 160.0, vWPos.y);      // oben wächst nichts mehr
+          float gAlt = mix(1.0, 1.0 - smoothstep(snowY - 60.0, snowY + 160.0, vWPos.y), gSetVeg);      // oben wächst nichts mehr (nur bei Bewuchs)
           float gWf = (1.0 - smoothstep(0.004, 0.03, vSlope)) * smoothstep(0.0, 0.2, (1.0 - gL2) * 1.5 + (1.0 - gL) * 0.8) * gAlt;
           // Decke des sanften Geländes bis etwa 20 Grad; in Flecken schaut das Geröll durch
           float gWs = (1.0 - smoothstep(0.05, 0.11, vSlope + (gL - 1.0) * 0.03)) * (1.0 - 0.9 * smoothstep(0.1, 0.28, (gL - 1.0) * 1.7)) * gAlt * (1.0 - gWf);
@@ -379,7 +401,7 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
         // Wiese: flache, tiefe Lagen bekommen die Farbe des Bewuchses (aus der Ferne wirkt das Gras so geschlossen)
         float vg = vegK * smoothstep(0.36, 0.5, gPat) * (1.0 - smoothstep(0.1, 0.24, vSlope)) * (1.0 - smoothstep(snowY - 60.0, snowY + 160.0, vWPos.y));
         #ifdef GSET
-          vg *= 1.0 - 0.85 * gSetK;      // mit Materialsatz bringen die Böden ihr Grün selbst mit
+          vg *= 1.0 - 0.85 * gSetK * gSetVeg;      // mit Materialsatz bringen die Böden ihr Grün selbst mit
         #endif
         diffuseColor.rgb = mix(diffuseColor.rgb, vegCol * (0.55 + 0.5 * gL) * (0.6 + 0.4 * dot(gC, vec3(0.34))), vg);
         float sn = snowK * smoothstep(0.5, 0.64, gPat + clamp((vWPos.y - snowY) * 0.0009, -0.4, 0.2)) * (1.0 - smoothstep(0.14, 0.32, vSlope));
