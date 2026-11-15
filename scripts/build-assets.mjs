@@ -138,7 +138,18 @@ for (const [k, v] of Object.entries(SOUNDDATA)) { const d = dataUri(v); if (d) p
 
 // ---- Kleine Datendateien (asset-src/data/<name>.json), z. B. das Felsmodell der Asteroiden ----
 const DATADIR = path.join(ROOT, 'asset-src', 'data');
-if (fs.existsSync(DATADIR)) for (const n of fs.readdirSync(DATADIR).filter(x => x.endsWith('.json'))) { const b = fs.readFileSync(path.join(DATADIR, n)); put('data/' + path.basename(n, '.json'), 'json', b, 'core', b.length); }
+if (fs.existsSync(DATADIR)) {
+  // Bewegungen der Figuren (anim_<figur>_<art>.json) gehen gebündelt in EINE Datei „anims“: Es sind über dreißig, und das claude.ai-Artifact
+  // fasst höchstens 511 Dateien je Fassung. Der Lader (loadExtraClips in charModels.ts) liest das Bündel und einzelne Dateien.
+  const anims = {};
+  for (const n of fs.readdirSync(DATADIR).filter(x => x.endsWith('.json'))) {
+    const b = fs.readFileSync(path.join(DATADIR, n)), k = path.basename(n, '.json');
+    if (k.startsWith('anim_')) { anims[k.slice(5)] = JSON.parse(b.toString('utf8')); continue; }
+    put('data/' + k, 'json', b, 'core', b.length);
+  }
+  const ab = Buffer.from(JSON.stringify(anims));
+  if (Object.keys(anims).length) put('data/anims', 'json', ab, 'core', ab.length);
+}
 // ---- Einzelne Texturen (asset-src/tex/<name>.png|jpg): höchstens 1024 px, WebP. Mit "@2048" im Namen (name@2048.png) bis zu dieser Größe ----
 const TEXDIR = path.join(ROOT, 'asset-src', 'tex');
 if (fs.existsSync(TEXDIR)) for (const n of fs.readdirSync(TEXDIR).filter(x => /\.(png|jpe?g)$/i.test(x))) { const src = fs.readFileSync(path.join(TEXDIR, n)); const base = path.basename(n, path.extname(n)), at = base.match(/^(.*)@(\d+)$/), max = at ? Math.min(4096, +at[2]) : 1024; const b = await sharp(src).resize(max, max, { fit: 'inside', withoutEnlargement: true }).webp({ quality: at ? 92 : 86, effort: 5 }).toBuffer(); put('tex/' + (at ? at[1] : base), 'webp', b, 'core', src.length); }

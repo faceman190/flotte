@@ -243,6 +243,22 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
 - Geprüft im Testfenster: Stehen, Gehen, Sprechen von vorn und von der Seite (`docs/bilder/figuren-118-clips.jpg`, `figuren-118-spiel.jpg`),
   Szene im Hangar der Bastion mit Kopfdrehung und Gespräch (`figuren-118-hangar.jpg`), Grundhaltung in Blender (`figuren-118-blender.jpg`).
 
+## Drehen auf der Stelle, Bewegungen als eine Datei (Alpha 1.19)
+
+- **Dreh-Clips:** je Skelett-Familie (merchant, worker, tamm, varga) vier Clips: `turnl`, `turnr` (Vierteldrehung, 0,93 s) und `turnl2`, `turnr2`
+  (halbe Drehung, 1,63 s), alle aus Vargas Mixamo-Paket (`left turn 90.fbx`, `left turn.fbx` und die rechten). Erzeugt am Ende von
+  `scripts/anims.sh`.
+- **`fbx-anim.mjs --turn`:** misst je Bild die Drehung der Hüfte um die Hochachse gegenüber dem ersten Bild, dreht die ganze Quelle um diesen
+  Winkel zurück und legt den Verlauf als `meta.yaw` ab (Bogenmaß, positiv = nach links), den Endwert als `meta.turn`. Der Clip selbst bleibt in
+  Blickrichtung und endet in der Haltung, in der er beginnt. Die rechte Vierteldrehung des Pakets dreht 102,6°, die linke 90,0°; im Spiel
+  zählt nur der gewünschte Winkel.
+- **Im Spiel:** `animTurn(a, winkel)` startet den passenden Clip (über 120° die halbe Drehung) und merkt sich den Maßstab; `animStep` überträgt
+  den Verlauf nach jedem Bild auf `a.root.rotation.y`. Aufrufer: `turnStep` in `interior.ts` (siehe `docs/stationsleben.md`).
+- **Für Händlerin und Arbeiter** ist Vargas Körper ein fremder Körper; übertragen wurde mit `--limbs` wie die übrigen Mixamo-Dateien. Im Bild
+  geprüft an der Deckmeisterin (Händlerin) und am Lagerarbeiter: Schritte sauber, Füße bleiben am Boden.
+- **Eine Datei statt 37:** `build-assets.mjs` bündelt alle `anim_*.json` zu `data/anims`. Grund: Das Artifact fasst höchstens 511 Dateien je
+  Fassung, und mit den 16 Dreh-Clips wären es 516 geworden. Nebenbei sind 20 Plätze frei geworden.
+
 ## Hangar (Alpha 0.62)
 - Quelle: `asset-src/neu/hangar/Hangar.blend` (per Skript gebaut; Textblöcke `hangar_lib` und `hangar_build` mit `build_shell`, `build_details`, `build_props`).
   Gebaut in den Maßen aus `src/game/interior.ts` (184 × 162 × 42 m, Tor 124 × 32 m, drei Stellplätze). Koordinaten im Skript sind Spielkoordinaten.

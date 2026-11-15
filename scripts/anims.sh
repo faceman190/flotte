@@ -29,3 +29,16 @@ node scripts/fbx-anim.mjs "$V/walking.fbx" varga_walk --rig=mixamo --figure=varg
 node scripts/fbx-anim.mjs "$V/Talking (2).fbx" varga_talk1 --rig=mixamo --figure=varga --limbs
 node scripts/fbx-anim.mjs "$V/Talking (3).fbx" varga_talk2 --rig=mixamo --figure=varga --limbs
 node scripts/fbx-anim.mjs "$V/Talking (4).fbx" varga_talk3 --rig=mixamo --figure=varga --limbs
+# Drehen auf der Stelle (seit Alpha 1.19): Viertel- und halbe Drehung aus Vargas Paket für alle Skelett-Familien (l = nach links, 2 = halbe Drehung).
+# --turn nimmt die Drehung aus dem Clip und legt sie als Verlauf ab; das Spiel dreht damit die ganze Figur um jeden gewünschten Winkel.
+for D in l r; do
+  W=left; [ $D = r ] && W=right
+  for F in merchant worker; do
+    node scripts/fbx-anim.mjs "$V/$W turn 90.fbx" ${F}_turn$D --figure=$F --limbs "--skin=$V/Talking (2).fbx" --turn --fps=30
+    node scripts/fbx-anim.mjs "$V/$W turn.fbx" ${F}_turn${D}2 --figure=$F --limbs "--skin=$V/Talking (2).fbx" --turn --fps=30
+  done
+  for F in varga tamm; do
+    node scripts/fbx-anim.mjs "$V/$W turn 90.fbx" ${F}_turn$D --rig=mixamo --figure=$F --limbs "--skin=$V/Talking (2).fbx" --turn --fps=30
+    node scripts/fbx-anim.mjs "$V/$W turn.fbx" ${F}_turn${D}2 --rig=mixamo --figure=$F --limbs "--skin=$V/Talking (2).fbx" --turn --fps=30
+  done
+done

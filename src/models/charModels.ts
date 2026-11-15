@@ -23,16 +23,20 @@ const clipKey = (name: string, kind: string) => (EXTRA[name + '_' + kind] || !RI
 // Sie sind auf das Skelett genau dieser Figur umgerechnet und ersetzen deren eingebaute Bewegung.
 const EXTRA: Record<string, THREE.AnimationClip> = {};
 // Zusatzangaben je Clip: mittleres Tempo (m/s), Tempo je Bild bei Clips auf der Stelle, zweiter Einstiegspunkt
-interface ClipMeta { fps: number; pace: number; inplace?: boolean; speed?: number[]; alt?: number }
+// yaw/turn: Drehen auf der Stelle (fbx-anim --turn): Verlauf der Drehung um die Hochachse je Bild und ihr Endwert (Bogenmaß, positiv = links)
+interface ClipMeta { fps: number; pace: number; inplace?: boolean; speed?: number[]; alt?: number; yaw?: number[]; turn?: number }
 const META: Record<string, ClipMeta> = {};
 async function loadExtraClips() {
   const files = ((window as any).DATAFILES || {}) as Record<string, string>;
+  const add = (k: string, j: any) => {
+    const clip = THREE.AnimationClip.parse(j);
+    clip.uuid = THREE.MathUtils.generateUUID();   // die Datei trägt keine Kennung; ohne eigene hält der Mischer alle Clips für denselben
+    EXTRA[k] = clip; if (j.meta) META[k] = j.meta;
+  };
+  // seit Alpha 1.19 liegen alle Bewegungen gebündelt in einer Datei (scripts/build-assets.mjs); einzelne Dateien gehen weiterhin
+  if (files.anims) try { for (const [k, j] of Object.entries(await (await fetch(files.anims)).json())) add(k, j); } catch (e) { console.warn('Bewegungen nicht geladen:', e); }
   await Promise.all(Object.entries(files).filter(([k]) => k.startsWith('anim_')).map(async ([k, url]) => {
-    try {
-      const j = await (await fetch(url)).json(), clip = THREE.AnimationClip.parse(j);
-      clip.uuid = THREE.MathUtils.generateUUID();   // die Datei trägt keine Kennung; ohne eigene hält der Mischer alle Clips für denselben
-      EXTRA[k.slice(5)] = clip; if (j.meta) META[k.slice(5)] = j.meta;
-    }
+    try { add(k.slice(5), await (await fetch(url)).json()); }
     catch (e) { console.warn('Bewegung nicht geladen:', k, e); }
   }));
 }
@@ -105,10 +109,13 @@ export function charInstance(name: string, tint: number | [number, number, numbe
   if (i && w) { const c = i.clone(); c.uuid = THREE.MathUtils.generateUUID(); under = mixer.clipAction(c); under.setEffectiveWeight(0); under.play(); }
   let neck: THREE.Object3D | null = null, head: THREE.Object3D | null = null;
   obj.traverse(o => { if (o.name === 'neck') neck = o; else if (o.name === 'Head') head = o; });
+  // Drehen auf der Stelle: l/r = Vierteldrehung nach links/rechts, l2/r2 = halbe Drehung (alle aus Vargas Mixamo-Paket, je Familie umgerechnet)
+  const turn: CharAnim['turn'] = {};
+  for (const k of ['l', 'r', 'l2', 'r2']) { const a = act('turn' + k), m = META[clipKey(name, 'turn' + k)]; if (a && m?.yaw && m.turn) turn[k] = { act: a, m }; }
   const anim: CharAnim = {
     under, underW: 0, root: g, neck, head, look: null, lookYaw: 0, lookPitch: 0, lookMem: [0, 1].map(() => ({ base: new THREE.Quaternion(), out: new THREE.Quaternion() })), lookOn: false,
     mixer, idle, walk, start: act('start'), stop: act('stop'), talk: [act('talk1'), act('talk2'), act('talk3')].filter(Boolean) as THREE.AnimationAction[],
-    mode: 'idle', cur: null, talkT: 0, talkI: 0,
+    mode: 'idle', cur: null, talkT: 0, talkI: 0, turn, turnK: 0, turnDone: 0, turnM: null,
     pace: (META[clipKey(name, 'walk')]?.pace || 1.4) * hipScale(name), mStart: META[clipKey(name, 'start')] || null, mStop: META[clipKey(name, 'stop')] || null,
   };
   return { g, mixer, walk, idle, anim, mats: [] as THREE.Material[] };
@@ -118,7 +125,9 @@ export function charInstance(name: string, tint: number | [number, number, numbe
 export interface CharAnim {
   mixer: THREE.AnimationMixer; idle: THREE.AnimationAction | null; walk: THREE.AnimationAction | null;
   start: THREE.AnimationAction | null; stop: THREE.AnimationAction | null; talk: THREE.AnimationAction[];
-  mode: 'idle' | 'start' | 'walk' | 'stop' | 'talk'; cur: THREE.AnimationAction | null;
+  mode: 'idle' | 'start' | 'walk' | 'stop' | 'talk' | 'turn'; cur: THREE.AnimationAction | null;
+  turn: Record<string, { act: THREE.AnimationAction; m: ClipMeta }>;   // Dreh-Clips (l, r, l2, r2), soweit vorhanden
+  turnK: number; turnDone: number; turnM: ClipMeta | null;            // laufende Drehung: Maßstab zum Wunschwinkel, schon gedrehter Winkel, Verlauf
   talkT: number; talkI: number;   // verbleibende Sprechzeit (s), nächster Sprech-Clip
   pace: number;                   // Tempo der Gehschleife in m/s bei normaler Abspielgeschwindigkeit
   under: THREE.AnimationAction | null; underW: number;   // Stehen als Unterlage beim Gehen und sein Gewicht
@@ -149,6 +158,20 @@ export function animInit(a: CharAnim, moving: boolean) {
   a.mixer.update(0);   // Haltung sofort einnehmen: Die Ruhehaltung der Tripo-Figuren ist die T-Haltung
 }
 export function animTalk(a: CharAnim, seconds: number) { if (a.talk.length) a.talkT = Math.max(a.talkT, seconds); }
+// Auf der Stelle drehen, mit Schritten statt wie auf einem Drehteller: angle in Bogenmaß, positiv = nach links (rotation.y der Figur wächst).
+// Der Clip selbst bleibt in Blickrichtung; die Drehung steht als Verlauf in meta.yaw und wird in animStep auf a.root übertragen, auf den
+// gewünschten Winkel gestreckt oder gestaucht (die Füße stehen nah an der Drehachse, das Rutschen bleibt im Zentimeterbereich).
+// Rückgabe false: Die Figur hat keine Dreh-Clips, steht gerade nicht ruhig oder der Winkel ist klein. Dann dreht der Aufrufer selbst.
+export function animTurn(a: CharAnim, angle: number) {
+  if (a.mode !== 'idle' || Math.abs(angle) < 0.45) return false;
+  const side = angle > 0 ? 'l' : 'r', t = (Math.abs(angle) > 2.1 ? a.turn[side + '2'] : null) || a.turn[side];
+  if (!t) return false;
+  fade(a, t.act, 0.2, 0, true); t.act.timeScale = 0.85;
+  a.turnK = angle / t.m.turn!; a.turnDone = 0; a.turnM = t.m; a.mode = 'turn';
+  return true;
+}
+export const animTurning = (a: CharAnim) => a.mode === 'turn';
+export const animHasTurn = (a: CharAnim) => !!(a.turn.l && a.turn.r);
 // Pro Bild: move = die Figur soll gehen, speed = ihr Gehtempo in m/s. Rückgabe: das Tempo, mit dem sie sich in diesem Bild
 // tatsächlich bewegen soll (beim Anlaufen und Abbremsen folgt es dem Clip, damit die Füße nicht rutschen).
 // follow = false: Die Figur wird von außen bewegt (andere Piloten); dann wird nur weich zwischen Stehen und Gehen überblendet.
@@ -202,6 +225,14 @@ export function animStep(a: CharAnim, dt: number, move: boolean, speed = 1.4, fo
   }
   if (a.under) { a.underW += (under - a.underW) * Math.min(1, dt * 4); a.under.setEffectiveWeight(a.underW < 0.002 ? 0 : a.underW); }
   a.mixer.update(dt);
+  if (a.mode === 'turn' && a.cur && a.turnM) {
+    // Drehung passend zum eben gesetzten Bild des Clips auf die Figur übertragen; am Ende zurück ins Stehen
+    const m = a.turnM, ys = m.yaw!, tt = a.cur.time, end = tt >= a.cur.getClip().duration - 0.04;
+    const f = Math.min(ys.length - 1, tt * m.fps), i0 = Math.floor(f), i1 = Math.min(ys.length - 1, i0 + 1);
+    const y = (end ? m.turn! : ys[i0] + (ys[i1] - ys[i0]) * (f - i0)) * a.turnK;
+    a.root.rotation.y += y - a.turnDone; a.turnDone = y;
+    if (end) { fade(a, a.idle, 0.35); a.mode = 'idle'; a.turnM = null; }
+  }
   lookStep(a, dt);
   return v;
 }

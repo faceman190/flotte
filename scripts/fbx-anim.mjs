@@ -4,6 +4,9 @@
 //   node scripts/fbx-anim.mjs <datei.fbx> <name> [Schalter]     schreiben
 // Schalter: --figure=merchant|worker (Zielskelett, Vorgabe merchant) · --fps=20 · --in=s --out=s (Ausschnitt in Sekunden)
 //   --inplace  Vorwärtsbewegung der Hüfte entfernen (die Figur bewegt das Spiel); das Tempo je Bild steht dann als meta.speed dabei
+//   --turn     Drehen auf der Stelle: Die Drehung um die Hochachse wird aus der Bewegung genommen und als Verlauf (meta.yaw, Bogenmaß je Bild,
+//              positiv = nach links) abgelegt; animTurn/animStep in charModels.ts drehen damit die ganze Figur. So lässt sich ein Clip für
+//              jeden Winkel nutzen, und er endet in derselben Haltung, in der er beginnt.
 //   --alt=s    zweiter Einstiegspunkt (Sekunden nach dem Zuschnitt), z. B. beim Abbremsen für den anderen Fuß
 //   --align    siehe unten
 //   --limbs    Arme und Beine nach der Knochenrichtung der Quelle ausrichten (siehe unten); bei allen Mixamo-Dateien angeben
@@ -159,10 +162,22 @@ if (LIMBS || RIG) for (let f = 0; f < frames; f++) { mixer.setTime(Math.min(T0 +
 const tAnkleFlat = Math.min(tRestP.LeftFoot.y, tRestP.RightFoot.y);   // Knöchelhöhe unserer Figur, wenn sie flach steht (Ruhelage)
 let liftMin = Infinity, liftMax = -Infinity;
 for (const n of Object.keys(A)) rot[n] = [];
+const TURN = !!flag.turn, baseQ = fbx.quaternion.clone(), yaws = []; let yaw0 = null, yawPrev = 0;
+if (TURN && fbx.position.length() > 1e-6) throw new Error('--turn: Die Quelle steht nicht im Ursprung.');
 const cur = {}, inv = new THREE.Quaternion(), d = new THREE.Quaternion(), w = new THREE.Quaternion(), loc = new THREE.Quaternion(), prev = {};
 for (let f = 0; f < frames; f++) {
   const t = Math.min(DUR, f / FPS); times.push(+t.toFixed(4));
+  if (TURN) fbx.quaternion.copy(baseQ);
   mixer.setTime(Math.min(T0 + t, clip.duration - 1e-4)); fbx.updateMatrixWorld(true);
+  if (TURN) {
+    // Drehung der Hüfte um die Hochachse messen (gegenüber dem ersten Bild) und die ganze Quelle um diesen Winkel zurückdrehen:
+    // Der Clip bleibt so in Blickrichtung, die Drehung steht als Verlauf in meta.yaw und dreht im Spiel die Figur als Ganzes.
+    const fw = new THREE.Vector3(0, 0, 1).applyQuaternion(wq(S.Hips).multiply(inv.copy(sRestQ.Hips).invert()));
+    let y = Math.atan2(fw.x, fw.z); if (yaw0 === null) yaw0 = y;
+    y -= yaw0; while (y - yawPrev > Math.PI) y -= 2 * Math.PI; while (y - yawPrev < -Math.PI) y += 2 * Math.PI;
+    yawPrev = y; yaws.push(+y.toFixed(4));
+    fbx.quaternion.copy(baseQ).premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -y)); fbx.updateMatrixWorld(true);
+  }
   for (const o of order) {
     const n = o.name, pq = cur[o.parent.name] || tRestQ[o.parent.name] || new THREE.Quaternion();
     if (!A[n]) { cur[n] = pq.clone().multiply(o.quaternion); continue; }   // ohne Gegenstück: Ruhelage relativ zum Elternknochen
@@ -213,7 +228,8 @@ fs.mkdirSync('asset-src/data', { recursive: true });
 // Tempo je Bild (m/s, leicht geglättet) und mittleres Tempo: Damit läuft die Figur im Spiel so schnell, wie die Füße greifen
 const raw = fwd.map((z, i) => { const a = Math.max(0, i - 1), b = Math.min(fwd.length - 1, i + 1); return (fwd[b] - fwd[a]) / Math.max(1e-6, times[b] - times[a]); });
 const speed = raw.map((_, i) => { let s = 0, n = 0; for (let j = Math.max(0, i - 2); j <= Math.min(raw.length - 1, i + 2); j++) { s += raw[j]; n++; } return +Math.max(0, s / n).toFixed(3); });
-const meta = { fps: FPS, pace: +((fwd[fwd.length - 1] - fwd[0]) / DUR).toFixed(3), inplace: INPLACE, ...(INPLACE ? { speed } : {}), ...(flag.alt ? { alt: +flag.alt } : {}) };
+const meta = { fps: FPS, pace: +((fwd[fwd.length - 1] - fwd[0]) / DUR).toFixed(3), inplace: INPLACE, ...(INPLACE ? { speed } : {}), ...(flag.alt ? { alt: +flag.alt } : {}), ...(TURN ? { yaw: yaws, turn: yaws[yaws.length - 1] } : {}) };
+if (TURN) console.log(`Drehung auf der Stelle: ${(yaws[yaws.length - 1] * 180 / Math.PI).toFixed(1)}° (positiv = nach links), als Verlauf in meta.yaw`);
 fs.writeFileSync(file, JSON.stringify({ name, duration: +DUR.toFixed(4), meta, tracks }));
 console.log(`Tempo im Mittel ${meta.pace} m/s${INPLACE ? ', auf der Stelle' : ''}${flag.alt ? ', zweiter Einstieg bei ' + flag.alt + ' s' : ''}`);
 const ys = hipPos.filter((_, i) => i % 3 === 1);

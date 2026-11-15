@@ -5,7 +5,7 @@ import { releaseAll, centerMouse } from '../core/input';
 import { P, G, saveGame, type Mode } from './state';
 import { world } from './world';
 import { spawnEnemy } from './combat';
-import { IN, storyNpc, npcSpeak, npcHush, hangarSpot, nearNpc } from './interior';
+import { IN, storyNpc, npcSpeak, npcHush, hangarSpot, nearNpc, storyNpcsLeave } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
 import { radio } from '../ui/radio';
@@ -126,11 +126,15 @@ function cur(): { c: Chain; n: number } | null {
 }
 let entered = '';
 export function goto(n: number) { const k = cur(); if (!k) return; st()[k.c.key] = n; entered = ''; saveGame(); }
-export function endChain(key: Chain['key']) { st()[key] = 'done'; entered = ''; saveGame(); }
+export function endChain(key: Chain['key']) { st()[key] = 'done'; entered = ''; storyNpcsLeave(); saveGame(); }      // die Runde löst sich auf
 // Scanner-Taste (für Peilungen)
 export const storyCtx = { scanAt: -99 };
 export function noteScan() { storyCtx.scanAt = G.time; }
 export const bastion = () => world.stations.find(s => s.id === 'bastion');
+// „Springe …“ mit dem passenden Verhältniswort je Sektor (bis Alpha 1.18 stand überall „nach“, auch „Springe nach Die Narbe“)
+const JUMP: Record<string, string> = { 'Die Narbe': 'in die <b>Narbe</b>', 'Splittergürtel': 'in den <b>Splittergürtel</b>', 'Stummfeld': 'ins <b>Stummfeld</b>', 'Ferrox-Kern': 'in den <b>Ferrox-Kern</b>',
+  'Lichtwall': 'zum <b>Lichtwall</b>', 'Schlackenfeld': 'ins <b>Schlackenfeld</b>', 'Sonnenfeld': 'ins <b>Sonnenfeld</b>', 'Wachtposten Ost': 'zum <b>Wachtposten Ost</b>' };
+export const jumpTo = (name: string) => JUMP[name] || `nach <b>${name}</b>`;
 
 // ---------- Prolog ----------
 const S = { talked: false, band: false, foes: [] as any[], docked: false, met: false, scene: false };
@@ -211,6 +215,8 @@ const STEPS: Step[] = [
     },
     lines: () => { const left = S.foes.filter(e => world.enemies.includes(e)).length; return [[`Ferrox-Späher abschießen · <b>${2 - left}/2</b>`, left === 0, false], ['Klick: Kanonen feuern', false, true]]; },
     done: () => S.foes.length > 0 && !S.foes.some(e => world.enemies.includes(e)),
+    // Die Späher entstehen beim nächsten Frachter, oft Kilometer entfernt; das HUD zeigt Ferrox außerhalb des Bildes erst ab 1,3 km an
+    markers: () => { const e = S.foes.find(f => world.enemies.includes(f)); return e ? [{ x: e.x, y: e.y, z: e.z, label: 'FERROX-SPÄHER', col: '#c070ff', big: true }] : []; },
   },
   { // 6: zurück, andocken, verkaufen
     title: 'Prolog · Heimkehr',
@@ -276,6 +282,7 @@ export const resumePrologue = resumeStory;
 const startChapter1 = (ms: number) => setTimeout(() => { if (P.story && st().prolog === 'done' && st().ch1 === undefined) { st().ch1 = 0; entered = ''; saveGame(); } }, ms);
 function finishPrologue() {
   st().prolog = 'done';
+  storyNpcsLeave();
   P.credits += 300;
   addRep('rat', 25);
   storyHooks.banner('IN DIE CREW AUFGENOMMEN', 'Vereidigt · +300 Credits', '#ffd27a');

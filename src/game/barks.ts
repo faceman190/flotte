@@ -7,10 +7,8 @@ import { bark } from '../core/audio';
 
 // Personal an den Theken: Stimme nach Vorname (Namen aus interior.ts → NAMES und Geschichtsfiguren)
 const FEM = new Set(['mira', 'leta', 'ilka', 'sefa', 'runa', 'yara', 'edda', 'tilda', 'nele', 'kaja', 'tamm', 'roth', 'krull']);
-export function staffBark(name: string, tab: string) {
-  const first = (name || '').trim().split(/\s+/)[0].toLowerCase();
-  bark(`g_${tab}_${FEM.has(first) ? 'w' : 'm'}`);
-}
+export const isFem = (name: string) => FEM.has((name || '').trim().split(/\s+/)[0].toLowerCase());
+export function staffBark(name: string, tab: string) { bark(`g_${tab}_${isFem(name) ? 'w' : 'm'}`); }
 
 // Wächterdrohnen: metallische Stimme, leiser mit der Entfernung; Pause dazwischen, damit ein Schwarm nicht durcheinander ruft
 let droneT = 0;

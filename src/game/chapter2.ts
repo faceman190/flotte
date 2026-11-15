@@ -11,7 +11,7 @@ import { SHARED } from './shared';
 import { IN, storyNpc, nearNpc, hangarSpot } from './interior';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
-import { talk, playScene, registerChain, st, endChain, storyCtx, storyHooks, startChain, dialogBusy, settled, type Step, type Obj } from './story';
+import { talk, playScene, registerChain, jumpTo, st, endChain, storyCtx, storyHooks, startChain, dialogBusy, settled, type Step, type Obj } from './story';
 import { terrainAt, liquidAt } from './surface';
 import { FOOT, footTargets } from './onfoot';
 import { addGuardDrones, guardsLeft } from './fieldfight';
@@ -57,7 +57,7 @@ function ruinPos() {
   }
   return d.ruin || null;
 }
-const lineSpace = (id: string, name: string): Obj => [`Springe nach <b>${name}</b>${P.route === id ? ' · Route gesetzt (Karte: M)' : ''}`, false, false];
+const lineSpace = (id: string, name: string): Obj => [`Springe ${jumpTo(name)}${P.route === id ? ' · Route gesetzt (Karte: M)' : ''}`, false, false];
 
 const STEPS: Step[] = [
   { // 0: Krull funkt

@@ -12,7 +12,7 @@ import { shipsAt, board } from './fleet';
 import { SHIPS, hasInterior } from '../data/ships';
 import { SECTORS, FACTION } from '../data/galaxy';
 import type { Paint } from '../models/gltfShips';
-import { hasChar, charInstance, animInit, animStep, animTalk, type CharAnim } from '../models/charModels';
+import { hasChar, charInstance, animInit, animStep, animTalk, animTurn, animTurning, animHasTurn, type CharAnim } from '../models/charModels';
 import { buildShipRoom, type ShipRoom, type ShipSpot } from './shipInterior';
 import { computeStats, type ShipId, type Up } from '../data/ships';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
@@ -26,7 +26,7 @@ import { applyKit, kitMeta } from '../models/kit';
 import { HANGAR_BLOCKS } from '../data/hangarBlocks';
 import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, type Avatar, type NetAct } from './avatar';
 import { viewModelId } from './mineArt';
-import { staffBark } from './barks';
+import { staffBark, isFem } from './barks';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -37,7 +37,18 @@ type Rect = [number, number, number, number]; // x0, x1, z0, z1
 interface Inter { x: number; z: number; r: number; label: () => string; act: () => void }
 interface Label { p: THREE.Vector3; text: string; col: string }
 interface Person { g: THREE.Group; legL: THREE.Group; legR: THREE.Group; armL: THREE.Group; armR: THREE.Group; head: THREE.Object3D; mixer?: THREE.AnimationMixer; walk?: THREE.AnimationAction | null; idle?: THREE.AnimationAction | null; moving?: boolean; anim?: CharAnim }
-interface Walker { p: Person; path: number[][]; i: number; x: number; z: number; ph: number; wait: number; rest: boolean }
+// Stehende Figur (Personal, Figuren der Geschichte, Gesprächsgruppen). home: Blickrichtung, in die sie zurückkehrt; span: wie weit sie sich
+// davon wegdrehen darf (Personal hinter der Theke); want: Richtung, in die sie sich gerade dreht; fix: dreht den Körper nicht zum Piloten
+// (Gesprächsgruppe); look: eigener Blickpunkt statt der Kamera; cust: Läufer, der gerade bei ihr steht
+interface Stand { p: Person; x: number; z: number; face: number; name?: string; home?: number; span?: number; want?: number | null; seen?: number; away?: number; fix?: boolean; look?: THREE.Vector3; cust?: Walker | null; story?: boolean }
+// Haltepunkt eines Läufers abseits seines Wegs: Standort, Blickrichtung, Dauer (s, von–bis), Wahrscheinlichkeit; who: Personal, mit dem er dort redet
+interface Stop { x: number; z: number; face: number; t: [number, number]; p: number; who?: Stand; busy?: boolean }
+interface Walker { p: Person; path: number[][]; stops: (Stop | null)[]; i: number; to: number; x: number; z: number; ph: number; wait: number; rest: boolean; at: Stop | null; leave: boolean; say: number; sayI: number; look: THREE.Vector3 }
+// Gesprächsgruppe: zwei oder drei Leute, die abwechselnd reden (sp = wer gerade spricht, t = Zeit bis zum Wechsel, gap = Pause)
+interface Chat { m: Stand[]; x: number; z: number; sp: number; t: number; gap: boolean }
+// Figur der Geschichte, die nach ihrer Szene abgeht (zum Gang und hinaus): erst kurz warten, umdrehen, dann den Weg gehen
+// end: Die Figur kommt herein statt hinauszugehen; am Ende des Wegs nimmt sie ihren Platz ein (storyNpc)
+interface Leaver { p: Person; x: number; z: number; path: number[][]; i: number; wait: number; turned: boolean; end?: () => void; name?: string }
 
 export const interiorHooks = {
   toCity: () => {},
@@ -92,7 +103,8 @@ let group: THREE.Group | null = null, stationGroup: THREE.Group | null = null;
 let rects: Rect[] = [], obstacles: Rect[] = [], shipObs: Rect[] = [];
 let inters: Inter[] = [], shipInters: Inter[] = [];
 let labels: Label[] = [], shipLabels: Label[] = [];
-let persons: { p: Person; x: number; z: number; face: number; name?: string }[] = [], walkers: Walker[] = [];
+let persons: Stand[] = [], walkers: Walker[] = [], chats: Chat[] = [], leavers: Leaver[] = [];
+let settledT = 0;   // seit wann der Pilot in diesem Raum steht (Landeablauf vorbei), in Spielzeit
 let parked: { m: ShipModel; uid: number }[] = [];
 let field: THREE.Mesh | null = null, holo: THREE.Object3D | null = null, standGroup: THREE.Group | null = null;
 let shipPad = { y: 0, z: 4 };
@@ -136,7 +148,9 @@ function buildPerson(suit: number, skin: number, hair: number, badge: number, ro
   // model: bestimmte Figur (Mechaniker, Lagerarbeiter …), falls geladen; sonst Arbeiter fürs Gehen und Händlerin fürs Stehen
   const cn = model && hasChar(model) ? model : role === 'walk' ? 'worker' : 'merchant';
   if (hasChar(cn)) {
-    const c = charInstance(cn, 0.85 + Math.random() * 0.2);
+    // etwas heller oder dunkler und ein Hauch Farbton, damit gleiche Modelle nebeneinander nicht wie Abzüge wirken
+    const k = 0.82 + Math.random() * 0.22, v = () => k * (0.93 + Math.random() * 0.14);
+    const c = charInstance(cn, [v(), v(), v()]);
     c.g.traverse((o: any) => { if (o.isMesh) { o.userData.shared = true; if (o.material !== undefined) disposables.push(o.material); } });
     const d = () => new THREE.Group();
     animInit(c.anim, role === 'walk');
@@ -295,7 +309,8 @@ function build(st: Station) {
   const mGlass = mat(new THREE.MeshStandardMaterial({ color: 0x9ac8e8, transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0.6, depthWrite: false }));
   const mGreen = mat(std(0x3a7a44, { roughness: 0.9, metalness: 0 }));
 
-  rects = []; obstacles = []; inters = []; labels = []; persons = []; walkers = [];
+  rects = []; obstacles = []; inters = []; labels = []; persons = []; walkers = []; chats = []; leavers = []; settledT = G.time;
+  const stalls: { x: number; z: number; s: number; who: Stand }[] = [];   // Stände mit Personal (für die Besorgungen der Läufer)
   const block = (x0: number, x1: number, z0: number, z1: number) => obstacles.push([Math.min(x0, x1), Math.max(x0, x1), Math.min(z0, z1), Math.max(z0, z1)]);
 
   // ===== Hangar =====
@@ -349,16 +364,20 @@ function build(st: Station) {
   } else for (const b of (kitHangar ? kitMeta('Hangar').blocks! : HANGAR_BLOCKS)) block(b[0], b[1], b[2], b[3]);   // Requisiten des Modells
   // Hangar-Terminal mit Deckmeister
   const nm = [...NAMES].sort(() => R.next() - 0.5);
+  let master: Stand | null = null;
+  // Personal: Figur passend zum Namen (bis Alpha 1.18 stand an jedem Stand die Frauenfigur, auch wenn eine Männerstimme antwortete)
+  const staffModel = (name: string) => (isFem(name) ? 'merchant' : ['worker', 'mechaniker', 'lagerarbeiter'][hashStr(name) % 3]);
   {
     const tx = 9, tz = HZ0 + 2.2;
     if (!hm) box(S, mDark, 3, 1.15, 0.9, tx, 0.575, tz);
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.55), mat(new THREE.MeshBasicMaterial({ map: signTex('Hangar', pal.css) })));
     scr.position.set(tx, hm ? 3.3 : 2.9, HZ0 + (hm ? 0.33 : 0.05)); deco.add(scr);
     block(tx - 1.6, tx + 1.6, HZ0, tz + 0.6);
-    const p = buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, pal.accent, 'idle', 'mechaniker');   // Hangarmeister
-    p.g.position.set(tx + 3, 0, tz + 0.4); deco.add(p.g);
     const name = nm.pop()!;
+    const p = buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, pal.accent, 'idle', isFem(name) ? 'merchant' : 'mechaniker');   // Deckmeister oder Deckmeisterin
+    p.g.position.set(tx + 3, 0, tz + 0.4); deco.add(p.g);
     persons.push({ p, x: tx + 3, z: tz + 0.4, face: 0, name });
+    master = persons[persons.length - 1];
     labels.push({ p: new THREE.Vector3(tx + 3, 2.0, tz + 0.4), text: `${name} · Hangar`, col: pal.css });
     inters.push({ x: tx + 1.5, z: tz + 2, r: 3.4, label: () => `${name} ansprechen · Hangar`, act: () => talk(name, 'hangar') });
   }
@@ -417,9 +436,10 @@ function build(st: Station) {
         used.add(k);
         const sg = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 0.91), mat(new THREE.MeshBasicMaterial({ map: signTex(TAB_N[tab], pal.css) })));
         sg.position.set(q.sx, q.sy, q.sz); sg.rotation.y = -s * Math.PI / 2; deco.add(sg);
-        const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent);
+        const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent, 'idle', staffModel(name));
         p.g.position.set(q.x, 0, q.z); p.g.rotation.y = -s * Math.PI / 2; deco.add(p.g);
-        persons.push({ p, x: q.x, z: q.z, face: -s * Math.PI / 2, name });
+        persons.push({ p, x: q.x, z: q.z, face: -s * Math.PI / 2, name, span: 1.2 });
+        stalls.push({ x: q.tx, z: q.tz, s, who: persons[persons.length - 1] });
         labels.push({ p: new THREE.Vector3(q.x, 2.0, q.z), text: `${name} · ${TAB_N[tab]}`, col: pal.css });
         inters.push({ x: q.tx, z: q.tz, r: 3.2, label: () => `${name} ansprechen · ${TAB_N[tab]}`, act: () => talk(name, tab) });
       });
@@ -444,9 +464,10 @@ function build(st: Station) {
       box(S, mDark, 2.6, 0.12, 5.2, wx - s * 1.6, 3.38, z);
       (goods[tab] || [0xaaaaaa]).forEach((c, k) => box(deco, mat(std(c, { roughness: 0.6 })), 0.24, 0.2, 0.24, wx - s * 3.15, 1.25, z + (k % 2 ? 1 : -1) * (1.3 + Math.floor(k / 2) * 0.4)));
       block(wx - s * 3.6, wx, z - 2.5, z + 2.5);
-      const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent);
+      const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent, 'idle', staffModel(name));
       p.g.position.set(wx - s * 1.6, 0, z); p.g.rotation.y = -s * Math.PI / 2; deco.add(p.g);
-      persons.push({ p, x: wx - s * 1.6, z, face: -s * Math.PI / 2, name });
+      persons.push({ p, x: wx - s * 1.6, z, face: -s * Math.PI / 2, name, span: 1.2 });
+      stalls.push({ x: wx - s * 4.4, z, s, who: persons[persons.length - 1] });
       labels.push({ p: new THREE.Vector3(wx - s * 1.6, 2.0, z), text: `${name} · ${TAB_N[tab]}`, col: pal.css });
       inters.push({ x: wx - s * 4.4, z, r: 3.2, label: () => `${name} ansprechen · ${TAB_N[tab]}`, act: () => talk(name, tab) });
     });
@@ -485,16 +506,63 @@ function build(st: Station) {
       block(px - 0.8, px + 0.8, pz - 0.8, pz + 0.8);
     }
   }
-  // Leute, die unterwegs sind
-  const lx = PW - 6.2, loop = [[-lx, PZ1 - 5], [-lx, PZ0 + 8], [lx, PZ0 + 8], [lx, PZ1 - 5]];
-  const mkWalker = (path: number[][], start: number) => {
-    const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent, 'walk', R.pick(['worker', 'lagerarbeiter', 'mechaniker', 'lagerarbeiter']));   // gemischte Belegschaft
+  // Leute, die unterwegs sind. Seit Alpha 1.19 erledigen sie dabei etwas: Sie treten an einen Stand und reden mit dem Personal, bleiben am
+  // Fenster oder an der Galaxiekarte stehen, prüfen im Hangar ein Wandgerät oder sprechen beim Deckmeister vor. Ein Haltepunkt ist eine
+  // Wegmarke mit Stop; ob die Figur ihn anläuft, entscheidet sie an der Marke davor (nextNode), sonst überspringt sie ihn.
+  type Node = [number, number, Stop | null];
+  const mkWalker = (nodes: Node[], start: number, rev = false) => {
+    // Startmarke: eine ohne Haltepunkt, falls es welche gibt (start zählt dann nur diese)
+    const ns = rev ? [...nodes].reverse() : nodes, free = ns.map((n, i) => (n[2] ? -1 : i)).filter(i => i >= 0), i = free.length ? free[start % free.length] : start % ns.length;
+    // gemischte Belegschaft: Frauen (Händlerin im Mantel) und Männer zu gleichen Teilen
+    const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent, 'walk', R.pick(['worker', 'merchant', 'mechaniker', 'merchant', 'lagerarbeiter', 'merchant']));
     deco.add(p.g);
-    walkers.push({ p, path, i: start % path.length, x: path[start % path.length][0], z: path[start % path.length][1], ph: R.range(0, 6), wait: 0, rest: false });
+    const w: Walker = { p, path: ns.map(n => [n[0], n[1]]), stops: ns.map(n => n[2]), i, to: i, x: ns[i][0], z: ns[i][1], ph: R.range(0, 6), wait: 0, rest: false, at: null, leave: false, say: 0, sayI: 0, look: new THREE.Vector3() };
+    nextNode(w); walkers.push(w);
   };
-  for (let i = 0; i < (kind === 'outpost' ? 2 : 4); i++) mkWalker(i % 2 ? [...loop].reverse() : loop, i);
-  mkWalker([[-30, HZ0 + 8], [30, HZ0 + 8], [32, -30], [-32, -30]], 0);
-  mkWalker([[86, 90], [86, -40], [-86, -40], [-86, 90]], 1);
+  const lx = PW - 6.2, hz = PC + 2, toward = (x: number, z: number, tx: number, tz: number) => Math.atan2(tx - x, tz - z);
+  const stallStop = (q: typeof stalls[0], dz: number): Node => { const x = q.s * (Math.abs(q.x) - 0.1), z = q.z + dz; return [x, z, { x, z, face: toward(x, z, q.who.x, q.who.z), t: [7, 15], p: 0.24, who: q.who }]; };
+  const look = (x: number, z: number, face: number, t: [number, number], p: number): Node => [x, z, { x, z, face, t, p }];
+  // Runde über die Promenade (Uhrzeigersinn von oben: linke Seite hinunter, am Fenster entlang, rechte Seite hinauf)
+  const loop: Node[] = [[-lx, PZ1 - 5, null],
+    ...stalls.filter(q => q.s < 0).sort((a, b) => b.z - a.z).map(q => stallStop(q, 0.9)),
+    [-lx, PZ0 + 8, null], look(-2.4, PZ0 + 6.9, Math.PI, [6, 14], 0.35), look(2.6, PZ0 + 6.9, Math.PI, [6, 14], 0.35), [lx, PZ0 + 8, null],
+    ...stalls.filter(q => q.s > 0).sort((a, b) => a.z - b.z).flatMap(q => (q.z < hz && q.z > hz - 9 ? [stallStop(q, -0.9), look(2.7, hz + 0.4, toward(2.7, hz + 0.4, 0, hz), [5, 10], 0.25)] : [stallStop(q, -0.9)])),
+    [lx, PZ1 - 5, null]];
+  for (let i = 0; i < (kind === 'outpost' ? 2 : 4); i++) mkWalker(loop, i, i % 2 === 1);
+  // Hangar: einer pendelt zwischen dem Regal an der Rückwand und dem Deckmeister, einer geht die große Runde an den Wandgeräten vorbei.
+  // Die kleine Runde liegt 9 m vor dem Treffpunkt der Geschichte (hangarSpot), damit niemand durch ein Gespräch läuft.
+  const mz = HZ0 + 16;
+  mkWalker([[-50, mz, null], look(-52, HZ0 + 7.2, Math.PI, [6, 12], 0.5), [-50, mz + 6, null], [30, mz + 6, null], [30, mz, null],
+    ...(master ? [[15.6, HZ0 + 5.6, { x: 15.6, z: HZ0 + 5.6, face: toward(15.6, HZ0 + 5.6, master.x, master.z), t: [7, 13], p: 0.5, who: master }] as Node] : []), [14, mz, null]], 0);
+  // An jeder Längswand pendelt jemand zwischen Tor und Rückwand und sieht unterwegs nach den Wandgeräten. An den Enden bleibt er kurz stehen
+  // und kehrt mit einer halben Drehung um. (Bis Alpha 1.18 lief eine Figur die große Runde, auch dicht am Treffpunkt der Geschichte vorbei.)
+  for (const sd of [1, -1]) {
+    // Wandgerät: von der Gehspur (1,7 m vor den Wandpfeilern) hin und zurück; die Spurmarken davor und dahinter halten den Weg von den Pfeilern frei
+    const wx = sd * 85.6, unit = [63.5, 19.5, -24.5].map(z => [[wx, z + 4.5, null], look(sd * 87.3, z, sd * Math.PI / 2, [6, 12], 0.35), [wx, z - 4.5, null]] as Node[]);
+    mkWalker([look(wx, 92, 0, [5, 10], 1), ...unit.flat(), look(wx, HZ0 + 13, Math.PI, [4, 8], 1), ...unit.map(u => [...u].reverse()).reverse().flat()], sd > 0 ? 0 : 5, sd < 0);
+  }
+
+  // Gesprächsgruppen (seit Alpha 1.19): zwei oder drei Leute stehen beisammen und reden abwechselnd, die anderen sehen den Sprecher an.
+  // Sie stehen neben den Laufwegen und sind für den Piloten ein Hindernis wie ein Möbel.
+  const mkChat = (x: number, z: number, n: number) => {
+    const kinds = ['merchant', 'worker', 'mechaniker', 'lagerarbeiter'].sort(() => R.next() - 0.5), a0 = R.range(0, 6.28), r = n === 2 ? 0.68 : 0.88, m: Stand[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = a0 + i * 6.2832 / n + R.range(-0.2, 0.2), px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r, face = a + Math.PI + R.range(-0.22, 0.22);
+      const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent, 'idle', kinds[i]);
+      p.g.position.set(px, 0, pz); p.g.rotation.y = face; deco.add(p.g);
+      const q: Stand = { p, x: px, z: pz, face, home: face, fix: true, look: new THREE.Vector3() };
+      if (p.anim) p.anim.look = q.look!;
+      persons.push(q); m.push(q);
+    }
+    block(x - r - 0.35, x + r + 0.35, z - r - 0.35, z + r + 0.35);
+    chats.push({ m, x, z, sp: 0, t: R.range(0.5, 4), gap: true });
+  };
+  const gx = Math.min(3.9, lx - 3.2);
+  mkChat(-gx, PZ1 - PD * 0.28, 3);
+  if (kind !== 'outpost') mkChat(gx - 0.7, PZ0 + PD * 0.28, 2);
+  // im Hangar links vom Ausgang und weit rechts: Der Treffpunkt der Geschichte (hangarSpot) liegt dazwischen und bleibt frei
+  mkChat(-22, HZ0 + 9, kind === 'outpost' ? 2 : 3);
+  if (kind !== 'outpost') mkChat(58, HZ0 + 8.5, 2);
 
   boxUV(S, 1 / 6);
   standGroup = new THREE.Group();
@@ -1000,12 +1068,34 @@ export function updateWalk(dt: number) {
   IN.target = best;
   updateRoomLife(dt);
 }
+// nur für Tests (Testfenster): Einblick in Figuren, Läufer und Gesprächsgruppen des aktuellen Raums
+export const lifeDebug = () => ({ persons, walkers, chats, leavers });
+const wrapA = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+// Kopfhöhe einer Figur als Punkt in der Welt (Blickziel für andere)
+const headOf = (p: Person, out: THREE.Vector3) => p.g.localToWorld(out.set(0, 1.6, 0));
+// Figur auf eine Blickrichtung drehen: großer Winkel mit Schritten (Dreh-Clip aus charModels.ts), kleiner Winkel oder Figur ohne Clip weich.
+// Rückgabe true = angekommen. Mit Clip wartet sie, bis sie ruhig steht (nach dem Abbremsen oder einer Gebärde), statt zu gleiten.
+function turnStep(p: Person, want: number, dt: number) {
+  const d = wrapA(want - p.g.rotation.y);
+  if (p.anim && animTurning(p.anim)) return false;
+  if (Math.abs(d) < 0.02) return true;
+  if (p.anim && Math.abs(d) >= 0.45 && animHasTurn(p.anim)) { animTurn(p.anim, d); return false; }
+  p.g.rotation.y += clamp(d, -1.4 * dt, 1.4 * dt);
+  return false;
+}
+// Nächste Wegmarke eines Läufers: Haltepunkte nur mit ihrer Wahrscheinlichkeit und wenn dort niemand steht, sonst weiter zur übernächsten
+function nextNode(w: Walker) {
+  const n = w.path.length; let j = (w.i + 1) % n;
+  for (let k = 0; k < n; k++) { const s = w.stops[j]; if (!s) break; if (!s.busy && Math.random() < s.p) { s.busy = true; break; } j = (j + 1) % n; }
+  w.to = j;
+}
 // Leben im Raum: Figuren atmen, gebärden und schauen, Läufer gehen ihre Wege. Läuft auch, wenn der Pilot gerade nicht selbst läuft
 // (Kinoszene, Stationsmenü, Start und Landung): Bis Alpha 1.07 standen die Figuren dort eingefroren, in den Szenen der Geschichte
 // also ausgerechnet dann, wenn sie sprechen.
 export function updateRoomLife(dt: number) {
   if (!IN.active) return;
   const t = G.time;
+  if (G.mode === 'launch' || G.mode === 'play') settledT = t;   // Start und Landung: Der Pilot steht noch nicht im Raum
   if (field) (field.material as THREE.MeshBasicMaterial).opacity = 0.055 + Math.sin(t * 2.2) * 0.02;
   if (holo) holo.rotation.y += dt * 0.25;
   for (const q of persons) {
@@ -1013,12 +1103,75 @@ export function updateRoomLife(dt: number) {
     const want = d < 9 ? clamp(Math.atan2(Math.sin(a), Math.cos(a)), -1.1, 1.1) : Math.sin(t * 0.4 + q.x) * 0.3;
     q.p.head.rotation.y += (want - q.p.head.rotation.y) * Math.min(1, dt * 4);
     q.p.armL.rotation.x = Math.sin(t * 0.8 + q.z) * 0.06; q.p.armR.rotation.x = -q.p.armL.rotation.x;
+    // Zuwenden (seit Alpha 1.19): Steht der Pilot nah und deutlich seitlich, dreht sich die Figur nach kurzem Zögern zu ihm um
+    // (der Kopf geht voraus, siehe lookStep); ist er eine Weile fort, dreht sie sich zurück. Gesprächsgruppen bleiben einander zugewandt.
+    if (!q.fix && !IN.ship) {
+      if (q.home === undefined) q.home = q.face;
+      const to = Math.atan2(IN.x - q.x, IN.z - q.z), off = Math.abs(wrapA(to - q.p.g.rotation.y));
+      if (d < 4.6) {
+        q.away = 0; q.seen = off > 0.8 ? (q.seen || 0) + dt : 0;
+        if (q.seen > 0.6) { q.want = q.span ? q.home + clamp(wrapA(to - q.home), -q.span, q.span) : to; q.seen = 0; }
+      } else { q.seen = 0; q.away = (q.away || 0) + dt; if (d > 8 && q.away > 3.5) q.want = q.home; }
+      if (q.want != null && turnStep(q.p, q.want, dt)) q.want = null;
+      q.face = q.p.g.rotation.y;
+    }
+    // Personal sieht den Kunden an, der vor der Theke steht, solange der Pilot nicht selbst in der Nähe ist
+    if (q.p.anim && q.cust) q.p.anim.look = d < 5 ? camera.position : q.cust.look;
     if (q.p.anim) animStep(q.p.anim, dt, false); else if (q.p.mixer) q.p.mixer.update(dt); else q.p.g.position.y = Math.sin(t * 1.3 + q.x) * 0.008;
+  }
+  for (const c of chats) {
+    // Wortwechsel: einer redet 2,5 bis 7 s, kurze Pause, dann ein anderer; ab und zu schweigen alle eine Weile
+    c.t -= dt;
+    if (c.t <= 0) {
+      if (c.gap) {
+        c.sp = (c.sp + 1 + Math.floor(Math.random() * (c.m.length - 1))) % c.m.length;
+        const len = 2.5 + Math.random() * 4.5, an = c.m[c.sp].p.anim;
+        if (an) animTalk(an, len);
+        c.t = len + 0.3; c.gap = false;
+      } else { c.gap = true; c.t = Math.random() < 0.2 ? 4 + Math.random() * 7 : 0.4 + Math.random() * 1.1; }
+    }
+    // Blicke: zum Sprecher; der Sprecher zum Nächsten in der Runde. Kommt der Pilot ganz nah, sieht ihn an, wer ihm zugewandt steht (lookStep).
+    const near = Math.hypot(IN.x - c.x, IN.z - c.z) < 3.4 && !IN.ship;
+    c.m.forEach((q, i) => {
+      if (!q.p.anim || !q.look) return;
+      const o = c.m[i === c.sp ? (i + 1) % c.m.length : c.sp];
+      if (near && Math.abs(wrapA(Math.atan2(IN.x - q.x, IN.z - q.z) - q.face)) < 1.0) q.look.copy(camera.position);
+      else headOf(o.p, q.look);
+    });
   }
   updateOthers(dt);
   for (const w of walkers) {
-    const n = w.path[(w.i + 1) % w.path.length], dx = n[0] - w.x, dzz = n[1] - w.z, d = Math.hypot(dx, dzz);
-    if (d < 0.3) { w.i = (w.i + 1) % w.path.length; w.rest = Math.random() < 0.4; continue; }
+    const an = w.p.anim;
+    headOf(w.p, w.look);
+    if (w.at) {
+      // am Haltepunkt: hindrehen, verweilen (am Stand im Wechsel mit dem Personal gebärden), zum nächsten Ziel drehen und weitergehen
+      const s = w.at, n = w.path[w.to];
+      if (an) animStep(an, dt, false, WALK_V);
+      if (!w.leave) {
+        turnStep(w.p, s.face, dt);
+        w.wait -= dt;
+        if (s.who && an) {
+          an.look = s.who.look || (s.who.look = new THREE.Vector3()); headOf(s.who.p, s.who.look);
+          s.who.cust = w;
+          if ((w.say -= dt) <= 0) { const len = 2.2 + Math.random() * 2.6, who = w.sayI++ % 2 ? s.who.p.anim : an; if (who) animTalk(who, len); w.say = len + 0.5 + Math.random() * 1.2; }
+        }
+        if (w.wait <= 0) w.leave = true;
+      } else if (turnStep(w.p, Math.atan2(n[0] - w.x, n[1] - w.z), dt) || !an) {
+        s.busy = false; w.at = null;
+        if (s.who) { s.who.cust = null; if (s.who.p.anim) s.who.p.anim.look = camera.position; }
+        if (an) an.look = camera.position;
+      }
+      continue;
+    }
+    const n = w.path[w.to], dx = n[0] - w.x, dzz = n[1] - w.z, d = Math.hypot(dx, dzz);
+    if (d < 0.3) {
+      w.i = w.to;
+      const s = w.stops[w.i];
+      if (s) { w.at = s; w.leave = false; w.wait = s.t[0] + Math.random() * (s.t[1] - s.t[0]); w.say = 0.8 + Math.random(); w.sayI = Math.random() < 0.5 ? 0 : 1; }
+      else w.rest = Math.random() < 0.15;
+      nextNode(w);
+      continue;
+    }
     // stehen bleiben, wenn der Spieler im Weg ist (früh genug, um auszulaufen) oder für eine Pause kurz vor einer Wegmarke
     const pd = Math.hypot(IN.x - w.x, IN.z - w.z), ahead = ((IN.x - w.x) * dx + (IN.z - w.z) * dzz) / (d * Math.max(0.01, pd));
     const full = !!w.p.anim?.stop, blocked = pd < (full ? 3.0 : 1.6) && ahead > 0.3;
@@ -1035,6 +1188,17 @@ export function updateRoomLife(dt: number) {
     w.ph += dt * sp * 4.6;
     const sw = sp ? Math.sin(w.ph) * 0.55 : 0;
     w.p.legL.rotation.x = sw; w.p.legR.rotation.x = -sw; w.p.armL.rotation.x = -sw * 0.7; w.p.armR.rotation.x = sw * 0.7;
+  }
+  // Figuren der Geschichte, die abgehen (storyNpcsLeave): umdrehen, zum Gang gehen, am Ende des Gangs aus dem Raum nehmen
+  for (let i = leavers.length - 1; i >= 0; i--) {
+    const w = leavers[i], an = w.p.anim, n = w.path[w.i], dx = n[0] - w.x, dzz = n[1] - w.z, d = Math.hypot(dx, dzz), ta = Math.atan2(dx, dzz);
+    w.wait -= dt;
+    if (w.wait <= 0 && !w.turned) w.turned = turnStep(w.p, ta, dt) || !an;
+    const go = w.wait <= 0 && w.turned, sp = an ? animStep(an, dt, go, WALK_V) : go ? WALK_V : 0;
+    if (!go) continue;
+    if (d < 0.35) { if (++w.i >= w.path.length) { if (w.end) w.end(); else w.p.g.removeFromParent(); leavers.splice(i, 1); } continue; }
+    w.x += dx / d * sp * dt; w.z += dzz / d * sp * dt; w.p.g.position.set(w.x, 0, w.z);
+    w.p.g.rotation.y += wrapA(ta - w.p.g.rotation.y) * Math.min(1, dt * 5);
   }
 }
 
@@ -1240,14 +1404,55 @@ const NPC_FALLBACK: Record<string, [string, [number, number, number]]> = {
 };
 export function storyNpc(name: string, title: string, label: string, act: () => void, col = '#ffb347', at?: { x: number; z: number }, look: NpcLook = {}) {
   if (!IN.active || !stationGroup || IN.ship) return false;
-  const x = at ? at.x : IN.x - 2.5, z = at ? at.z : IN.z - 7, face = Math.atan2(IN.x - x, IN.z - z);   // vor dem Spieler (Blick zum Korridor)
+  // Dieselbe Figur steht oder kommt schon (ein Schritt wurde neu betreten): Die alte weicht, damit nie zwei ineinander stehen
+  if (leavers.some(w => w.end && w.name === name)) return true;
+  for (let i = persons.length - 1; i >= 0; i--) {
+    const q = persons[i]; if (!q.story || q.name !== name) continue;
+    const same = (px: number, pz: number) => Math.abs(px - q.x) < 0.05 && Math.abs(pz - q.z) < 0.05;
+    for (let j = inters.length - 1; j >= 0; j--) if (same(inters[j].x, inters[j].z)) inters.splice(j, 1);
+    for (let j = labels.length - 1; j >= 0; j--) if (same(labels[j].p.x, labels[j].p.z)) labels.splice(j, 1);
+    q.p.g.removeFromParent(); persons.splice(i, 1);
+  }
+  const x = at ? at.x : IN.x - 2.5, z = at ? at.z : IN.z - 7;   // ohne Ortsangabe: vor dem Spieler (Blick zum Korridor)
   const p = storyPerson(look);
-  p.g.position.set(x, 0, z); p.g.rotation.y = face;
   stationGroup.add(p.g);
-  persons.push({ p, x, z, face, name });
-  labels.push({ p: new THREE.Vector3(x, 2.15, z), text: `${name} · ${title}`, col });
-  inters.push({ x, z, r: 3.4, label: () => label, act });
+  const settle = () => {
+    const face = Math.atan2(IN.x - x, IN.z - z);
+    p.g.position.set(x, 0, z);
+    persons.push({ p, x, z, face: p.g.rotation.y, name, home: face, want: face, story: true });
+    labels.push({ p: new THREE.Vector3(x, 2.15, z), text: `${name} · ${title}`, col });
+    inters.push({ x, z, r: 3.4, label: () => label, act });
+  };
+  // Steht der Pilot schon länger im Raum (ein Kapitel beginnt, während er im Hangar ist), kommt die Figur durch den Gang herein und geht an
+  // ihren Platz, statt vor ihm aufzutauchen. Nach dem Andocken (die Figuren warten schon) steht sie sofort da.
+  if (at && G.mode === 'walk' && G.time - settledT > 4) {
+    const k = leavers.filter(w => w.end).length, off = (k % 2 ? 1 : -1) * (0.5 + 0.35 * k), sx = off * 0.6, sz = PZ1 + 1.5;
+    p.g.position.set(sx, 0, sz); p.g.rotation.y = 0;
+    if (p.anim) p.anim.look = null;
+    leavers.push({ p, x: sx, z: sz, path: [[off * 0.6, HZ0 - 1], [off, HZ0 + 4], [x, z]], i: 0, wait: k * 1.4, turned: true, name, end: () => { if (p.anim) p.anim.look = camera.position; settle(); } });
+  } else { p.g.rotation.y = Math.atan2(IN.x - x, IN.z - z); settle(); }
   return true;
+}
+// Die Szene ist vorbei: Alle Figuren der Geschichte im Raum gehen ab (durch den Gang hinaus) und lassen sich nicht mehr ansprechen.
+// Ohne das blieben sie nach dem Ende eines Kapitels stehen. Begann das nächste Kapitel an derselben Station, stellte es seine Figuren in die
+// alten hinein, und die Taste E traf den alten, abgeschlossenen Ansprechpunkt: Es ging erst nach Ablegen und erneutem Andocken weiter
+// (gefunden im Probelauf zu Alpha 1.19, Übergang Kapitel 3 → 4 und 4 → 5 in der Bastion).
+export function storyNpcsLeave() {
+  if (!IN.active || IN.ship || !stationGroup) return;
+  for (const w of leavers) if (w.end) { w.end = undefined; w.path = [[0.4, HZ0 + 4], [0.3, HZ0 - 1], [0.3, PZ1 + 1.5]]; w.i = 0; w.turned = false; }   // wer noch hereinkommt, kehrt um
+  let k = 0;
+  for (let i = persons.length - 1; i >= 0; i--) {
+    const q = persons[i]; if (!q.story) continue;
+    persons.splice(i, 1);
+    const same = (x: number, z: number) => Math.abs(x - q.x) < 0.05 && Math.abs(z - q.z) < 0.05;
+    for (let j = inters.length - 1; j >= 0; j--) if (same(inters[j].x, inters[j].z)) inters.splice(j, 1);
+    for (let j = labels.length - 1; j >= 0; j--) if (same(labels[j].p.x, labels[j].p.z)) labels.splice(j, 1);
+    if (q.p.anim) { q.p.anim.look = null; q.p.anim.talkT = 0; }
+    const off = (k % 2 ? 1 : -1) * (0.5 + 0.35 * k);      // nebeneinander durch die Tür, nicht ineinander
+    leavers.push({ p: q.p, x: q.x, z: q.z, path: [[off, HZ0 + 4], [off * 0.6, HZ0 - 1], [off * 0.6, PZ1 + 1.5]], i: 0, wait: 1.2 + k * 1.1, turned: false });
+    k++;
+  }
+  if (IN.target && !inters.includes(IN.target)) IN.target = null;
 }
 // Treffpunkt für Figuren der Geschichte: im Hangar links vom Ausgang, rund 15 m vom Platz, an dem der Pilot aussteigt.
 // Hängt nicht davon ab, wo der Pilot gerade steht (er kann auch im Stationsmenü oder auf der Promenade sein).

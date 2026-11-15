@@ -368,6 +368,42 @@ Am 2026-11-14 wurden alle Stationsszenen von Prolog bis Kapitel 4 im Testfenster
 - **Ein Schritt, der mit einem Gespräch endet, wartet auf `!dialogBusy()`.** Ein neuer Schritt verwirft offene Zeilen. Nachgezogen in Alpha 1.08: Kapitel 1 Schritt 4 (Hollwegs „Pilot, vertreib sie“ war nie zu hören), Kapitel 2 Schritt 6 (Vargas Aufnahme brach nach gut einer Sekunde ab, Roths Zeile fiel weg) und der jeweils erste Schritt der Kapitel 1 bis 4 (wer beim Kapitelbeginn schon am Ziel ist, hörte den Funkspruch nicht zu Ende).
 - **Neue Figuren nehmen ihre Haltung sofort ein** (`animInit` ruft `mixer.update(0)`). Sonst stehen die Tripo-Figuren bis zum ersten Bild in der T-Haltung, zum Beispiel Achterberg beim Spielstart während der Landung.
 
+## Probelauf von Prolog bis Kapitel 5 (Alpha 1.19)
+
+Am 2026-11-15 hat ein Bot die ganze Geschichte im Testfenster durchgespielt (Verfahren und Grenzen: `docs/probelauf.md`, Skript: `scripts/probelauf.js`).
+Er prüft den Ablauf, nicht die Schwierigkeit: Ziele fliegt er nicht an, sondern versetzt das Schiff dorthin; Gegner schaltet er direkt aus.
+
+**Gelaufen:** drei vollständige Durchläufe ab neuem Spiel (Rat/Rat/Rat, Gilde/Grenzwacht/Grenzwacht, Rat/Rat/Gilde), jeweils mit sofortigem
+Beginn des nächsten Kapitels im Hangar der Schlussszene; dazu Laden über „Weiterspielen“ an jedem der 65 Schrittanfänge mit mindestens drei
+Schritten Weiterspielen. Alle Läufe kamen ohne Hänger und ohne Fehlermeldung durch, nachdem der erste Fund behoben war.
+
+**Gefunden und behoben:**
+
+- **Hänger am Übergang zwischen zwei Kapiteln.** Wer nach der Schlussszene von Kapitel 3 oder 4 (Wahl „Rat“) im Hangar der Bastion blieb, bis
+  das nächste Kapitel begann, bekam dessen Figuren in die alten hineingestellt. Die Taste E traf den alten, abgeschlossenen Ansprechpunkt; weiter
+  ging es erst nach Ablegen und erneutem Andocken. Jetzt gehen die Figuren nach ihrer Szene durch den Gang ab (`storyNpcsLeave` über `endChain`),
+  und `storyNpc` stellt nie zwei Figuren gleichen Namens.
+- **Figuren tauchten vor dem Piloten auf**, wenn ein Kapitel begann, während er im Hangar stand. Jetzt kommen sie durch den Gang herein und
+  gehen an ihren Platz (nur in diesem Fall; nach dem Andocken warten sie wie bisher schon dort).
+- **Nach „Sanders Rechnung“ (Kapitel 5)** blieb die Runde mit einem Ansprechpunkt stehen, der nichts mehr tat. Sie geht jetzt ebenfalls ab.
+- **Prolog, Ferrox-Späher:** Die beiden Späher entstehen beim nächsten Frachter, oft Kilometer entfernt, und hatten keine Marke. Das HUD zeigt
+  Ferrox außerhalb des Bildes erst ab 1,3 km an. Jetzt führt die Marke „FERROX-SPÄHER“ hin.
+- **Krull in Talstadt (Kapitel 4 und 5):** Außerhalb von Heimstatt stand nur „Springe nach Heimstatt“, danach „zu Gildemeisterin Krull gehen“.
+  Dass sie in Talstadt auf Heimstatt II sitzt, stand erst im Sektor selbst da. Jetzt steht es von Anfang an im Auftrag.
+- **Sprungzeilen:** „Springe nach Die Narbe“, „nach Stummfeld“, „nach Splittergürtel“ heißen jetzt „in die Narbe“, „ins Stummfeld“, „in den
+  Splittergürtel“ (`jumpTo` in `story.ts`).
+
+**Aufgefallen, nicht geändert:**
+
+- Zwischen zwei Kapiteln liegen 22 bis 30 Sekunden, in denen nichts ankündigt, dass es weitergeht.
+- In Ferrox-Sektoren kommt man mit 160 bis 180 m/s aus dem Tor oder aus dem Orbit; die Tarnung in Kapitel 4 greift erst nach zweieinhalb
+  Sekunden unter 60 m/s. Wer mit dem Leitkristall von Kernkristall aufsteigt, ist also kurz sichtbar.
+- Die Narbe hat das Startschiff des Bots (Venom ohne Ausbau) im Wrackfeld von Kapitel 3 einmal binnen Sekunden zerstört. Danach stand der
+  Auftrag richtig auf „Springe in die Narbe“. Ob das mit einem ausgebauten Schiff fair ist, kann nur ein Mensch am Steuer beurteilen.
+
+**Nicht geprüft:** Flugwege und Kämpfe von Hand, Schürfen und Kaufen der verlangten Waren, die Wege zu Fuß (der Bot stellt den Piloten vor
+die Figur), Laden mitten in einem Schritt (nur an Schrittanfängen), Mehrspieler.
+
 ## Texte im Spiel, die angepasst werden müssen
 
 - Spieltitel überall: „Letzte Flotte“ → **„Letzte Crew“**; „Pilot der Letzten Flotte“ → „Pilot der Crew“.

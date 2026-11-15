@@ -8,11 +8,11 @@ import { world } from './world';
 import { burst } from './fx';
 import { spawnEnemy, killEnemy } from './combat';
 import { SHARED } from './shared';
-import { IN, storyNpc, nearNpc, hangarSpot } from './interior';
+import { IN, storyNpc, nearNpc, hangarSpot, storyNpcsLeave } from './interior';
 import { addRep, level, type RepId } from './reputation';
 import { closeMenu } from '../ui/dock';
 import { radio } from '../ui/radio';
-import { talk, playScene, registerChain, st, endChain, storyHooks, dialogBusy, settled, type Step, type Obj, type Marker } from './story';
+import { talk, playScene, registerChain, jumpTo, st, endChain, storyHooks, dialogBusy, settled, type Step, type Obj, type Marker } from './story';
 import { DUN, enterDungeon, dungeonAlarm, dungeonSay, dungeonHurt, type DungeonEntrance } from './dungeon';
 import { buildStoryShip, spawnStoryShip, spawnStoryAlly } from './npc';
 import type { CivType } from '../models/ships';
@@ -53,7 +53,7 @@ const inSpace = (id: string) => !!world.def && world.def.id === id && !world.sur
 const docked = (id: string) => !!G.dockedAt && G.dockedAt.id === id;
 const fmtDist = (d: number) => (d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m');
 const route = (to: string) => { if (P.sector !== to) P.route = to; };
-const lineSpace = (id: string, name: string): Obj => [`Springe nach <b>${name}</b>${P.route === id ? ' · Route gesetzt (Karte: M)' : ''}`, false, false];
+const lineSpace = (id: string, name: string): Obj => [`Springe ${jumpTo(name)}${P.route === id ? ' · Route gesetzt (Karte: M)' : ''}`, false, false];
 const speed = () => Math.hypot(P.vx, P.vy, P.vz);
 const dist = (p: number[]) => d3(p[0], p[1], p[2], P.x, P.y, P.z);
 const dockMark = (id: string, label: string, col: string): Marker[] => { const s = world.stations.find(x => x.id === id); return s && !world.surface ? [{ x: s.dock.x, y: s.dock.y, z: s.dock.z, label, col, big: true }] : []; };
@@ -281,7 +281,7 @@ const STEPS: Step[] = [
     },
     lines: () => {
       const d = c5(), ne = Math.min(EIS, P.cargo.eis || 0), nh = Math.min(HE, P.cargo.helium || 0), here = IN.active && docked(TAL);
-      const way: Obj = here ? ['In <b>Talstadt</b> gelandet', true, false] : world.surface && P.sector === HOME ? ['In die Stadt <b>Talstadt</b> fliegen und im Hangar landen', false, false] : P.sector === HOME ? ['Auf <b>Heimstatt II</b> landen', false, false] : lineSpace(HOME, 'Heimstatt');
+      const way: Obj = here ? ['In <b>Talstadt</b> gelandet', true, false] : world.surface && P.sector === HOME ? ['In die Stadt <b>Talstadt</b> fliegen und im Hangar landen', false, false] : P.sector === HOME ? ['Auf <b>Heimstatt II</b> landen (Ziel: Talstadt)', false, false] : [`Springe nach <b>Heimstatt</b>, dort nach <b>Talstadt</b> auf Heimstatt II${P.route === HOME ? ' · Route gesetzt (Karte: M)' : ''}`, false, false];
       if (!d.krull) return [way, ['Aussteigen und zu <b>Gildemeisterin Krull</b> gehen', nearNpc('Krull'), false], ['Mit Krull sprechen · <b>E</b>', false, false]];
       if (!d.wach) return [[`<b>${EIS} Wassereis</b> im Frachtraum · ${ne}/${EIS}`, ne >= EIS, false], [`<b>${HE} Helium-3</b> im Frachtraum · ${nh}/${HE}`, nh >= HE, false], ['Eis: jedes Eisfeld. Helium-3: Markt in Talstadt oder Eisplaneten', false, true], way, ['Krull beides bringen · <b>E</b>', false, false]];
       return [['Die Weckanlage läuft', true, false], ['Ablegen', false, false]];
@@ -459,7 +459,7 @@ function rechnung() {
     { who: 'HOLLWEG', text: 'Meine Mutter hat geschworen, dass das nie geschieht. Ich schwöre etwas anderes: Wenn er kommt, findet er uns wach.' },
     keep,
     { who: 'ACHTERBERG', text: 'Pilot. Ruf zusammen, wer dir vertraut. Wir brauchen jedes Schiff, das fliegen kann.' },
-  ], () => { c5().plan = true; S.scene = false; saveGame(); });
+  ], () => { c5().plan = true; S.scene = false; storyNpcsLeave(); saveGame(); });      // die Runde löst sich auf (sonst blieb sie mit einem toten Ansprechpunkt stehen)
 }
 function vollzaehlig() {
   if (G.mode === 'dock' && G.inside) closeMenu();
