@@ -6,7 +6,7 @@ import { bark } from '../core/audio';
 // =====================================================================================
 
 // Personal an den Theken: Stimme nach Vorname (Namen aus interior.ts → NAMES und Geschichtsfiguren)
-const FEM = new Set(['mira', 'leta', 'ilka', 'sefa', 'runa', 'yara', 'edda', 'tilda', 'nele', 'kaja', 'tamm', 'roth', 'krull', 'varga']);
+const FEM = new Set(['mira', 'leta', 'ilka', 'sefa', 'runa', 'yara', 'edda', 'tilda', 'nele', 'kaja', 'tamm', 'roth', 'krull']);
 export function staffBark(name: string, tab: string) {
   const first = (name || '').trim().split(/\s+/)[0].toLowerCase();
   bark(`g_${tab}_${FEM.has(first) ? 'w' : 'm'}`);

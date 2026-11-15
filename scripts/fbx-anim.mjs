@@ -12,6 +12,8 @@
 //              Mixamo und Tripo setzen die Gelenke verschieden in den Körper (Fuß 40°, Schulter 34°, Unterschenkel 18°); --align würde
 //              die Füße um diesen Unterschied kippen. Die Finger kommen nicht aus der Quelle (deren Hand ruht gekrümmt, unsere gestreckt),
 //              sondern als feste Haltung aus dem ersten Bild von anim_tamm_idle.json (entspannte Hand).
+//   --skin=<figur.fbx>  Die Bewegungsdatei hat keine Hülle (Mixamo-Pakete liefern nur die Figur und die Sprech-Dateien "mit Skin"):
+//              Grundhaltung, Körpergröße und Hüftlage kommen dann aus dieser Datei derselben Figur, die Bewegung aus <datei.fbx>.
 // Alle Clips einer Figur neu erzeugen: scripts/anims.sh
 // align: nur angeben, wenn die FBX auf einem FREMDEN Körper beruht (z. B. der Mixamo-Standardfigur in T-Haltung). Wurde
 // unsere eigene Figur bei Mixamo hochgeladen, steht die Hülle in beiden Skeletten gleich da: dann darf Schritt 1 nicht laufen,
@@ -50,9 +52,10 @@ const SRC_CHILD = RIG ? {} : { head_end: 'HeadTop_End' };   // Zielkind → Quel
 const clean = n => n.replace(/^.*[:|]/, '').replace(/^mixamorig/, '');
 
 // ---------- Quelle ----------
-const buf = fs.readFileSync(inp);
 const warn = console.warn; console.warn = () => {};
-const fbx = new FBXLoader().parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
+const loadFbx = p => { const buf = fs.readFileSync(p); return new FBXLoader().parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), ''); };
+const motion = loadFbx(inp), fbx = flag.skin ? loadFbx(flag.skin) : motion;   // fbx trägt Skelett und Hülle, motion die Bewegung (gleiche Knochennamen)
+if (flag.skin) fbx.animations = motion.animations;
 console.warn = warn;
 const S = {}; let skinned = null;
 fbx.traverse(o => { if (o.isBone) S[clean(o.name)] = o; if (o.isSkinnedMesh && !skinned) skinned = o; });

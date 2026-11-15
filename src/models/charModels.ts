@@ -8,13 +8,16 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 interface Tpl { scene: THREE.Group; clips: THREE.AnimationClip[]; scale: number; footY: number }
 const TPL: Record<string, Tpl> = {};
-const HEIGHT: Record<string, number> = { worker: 1.8, merchant: 1.7, achterberg: 1.72, mechaniker: 1.78, lagerarbeiter: 1.86, hollweg: 1.86, roth: 1.72, tamm: 1.7, kessler: 1.8, brandt: 1.76, krull: 1.66 };
-// Zwei Skelett-Familien, jeweils mit einem Vorbild, dessen Bewegungen die anderen mitnutzen (solange es keine eigenen gibt):
+const HEIGHT: Record<string, number> = { worker: 1.8, merchant: 1.7, achterberg: 1.72, mechaniker: 1.78, lagerarbeiter: 1.86, hollweg: 1.86, roth: 1.72, tamm: 1.7, kessler: 1.8, brandt: 1.76, krull: 1.66, varga: 1.76, sander: 1.84 };
+// Skelett-Familien, jeweils mit einem Vorbild, dessen Bewegungen die anderen mitnutzen (solange es keine eigenen gibt):
 // 1. Händler (24 Knochen): Mechaniker und Lagerarbeiter aus Blender tragen sein Skelett in derselben Grundhaltung.
 // 2. Tamm (53 Knochen mit Fingern, seit Alpha 1.07): Die Figuren von Tripo haben in Blender einheitliche Knochenachsen und Mixamos T-Haltung
 //    bekommen (tripo_to_mixamo, siehe docs/assets.md). Stehen und Gehen kommen unverändert aus dem Mixamo-Paket, das für Tamm geladen wurde;
 //    Sprechen ist von den Händler-Dateien übertragen. Anlaufen und Abbremsen gibt es für diese Familie noch nicht (animStep blendet dann direkt).
-const RIG_OF: Record<string, string> = { mechaniker: 'merchant', lagerarbeiter: 'merchant', achterberg: 'tamm', hollweg: 'tamm', roth: 'tamm', kessler: 'tamm', brandt: 'tamm', krull: 'tamm' };
+// 3. Varga (dasselbe Skelett wie Tamm, seit Alpha 1.18): die Bewegungen der Männer. Stehen, Gehen und drei Sprech-Gebärden stammen aus dem
+//    Mixamo-Paket, das der Entwickler für Varga geladen hat (scripts/anims.sh). Die Frauen (Achterberg, Roth, Krull) bleiben bei Tamms Paket.
+const RIG_OF: Record<string, string> = { mechaniker: 'merchant', lagerarbeiter: 'merchant', achterberg: 'tamm', roth: 'tamm', krull: 'tamm',
+  hollweg: 'varga', kessler: 'varga', brandt: 'varga', sander: 'varga' };
 const clipKey = (name: string, kind: string) => (EXTRA[name + '_' + kind] || !RIG_OF[name] ? name : RIG_OF[name]) + '_' + kind;
 // Zusätzliche Bewegungen aus FBX-Dateien (scripts/fbx-anim.mjs → asset-src/data/anim_<figur>_<art>.json), z. B. merchant_idle.
 // Sie sind auf das Skelett genau dieser Figur umgerechnet und ersetzen deren eingebaute Bewegung.
@@ -104,7 +107,7 @@ export function charInstance(name: string, tint: number | [number, number, numbe
   obj.traverse(o => { if (o.name === 'neck') neck = o; else if (o.name === 'Head') head = o; });
   const anim: CharAnim = {
     under, underW: 0, root: g, neck, head, look: null, lookYaw: 0, lookPitch: 0, lookMem: [0, 1].map(() => ({ base: new THREE.Quaternion(), out: new THREE.Quaternion() })), lookOn: false,
-    mixer, idle, walk, start: act('start'), stop: act('stop'), talk: [act('talk1'), act('talk2')].filter(Boolean) as THREE.AnimationAction[],
+    mixer, idle, walk, start: act('start'), stop: act('stop'), talk: [act('talk1'), act('talk2'), act('talk3')].filter(Boolean) as THREE.AnimationAction[],
     mode: 'idle', cur: null, talkT: 0, talkI: 0,
     pace: (META[clipKey(name, 'walk')]?.pace || 1.4) * hipScale(name), mStart: META[clipKey(name, 'start')] || null, mStop: META[clipKey(name, 'stop')] || null,
   };

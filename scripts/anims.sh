@@ -21,3 +21,11 @@ node scripts/glb-anim.mjs "$N/figuren/mx_idle.glb" tamm_idle --fps=15
 node scripts/glb-anim.mjs "$N/figuren/mx_walk.glb" tamm_walk --inplace
 node scripts/fbx-anim.mjs "$N/Talking.fbx" tamm_talk1 --rig=mixamo --limbs
 node scripts/fbx-anim.mjs "$N/Talking (1).fbx" tamm_talk2 --rig=mixamo --limbs
+# Männer (Vorbild varga, seit Alpha 1.18): Mixamo-Paket, das für Varga geladen wurde (asset-src/neu/figuren/varga_mixamo). Die Paketdateien haben
+# keine Hülle; Grundhaltung und Körpermaße kommen deshalb über --skin aus einer der Sprech-Dateien (Varga.fbx selbst liest der FBX-Leser nicht).
+V=$N/figuren/varga_mixamo
+node scripts/fbx-anim.mjs "$V/idle.fbx" varga_idle --rig=mixamo --figure=varga --limbs "--skin=$V/Talking (2).fbx" --fps=15
+node scripts/fbx-anim.mjs "$V/walking.fbx" varga_walk --rig=mixamo --figure=varga --limbs "--skin=$V/Talking (2).fbx" --inplace --fps=30
+node scripts/fbx-anim.mjs "$V/Talking (2).fbx" varga_talk1 --rig=mixamo --figure=varga --limbs
+node scripts/fbx-anim.mjs "$V/Talking (3).fbx" varga_talk2 --rig=mixamo --figure=varga --limbs
+node scripts/fbx-anim.mjs "$V/Talking (4).fbx" varga_talk3 --rig=mixamo --figure=varga --limbs

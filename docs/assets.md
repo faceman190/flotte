@@ -221,6 +221,28 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
 - Nach mehreren Läufen in Blender `bpy.data.orphans_purge(do_recursive=True)` aufrufen, bevor gespeichert wird: Sonst bleiben die Bilder
   verworfener Läufe in der Datei (90 MB statt 34 MB; GitHub nimmt höchstens 100 MB je Datei).
 
+## Varga und Sander aus Mixamo-Paketen, eigene Clips der Männer (Alpha 1.18)
+
+- **Was der Entwickler geliefert hat:** `VargaAnimated.zip` und `EmilAnimated.zip` im OneDrive-Ordner. Er hat die Tripo-Figuren bei Mixamo hochgeladen
+  und von dort geladen: je eine Figur als FBX mit Hülle (rund 54.000 Dreiecke, ein Bild 4096 px, 65 Knochen `mixamorig:`), dazu Stehen, Gehen,
+  Rennen, Springen, Seitschritte, Drehungen (ohne Hülle) und Sprech-Gebärden (mit Hülle). Arbeitskopie: `asset-src/neu/figuren/varga_mixamo/`
+  und `sander_mixamo/` (nicht im Repository).
+- **Figur umrechnen:** `tripo_to_mixamo(Name, Größe, src='varga_mixamo/Varga.fbx')`. Mit `src` liest die Funktion die FBX statt der Tripo-GLB:
+  Die Drehung des Skelett-Objekts (90° um X, Maßstab 0,01) geht in die Daten, das Bild wird auf 2048 px verkleinert, danach läuft alles wie bisher.
+  Die Knochenachsen der Finger weichen bei jeder Mixamo-Figur um 95 bis 120° vom Vorbild ab (Mixamo richtet sie nach der Handhaltung der Figur);
+  das Angleichen an `Arm_MixamoRef` hebt das auf (`rest_deviation_deg` 0). Varga 1,76 m, Sander 1,84 m, je 30.000 Dreiecke.
+- **Clips der Männer (Familie `varga`):** `varga_idle`, `varga_walk` (1,71 m/s), `varga_talk1` bis `varga_talk3` aus Vargas Paket, erzeugt in
+  `scripts/anims.sh` mit `fbx-anim.mjs --rig=mixamo --figure=varga --limbs`. Hollweg, Kessler, Brandt und Sander nutzen sie über `RIG_OF`;
+  Achterberg, Roth und Krull bleiben bei Tamms Paket. `charInstance` nimmt jetzt bis zu drei Sprech-Gebärden.
+- **Neuer Schalter `--skin=<datei.fbx>`** in `fbx-anim.mjs`: Die Paketdateien haben keine Hülle; Grundhaltung, Körpergröße und Hüftlage kommen dann
+  aus einer Datei derselben Figur mit Hülle. `Varga.fbx` selbst liest der FBX-Leser von three.js nicht („Unknown property type“), eine der
+  Sprech-Dateien tut es genauso.
+- Die Finger bleiben in allen Clips fest (entspannte Hand aus `tamm_idle`), wie bisher.
+- **Noch nicht genutzt:** Rennen, Springen, Seitschritte und Drehungen aus beiden Paketen (das Spiel hat dafür bei den Figuren in den Stationen
+  keine Verwendung). Sanders Sprech-Dateien sind dieselben Gebärden wie zwei von Vargas.
+- Geprüft im Testfenster: Stehen, Gehen, Sprechen von vorn und von der Seite (`docs/bilder/figuren-118-clips.jpg`, `figuren-118-spiel.jpg`),
+  Szene im Hangar der Bastion mit Kopfdrehung und Gespräch (`figuren-118-hangar.jpg`), Grundhaltung in Blender (`figuren-118-blender.jpg`).
+
 ## Hangar (Alpha 0.62)
 - Quelle: `asset-src/neu/hangar/Hangar.blend` (per Skript gebaut; Textblöcke `hangar_lib` und `hangar_build` mit `build_shell`, `build_details`, `build_props`).
   Gebaut in den Maßen aus `src/game/interior.ts` (184 × 162 × 42 m, Tor 124 × 32 m, drei Stellplätze). Koordinaten im Skript sind Spielkoordinaten.

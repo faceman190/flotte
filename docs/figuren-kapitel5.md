@@ -2,6 +2,8 @@
 
 Stand: 2026-11-14, Alpha 1.10. Zwei neue Figuren stehen im Hangar der Bastion: **Kapitän Varga** und **Navigator Emil Sander**. Bis die Modelle da sind, stehen dort Ersatzfiguren.
 
+**Erledigt (15.11.2026, Alpha 1.18):** Beide Figuren sind im Spiel. Der Entwickler hat sie als Mixamo-Pakete geliefert (FBX mit Bewegungen statt GLB); der Weg steht in `docs/assets.md`, Abschnitt „Varga und Sander aus Mixamo-Paketen“.
+
 ## So kommen sie ins Spiel
 
 1. Je Figur ein Bild erzeugen (Vorgaben unten), in Tripo ein Modell mit Rig daraus machen.

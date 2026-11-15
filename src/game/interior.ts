@@ -1231,12 +1231,12 @@ export function nearestOther(max = 3.2): { id: number; name: string } | null {
 // Story: eine benannte Figur in den Stationsraum stellen (z. B. die Ausbilderin im Prolog).
 // Steht neben dem Spieler, schaut ihn an und lässt sich mit E ansprechen.
 // model: 'merchant' ist die Frauenfigur (Mantel), 'worker' die Männerfigur (Arbeitsanzug): passend zur Rolle wählen
-// Eigene Figuren der Geschichte: 'achterberg', 'hollweg', 'roth', 'tamm', 'kessler', 'krull' (Brandt steht in Neonhafen, siehe chapter3.ts). Fehlt die Datei, steht dort ersatzweise eine der beiden Grundfiguren mit Farbton.
+// Eigene Figuren der Geschichte: 'achterberg', 'hollweg', 'roth', 'tamm', 'kessler', 'krull', 'varga', 'sander' (Brandt steht in Neonhafen, siehe chapter3.ts). Fehlt die Datei, steht dort ersatzweise eine der beiden Grundfiguren mit Farbton.
 export interface NpcLook { model?: 'worker' | 'merchant' | 'achterberg' | 'mechaniker' | 'lagerarbeiter' | 'hollweg' | 'roth' | 'tamm' | 'kessler' | 'krull' | 'varga' | 'sander'; tint?: [number, number, number] }
 const NPC_FALLBACK: Record<string, [string, [number, number, number]]> = {
   achterberg: ['merchant', [0.82, 0.86, 0.95]], hollweg: ['worker', [0.72, 0.8, 1.05]], roth: ['merchant', [0.6, 0.85, 0.55]], tamm: ['merchant', [1.1, 0.92, 0.68]],
   kessler: ['mechaniker', [0.95, 0.85, 0.7]], krull: ['merchant', [1.05, 0.95, 0.8]],
-  varga: ['lagerarbeiter', [0.7, 0.8, 1.05]], sander: ['mechaniker', [0.8, 1.0, 0.95]],      // Kapitel 5: Ersatz, bis die eigenen Figuren da sind
+  varga: ['lagerarbeiter', [0.7, 0.8, 1.05]], sander: ['mechaniker', [0.8, 1.0, 0.95]],      // Kapitel 5 (eigene Figuren seit Alpha 1.18)
 };
 export function storyNpc(name: string, title: string, label: string, act: () => void, col = '#ffb347', at?: { x: number; z: number }, look: NpcLook = {}) {
   if (!IN.active || !stationGroup || IN.ship) return false;

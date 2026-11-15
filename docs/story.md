@@ -172,7 +172,7 @@ Jedes Kapitel verbindet Hauptmissionen mit dem, was das Spiel schon kann: Bergba
 
 **Vertonung:** 61 Zeilen, 7.639 Credits, noch nicht aufgenommen (`docs/voice/kapitel5.md`). Neue Stimmen: Sander, Brandes, die Kennung aus Halden.
 
-**Figuren:** Sander und Varga stehen vorerst als Ersatzfiguren im Hangar (Mechaniker und Lagerarbeiter mit Farbton). Sobald `sander.glb` und `varga.glb` in `asset-src/glb/char/` liegen, nimmt das Spiel sie von selbst (`NPC_FALLBACK` in `src/game/interior.ts`). Bildvorgaben: `docs/figuren-kapitel5.md`.
+**Figuren:** Sander und Varga haben seit Alpha 1.18 eigene Figuren (`sander.glb`, `varga.glb` in `asset-src/glb/char/`). Fehlt eine Datei, steht ersatzweise ein Mechaniker oder Lagerarbeiter mit Farbton dort (`NPC_FALLBACK` in `src/game/interior.ts`). Bildvorgaben: `docs/figuren-kapitel5.md`.
 
 **Nicht geprüft:** Die Flugwege zwischen den Schritten und die Kämpfe wurden im Testfenster mit gesetzten Positionen durchlaufen, nicht von Hand geflogen. Die Zeit für den Weg durch die Anna (rund 100 m Laufweg) ist gerechnet, nicht gespielt.
 
