@@ -253,22 +253,25 @@ const GROUND: Record<string, { m: number; tint: number; nrm: number }> = {
 interface GroundLayer { tex: string; m: number; col: number; tint: number }
 // veg: Der Satz ist Bewuchs und endet an der Schneegrenze (Felsplaneten). Ohne veg gilt er in jeder Höhe (Sand, Schnee, Asche, Staub).
 interface GroundSet { fine: GroundLayer; scree: GroundLayer; veg?: boolean }
-// Je Planetentyp (Alpha 1.16); ein Eintrag in GROUNDSET für einen Sektor geht vor. Fehlt eines der Bilder, bleibt es beim einen Bodenbild.
+// Je Planetentyp (Alpha 1.16, Bilder und Farben ab 1.17); ein Eintrag in GROUNDSET für einen Sektor geht vor. Fehlt eines der Bilder, bleibt es
+// beim einen Bodenbild. Farben: Die drei Böden eines Planeten liegen im Ton nah beieinander und unterscheiden sich im Muster; mit größerem Abstand
+// stehen die Flächen als Pfützen im Gelände. tint mischt zur Zielfarbe: Auf dunklen Welten muss es fast 1 sein, sonst schlägt die helle
+// Eigenfarbe des Bilds durch (getrockneter Schlamm als Lavakruste).
 const TYPESET: Record<string, GroundSet> = {
   // Felsplaneten: Wiese und Waldboden wie auf Heimstatt II
   fels: { fine: { tex: 'l_gras', m: 12, col: 0x626a30, tint: 0.55 }, scree: { tex: 'l_wald', m: 2, col: 0x626a30, tint: 0.4 }, veg: true },
   // Wüste: rissige Lehmpfannen in den Senken, Kiesebene als Decke, der bisherige Sand an den Hängen und in Verwehungen
-  wueste: { fine: { tex: 'l_lehm', m: 5, col: 0xc0a078, tint: 0.6 }, scree: { tex: 'l_kies', m: 2.5, col: 0xb48a5c, tint: 0.55 } },
+  wueste: { fine: { tex: 'l_lehm', m: 5, col: 0xd2b48a, tint: 0.6 }, scree: { tex: 'l_kies', m: 2.5, col: 0xb89060, tint: 0.6 } },
   // Eiswelt: verwehtes Eisfeld mit dunklen Stellen (Luftbild, hier auf 30 m gelegt), harschiger Schnee als Decke, Pulverschnee an den Hängen
-  eis: { fine: { tex: 'l_eisfeld', m: 30, col: 0xb8cede, tint: 0.6 }, scree: { tex: 'l_harsch', m: 2.5, col: 0xd0deea, tint: 0.5 } },
+  eis: { fine: { tex: 'l_eisfeld', m: 30, col: 0xa8c4dc, tint: 0.6 }, scree: { tex: 'l_harsch', m: 2.5, col: 0xd4e0ea, tint: 0.5 } },
   // Vulkan: erstarrte Lavakruste in Schollen auf den Ebenen, Schlackekies als Decke
-  vulkan: { fine: { tex: 'l_kruste', m: 3.5, col: 0x2e2622, tint: 0.8 }, scree: { tex: 'l_schlacke', m: 1.8, col: 0x40342e, tint: 0.75 } },
+  vulkan: { fine: { tex: 'l_kruste', m: 3.5, col: 0x30261f, tint: 1 }, scree: { tex: 'l_schlacke', m: 1.8, col: 0x4a3a30, tint: 0.95 } },
   // Aschewelt: feine Asche in den Senken, verkohlter Schutt als Decke
-  asche: { fine: { tex: 'l_asche', m: 2.2, col: 0x5a4c58, tint: 0.85 }, scree: { tex: 'l_brand', m: 1.6, col: 0x3c3238, tint: 0.8 } },
+  asche: { fine: { tex: 'l_asche', m: 2.2, col: 0x6a5a68, tint: 0.95 }, scree: { tex: 'l_brand', m: 1.6, col: 0x44383f, tint: 0.95 } },
   // Kristallwüste: dicht gesprungene Glasflächen, Bruchstücke als Decke
-  kristall: { fine: { tex: 'l_sprung', m: 3, col: 0x4a3a70, tint: 0.9 }, scree: { tex: 'l_bruch', m: 3, col: 0x3a3058, tint: 0.9 } },
+  kristall: { fine: { tex: 'l_sprung', m: 3, col: 0x56427c, tint: 1 }, scree: { tex: 'l_bruch', m: 3, col: 0x40325e, tint: 1 } },
   // Mond: Staubflächen mit kleinen Einschlägen, feiner Regolith als Decke, das bisherige Geröll an den Hängen
-  mond: { fine: { tex: 'l_einschlag', m: 6, col: 0x8a8a8e, tint: 0.4 }, scree: { tex: 'l_regolith', m: 3.1, col: 0x7a7a7e, tint: 0.35 } },
+  mond: { fine: { tex: 'l_einschlag', m: 6, col: 0x8e8e92, tint: 0.75 }, scree: { tex: 'l_regolith', m: 3.1, col: 0x7c7c80, tint: 0.75 } },
 };
 const GROUNDSET: Record<string, GroundSet> = {
   // Heimstatt II: saftige Wiese mit Steinnestern in den Ebenen (Luftbild, hier auf 12 m gelegt), Waldboden mit Gras und Zweigen als Decke

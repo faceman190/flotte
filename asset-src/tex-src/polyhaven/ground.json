@@ -9,5 +9,17 @@
   "mond": "mond_kies",
   "_info2": "Schlüssel mit l_ sind weitere Böden für Materialsätze (surface.ts, GROUNDSET), keine Planetentypen. Liegt im Ordner eine disp.jpg, kommt sie als Höhe in den Alphakanal des Farbbilds.",
   "l_wald": "forrest_ground_01",
-  "l_gras": "rocky_terrain_02"
+  "l_gras": "rocky_terrain_02",
+  "l_lehm": "dry_ground_01",
+  "l_kies": "sandy_gravel_02",
+  "l_eisfeld": "snow_field_aerial",
+  "l_harsch": "snow_01",
+  "l_kruste": "mud_cracked_dry_03",
+  "l_schlacke": "rock_ground",
+  "l_asche": "ground_grey",
+  "l_brand": "burned_ground_01",
+  "l_sprung": "mud_cracked_dry_riverbed_002",
+  "l_bruch": "rocks_ground_06",
+  "l_einschlag": "moon_meteor_01",
+  "l_regolith": "moon_02"
 }
