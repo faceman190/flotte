@@ -5,6 +5,7 @@
 # Wandbausteine sind an einer Bezugswand gebaut: Wandebene x = 0, Blick der Wand nach +X, Länge entlang y, Mitte bei y = 0.
 HW, YB, YG, HH, DW, DH, BAY = 92.0, 50.0, -112.0, 42.0, 62.0, 32.0, 18.0
 GZ = 9.6      # Lauffläche der Galerie
+SPIEL = globals().get('SPIEL', False)      # Fassung fürs Spiel: Öffnung für die Schleuse des Decks statt des eigenen Portals, keine Wandfüllungen auf der Galerie
 
 M['hfloor'] = mk('Hangarboden', (0.04, 0.043, 0.049), 0.6, 0.36, var=0.12, rvar=0.16, scale=0.3, bump=0.04, bscale=12.0, wear=0.5)
 M['hfloor2'] = mk('Hangarboden hell', (0.056, 0.06, 0.067), 0.55, 0.4, var=0.12, rvar=0.16, scale=0.3, bump=0.04, bscale=12.0, wear=0.5)
@@ -115,7 +116,7 @@ def h_joch(v, L=18.0):      # ein Wandjoch; v wählt Felderschnitt und Einbauten
         for r, (z0, z1) in enumerate(rows):
             if r >= 2 and skip == (c, r - 2): continue
             bigfield(y0, y1, z0, z1, 1 + (c + v + r * 2) % 4, (c + v + r) % 2 == 0, bolt=0.32 if r < 2 else 0)
-    for q in range(n):      # Wandfüllungen des Baukastens auf der Galerie
+    for q in range(0 if SPIEL else n):      # Wandfüllungen des Baukastens auf der Galerie (im Spiel zu weit weg, um sie zu sehen)
         nm = GAL[v % 3][q % 8]; inst(dress(nm), (1.7, -(h - 2) + q * 2, GZ), 0.0)
     box('Galerie Sockel', 0.13, L - 1.6, 0.2, 0.065, 0, GZ + 0.1, M['frame'], 0.01); box('Galerie Gesims', 0.3, L - 1.6, 0.2, 0.15, 0, GZ + 2.25, M['frame'], 0.02)
     box('Galerie Lichtfuge', 0.06, L - 2.4, 0.02, 0.2, 0, GZ + 2.14, M['e_cool'], 0)
@@ -162,20 +163,24 @@ def h_turm():      # Eckturm mit Treppenhaus: deckt die Ecken ab, Türen unten u
 # ---------- Rückwand Mitte: Ausgang, Deckmeister, Leitstand, Schriftzug ----------
 def h_mitte():
     L = 36.0; h = 18.0; LZ = 12.6      # Unterkante Leitstand
-    box('Hallenwand', 0.5, L, HH, -0.25, 0, HH / 2, M['wall'], 0)
+    if SPIEL:      # Öffnung 6,3 × 4,8 m: Dort sitzt die Schleuse des Decks (p_schleuse in bk_deck_d.py)
+        for sy in (-1, 1): box('Hallenwand', 0.5, 14.85, HH, -0.25, sy * 10.575, HH / 2, M['wall'], 0)
+        box('Hallenwand', 0.5, 6.3, HH - 4.8, -0.25, 0, 4.8 + (HH - 4.8) / 2, M['wall'], 0)
+    else: box('Hallenwand', 0.5, L, HH, -0.25, 0, HH / 2, M['wall'], 0)
     h_sockel(-17, -3); h_sockel(3, 17); h_fussweg(L, 2.6); h_galerie(L); h_oben(L)
     for (y0, y1, v) in ((-17.2, -11.6, 1), (-11.45, -3.3, 2), (3.3, 11.45, 4), (11.6, 17.2, 2)):
         bigfield(y0, y1, 2.8, 5.6, v, y0 < 0); bigfield(y0, y1, 5.75, 8.85, 1 + (v + 1) % 4, y0 > 0)
-    # Ausgang: Portal mit dem geschlossenen Tor des Baukastens (dasselbe Tor wie auf der Gangseite)
-    prism('Portal', [(-2.6, 0), (-2.0, 0), (-2.0, 3.3), (-1.6, 3.7), (1.6, 3.7), (2.0, 3.3), (2.0, 0), (2.6, 0), (2.6, 3.9), (2.0, 4.6), (-2.0, 4.6), (-2.6, 3.9)], 0.0, 1.1, M['frame'], 'X', 0.05)
-    inst(module('Tor zu', door_closed), (2.36, 0, 0), 0.0)
-    box('Portal Leuchtband', 0.04, 3.0, 0.1, 1.11, 0, 3.86, M['e_teal'], 0); box('Portal Schild', 0.04, 3.4, 0.52, 1.11, 0, 4.28, M['wall4'], 0.01)
-    text('DECK 3', 0.26, (1.135, -0.54, 4.22), BX_, BY_, M['txtw']); text('PROMENADE · QUARTIERE · LEITSTAND', 0.065, (1.135, -0.74, 4.08), BX_, BY_, M['txto'])
-    for sy in (-1, 1):
-        box('Portal Warnband', 0.012, 0.56, 1.0, 1.106, sy * 2.3, 0.6, M['warnh'], 0); cyl('Portal Leuchte', 0.06, 0.05, 1.11, sy * 2.3, 2.6, M['e_amber'], 'X', n=12, bev=0)
-        box('Portal Licht', 0.05, 0.08, 2.2, 0.36, sy * 1.94, 1.5, M['e_cool'], 0)
+    # Ausgang: Portal mit dem geschlossenen Tor des Baukastens (dasselbe Tor wie auf der Gangseite); im Spiel steht dort die Schleuse des Decks
     box('Portal Vorfeld', 2.4, 5.0, 0.004, 2.3, 0, 0.017, M['warnf'], 0); box('Portal Schwelle', 1.1, 3.9, 0.03, 0.55, 0, 0.012, M['steel'], 0.006)
     area('Portallicht', (1.5, 0, 3.6), (0, math.radians(-60), 0), 0.2, 3.0, 220, (0.5, 0.95, 0.9))
+    if not SPIEL:
+        prism('Portal', [(-2.6, 0), (-2.0, 0), (-2.0, 3.3), (-1.6, 3.7), (1.6, 3.7), (2.0, 3.3), (2.0, 0), (2.6, 0), (2.6, 3.9), (2.0, 4.6), (-2.0, 4.6), (-2.6, 3.9)], 0.0, 1.1, M['frame'], 'X', 0.05)
+        inst(module('Tor zu', door_closed), (2.36, 0, 0), 0.0)
+        box('Portal Leuchtband', 0.04, 3.0, 0.1, 1.11, 0, 3.86, M['e_teal'], 0); box('Portal Schild', 0.04, 3.4, 0.52, 1.11, 0, 4.28, M['wall4'], 0.01)
+        text('DECK 3', 0.26, (1.135, -0.54, 4.22), BX_, BY_, M['txtw']); text('PROMENADE · QUARTIERE · LEITSTAND', 0.065, (1.135, -0.74, 4.08), BX_, BY_, M['txto'])
+        for sy in (-1, 1):
+            box('Portal Warnband', 0.012, 0.56, 1.0, 1.106, sy * 2.3, 0.6, M['warnh'], 0); cyl('Portal Leuchte', 0.06, 0.05, 1.11, sy * 2.3, 2.6, M['e_amber'], 'X', n=12, bev=0)
+            box('Portal Licht', 0.05, 0.08, 2.2, 0.36, sy * 1.94, 1.5, M['e_cool'], 0)
     # Pult des Deckmeisters (Spiel: Block x 7,4 … 10,6, z −48,4 … −47,2) mit Vordach
     yc = 9.0
     box('Pult', 1.0, 3.2, 1.0, 2.2, yc, 0.5, M['cab'], 0.03); box('Pultplatte', 1.2, 3.4, 0.05, 2.2, yc, 1.03, M['frame'], 0.015); box('Pult Warnband', 0.012, 3.2, 0.16, 2.706, yc, 0.2, M['warn'], 0)
@@ -221,7 +226,7 @@ def h_mitte():
         area('Tafellicht', (1.35, y, 19.1), (0, math.radians(168), 0), 0.3, 0.7, 900, COOL)
     for sy in (-1, 1):
         y0, y1 = (13.5, 17.2) if sy > 0 else (-17.2, -13.5); bigfield(y0, y1, 12.7, 19.0, 2 if sy > 0 else 4, sy > 0, bolt=0)
-    for q in range(17):      # Wandfüllungen auf der Galerie unter dem Leitstand
+    for q in range(0 if SPIEL else 17):      # Wandfüllungen auf der Galerie unter dem Leitstand
         inst(dress(GAL[1][q % 8] if q != 8 else 'tuer2'), (1.7, -16 + q * 2, GZ), 0.0)
     box('Galerie Sockel', 0.13, L - 1.6, 0.2, 0.065, 0, GZ + 0.1, M['frame'], 0.01); box('Galerie Gesims', 0.3, L - 1.6, 0.2, 0.15, 0, GZ + 2.25, M['frame'], 0.02)
     box('Galerie Lichtfuge', 0.06, L - 2.4, 0.02, 0.2, 0, GZ + 2.14, M['e_cool'], 0)
@@ -270,9 +275,9 @@ def h_boden(v):      # 18 × 18 m: geschnittene Platten, Ablaufrinne, Zurrpunkte
     ys = ((-9, -3.3), (-2.7, 3), (3, 9))
     for i in range(3):
         for j, (y0, y1) in enumerate(ys): floorfield(-9 + i * 6, -3 + i * 6, y0, y1, 1 + (i + j * 2 + v) % 4, (i + j + v) % 2 == 0)
-    box('Rinnenrahmen', BAY, 0.6, 0.06, 0, -3.0, -0.045, M['steel'], 0.006); array(box('Rinnenstab', 0.04, 0.5, 0.03, -8.94, -3.0, -0.012, M['grate'], 0), 150, (0.12, 0, 0))
-    ob = cyl('Zurrpunkt', 0.14, 0.012, -6, -6, 0.004, M['steel'], 'Z', n=14, bev=0); array(ob, 3, (6, 0, 0)); array(ob, 3, (0, 6, 0))
-    ob = cyl('Zurrpunkt Ring', 0.2, 0.004, -6, -6, 0.002, M['paint_y'], 'Z', n=14, bev=0); array(ob, 3, (6, 0, 0)); array(ob, 3, (0, 6, 0))
+    box('Rinnenrahmen', BAY, 0.6, 0.06, 0, -3.0, -0.045, M['steel'], 0.006); array(box('Rinnenstab', 0.04, 0.5, 0.03, -8.94, -3.0, -0.012, M['grate'], 0), 150, (0.12, 0, 0)) if not SPIEL else box('Rinnenrost', BAY, 0.5, 0.03, 0, -3.0, -0.012, M['grate'], 0)      # im Spiel eine Fläche statt 150 Stäben
+    ob = cyl('Zurrpunkt', 0.14, 0.012, -6, -6, 0.004, M['steel'], 'Z', n=8 if SPIEL else 14, bev=0); array(ob, 3, (6, 0, 0)); array(ob, 3, (0, 6, 0))
+    if not SPIEL: ob = cyl('Zurrpunkt Ring', 0.2, 0.004, -6, -6, 0.002, M['paint_y'], 'Z', n=14, bev=0); array(ob, 3, (6, 0, 0)); array(ob, 3, (0, 6, 0))
     for q in range(4): spot((R.uniform(-7, 7), R.uniform(-7, 7), 0.0), R.uniform(0.6, 2.2), 'fleck', R.uniform(0.6, 1.6))
     for q in range(3):
         x, y, a = R.uniform(-6, 6), R.uniform(-2, 8), R.uniform(-0.5, 0.5)

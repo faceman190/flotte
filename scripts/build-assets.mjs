@@ -70,7 +70,9 @@ async function model(key, data, pack) {
     // 500 m großen Stadt 3 cm grob: Fahrbahn (21,6 cm), Pflaster (20,7 cm) und Gehweg (20 cm) landeten auf derselben Höhe und flackerten
     // gegeneinander. Deshalb 16 Bit (Raster höchstens 1 mm bis 60 m Größe); größere Modelle (Städte, Hangars, Werke) behalten ihre Positionen ungerundet.
     const sc = doc.getRoot().getDefaultScene() || doc.getRoot().listScenes()[0], bb = sc ? getBounds(sc) : null;
-    const ext = bb ? Math.max(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]) : 0, big = !(ext <= 60);
+    // Bastion-Baukasten (ext_bk_…): Lage immer mit 16 Bit je Netz (bei 184 m Hallenbreite knapp 3 mm, das genügt)
+    const bk = doc.getRoot().listMaterials().some(m => /^ext_bk_/.test(m.getName()));
+    const ext = bb ? Math.max(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]) : 0, big = !(ext <= 60) && !bk;
     await doc.transform(dedup({ keepUniqueNames: true }), prune({ keepAttributes: true }),
       reorder({ encoder: MeshoptEncoder, target: 'size' }), quantize({ pattern: big ? /^(NORMAL|COLOR)(_\d+)?$/ : /^(POSITION|NORMAL|COLOR)(_\d+)?$/, quantizePosition: 16 }));
     doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });

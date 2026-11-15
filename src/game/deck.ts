@@ -14,6 +14,7 @@ import { interiorEnv } from './meshRoom';
 //   glow                 Leuchten, Lichtfugen, LEDs (Strahldichte wie in Blender, überstrahlt im Bloom)
 //   warn                 Warnschraffur: Muster aus der Lage, Helligkeit aus dem vorberechneten Licht
 //   screen               Bildschirme mit Zeilenmuster; glass durchsichtig; gloss dunkles Glas; stain Laufspuren und Flecken; stars Fenster
+//   warnbig, mark        Hangar: breite Warnschraffur und Bodenmarkierungen (liegen wenige Millimeter über dem Boden)
 // Zum Zeichnen werden die Bausteine je Bereich (Raum oder Gangstück) und Art zu einem Netz zusammengefasst; ferne Bereiche bleiben aus.
 // Koordinaten: Plan (x nach Osten, y nach Norden) → Innenraum der Station: das Hangartor der Karte liegt bei x = 0 an der Hangarrückwand,
 // Osten zeigt vom Hangar weg (−z), Norden nach −x.
@@ -25,7 +26,7 @@ interface DeckJson {
   cell: number; karte: string[]; ort: Record<string, string>; tueren: number[][][]; schotte: number[][]; offen: string;
   personal: { tab: string; x: number; y: number; face: number; tx: number; ty: number }[];
   wege: (number | { face: number; t: [number, number]; p: number; who: string | null })[][][]; gruppen: number[][]; karte_xy: number[];
-  mod: { n: string; o: string; block: number[] | null }[]; inst: number[][];
+  mod: { n: string; o: string; block: number[] | null }[]; inst: number[][];      // inst: Baustein, x, y, Drehung, über Kopf (0/1), Höhe
 }
 export interface DeckSpot { tab: string; x: number; z: number; face: number; tx: number; tz: number }
 export interface DeckNode { x: number; z: number; stop: null | { face: number; t: [number, number]; p: number; who: string | null } }
@@ -39,6 +40,9 @@ export interface Deck {
 const RANGE = 46;                 // Bereiche weiter weg werden nicht gezeichnet (m)
 const LIGHT = { value: 1.0 };     // Stärke des vorberechneten Lichts
 const GLOW = { value: 0.7 };      // Stärke der Leuchten
+const GLOW_MAX = 1.25;            // Obergrenze der Strahldichte von Leuchten
+const LIT_MAX = 1.0;              // Obergrenze der Strahldichte beleuchteter Flächen
+const FAR_SMALL = 85;             // Hangar: Wandfüllungen und Kleinteile weiter weg werden nicht gezeichnet (m)
 export const deckTune = { LIGHT, GLOW, mats: () => materials() };      // zum Einstellen im Testfenster
 let DATA: DeckJson | null = null, PARTS: Record<string, Part[]> | null = null, loading: Promise<boolean> | null = null;
 export const deckReady = () => !!(DATA && PARTS);
@@ -50,31 +54,36 @@ export function loadDeck(): Promise<boolean> {
   return (loading = (async () => {
     try {
       const [data, gltf] = await Promise.all([fetch(dj).then(r => { if (!r.ok) throw new Error('Deckdaten: ' + r.status); return r.json(); }), new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
-      const parts: Record<string, Part[]> = {};
-      gltf.scene.updateMatrixWorld(true);
-      const v = new THREE.Vector3(), nm = new THREE.Matrix3();
-      gltf.scene.traverse((o: any) => {
-        if (!o.isMesh) return;
-        // der Name des Bausteins steht am Objekt selbst oder (bei mehreren Arten) am Elternknoten
-        let name = o.name as string; for (let p = o; p && p !== gltf.scene; p = p.parent) if (/^m\d+$/.test(p.name)) { name = p.name; break; }
-        const g = o.geometry as THREE.BufferGeometry, P = g.attributes.position, N = g.attributes.normal, C = g.attributes.color, n = P.count;
-        const pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3), col = new Uint8Array(n * 4);
-        nm.getNormalMatrix(o.matrixWorld);
-        for (let i = 0; i < n; i++) {
-          v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld); pos[i * 3] = v.x; pos[i * 3 + 1] = v.y; pos[i * 3 + 2] = v.z;
-          v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nrm[i * 3] = v.x; nrm[i * 3 + 1] = v.y; nrm[i * 3 + 2] = v.z;
-          if (C) { col[i * 4] = Math.round(C.getX(i) * 255); col[i * 4 + 1] = Math.round(C.getY(i) * 255); col[i * 4 + 2] = Math.round(C.getZ(i) * 255); col[i * 4 + 3] = C.itemSize > 3 ? Math.round(C.getW(i) * 255) : 255; }
-          else col[i * 4 + 3] = 255;
-        }
-        const ia = g.index, idx = new Uint32Array(ia ? ia.count : n);
-        if (ia) for (let i = 0; i < ia.count; i++) idx[i] = ia.getX(i); else for (let i = 0; i < n; i++) idx[i] = i;
-        (parts[name] = parts[name] || []).push({ cls: String(o.material?.name || 'ext_bk_paint').replace(/^ext_bk_/, ''), pos, nrm, col, idx });
-        g.dispose();
-      });
-      DATA = data; PARTS = parts;
+      DATA = data; PARTS = partsOf(gltf.scene);
       return true;
     } catch (e) { console.warn('Deck der Bastion nicht geladen:', e); loading = null; return false; }
   })());
+}
+
+// Netze eines geladenen Modells je Baustein (Objekt m<Nr>) und Art (Materialname ext_bk_<Art>), in Bausteinlage
+function partsOf(scene: THREE.Object3D) {
+  const parts: Record<string, Part[]> = {};
+  scene.updateMatrixWorld(true);
+  const v = new THREE.Vector3(), nm = new THREE.Matrix3();
+  scene.traverse((o: any) => {
+    if (!o.isMesh) return;
+    // der Name des Bausteins steht am Objekt selbst oder (bei mehreren Arten) am Elternknoten
+    let name = o.name as string; for (let p = o; p && p !== scene; p = p.parent) if (/^m\d+$/.test(p.name)) { name = p.name; break; }
+    const g = o.geometry as THREE.BufferGeometry, P = g.attributes.position, N = g.attributes.normal, C = g.attributes.color, n = P.count;
+    const pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3), col = new Uint8Array(n * 4);
+    nm.getNormalMatrix(o.matrixWorld);
+    for (let i = 0; i < n; i++) {
+      v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld); pos[i * 3] = v.x; pos[i * 3 + 1] = v.y; pos[i * 3 + 2] = v.z;
+      v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nrm[i * 3] = v.x; nrm[i * 3 + 1] = v.y; nrm[i * 3 + 2] = v.z;
+      if (C) { col[i * 4] = Math.round(C.getX(i) * 255); col[i * 4 + 1] = Math.round(C.getY(i) * 255); col[i * 4 + 2] = Math.round(C.getZ(i) * 255); col[i * 4 + 3] = C.itemSize > 3 ? Math.round(C.getW(i) * 255) : 255; }
+      else col[i * 4 + 3] = 255;
+    }
+    const ia = g.index, idx = new Uint32Array(ia ? ia.count : n);
+    if (ia) for (let i = 0; i < ia.count; i++) idx[i] = ia.getX(i); else for (let i = 0; i < n; i++) idx[i] = i;
+    (parts[name] = parts[name] || []).push({ cls: String(o.material?.name || 'ext_bk_paint').replace(/^ext_bk_/, ''), pos, nrm, col, idx });
+    g.dispose();
+  });
+  return parts;
 }
 
 // ---------- Materialien (einmal für alle) ----------
@@ -87,20 +96,25 @@ function materials() {
   if (dt) { dt.wrapS = dt.wrapT = THREE.RepeatWrapping; dt.anisotropy = 4; dt.colorSpace = THREE.NoColorSpace; }
   const env = interiorEnv();
   // beleuchtete Fläche: streut nicht (Metall mit der Grundspiegelung f0), leuchtet mit dem vorberechneten Licht; feines Korn aus einem Kachelbild
-  const lit = (key: string, f0: number, rough: number, envK: number, warn = false) => {
+  const lit = (key: string, f0: number, rough: number, envK: number, warn = 0, lift = false) => {      // warn: Streifen je Meter (0 = keine); lift: liegt auf einer Fläche auf
+
     const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(f0, f0, f0), metalness: 1, roughness: rough, vertexColors: true, envMap: env, envMapIntensity: envK });
+    if (lift) { m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -4; }      // Markierungen liegen nur 4 mm über dem Boden; auf 60 m Entfernung löst der Tiefenpuffer das nicht mehr auf
     m.onBeforeCompile = (sh) => {
       sh.uniforms.bkLight = LIGHT; sh.uniforms.bkTex = { value: dt };
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vBkP; varying vec3 vBkN;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvBkP = position; vBkN = normal;');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nuniform float bkLight; uniform sampler2D bkTex; varying vec3 vBkP; varying vec3 vBkN;')
         .replace('#include <color_fragment>', '')
+        // Lampen und Sonne des Spiels wirken auf diese Flächen nicht (sie schienen durch Wände und setzten Glanzflecken auf den Hallenboden)
+        .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directSpecular = vec3(0.0); reflectedLight.directDiffuse = vec3(0.0);')
         .replace('#include <roughnessmap_fragment>', [
           'vec3 bkA = abs(vBkN); vec2 bkUv = bkA.y > 0.6 ? vBkP.xz : (bkA.x > bkA.z ? vBkP.zy : vBkP.xy);',
           dt ? 'float bkD = texture2D(bkTex, bkUv * 0.55).g * 0.6 + texture2D(bkTex, bkUv * 0.083).g * 0.4;' : 'float bkD = 0.5;',
           '#include <roughnessmap_fragment>', 'roughnessFactor = clamp(roughnessFactor + (bkD - 0.5) * 0.5, 0.05, 1.0);'].join('\n'))
-        .replace('#include <emissivemap_fragment>', ['#include <emissivemap_fragment>', DECODE,
-          warn ? 'bkc *= mix(vec3(0.02, 0.02, 0.022), vec3(0.75, 0.33, 0.03), step(0.5, fract((vBkP.x + vBkP.y + vBkP.z) * 7.0)));' : '',
+        // Eckpunkte direkt an einer Leuchte tragen eine riesige Strahldichte; ungedeckelt werden daraus im Bloom helle Vierecke
+        .replace('#include <emissivemap_fragment>', ['#include <emissivemap_fragment>', DECODE, 'bkc *= min(1.0, ' + LIT_MAX.toFixed(2) + ' / max(0.001, max(bkc.r, max(bkc.g, bkc.b))));',
+          warn ? 'bkc *= mix(vec3(0.02, 0.02, 0.022), vec3(0.75, 0.33, 0.03), step(0.5, fract((vBkP.x + vBkP.y + vBkP.z) * ' + warn.toFixed(2) + ')));' : '',
           'totalEmissiveRadiance += bkc * bkLight * mix(0.72, 1.28, bkD);'].join('\n'));
     };
     m.customProgramCacheKey = () => 'bk-' + key;
@@ -120,8 +134,11 @@ function materials() {
   };
   return (MATS = {
     // Grundspiegelung und Anteil der Raumumgebung bewusst klein: Mit mehr wirkten die dunklen Flächen hellgrau und die Decken bräunlich
-    metal: lit('metal', 0.09, 0.44, 0.3), paint: lit('paint', 0.04, 0.5, 0.22), soft: lit('soft', 0.02, 0.9, 0.1), gloss: lit('gloss', 0.3, 0.1, 0.6), warn: lit('warn', 0.04, 0.55, 0.2, true),
-    glow: glow('glow', 'diffuseColor.rgb = bkc * bkGlow;'),
+    metal: lit('metal', 0.09, 0.44, 0.3), paint: lit('paint', 0.04, 0.5, 0.22), soft: lit('soft', 0.02, 0.9, 0.1), gloss: lit('gloss', 0.3, 0.1, 0.6), warn: lit('warn', 0.04, 0.55, 0.2, 7),
+    // Hangar: breite Warnschraffur (Torpfeiler, Spantfüße, Bodenfelder) und Bodenmarkierungen, beide leicht vor die Fläche gezogen
+    warnbig: lit('warnbig', 0.04, 0.55, 0.2, 0.9, true), mark: lit('mark', 0.04, 0.6, 0.15, 0, true),
+    // Leuchten: Strahldichte gedeckelt. Ungedeckelt (bis 26) überstrahlten die vielen Hallenleuchten des Hangars im Bloom das ganze Bild
+    glow: glow('glow', 'bkc *= bkGlow; diffuseColor.rgb = bkc * min(1.0, GLOW_MAX / max(0.001, max(bkc.r, max(bkc.g, bkc.b))));'.replace('GLOW_MAX', GLOW_MAX.toFixed(2))),      // Farbton bleibt erhalten
     screen: glow('screen', 'diffuseColor.rgb = bkc * bkGlow * mix(0.12, 1.0, step(0.42, fract(vBkP.y * 42.0)));'),
     stars: glow('stars', 'vec3 bkq = floor(vBkP * 26.0); float bkh = fract(sin(dot(bkq, vec3(12.9898, 78.233, 37.719))) * 43758.5453); diffuseColor.rgb = vec3(0.004, 0.006, 0.012) + vec3(0.7, 0.8, 1.0) * step(0.985, bkh) * (0.3 + bkh);'),
     stain: glow('stain', 'diffuseColor.rgb = bkc * bkLight; diffuseColor.a *= vColor.a;', { transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
@@ -129,10 +146,87 @@ function materials() {
   });
 }
 
+// ---------- Bausteine setzen: je Bereich und Art ein Netz ----------
+// place: Lage eines Bausteins im Innenraum aus seiner Lage im Plan (x, y, Drehung) → [x, z, Drehung um die Hochachse]
+// zone: Bereich, zu dem ein Baustein gehört; rect: Rechteck im Plan → Rechteck im Innenraum; blocks: nimmt die Standflächen auf
+interface Placed { group: THREE.Group; meshes: { m: THREE.Mesh; c: THREE.Vector3; r: number; zn: string }[]; tris: number }
+function assemble(D: Pick<DeckJson, 'mod' | 'inst'>, PARTS: Record<string, Part[]>, place: (x: number, y: number, a: number) => [number, number, number],
+  zone: (x: number, y: number, over: number, name: string) => string, rect: (x0: number, x1: number, y0: number, y1: number) => Rect, blocks: Rect[]): Placed {
+  const M = materials();
+  const zones = new Map<string, { n: number; ni: number; list: [Part, number, number, number, number][] }>();
+  for (const [mi, x, y, a, over, h] of D.inst) {
+    const md = D.mod[mi], parts = PARTS[md.o]; if (!parts) continue;
+    const zn = zone(x, y, over, md.n);
+    for (const p of parts) {
+      const k = zn + '|' + p.cls; let z = zones.get(k); if (!z) zones.set(k, (z = { n: 0, ni: 0, list: [] }));
+      z.n += p.pos.length / 3; z.ni += p.idx.length; z.list.push([p, x, y, a, h || 0]);
+    }
+    if (md.block) {      // Standfläche: Rechteck des Bausteins um seine Drehung, davon das achsparallele Rechteck
+      const [bx0, bx1, by0, by1] = md.block, cs = Math.cos(a), sn = Math.sin(a); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      for (const [px, py] of [[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1]]) { const wx = x + px * cs - py * sn, wy = y + px * sn + py * cs; x0 = Math.min(x0, wx); x1 = Math.max(x1, wx); y0 = Math.min(y0, wy); y1 = Math.max(y1, wy); }
+      blocks.push(rect(x0, x1, y0, y1));
+    }
+  }
+  const group = new THREE.Group(), meshes: Placed['meshes'] = []; let tris = 0;
+  for (const [k, z] of zones) {
+    const [zn, cls] = k.split('|'), mat = M[cls] || M.paint;
+    const pos = new Float32Array(z.n * 3), nrm = new Int8Array(z.n * 3), col = new Uint8Array(z.n * 4), idx = new Uint32Array(z.ni); let vo = 0, io = 0;
+    for (const [p, x, y, a, h] of z.list) {
+      // Baustein (glTF-Lage: x, oben, −y) drehen und an seinen Platz im Innenraum setzen
+      const [tx, tz, th] = place(x, y, a), cs = Math.cos(th), sn = Math.sin(th), n = p.pos.length / 3;
+      for (let i = 0; i < n; i++) {
+        const px = p.pos[i * 3], py = p.pos[i * 3 + 1], pz = p.pos[i * 3 + 2], o = (vo + i) * 3;
+        pos[o] = px * cs + pz * sn + tx; pos[o + 1] = py + h; pos[o + 2] = -px * sn + pz * cs + tz;
+        const nx = p.nrm[i * 3], nz = p.nrm[i * 3 + 2];
+        nrm[o] = Math.round((nx * cs + nz * sn) * 127); nrm[o + 1] = Math.round(p.nrm[i * 3 + 1] * 127); nrm[o + 2] = Math.round((-nx * sn + nz * cs) * 127);
+      }
+      col.set(p.col, vo * 4);
+      for (let i = 0; i < p.idx.length; i++) idx[io + i] = p.idx[i] + vo;
+      vo += n; io += p.idx.length;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3, true)); g.setAttribute('color', new THREE.BufferAttribute(col, 4, true));
+    g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeBoundingSphere();
+    const m = new THREE.Mesh(g, mat); m.matrixAutoUpdate = false;
+    if (cls === 'mark') m.renderOrder = 1; if (cls === 'stain') m.renderOrder = 2; if (cls === 'glass') m.renderOrder = 3;
+    group.add(m); meshes.push({ m, c: g.boundingSphere!.center.clone(), r: g.boundingSphere!.radius, zn }); tris += z.ni / 3;
+  }
+  return { group, meshes, tris };
+}
+
+// ---------- Hangar der Bastion im Look des Baukastens (base/BastionHangar, data/hangar_bastion; bk_export_hangar.py) ----------
+// Gebaut in den Maßen des Spiels: Plan-x = x im Innenraum, Plan-y = −z. Ersetzt in der Bastion das Hangar-Modell der anderen Stationen.
+let HDATA: Pick<DeckJson, 'mod' | 'inst'> | null = null, HPARTS: Record<string, Part[]> | null = null, hloading: Promise<boolean> | null = null;
+export const hangarReady = () => !!(HDATA && HPARTS);
+export function loadHangar(): Promise<boolean> {
+  if (hangarReady()) return Promise.resolve(true);
+  if (hloading) return hloading;
+  const W = window as any, dj = W.DATAFILES?.hangar_bastion as string | undefined, mu = W.BASEDATA?.BastionHangar as string | undefined;
+  if (!dj || !mu) return Promise.resolve(false);
+  return (hloading = (async () => {
+    try {
+      const [data, gltf] = await Promise.all([fetch(dj).then(r => { if (!r.ok) throw new Error('Hangardaten: ' + r.status); return r.json(); }), new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
+      HPARTS = partsOf(gltf.scene); HDATA = data;
+      return true;
+    } catch (e) { console.warn('Hangar der Bastion nicht geladen:', e); hloading = null; return false; }
+  })());
+}
+export function buildHangar(): { group: THREE.Group; blocks: Rect[]; tris: number; update: (x: number, z: number) => void } | null {
+  if (!HDATA || !HPARTS) return null;
+  const blocks: Rect[] = [];
+  // Bereiche: Dach, alles Ganze (Boden, Stellplätze) und ein Raster aus 3 × 3 Feldern; three zeichnet nur, was im Bild liegt
+  // Wandfüllungen und Kleinteile des Gang-Baukastens liegen in feineren Feldern (36 m) und fallen in der Ferne weg: Von ihnen stehen über 200 an den Wänden
+  const zone = (x: number, y: number, over: number, name: string) => (over ? 'dach' : name.startsWith('Ganz ') ? 'ganz' : /^(Wand|Objekt) /.test(name) ? 'w' + Math.floor(x / 36) + '_' + Math.floor(y / 36)
+    : 'h' + Math.min(2, Math.max(0, Math.floor((x + 92) / 61.4))) + Math.min(2, Math.max(0, Math.floor((y + 112) / 54.1))));
+  const { group, meshes, tris } = assemble(HDATA, HPARTS, (x, y, a) => [x, -y, a], zone, (x0, x1, y0, y1) => [Math.min(x0, x1), Math.max(x0, x1), -Math.max(y0, y1), -Math.min(y0, y1)], blocks);
+  const small = meshes.filter(q => q.zn[0] === 'w');
+  return { group, blocks, tris, update: (x, z) => { for (const q of small) q.m.visible = Math.hypot(q.c.x - x, q.c.z - z) - q.r < FAR_SMALL; } };
+}
+
 // ---------- Deck für den aktuellen Innenraum bauen (hz0 = Hangarrückwand, z des Tors) ----------
 export function buildDeck(hz0: number): Deck | null {
   if (!DATA || !PARTS) return null;
-  const D = DATA, K = D.karte, RO = K.length, CO = K[0].length, C = D.cell, M = materials();
+  const D = DATA, K = D.karte, RO = K.length, CO = K[0].length, C = D.cell;
   const at = (r: number, c: number) => (r >= 0 && r < RO && c >= 0 && c < CO ? K[r][c] : '.');
   const isG = (ch: string) => 'GgHP'.includes(ch), up = (ch: string) => (isG(ch) ? 'G' : ch.toUpperCase());
   let hr = 0, hc = 0; for (let r = 0; r < RO; r++) for (let c = 0; c < CO; c++) if (K[r][c] === 'H') { hr = r; hc = c; }
@@ -169,44 +263,7 @@ export function buildDeck(hz0: number): Deck | null {
   }
 
   // Bausteine setzen: je Bereich und Art ein Netz
-  const zones = new Map<string, { n: number; ni: number; list: [Part, number, number, number][] }>();
-  for (const [mi, x, y, a] of D.inst) {
-    const md = D.mod[mi], parts = PARTS[md.o]; if (!parts) continue;
-    const zn = zoneOf(Math.round(-y / C), Math.round(x / C));
-    for (const p of parts) {
-      const k = zn + '|' + p.cls; let z = zones.get(k); if (!z) zones.set(k, (z = { n: 0, ni: 0, list: [] }));
-      z.n += p.pos.length / 3; z.ni += p.idx.length; z.list.push([p, x, y, a]);
-    }
-    if (md.block) {      // Standfläche: Rechteck des Bausteins um seine Drehung, davon das achsparallele Rechteck
-      const [bx0, bx1, by0, by1] = md.block, cs = Math.cos(a), sn = Math.sin(a); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
-      for (const [px, py] of [[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1]]) { const wx = x + px * cs - py * sn, wy = y + px * sn + py * cs; x0 = Math.min(x0, wx); x1 = Math.max(x1, wx); y0 = Math.min(y0, wy); y1 = Math.max(y1, wy); }
-      blocks.push(rect(x0, x1, y0, y1));
-    }
-  }
-  const group = new THREE.Group(), meshes: { m: THREE.Mesh; c: THREE.Vector3; r: number; zn: string }[] = []; let tris = 0;
-  for (const [k, z] of zones) {
-    const [zn, cls] = k.split('|'), mat = M[cls] || M.paint;
-    const pos = new Float32Array(z.n * 3), nrm = new Int8Array(z.n * 3), col = new Uint8Array(z.n * 4), idx = new Uint32Array(z.ni); let vo = 0, io = 0;
-    for (const [p, x, y, a] of z.list) {
-      // Baustein (glTF-Lage: x, oben, −y) um a drehen, an seinen Platz im Plan, dann in den Innenraum (Vierteldrehung, siehe Kopf der Datei)
-      const th = a + Math.PI / 2, cs = Math.cos(th), sn = Math.sin(th), tx = gx(y), tz = gz(x), n = p.pos.length / 3;
-      for (let i = 0; i < n; i++) {
-        const px = p.pos[i * 3], py = p.pos[i * 3 + 1], pz = p.pos[i * 3 + 2], o = (vo + i) * 3;
-        pos[o] = px * cs + pz * sn + tx; pos[o + 1] = py; pos[o + 2] = -px * sn + pz * cs + tz;
-        const nx = p.nrm[i * 3], nz = p.nrm[i * 3 + 2];
-        nrm[o] = Math.round((nx * cs + nz * sn) * 127); nrm[o + 1] = Math.round(p.nrm[i * 3 + 1] * 127); nrm[o + 2] = Math.round((-nx * sn + nz * cs) * 127);
-      }
-      col.set(p.col, vo * 4);
-      for (let i = 0; i < p.idx.length; i++) idx[io + i] = p.idx[i] + vo;
-      vo += n; io += p.idx.length;
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3, true)); g.setAttribute('color', new THREE.BufferAttribute(col, 4, true));
-    g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeBoundingSphere();
-    const m = new THREE.Mesh(g, mat); m.matrixAutoUpdate = false;
-    if (cls === 'stain') m.renderOrder = 1; if (cls === 'glass') m.renderOrder = 2;
-    group.add(m); meshes.push({ m, c: g.boundingSphere!.center.clone(), r: g.boundingSphere!.radius, zn }); tris += z.ni / 3;
-  }
+  const { group, meshes, tris } = assemble(D, PARTS, (x, y, a) => [gx(y), gz(x), a + Math.PI / 2], (x, y) => zoneOf(Math.round(-y / C), Math.round(x / C)), rect, blocks);
   // Personal, Wege, Gruppen
   const yaw = (deg: number) => { const f = deg * Math.PI / 180; return Math.atan2(-Math.sin(f), -Math.cos(f)); };
   const spots: DeckSpot[] = D.personal.map(s => ({ tab: s.tab, x: gx(s.y), z: gz(s.x), face: yaw(s.face), tx: gx(s.ty), tz: gz(s.tx) }));

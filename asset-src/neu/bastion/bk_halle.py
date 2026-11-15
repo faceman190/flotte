@@ -196,18 +196,18 @@ def furnish():
     def cont(k, x, y, ang, z=0.0): e = inst(module('Halle Container ' + k, CT[k]), (x, y, z), ang, C_HALL); return e
     # Containerlager hinten links und rechts (hinter den äußeren Stellplätzen, vor den Hochregalen)
     for (k, x, y, a, z) in (('t', -72, 33, 0.02, 0), ('o', -72, 30.3, -0.01, 0), ('w', -72, 33, 0.0, 2.6), ('g', -65.4, 33, 0.0, 0), ('r', -65.4, 30.3, 0.03, 0), ('t', -65.4, 31.6, 0.0, 2.6),
-                            ('o', -79.2, 36, PI / 2, 0), ('g', 70, 34, 0.0, 0), ('w', 70, 31.3, 0.02, 0), ('t', 76.6, 34, 0.0, 0), ('r', 70, 32.6, -0.04, 2.6), ('o', 56, 38.5, 0.3, 0),
+                            ('o', -79.2, 36, PI / 2, 0), ('g', 70, 34, 0.0, 0), ('w', 70, 31.3, 0.02, 0), ('t', 76.6, 34, 0.0, 0), ('r', 70, 32.6, -0.04, 2.6), ('o', 50.5, 38.8, 0.3, 0),
                             ('w', -84, -96, PI / 2, 0), ('t', -84, -89.5, PI / 2, 0), ('g', -84, -92.8, PI / 2, 2.6), ('o', 84, -94, PI / 2, 0), ('r', 84, -87.4, PI / 2 + 0.05, 0)):
         cont(k, x, y, a, z)
     for q in range(6):      # Hochregale an der Rückwand (Spiel: Blöcke x ±45,5 … 83,5)
         for sx in (-1, 1): put('Regal %d' % (q % 3), sx * (48.8 + q * 6.4), 48.6, 0.0, p_regal, 3 + q % 3)
-    put('Schlepper', -37.5, 30.5, 0.5, p_schlepper); put('Schlepper', 33.0, -86.0, -1.9, p_schlepper); put('Tankwagen', 41.0, 31.5, 2.9, p_tankwagen); put('Treppe', -35.5, 38.5, -0.3, p_treppe)
+    put('Schlepper', -38.5, 33.0, 0.5, p_schlepper); put('Schlepper', 33.0, -86.0, -1.9, p_schlepper); put('Tankwagen', 41.0, 31.5, 2.9, p_tankwagen); put('Treppe', -35.5, 38.5, -0.3, p_treppe)
     put('Treppe', 87.5, 2.0, PI / 2, p_treppe); put('Tankwagen', -87.0, -40.0, PI / 2, p_tankwagen); put('Schlepper', -32.0, 4.0, -PI / 2, p_schlepper); put('Treppe', 32.0, -2.0, -PI / 2, p_treppe)
     cont('g', 32.0, -34.0, PI / 2); cont('o', -32.0, -40.0, PI / 2); cont('t', -32.0, -46.8, PI / 2 + 0.03)
     # Kleinteile aus dem Baukasten: an den Fußwegen, am Ausgang, bei den Fahrzeugen (der Streifen x −30 … 30, y 24,5 … 41 bleibt frei)
     for (nm, x, y, a) in (('palette', -16.5, 45.6, 0.1), ('palette', -18.2, 45.4, 1.6), ('karre', -14.6, 46.2, 2.2), ('tonne', -5.2, 46.4, 0), ('tonne', 5.6, 46.5, 0), ('absperrung', -22.5, 43.8, 0.2),
                           ('kisten', 15.5, 46.3, 3.3), ('trommel', 18.5, 45.4, 0.4), ('saeule', 4.6, 46.2, -PI / 2), ('wagen', 21.5, 44.6, 1.2), ('fass', 24.0, 46.5, 0),
-                          ('fass', 24.7, 46.1, 1), ('palette', -39.5, 27.2, 0.4), ('trommel', -33.0, 33.2, 2.0), ('absperrung', 37.5, 27.0, 1.5), ('absperrung', 36.8, 35.5, 1.7), ('tonne', 44.5, 36.0, 0),
+                          ('fass', 24.7, 46.1, 1), ('palette', -43.5, 31.5, 0.4), ('trommel', -33.0, 33.2, 2.0), ('absperrung', 37.5, 27.0, 1.5), ('absperrung', 36.8, 35.5, 1.7), ('tonne', 44.5, 36.0, 0),
                           ('kisten', -88.6, 22.0, 0.0), ('palette', -88.2, 12.5, 0.1), ('karre', -88.8, 5.5, 0.3), ('fass', -88.9, -4.0, 0), ('fass', -88.3, -4.4, 2), ('trommel', -88.4, -22.0, 1.0),
                           ('wagen', -88.5, -58.0, 1.5), ('palette', 88.3, 26.0, 0.0), ('kisten', 88.6, 14.0, PI), ('absperrung', 87.6, -9.0, PI / 2), ('tonne', 88.9, -30.0, 0), ('palette', 88.2, -52.0, 0.2),
                           ('karre', 88.7, -70.0, 2.9), ('palette', -31.8, -60.0, 0.0), ('palette', 32.0, -20.0, 1.5), ('absperrung', -31.8, -20.0, PI / 2), ('trommel', 31.6, 8.0, 0.5)):

@@ -1,4 +1,4 @@
-# Bastion: Deck 3 im Spiel (Alpha 1.20)
+# Bastion: Deck 3 und Hangar im Spiel (Alpha 1.20 und 1.21)
 
 In der Bastion gibt es keine Promenade mehr. Hinter der Schleuse an der Rückwand des Hangars liegt Deck 3 nach Plan D aus dem
 Bastion-Baukasten (`docs/bastion-baukasten.md`): verwinkelte Gänge, Treffpunkt, Besprechung, Krankenstation, Werkstatt, Lager,
@@ -73,9 +73,35 @@ Westrand bleibt und der Gang dahinter nach Osten führt.
 - **Geschichte:** Story-Bot (`docs/probelauf.md`) dreimal vom Prolog bis zum Ende von Kapitel 5 (Rat, Gilde, Grenzwacht): keine Hänger,
   keine Fehler. Dazu 17 Lade-Tests über „Weiterspielen“ quer durch die Kapitel.
 
+## Hangar im Look des Baukastens (Alpha 1.21)
+
+Seit Alpha 1.21 steht in der Bastion der Hangar aus `BastionHangar.blend` (`docs/bastion-baukasten.md`, Abschnitt „Hangar im selben Look“).
+Andere Stationen behalten das bisherige Hangar-Modell. Maße, Tor, Stellplätze, Pult des Deckmeisters und der freie Streifen für die Figuren
+der Geschichte liegen wie zuvor; Landung, Start und die Wege der Läufer sind unverändert.
+
+- **Fassung fürs Spiel** (`SPIEL = True` vor `bk_hangar.py`): In der Rückwand ist eine Öffnung für die Schleuse des Decks statt des eigenen
+  Portals, auf der Galerie stehen keine Wandfüllungen, die Ablaufrinnen sind Flächen statt einzelner Stäbe.
+- **Ausgabe:** `bk_export_hangar.py` (setzt die Angaben und ruft `bk_export.py`), rund 8 Minuten. Gröberes Abspecken als im Deck (Fasen unter 3 cm
+  weg, Teile unter 12 cm weg), kein Raster in den großen Flächen. Boden und Stellplätze werden als Ganzes gebacken (`unique`), weil ihr Licht
+  vom Ort abhängt; alles andere wie im Deck je Baustein an der Stelle seines ersten Einsatzes. Ergebnis: `asset-src/glb/base/BastionHangar.glb`
+  und `asset-src/data/hangar_bastion.json`.
+- **Im Spiel:** `loadHangar()` und `buildHangar()` in `deck.ts` (dieselbe Zusammensetzung wie das Deck, `assemble()`), eingehängt in `build()` in
+  `interior.ts`. Standflächen kommen aus den Bausteinen (Spantfüße, Ecktürme, Regale, Container, Fahrzeuge, Wandfüllungen). Wandfüllungen und
+  Kleinteile weiter als 85 m werden nicht gezeichnet (`FAR_SMALL`).
+- **Zwei neue Arten:** `warnbig` (breite Warnschraffur) und `mark` (Bodenmarkierungen); beide liegen nur wenige Millimeter über dem Boden und
+  werden in der Tiefe ein Stück vorgezogen, sonst flimmern sie auf Entfernung.
+- **Drei Dinge, die erst im Spiel auffielen:** (1) Die Strahldichte der Leuchten ist gedeckelt (`GLOW_MAX`); ungedeckelt überstrahlten die über
+  hundert Hallenleuchten im Bloom das ganze Bild. (2) Auch beleuchtete Flächen sind gedeckelt (`LIT_MAX`): Eckpunkte direkt an einer Leuchte
+  tragen eine riesige Strahldichte und wurden im Bloom zu hellen Vierecken. (3) Lampen und Sonne des Spiels wirken auf die Flächen des
+  Baukastens nicht mehr; sie schienen durch Wände und setzten Glanzflecken auf den Hallenboden. Die Hangarlampe gilt jetzt allein den
+  Schiffen und Figuren und ist dafür heller.
+- **Umfang und Last:** 80 Bausteine, 215.000 Dreiecke einmalig, 764.000 gesetzt, gepackt 3,7 MB. Im Hangar 640.000 bis 760.000 Dreiecke je
+  Bild (mit Schiff und Figuren; der alte Hangar lag bei rund 500.000) und rund 200 Zeichenaufrufe.
+- **Geprüft:** Landung und Start mit echten Bildern ohne Fehler; 28.000 m² begehbar, Schleuse, Deckmeister, Treffpunkt der Geschichte und
+  alle drei Stellplätze erreichbar; Heimring unverändert; Story-Bot dreimal bis zum Ende von Kapitel 5 (Rat, Gilde, Grenzwacht) und 13 Lade-Tests über „Weiterspielen“: keine Hänger, keine Fehler.
+
 ## Offen
 
-- Im Hangar steht weiter das alte Hangar-Modell. Der Hangar im Look des Baukastens (`BastionHangar.blend`) ist noch nicht im Spiel.
 - Ein Baustein hat überall das Licht seines ersten Einsatzes; in Räumen mit anderer Lichtstimmung passt der Ton nicht ganz.
 - Feine Schatten fehlen (Licht nur in den Eckpunkten). Eine Lichtkarte je Raum wäre der nächste Schritt, kostet aber Speicher.
 - Die Krankenstation hat noch keine Funktion im Spiel.

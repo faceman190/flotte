@@ -51,7 +51,7 @@ import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot,
 import { CITY, updateCity, insideCityGate, preloadCities, cityDoorOut, hangarPadPose, cityHooks, cityWorld } from './game/city';
 import { updateBaseFx } from './game/basefx';
 import { preloadBases } from './models/stationModels';
-import { loadDeck } from './game/deck';
+import { loadDeck, loadHangar } from './game/deck';
 import { updateChapter2 } from './game/chapter2';
 import { updateChapter3 } from './game/chapter3';
 import { updateChapter4 } from './game/chapter4';
@@ -682,7 +682,7 @@ if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterSh
 
 // =============== Start ===============
 // Schiffsmodelle laden (kurz), dann Menü zeigen. Ohne Modelle laufen die eingebauten Ersatzmodelle.
-Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false), loadDeck().catch(() => false)]).then(() => {
+Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false), loadDeck().catch(() => false), loadHangar().catch(() => false)]).then(() => {
   setTimeout(preloadMeshRooms, 3000);
   setTimeout(preloadBases, 4000);    // Planetenbasen mit eigenem Modell (Schmelzwerk, Bohrturm)
   setTimeout(preloadCities, 2500);   // Städte (Hintergrund-Paket): vor dem ersten Landen auf Heimstatt II geladen

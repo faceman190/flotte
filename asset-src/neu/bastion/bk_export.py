@@ -1,4 +1,5 @@
-# Bastion-Deck für das Spiel ausgeben. Läuft in BastionDeckD.blend (nach dem Aufbau durch bk_deck_d.py), braucht dessen Namensraum nicht.
+# Bastion-Deck (und mit anderen Angaben in OPT den Hangar, siehe bk_export_hangar.py) für das Spiel ausgeben.
+# Läuft in BastionDeckD.blend (nach dem Aufbau durch bk_deck_d.py), braucht dessen Namensraum nicht.
 # ACHTUNG: verändert die Szene (Fasen, Materialien für das Backen). Danach die Datei NICHT speichern.
 # Je Baustein (Sammlung, die im Deck gesetzt ist):
 #   1. abspecken: Fasen unter 8 mm weg, sonst eine Stufe; Schrauben und Niete (unter 5 cm) weg; winzige Schrift weg; Rohre mit weniger Seiten
@@ -12,12 +13,19 @@ import numpy as np
 from mathutils import Matrix, Vector
 HERE = os.path.dirname(bpy.data.filepath); SC = bpy.context.scene
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
-OUT_GLB = os.path.join(ROOT, 'asset-src', 'glb', 'base', 'BastionDeck.glb'); OUT_JSON = os.path.join(ROOT, 'asset-src', 'data', 'deck_bastion.json')
-META = json.load(open(os.path.join(HERE, 'deck_d_meta.json'), encoding='utf-8'))
-OPT = dict({'samples': 96, 'only': None, 'grid': 0.5, 'mark': 'export.txt'}, **globals().get('OPT', {}))
+OPT = dict({'samples': 96, 'only': None, 'mark': 'export.txt',
+            'grid': 0.5, 'long': 1.0,                    # große Flächen in diesem Raster teilen (m); als groß gilt eine Kante über „long“
+            'bevel_min': 0.008, 'drop': 0.05, 'font_min': 0.03,      # Fasen darunter entfallen; Teile und Schrift darunter entfallen
+            'colls': [('Deck', 0), ('Deck Decken', 1)],  # Sammlungen mit den gesetzten Bausteinen (Name, Kennzahl im Spiel: 1 = über Kopf)
+            'loose': 'Deck Schilder', 'loose_cell': 4.0, # lose Teile (Schilder), je Feld dieser Größe zu einem Baustein gefasst
+            'unique': [],                                # Bausteine mit diesem Namensanfang: alle Einsätze zusammen als ein Netz backen (Licht je Ort)
+            'hide': [],                                  # Objekte, die beim Backen nicht mitrechnen (Dunst)
+            'meta': 'deck_d_meta.json', 'glb': 'BastionDeck.glb', 'json': 'deck_bastion.json'}, **globals().get('OPT', {}))
+META = json.load(open(os.path.join(HERE, OPT['meta']), encoding='utf-8')) if OPT['meta'] else {}
+OUT_GLB = os.path.join(ROOT, 'asset-src', 'glb', 'base', OPT['glb']); OUT_JSON = os.path.join(ROOT, 'asset-src', 'data', OPT['json'])
 CELL = 4.0
 STAIN = {'Laufspur': 0.9, 'Rostspur': 0.75, 'Staubspur': 0.35, 'Fleck': 0.85, 'Abrieb': 0.3}
-CLASSES = ['metal', 'paint', 'soft', 'glow', 'warn', 'screen', 'glass', 'gloss', 'stain', 'stars']
+CLASSES = ['metal', 'paint', 'soft', 'glow', 'warn', 'warnbig', 'mark', 'screen', 'glass', 'gloss', 'stain', 'stars']
 
 # ---------- Materialien einordnen (vor dem Umbau fürs Backen) ----------
 def principled(m): return [n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'] if (m and m.use_nodes) else []
@@ -31,7 +39,9 @@ def classify(m):
         met = sock(b, 'Metallic').default_value; rough = sock(b, 'Roughness').default_value
         es = sock(b, 'Emission Strength'); ec = sock(b, 'Emission Color', 'Emission'); tr = sock(b, 'Transmission Weight', 'Transmission')
         if nm in STAIN: r = ('stain', STAIN[nm])
+        elif nm in ('Warnschraffur Hangar', 'Warnschraffur Hallenboden'): r = ('warnbig', None)      # breite Streifen (Hangar)
         elif nm.startswith('Warnschraffur'): r = ('warn', None)
+        elif nm.startswith('Bodenfarbe'): r = ('mark', None)      # Markierungen auf dem Hallenboden
         elif nm == 'Bildschirm': r = ('screen', (0.08 * 2.2, 0.75 * 2.2, 0.65 * 2.2))
         elif nm == 'Wandbild': r = ('screen', (0.1 * 2.6, 0.62 * 2.6, 0.7 * 2.6))
         elif nm == 'Sternfeld': r = ('stars', None)
@@ -57,7 +67,7 @@ def prep_scene():
     for ob in bpy.data.objects:
         for md in ob.modifiers:
             if md.type == 'BEVEL':
-                if md.width < 0.008: md.show_viewport = False
+                if md.width < OPT['bevel_min']: md.show_viewport = False
                 else: md.segments = 1
             elif md.type in ('WEIGHTED_NORMAL', 'EDGE_SPLIT'): md.show_viewport = False
         if ob.type == 'CURVE': ob.data.bevel_resolution = min(ob.data.bevel_resolution, 2)
@@ -67,15 +77,19 @@ def keep(ob):
     mats = [s.material for s in ob.material_slots if s.material]; cls = classify(mats[0])[0] if mats else 'paint'
     if ob.type == 'FONT':
         if not ob.data.body.strip(): return False
-        return ob.data.size >= 0.03 or cls == 'glow'
-    return max(ob.dimensions) >= 0.05 or cls == 'glow'
+        return ob.data.size >= OPT['font_min'] or cls == 'glow'
+    return max(ob.dimensions) >= OPT['drop'] or cls == 'glow'
 
 # ---------- Baustein als ein Netz in die Szene stellen ----------
-def realize(objs, T, name):
-    dg = bpy.context.evaluated_depsgraph_get(); tmp = []; lights = []
+def flat(objs, T):      # Objekte eines Bausteins mit ihrer Lage; Instanzen anderer Bausteine darin werden aufgelöst
     for ob in objs:
+        if ob.type == 'EMPTY' and ob.instance_type == 'COLLECTION' and ob.instance_collection: yield from flat(ob.instance_collection.objects, T @ ob.matrix_world)
+        else: yield ob, T @ ob.matrix_world
+def realize(pairs, name):
+    dg = bpy.context.evaluated_depsgraph_get(); tmp = []; lights = []
+    for ob, MW in pairs:
         if ob.type == 'LIGHT':
-            l = ob.copy(); l.matrix_world = T @ ob.matrix_world; SC.collection.objects.link(l); lights.append(l); continue
+            l = ob.copy(); l.matrix_world = MW; SC.collection.objects.link(l); lights.append(l); continue
         if not keep(ob): continue
         me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg), depsgraph=dg)
         if not me.polygons: bpy.data.meshes.remove(me); continue
@@ -87,7 +101,7 @@ def realize(objs, T, name):
             bm.to_mesh(me); bm.free()
         else:
             a = me.attributes.new('bk_a', 'FLOAT', 'POINT'); a.data.foreach_set('value', np.ones(n0, dtype=np.float32))
-        o = bpy.data.objects.new('tmp', me); o.matrix_world = T @ ob.matrix_world; SC.collection.objects.link(o); tmp.append(o)
+        o = bpy.data.objects.new('tmp', me); o.matrix_world = MW; SC.collection.objects.link(o); tmp.append(o)
     if not tmp: return None, lights
     if len(tmp) > 1:
         datas = [o.data for o in tmp[1:]]
@@ -97,7 +111,7 @@ def realize(objs, T, name):
             if d.users == 0: bpy.data.meshes.remove(d)
     J = tmp[0]; J.name = name; me = J.data; me.transform(J.matrix_world); J.matrix_world = Matrix.Identity(4)
     return J, lights
-def grid_cut(me, step, long=1.0):      # große Flächen entlang eines Rasters teilen: Das Licht steht nur in den Eckpunkten
+def grid_cut(me, step, long):      # große Flächen entlang eines Rasters teilen: Das Licht steht nur in den Eckpunkten
     bm = bmesh.new(); bm.from_mesh(me)
     def big(f): L = max(e.calc_length() for e in f.edges); return L > long and f.calc_area() / L > 0.3      # lang und breit; schmale Streifen (Rohre, Leisten, Roststäbe) bleiben ganz
     cand = set(f for f in bm.faces if big(f))
@@ -156,7 +170,7 @@ def finish(J):      # Farben je Art setzen und kodieren, Flächen nach Art ordne
     me.update()
     return used, remap[mi]
 def block_of(J, name, pm):      # Standfläche (Bausteinlage): Umriss der Teile zwischen 0,2 und 1,9 m Höhe, ohne Spuren
-    if not name.startswith(('Wand ', 'Objekt ')) or name in ('Objekt schleuse', 'Objekt pendel'): return None
+    if not name.startswith(('Wand ', 'Objekt ', 'Halle ', 'H Spant', 'H Eckturm')) or name in ('Objekt schleuse', 'Objekt pendel'): return None
     me = J.data; nv = len(me.vertices); co = np.empty(nv * 3, dtype=np.float32); me.vertices.foreach_get('co', co); co = co.reshape(nv, 3)
     stain = [i for i, m in enumerate(me.materials) if m.name == 'ext_bk_stain']; ok = np.zeros(nv, dtype=bool)
     lt = np.empty(len(me.polygons), dtype=np.int32); me.polygons.foreach_get('loop_total', lt); lv = np.empty(len(me.loops), dtype=np.int32); me.loops.foreach_get('vertex_index', lv)
@@ -188,39 +202,49 @@ def run():
         for l in list(wo.inputs['Volume'].links): wd.node_tree.links.remove(l)
         bg = next((n for n in wd.node_tree.nodes if n.type == 'BACKGROUND'), None)
         if bg: bg.inputs[0].default_value = (0.004, 0.005, 0.007, 1)
-    for cn in ('Blatt', 'Kameras'):
+    for cn in ('Blatt', 'Kameras', 'Draussen'):
         c = bpy.data.collections.get(cn)
         if c: c.hide_render = True
-    for cn in ('Deck', 'Deck Decken', 'Deck Schilder'): bpy.data.collections[cn].hide_render = False
+    for n in OPT['hide']:
+        o = bpy.data.objects.get(n)
+        if o: o.hide_render = True
     # wo steht was
-    inst = []; first = {}
-    for cn, ceil in (('Deck', 0), ('Deck Decken', 1)):
+    inst = []; first = {}; every = {}
+    for cn, ceil in OPT['colls']:
+        bpy.data.collections[cn].hide_render = False
         for e in bpy.data.collections[cn].objects:
             if e.instance_type != 'COLLECTION' or not e.instance_collection: continue
-            nm = e.instance_collection.name; mw = e.matrix_world.copy()
-            inst.append((nm, mw.translation.x, mw.translation.y, mw.to_euler('XYZ').z, ceil))
+            nm = e.instance_collection.name; mw = e.matrix_world.copy(); u = next((p for p in OPT['unique'] if nm.startswith(p)), None)
+            if u: every.setdefault(u, []).append((e, mw)); continue
+            inst.append((nm, mw.translation.x, mw.translation.y, mw.to_euler('XYZ').z, ceil, mw.translation.z))
             if nm not in first: first[nm] = (e, mw)
-    # Schilder und Wegweiser: lose Teile, je Zelle zu einem Baustein gefasst
-    signs = {}
-    for ob in bpy.data.collections['Deck Schilder'].objects:
-        if ob.type not in ('MESH', 'CURVE', 'FONT'): continue
-        ctr = sum((ob.matrix_world @ Vector(b) for b in ob.bound_box), Vector()) / 8.0
-        signs.setdefault((round(-ctr.y / CELL), round(ctr.x / CELL)), []).append(ob)
-    names = sorted(first) + ['Schild %d %d' % k for k in sorted(signs)]
+    # lose Teile (Schilder, Wegweiser, Schrift auf Wand und Boden): je Feld zu einem Baustein gefasst
+    signs = {}; LC = OPT['loose_cell']; loose = [OPT['loose']] if OPT['loose'] else [cn for cn, c in OPT['colls']]
+    for cn in loose:
+        bpy.data.collections[cn].hide_render = False
+        for ob in bpy.data.collections[cn].objects:
+            if ob.type not in ('MESH', 'CURVE', 'FONT'): continue
+            ctr = sum((ob.matrix_world @ Vector(b) for b in ob.bound_box), Vector()) / 8.0
+            signs.setdefault((round(-ctr.y / LC), round(ctr.x / LC)), []).append(ob)
+    names = sorted(first) + ['Schild %d %d' % k for k in sorted(signs)] + ['Ganz ' + u for u in sorted(every)]
     if OPT['only']: names = [n for n in names if any(n.startswith(o) for o in OPT['only'])]
     out = []; mods = {}; total = 0
     for i, nm in enumerate(names):
         t0 = time.time()
         if nm.startswith('Schild '):
-            r, c = (int(v) for v in nm.split()[1:]); objs = signs[(r, c)]; T = Matrix.Identity(4); back = Matrix.Translation((-c * CELL, r * CELL, 0)); hide = objs
-            inst.append((nm, c * CELL, -r * CELL, 0.0, 0))
+            r, c = (int(v) for v in nm.split()[1:]); pairs = [(o, o.matrix_world.copy()) for o in signs[(r, c)]]; back = Matrix.Translation((-c * LC, r * LC, 0)); hide = signs[(r, c)]
+            inst.append((nm, c * LC, -r * LC, 0.0, 0, 0.0))
+        elif nm.startswith('Ganz '):      # alle Einsätze zusammen: ein Netz, Licht je Ort
+            es = every[nm[5:]]; pairs = [q for (e, mw) in es for q in flat(e.instance_collection.objects, mw)]; back = Matrix.Identity(4); hide = [e for (e, mw) in es]
+            inst.append((nm, 0.0, 0.0, 0.0, 0, 0.0))
         else:
-            e, T = first[nm]; objs = list(bpy.data.collections[nm].objects); back = T.inverted(); hide = [e]
-        J, lights = realize(objs, T, 'm%d' % i)
+            e, T = first[nm]; pairs = list(flat(bpy.data.collections[nm].objects, T)); back = T.inverted(); hide = [e]
+        J, lights = realize(pairs, 'm%d' % i)
         if J is None:
             for l in lights: bpy.data.objects.remove(l)
             note('%s: leer' % nm); continue
-        grid_cut(J.data, OPT['grid']); shade(J.data)
+        if OPT['grid']: grid_cut(J.data, OPT['grid'], OPT['long'])
+        shade(J.data)
         for h in hide: h.hide_render = True
         try: bake(J)
         finally:
@@ -245,10 +269,10 @@ def run():
                               export_cameras=False, export_lights=False, export_animations=False, export_skins=False, export_morph=False, export_shared_accessors=False)
     order = [n for n in names if n in mods]
     data = dict(META, mod=[{'n': n, 'o': mods[n]['o'], 'block': mods[n]['block']} for n in order],
-                inst=[[order.index(n), round(x, 3), round(y, 3), round(a, 4), cl] for (n, x, y, a, cl) in inst if n in mods])
+                inst=[[order.index(n), round(x, 3), round(y, 3), round(a, 4), cl, round(z, 3)] for (n, x, y, a, cl, z) in inst if n in mods])
     js = OUT_JSON if not OPT['only'] else os.path.join(HERE, 'export-test.json')
     open(js, 'w', encoding='utf-8').write(json.dumps(data, ensure_ascii=False, separators=(',', ':')))
-    placed = sum(mods[n]['tris'] for (n, x, y, a, cl) in inst if n in mods)
+    placed = sum(mods[n]['tris'] for (n, x, y, a, cl, z) in inst if n in mods)
     cp.compute_device_type = 'NONE'
     note('FERTIG %d Bausteine, %d Dreiecke einmalig, %d gesetzt, %d Instanzen, %.0f s, %s' % (len(order), total, placed, len(data['inst']), time.time() - t00, glb))
 def start():

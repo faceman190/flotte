@@ -27,7 +27,7 @@ import { HANGAR_BLOCKS } from '../data/hangarBlocks';
 import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, type Avatar, type NetAct } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
-import { loadDeck, buildDeck, type Deck } from './deck';
+import { loadDeck, buildDeck, loadHangar, buildHangar, type Deck } from './deck';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -265,7 +265,7 @@ function addHangarModel(parent: THREE.Object3D, pal: { accent: number; wall: num
 const PROM_LIGHT = 2.0;   // Stärke des vorberechneten Lichts
 let hasProm = false;
 // Bastion: Deck 3 aus dem Bastion-Baukasten ersetzt Korridor und Promenade (src/game/deck.ts). Ist das Modell nicht geladen, bleibt es beim alten Aufbau.
-let deck: Deck | null = null, hangarBody: THREE.Object3D | null = null;
+let deck: Deck | null = null, hangarBody: THREE.Object3D | null = null, hangarUpdate: null | ((x: number, z: number) => void) = null;
 // Weg der Story-Figuren vom Hangar hinaus (herein in umgekehrter Folge): durch den Korridor oder durch die Schleuse aufs Deck
 const outPath = (off: number): number[][] => (deck ? deck.way(off) : [[off, HZ0 + 4], [off * 0.6, HZ0 - 1], [off * 0.6, PZ1 + 1.5]]);
 // In Korridor und Promenade trägt das vorberechnete Licht: Grundlicht und Gegenlicht des Spiels werden dort zurückgenommen (0 = Hangar, 1 = Halle)
@@ -280,7 +280,8 @@ function zoneLight() {
   ambient.intensity = ambSet = ambIn * (1 - 0.8 * t);
   sun.intensity = sunIn * (1 - 0.62 * t);
   rim.color.copy(rimOut).lerp(RIM_IN, t);
-  lamps[0].intensity = kitHangar ? Math.PI * 0.1 : Math.PI * 0.5 * (1 - 0.7 * t);      // im Hangar beleuchtet diese Lampe vor allem die Schiffe
+  lamps[0].intensity = hangarUpdate ? Math.PI * 0.42 : kitHangar ? Math.PI * 0.1 : Math.PI * 0.5 * (1 - 0.7 * t);      // neuer Hangar der Bastion: Flächen nehmen kein Lampenlicht, die Lampe gilt allein den Schiffen und Figuren
+       // im Hangar beleuchtet diese Lampe vor allem die Schiffe
 }
 function promMeta() { const m = kitMeta('Promenade'); return stationTemplate('Promenade') && m.slots && m.dims ? m : null; }
 function addPromModel(parent: THREE.Object3D, accent: number) {
@@ -322,7 +323,12 @@ function build(st: Station) {
 
   // ===== Hangar =====
   const HL = HZ1 - HZ0, HC = (HZ0 + HZ1) / 2;
-  const hm = addHangarModel(g, pal);   // Hangar-Modell aus Blender; ohne Modell die Grundformen unten
+  // Bastion: Hangar im Look des Bastion-Baukastens (deck.ts). Sonst das Hangar-Modell aller Stationen; ohne Modell die Grundformen unten
+  const nh = st.id === 'bastion' ? buildHangar() : null;
+  if (st.id === 'bastion' && !nh) loadHangar();
+  const hm = nh ? true : addHangarModel(g, pal);
+  if (nh) { g.add(nh.group); kitHangar = true; }      // vorberechnetes Licht wie beim Baukasten-Hangar (zoneLight)
+  hangarUpdate = nh ? nh.update : null;
   hangarBody = hm ? g.children[g.children.length - 1] : null;
   if (!hm) {
   box(S, mFloor, HW * 2, 0.5, HL, 0, -0.25, HC);
@@ -369,7 +375,8 @@ function build(st: Station) {
       block(x - 1.5, x + 1.5, z + 4.5, z + 7.5);
     }
   }
-  } else for (const b of (kitHangar ? kitMeta('Hangar').blocks! : HANGAR_BLOCKS)) block(b[0], b[1], b[2], b[3]);   // Requisiten des Modells
+  } else if (nh) for (const b of nh.blocks) obstacles.push(b);      // Standflächen aus den Bausteinen (Spantfüße, Regale, Container, Fahrzeuge, Wandfüllungen)
+  else for (const b of (kitHangar ? kitMeta('Hangar').blocks! : HANGAR_BLOCKS)) block(b[0], b[1], b[2], b[3]);   // Requisiten des Modells
   // Hangar-Terminal mit Deckmeister
   const nm = [...NAMES].sort(() => R.next() - 0.5);
   let master: Stand | null = null;
@@ -800,7 +807,7 @@ export function leaveInterior() {
   }
   for (const d of disposables) d.dispose();
   disposables.length = 0;
-  group = null; field = null; holo = null; standGroup = null; deck = null; hangarBody = null;
+  group = null; field = null; holo = null; standGroup = null; deck = null; hangarBody = null; hangarUpdate = null;
   for (const l of lamps) l.intensity = 0;
   setExposure(1);
   if (IN.station) IN.station.mesh.visible = true;
@@ -1083,11 +1090,13 @@ export function updateWalk(dt: number) {
     if (IN.jy <= 0) { IN.jy = 0; IN.jv = 0; stepT = 0; }   // kein eigener Ton beim Aufkommen: der nächste Schritt folgt sofort
   }
   IN.area = room ? room.area(IN.x, IN.z) : IN.z > HZ0 ? 'Hangardeck' : deck ? deck.area(IN.x, IN.z) : IN.z > PZ1 ? 'Korridor' : PAL[kind].hall;
+  if (hangarUpdate && !room) hangarUpdate(IN.x, IN.z);      // Hangar der Bastion: ferne Kleinteile ausblenden
   if (deck && !room) {      // ferne Bereiche des Decks ausblenden; eine Lampe geht mit, damit die Figuren im Deck Licht haben
     deck.update(IN.x, IN.z);
     const on = deck.inside(IN.z);
     if (on && group) group.localToWorld(lamps[1].position.set(IN.x, 2.3, IN.z));
     lamps[1].intensity = on ? Math.PI * 0.26 : 0; lamps[1].distance = 15; lamps[2].intensity = 0;
+    lamps[0].intensity = on ? Math.PI * 0.08 : hangarUpdate ? Math.PI * 0.42 : Math.PI * 0.1;      // die Hangarlampe reicht bis ins Deck: dort zurücknehmen
     // was vom Standort aus nicht zu sehen ist, wird nicht gezeichnet: der Hangar hinter der Schleuse und Figuren in anderen Räumen
     const hs = deck.hangarSeen();
     if (hangarBody) hangarBody.visible = hs;

@@ -79,7 +79,7 @@ Maschinenraum, Spinde, Lager, Quartier, Werkstatt. `BULK` nennt die Schotte zwis
 
 ## Hangar im selben Look
 
-Stand 15.11.2026: Schaustück in Blender (`BastionHangar.blend`), noch nicht im Spiel. Der Hangar ist in den Maßen des Spiels gebaut
+Stand 15.11.2026: Schaustück in Blender (`BastionHangar.blend`); seit Alpha 1.21 auch im Spiel (`docs/bastion-deck.md`, eigene Fassung mit `SPIEL = True`). Der Hangar ist in den Maßen des Spiels gebaut
 (`src/game/interior.ts`: 184 × 162 × 42 m, Tor 124 × 32 m), damit er den heutigen Hangar später ersetzen kann.
 Blender-y ist −Spiel-z: Rückwand mit Ausgang bei y = +50, Tor bei y = −112, Stellplätze bei x = 0 und ±60, y = −28.
 
