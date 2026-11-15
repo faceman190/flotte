@@ -501,16 +501,16 @@ function updateCamera(dt: number) {
   const cs = stats(), cm = cs.camBack / 24;
   _o.set(0, cs.camUp * CAM.zoom, cs.camBack * CAM.zoom).applyEuler(_e);
   _t.set(P.x, P.y, P.z).add(_o);
-  if (!G.camInit) { camPos.copy(_t); G.camInit = true; }
-  camPos.lerp(_t, 1 - Math.exp(-dt * 7));
+  // Feste Kamera (Alpha 1.15, Wunsch des Spielers): Sie sitzt starr am eingestellten Platz hinter dem Schiff. Kein Nachziehen beim Beschleunigen
+  // und Wenden, kein Wackeln bei Treffern, kein weiteres Blickfeld bei Tempo, Sprung oder Eintritt. Abstand (Mausrad), Blickfeld (Einstellungen)
+  // und die freie Umsicht (V, C, mittlere Maustaste) bleiben.
+  camPos.copy(_t); G.camInit = true;
   camera.position.copy(camPos);
-  if (G.shake > 0) camera.position.add(new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(G.shake));
   const f = fwd();
   // normal: Blick voraus; freie Kamera: Blick auf das Schiff
   const a = 40 * cm * (1 - CAM.w);
   camera.lookAt(P.x + f.x * a, P.y + f.y * a + cs.camUp * 0.3 * (1 - CAM.w * 0.6), P.z + f.z * a);
-  const sp = Math.hypot(P.vx, P.vy, P.vz);
-  setFov(settings.fov + clamp(sp / stats().max, 0, 1) * 10 + (G.mode === 'jump' ? (1.3 - G.jumpT) * 40 : 0) + (G.mode === 'entry' ? 14 : 0));
+  setFov(settings.fov);
 }
 
 // Lichter, Ringe, Tore animieren
