@@ -280,6 +280,16 @@ export function gunSound(vol = 1) {
   return true;
 }
 export const hasLaserSound = () => !!BUF.laser;
+
+// ---------- Geräusche aus dem All ----------
+// Ferrox, Gefechte vor der Station, Explosionen, zerbrechende Asteroiden, der Alarmton bei Ferrox-Kontakt. Die Welt läuft weiter, während der
+// Pilot zu Fuß in einer Station, im eigenen Schiff oder in einem Wrack ist; bis Alpha 1.19 hörte er dort alles, als säße er im Cockpit.
+// main.ts setzt outside.muted je Bild; combat.ts, npc.ts und world.ts nutzen die Fassungen mit „Out“. Funksprüche (Text) kommen weiter an.
+export const outside = { muted: false };
+export const sndOut: typeof snd = (f, d, type, v, slide) => { if (!outside.muted) snd(f, d, type, v, slide); };
+export const sfxOut: typeof sfx = (key, vol, rate, fallback) => (outside.muted ? false : sfx(key, vol, rate, fallback));
+export const boomOut: typeof boom = (vol, rate, fallback) => (outside.muted ? false : boom(vol, rate, fallback));
+export const gunSoundOut: typeof gunSound = vol => (outside.muted ? true : gunSound(vol));
 export const audioDebug = () => ({ musicEl: music, musicMode, musicSrc: music?.src || '', musicPlaying: !!music && !music.paused, musicTime: music?.currentTime || 0, musicDur: music?.duration || 0, loaded: Object.keys(BUF), trim: TRIM, ctx: AC?.state });
 
 // ---------------- Freischalten nach der ersten Eingabe ----------------

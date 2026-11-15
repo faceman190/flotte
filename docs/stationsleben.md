@@ -57,3 +57,12 @@ Gilt für alle Stationen mit Hangar und Promenade (Bastion, Außenposten, Planet
   stehenden Figur näher als 2,9 m; Kehrtwende, Drehung zum Piloten und Kunde am Stand im Bild (`docs/bilder/leben-119-*.jpg`).
 - Nicht geprüft: Außenposten und Planetenbasen einzeln im Bild (sie nutzen dieselben Räume), das Zusammenspiel mit anderen Piloten im Mehrspieler.
 - Offen: Sitzen (es gibt keinen Clip dafür), Seitschritte, Rennen und Springen aus den Paketen sind weiter ungenutzt.
+
+## Ton: kein Gefechtslärm von draußen (Alpha 1.19a)
+
+Die Welt läuft weiter, während der Pilot zu Fuß in einer Station, im eigenen Schiff oder in einem Wrack ist. Bis Alpha 1.19 hörte er dort jedes
+Gefecht vor der Station: Schreie und Explosionen der Ferrox, Torpedos, Flak, Kanonen der Patrouille, zerbrechende Asteroiden und den Alarmton
+bei „Ferrox-Kontakt“. Seit 1.19a sind diese Töne im Inneren stumm: `outside.muted` in `src/core/audio.ts` (gesetzt in `simulate`, `main.ts`,
+solange `IN.active` oder `DUN.active`), und `combat.ts`, `npc.ts` und `world.ts` nutzen die Fassungen `sndOut`, `sfxOut`, `boomOut`,
+`gunSoundOut`. Der Funkspruch selbst (Text mit kurzem Piep) kommt weiter an. Wer einen neuen Ton für etwas im All einbaut, nimmt diese Fassungen.
+Geprüft: 14 Sekunden Gefecht mit Ferrox-Welle neben der Bastion ergeben im Hangar keinen einzigen Ton, im Flug danach wieder alle.

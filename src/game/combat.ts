@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { scene, camera, basicAdd, glowMat } from '../core/engine';
 import { rand, ri, pick, d3, clamp, rng, hashStr } from '../core/util';
-import { snd, sfx, boom } from '../core/audio';
+import { sndOut as snd, sfxOut as sfx, boomOut as boom } from '../core/audio';   // im Inneren einer Station stumm (siehe audio.ts)
 import { ferroxDrone, BOMBER_T, buildMother } from '../models/ferrox';
 import { MK } from '../models/ships';
 import { world, dropPick, breakAst, SECTOR_RADIUS } from './world';

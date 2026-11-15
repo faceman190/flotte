@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { scene } from '../core/engine';
 import { rand, pick, d3, clamp } from '../core/util';
-import { snd, gunSound, sfx, boom } from '../core/audio';
+import { sndOut as snd, gunSoundOut as gunSound, sfxOut as sfx, boomOut as boom } from '../core/audio';   // im Inneren einer Station stumm (siehe audio.ts)
 import { buildCivilian, SHIPDEF, SHIPNAMES, type CivType } from '../models/ships';
 import { buildAllyModel } from '../models/playerShips';
 import { world, type Station, type Gate } from './world';

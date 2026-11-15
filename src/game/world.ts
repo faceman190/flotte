@@ -13,7 +13,7 @@ import { oreTable, rockKinds } from '../data/ores';
 import { buildCarrier, CARRIER_DOCK, CARRIER_LAUNCH, carrierSpheres } from '../models/ships';
 import { buildStation, buildOutpost, buildGate } from '../models/structures';
 import { burst, clearParticles } from './fx';
-import { snd } from '../core/audio';
+import { sndOut as snd } from '../core/audio';   // im Inneren einer Station stumm (siehe audio.ts)
 import { planetLook } from '../data/planets';
 import { buildModelStation, buildCarrierModel, buildBaseModel, baseLoaded, loadBase } from '../models/stationModels';
 import { SHARED } from './shared';

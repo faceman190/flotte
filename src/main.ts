@@ -7,7 +7,7 @@ import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience'
 import { ux } from './core/engine';
 import { perfFrameStart, perfFrameEnd, perfHooks } from './core/perf';
 import { onKey, centerMouse, releaseAll, keys, look } from './core/input';
-import { ambience, preloadSfx, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode, sfx, sfxHeld, loopVol } from './core/audio';
+import { ambience, preloadSfx, outside, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode, sfx, sfxHeld, loopVol } from './core/audio';
 import { rand, clamp, $ } from './core/util';
 import { P, G, settings, loadSettings, saveSettings, newPlayer, setPlayer, loadGame, saveGame, stats, type Player, type Tool } from './game/state';
 import { world, buildSector, stationById, gateTo, updateAsteroids } from './game/world';
@@ -535,6 +535,7 @@ function animateStructures(dt: number) {
 // Ein Simulationsschritt der Spielwelt
 function simulate(dt: number) {
   const m = G.mode, live = m === 'play' || m === 'jump' || m === 'dock' || m === 'walk' || m === 'rover' || m === 'entry' || m === 'launch' || m === 'dungeon';
+  outside.muted = IN.active || DUN.active;   // zu Fuß in Station, Schiff oder Wrack: kein Gefechtslärm von draußen
   if (!(live || m === 'menu' || m === 'intro')) return;
   G.time += dt;
   if (live) P.playtime += dt;
