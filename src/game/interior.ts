@@ -27,6 +27,7 @@ import { HANGAR_BLOCKS } from '../data/hangarBlocks';
 import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, type Avatar, type NetAct } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
+import { loadDeck, buildDeck, type Deck } from './deck';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -263,11 +264,15 @@ function addHangarModel(parent: THREE.Object3D, pal: { accent: number; wall: num
 // kommen aus data/kit_Promenade.json. Fehlt das Modell, entstehen Korridor und Halle wie früher aus Grundformen.
 const PROM_LIGHT = 2.0;   // Stärke des vorberechneten Lichts
 let hasProm = false;
+// Bastion: Deck 3 aus dem Bastion-Baukasten ersetzt Korridor und Promenade (src/game/deck.ts). Ist das Modell nicht geladen, bleibt es beim alten Aufbau.
+let deck: Deck | null = null, hangarBody: THREE.Object3D | null = null;
+// Weg der Story-Figuren vom Hangar hinaus (herein in umgekehrter Folge): durch den Korridor oder durch die Schleuse aufs Deck
+const outPath = (off: number): number[][] => (deck ? deck.way(off) : [[off, HZ0 + 4], [off * 0.6, HZ0 - 1], [off * 0.6, PZ1 + 1.5]]);
 // In Korridor und Promenade trägt das vorberechnete Licht: Grundlicht und Gegenlicht des Spiels werden dort zurückgenommen (0 = Hangar, 1 = Halle)
 const RIM_IN = new THREE.Color(0x4a4640), rimOut = new THREE.Color();
 let ambIn = 0, sunIn = 0, zoneT = -1, ambSet = -1;
 function zoneLight() {
-  if (!(hasProm || kitHangar) || room) return;
+  if (!(hasProm || kitHangar || deck) || room) return;
   if (ambSet >= 0 && Math.abs(ambient.intensity - ambSet) > 1e-5) { ambIn = ambient.intensity; sunIn = sun.intensity; zoneT = -1; }   // die Belichtung wurde von außen neu gesetzt
   const t = kitHangar ? 1 : Math.min(1, Math.max(0, (HZ0 + 1 - IN.z) / (CL - 2)));      // Baukasten-Hangar: überall vorberechnetes Licht
   if (Math.abs(t - zoneT) < 0.002) return;
@@ -290,7 +295,9 @@ function addPromModel(parent: THREE.Object3D, accent: number) {
 // ---------- Innenraum aufbauen ----------
 function build(st: Station) {
   kind = st.kind;
-  const pm = promMeta();
+  deck = st.id === 'bastion' ? buildDeck(HZ0) : null;
+  if (st.id === 'bastion' && !deck) loadDeck();      // noch nicht da: beim nächsten Betreten
+  const dk = deck, pm = dk ? null : promMeta();
   hasProm = !!pm;
   dims = pm ? pm.dims! : PROM[kind];
   const pal = PAL[kind], R = rng(hashStr(st.id + ':innen'));
@@ -316,6 +323,7 @@ function build(st: Station) {
   // ===== Hangar =====
   const HL = HZ1 - HZ0, HC = (HZ0 + HZ1) / 2;
   const hm = addHangarModel(g, pal);   // Hangar-Modell aus Blender; ohne Modell die Grundformen unten
+  hangarBody = hm ? g.children[g.children.length - 1] : null;
   if (!hm) {
   box(S, mFloor, HW * 2, 0.5, HL, 0, -0.25, HC);
   box(S, mCeil, HW * 2, 0.5, HL, 0, HH + 0.25, HC);
@@ -383,10 +391,16 @@ function build(st: Station) {
   }
   rects.push([-HW, HW, HZ0, HZ1 - 1.5]);
 
+  // ===== Bastion: Deck 3 statt Korridor und Promenade =====
+  if (dk) {
+    g.add(dk.group);
+    for (const r of dk.rects) rects.push(r);
+    for (const b of dk.blocks) obstacles.push(b);
+  }
   // ===== Korridor =====
   const CC = HZ0 - CL / 2;
   const promBody = pm ? addPromModel(g, pal.accent) : null;
-  if (!pm) {
+  if (!pm && !dk) {
   box(S, mFloor, CW * 2, 0.5, CL + 1.2, 0, -0.25, CC);
   box(S, mCeil, CW * 2, 0.5, CL + 1.2, 0, CH + 0.25, CC);
   for (const s of [-1, 1]) {
@@ -395,11 +409,11 @@ function build(st: Station) {
   }
   box(deco, mLight, 0.5, 0.08, CL - 2, 0, CH - 0.05, CC);
   }
-  rects.push([-CW, CW, PZ1 - 2, HZ0 + 2]);
+  if (!dk) rects.push([-CW, CW, PZ1 - 2, HZ0 + 2]);
 
   // ===== Promenade =====
   const PC = (PZ0 + PZ1) / 2, WW = PW - 5, WY0 = 1.5, WY1 = PH - 1.4;
-  if (!pm) {
+  if (!pm && !dk) {
   box(S, mHall, PW * 2, 0.5, PD, 0, -0.25, PC);
   box(S, mCeil, PW * 2, 0.5, PD, 0, PH + 0.25, PC);
   for (const s of [-1, 1]) {
@@ -412,22 +426,22 @@ function build(st: Station) {
   box(S, mWall, WW * 2, WY0, 0.6, 0, WY0 / 2, PZ0 - 0.3);
   box(S, mWall, WW * 2, PH - WY1, 0.6, 0, (PH + WY1) / 2, PZ0 - 0.3);
   }
-  const glass = new THREE.Mesh(new THREE.PlaneGeometry(WW * 2, WY1 - WY0), mGlass); glass.position.set(0, (WY0 + WY1) / 2, PZ0 - 0.1); deco.add(glass);
-  if (!pm) {
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(WW * 2, WY1 - WY0), mGlass); glass.position.set(0, (WY0 + WY1) / 2, PZ0 - 0.1); if (!dk) deco.add(glass);
+  if (!pm && !dk) {
   for (let x = -WW; x <= WW + 0.1; x += WW / 3) box(S, mDark, 0.35, WY1 - WY0, 0.5, x, (WY0 + WY1) / 2, PZ0 - 0.1);
   for (let z = PZ0 + 6; z < PZ1 - 2; z += 9) {
     box(deco, mLight, PW * 1.1, 0.1, 0.5, 0, PH - 0.06, z);
     box(S, mDark, PW * 2, 0.5, 0.6, 0, PH - 0.25, z + 4.5);
   }
   }
-  rects.push([-PW, PW, PZ0, PZ1]);
+  if (!dk) rects.push([-PW, PW, PZ0, PZ1]);
 
   // Stände: links Handel, rechts Technik
   const tabs = interiorHooks.tabs().filter(t => t !== 'hangar');
   const left = tabs.filter(t => ['markt', 'ausruester', 'raffinerie', 'auftraege', 'lager'].includes(t)), right = tabs.filter(t => !left.includes(t));
   const suits = [0x8a5a3a, 0x3a5a8a, 0x5a7a4a, 0x7a4a6a, 0x4a6a7a, 0x8a7a3a], skins = [0xe0b090, 0xc89070, 0x9a6a4a, 0xf0c8a8, 0x7a5238], hairs = [0x1a1410, 0x4a3020, 0x8a6a40, 0x909090, 0x2a2a30];
   const goods: Record<string, number[]> = { ausruester: [0x5fd0ff, 0xc070ff, 0x8a8f9a], markt: [0xd9822b, 0xbfe6ff, 0xe8664a], raffinerie: [0xc4c8d0, 0xff9a6a, 0xc8dcff], auftraege: [0xe8e2d6], missionen: [0x7cc4ff, 0xffb347], lager: [0x8a8f9a, 0x5a6068], werft: [0x6a9ad8], werkstatt: [0xffb347, 0x9aa0a8], service: [0xff6b5b, 0xffd27a], info: [0x7cc4ff] };
-  for (const [list, s] of [[left, -1], [right, 1]] as const) {
+  if (!dk) for (const [list, s] of [[left, -1], [right, 1]] as const) {
     if (pm) {
       // Modell: feste Ladennischen (fünf je Seite); belegt wird gleichmäßig verteilt, leere Nischen bleiben geschlossen
       const sl = pm.slots!.filter(q => Math.sign(q.x) === s).sort((a, b) => b.z - a.z), used = new Set<number>();
@@ -473,7 +487,7 @@ function build(st: Station) {
     });
   }
   // Holo-Tisch mit Galaxiekarte
-  {
+  if (!dk) {
     const hz = PC + 2;
     const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 0.9, 20), mDark); base.position.set(0, 0.45, hz); S.add(base);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.05, 6, 32), mAccent); ring.rotation.x = Math.PI / 2; ring.position.set(0, 0.92, hz); deco.add(ring);
@@ -496,7 +510,7 @@ function build(st: Station) {
   }
   if (pm) for (const b of pm.blocks || []) block(b[0], b[1], b[2], b[3]);   // Standflächen aus dem Modell (Läden, Bänke, Kübel, Automaten)
   // Bänke und Pflanzkübel
-  if (!pm) for (const s of [-1, 1]) {
+  if (!pm && !dk) for (const s of [-1, 1]) {
     const bz = PZ0 + 5;
     box(S, mDark, 4, 0.45, 1, s * (WW - 3.5), 0.225, bz); block(s * (WW - 3.5) - 2.1, s * (WW - 3.5) + 2.1, bz - 0.6, bz + 0.6);
     for (const pz of [PZ1 - 2.5, PZ0 + 2.2]) {
@@ -528,7 +542,7 @@ function build(st: Station) {
     [-lx, PZ0 + 8, null], look(-2.4, PZ0 + 6.9, Math.PI, [6, 14], 0.35), look(2.6, PZ0 + 6.9, Math.PI, [6, 14], 0.35), [lx, PZ0 + 8, null],
     ...stalls.filter(q => q.s > 0).sort((a, b) => a.z - b.z).flatMap(q => (q.z < hz && q.z > hz - 9 ? [stallStop(q, -0.9), look(2.7, hz + 0.4, toward(2.7, hz + 0.4, 0, hz), [5, 10], 0.25)] : [stallStop(q, -0.9)])),
     [lx, PZ1 - 5, null]];
-  for (let i = 0; i < (kind === 'outpost' ? 2 : 4); i++) mkWalker(loop, i, i % 2 === 1);
+  if (!dk) for (let i = 0; i < (kind === 'outpost' ? 2 : 4); i++) mkWalker(loop, i, i % 2 === 1);
   // Hangar: einer pendelt zwischen dem Regal an der Rückwand und dem Deckmeister, einer geht die große Runde an den Wandgeräten vorbei.
   // Die kleine Runde liegt 9 m vor dem Treffpunkt der Geschichte (hangarSpot), damit niemand durch ein Gespräch läuft.
   const mz = HZ0 + 16;
@@ -558,11 +572,35 @@ function build(st: Station) {
     chats.push({ m, x, z, sp: 0, t: R.range(0.5, 4), gap: true });
   };
   const gx = Math.min(3.9, lx - 3.2);
-  mkChat(-gx, PZ1 - PD * 0.28, 3);
-  if (kind !== 'outpost') mkChat(gx - 0.7, PZ0 + PD * 0.28, 2);
+  if (!dk) mkChat(-gx, PZ1 - PD * 0.28, 3);
+  if (!dk && kind !== 'outpost') mkChat(gx - 0.7, PZ0 + PD * 0.28, 2);
   // im Hangar links vom Ausgang und weit rechts: Der Treffpunkt der Geschichte (hangarSpot) liegt dazwischen und bleibt frei
   mkChat(-22, HZ0 + 9, kind === 'outpost' ? 2 : 3);
   if (kind !== 'outpost') mkChat(58, HZ0 + 8.5, 2);
+
+  // Bastion, Deck 3: Das Personal der Dienste steht an den Tresen in den Räumen (statt an den Ständen der Promenade), dazu Läufer und Gruppen
+  if (dk) {
+    const here = new Set(interiorHooks.tabs()), byTab: Record<string, Stand> = {};
+    for (const sp of dk.spots) {
+      const svc = sp.tab !== 'kranken';
+      if (svc && !here.has(sp.tab)) continue;
+      const name = nm.pop() || 'Kim', title = svc ? TAB_N[sp.tab] : 'Krankenstation';
+      const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent, 'idle', staffModel(name));
+      p.g.position.set(sp.x, 0, sp.z); p.g.rotation.y = sp.face; deco.add(p.g);
+      const q: Stand = { p, x: sp.x, z: sp.z, face: sp.face, name, span: 1.2 };
+      persons.push(q); byTab[sp.tab] = q;
+      labels.push({ p: new THREE.Vector3(sp.x, 2.0, sp.z), text: `${name} · ${title}`, col: pal.css });
+      inters.push({ x: sp.tx, z: sp.tz, r: 2.3, label: () => `${name} ansprechen · ${title}`, act: svc ? () => talk(name, sp.tab) : () => say(name, 'Alles ruhig hier. Wer verletzt ist, legt sich hin und wartet.') });
+    }
+    labels.push({ p: new THREE.Vector3(dk.map.x, 2.7, dk.map.z), text: 'Galaxiekarte', col: '#7cc4ff' });
+    inters.push({ x: dk.map.x, z: dk.map.z, r: 2.6, label: () => 'Galaxiekarte öffnen', act: () => interiorHooks.openMap() });
+    dk.routes.forEach((rt, i) => {
+      const nodes: Node[] = rt.map(n => [n.x, n.z, n.stop ? { x: n.x, z: n.z, face: n.stop.face, t: n.stop.t, p: n.stop.p, who: n.stop.who ? byTab[n.stop.who] : undefined } : null]);
+      mkWalker(nodes, i * 3);
+      if (i < 2) mkWalker(nodes, i * 3 + 7, true);
+    });
+    for (const [x, z, n] of dk.chats) mkChat(x, z, n);
+  }
 
   boxUV(S, 1 / 6);
   standGroup = new THREE.Group();
@@ -733,7 +771,7 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
     say('SYSTEM', `Promenade von ${st.name}. Dein Schiff steht im Hangar.`);
   } else {
     beginSeq(-1, 4.5, null);   // Landung: das Schiff kommt durchs Tor herein und setzt auf
-    say('SYSTEM', `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
+    say('SYSTEM', deck ? `Willkommen auf ${st.name}. Durch die Schleuse an der Rückwand geht es auf Deck 3.` : `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
   }
   // Stadt: Tür am Ende der Promenade hinaus auf den Marktplatz
   if ((st.def as any).city && !onFoot) {
@@ -762,7 +800,7 @@ export function leaveInterior() {
   }
   for (const d of disposables) d.dispose();
   disposables.length = 0;
-  group = null; field = null; holo = null; standGroup = null;
+  group = null; field = null; holo = null; standGroup = null; deck = null; hangarBody = null;
   for (const l of lamps) l.intensity = 0;
   setExposure(1);
   if (IN.station) IN.station.mesh.visible = true;
@@ -979,12 +1017,13 @@ function free(x: number, z: number) {
     ok = inAny(x, z) && inAny(x - R, z) && inAny(x + R, z) && inAny(x, z - R) && inAny(x, z + R);
   }
   // Durchgänge: im Korridor zählt nur die Breite
-  if (!ok && !IN.ship && Math.abs(x) < CW - R && z > PZ1 - 2 && z < HZ0 + 2) ok = true;
+  if (!ok && !IN.ship && !deck && Math.abs(x) < CW - R && z > PZ1 - 2 && z < HZ0 + 2) ok = true;
   if (!ok) return false;
   for (const o of obstacles) if (x > o[0] - R && x < o[1] + R && z > o[2] - R && z < o[3] + R) return false;
   for (const o of shipObs) if (x > o[0] - R && x < o[1] + R && z > o[2] - R && z < o[3] + R) return false;
   return true;
 }
+export const walkFree = (x: number, z: number) => free(x, z);      // für Prüfskripte (scripts/decktest.js)
 let stepT = 0;
 const walkV = { x: 0, z: 0 };   // Laufgeschwindigkeit (m/s) in Raumkoordinaten
 // Springen (Leertaste): nur vom Boden aus
@@ -1043,7 +1082,18 @@ export function updateWalk(dt: number) {
     if (IN.jy > top) { IN.jy = top; IN.jv = Math.min(IN.jv, 0); }
     if (IN.jy <= 0) { IN.jy = 0; IN.jv = 0; stepT = 0; }   // kein eigener Ton beim Aufkommen: der nächste Schritt folgt sofort
   }
-  IN.area = room ? room.area(IN.x, IN.z) : IN.z > HZ0 ? 'Hangardeck' : IN.z > PZ1 ? 'Korridor' : PAL[kind].hall;
+  IN.area = room ? room.area(IN.x, IN.z) : IN.z > HZ0 ? 'Hangardeck' : deck ? deck.area(IN.x, IN.z) : IN.z > PZ1 ? 'Korridor' : PAL[kind].hall;
+  if (deck && !room) {      // ferne Bereiche des Decks ausblenden; eine Lampe geht mit, damit die Figuren im Deck Licht haben
+    deck.update(IN.x, IN.z);
+    const on = deck.inside(IN.z);
+    if (on && group) group.localToWorld(lamps[1].position.set(IN.x, 2.3, IN.z));
+    lamps[1].intensity = on ? Math.PI * 0.26 : 0; lamps[1].distance = 15; lamps[2].intensity = 0;
+    // was vom Standort aus nicht zu sehen ist, wird nicht gezeichnet: der Hangar hinter der Schleuse und Figuren in anderen Räumen
+    const hs = deck.hangarSeen();
+    if (hangarBody) hangarBody.visible = hs;
+    for (const q of persons) q.p.g.visible = deck.seen(q.x, q.z);
+    for (const w of walkers) w.p.g.visible = deck.seen(w.x, w.z);
+  }
   // eigene Figur (Außensicht)
   const tpOn = VIEW.tp && SEQ.t < 0;
   if (tpOn) me = syncAvatar(meHolder, me, P.gear || {});
@@ -1208,6 +1258,7 @@ const _c = new THREE.Vector3();
 function ceilY() {
   if (mesh) { mesh.floorAt(IN.x, IN.z, IN.fy); return IN.fy + Math.max(2.1, mesh.head() - 0.15); }   // head(): Kopffreiheit über dem zuletzt abgefragten Boden
   if (room) return room.height - 0.15;
+  if (deck && IN.z <= HZ0) return deck.ceil(IN.x, IN.z);
   return (IN.z > HZ0 ? HH : IN.z > PZ1 ? CH : dims.h) - 0.2;
 }
 export function applyWalkCamera() {
@@ -1426,10 +1477,10 @@ export function storyNpc(name: string, title: string, label: string, act: () => 
   // Steht der Pilot schon länger im Raum (ein Kapitel beginnt, während er im Hangar ist), kommt die Figur durch den Gang herein und geht an
   // ihren Platz, statt vor ihm aufzutauchen. Nach dem Andocken (die Figuren warten schon) steht sie sofort da.
   if (at && G.mode === 'walk' && G.time - settledT > 4) {
-    const k = leavers.filter(w => w.end).length, off = (k % 2 ? 1 : -1) * (0.5 + 0.35 * k), sx = off * 0.6, sz = PZ1 + 1.5;
+    const k = leavers.filter(w => w.end).length, off = (k % 2 ? 1 : -1) * (0.5 + 0.35 * k), op = outPath(off), [sx, sz] = op[op.length - 1];
     p.g.position.set(sx, 0, sz); p.g.rotation.y = 0;
     if (p.anim) p.anim.look = null;
-    leavers.push({ p, x: sx, z: sz, path: [[off * 0.6, HZ0 - 1], [off, HZ0 + 4], [x, z]], i: 0, wait: k * 1.4, turned: true, name, end: () => { if (p.anim) p.anim.look = camera.position; settle(); } });
+    leavers.push({ p, x: sx, z: sz, path: [...op.slice(0, -1).reverse(), [x, z]], i: 0, wait: k * 1.4, turned: true, name, end: () => { if (p.anim) p.anim.look = camera.position; settle(); } });
   } else { p.g.rotation.y = Math.atan2(IN.x - x, IN.z - z); settle(); }
   return true;
 }
@@ -1439,7 +1490,7 @@ export function storyNpc(name: string, title: string, label: string, act: () => 
 // (gefunden im Probelauf zu Alpha 1.19, Übergang Kapitel 3 → 4 und 4 → 5 in der Bastion).
 export function storyNpcsLeave() {
   if (!IN.active || IN.ship || !stationGroup) return;
-  for (const w of leavers) if (w.end) { w.end = undefined; w.path = [[0.4, HZ0 + 4], [0.3, HZ0 - 1], [0.3, PZ1 + 1.5]]; w.i = 0; w.turned = false; }   // wer noch hereinkommt, kehrt um
+  for (const w of leavers) if (w.end) { w.end = undefined; w.path = outPath(0.5); w.i = 0; w.turned = false; }   // wer noch hereinkommt, kehrt um
   let k = 0;
   for (let i = persons.length - 1; i >= 0; i--) {
     const q = persons[i]; if (!q.story) continue;
@@ -1449,7 +1500,7 @@ export function storyNpcsLeave() {
     for (let j = labels.length - 1; j >= 0; j--) if (same(labels[j].p.x, labels[j].p.z)) labels.splice(j, 1);
     if (q.p.anim) { q.p.anim.look = null; q.p.anim.talkT = 0; }
     const off = (k % 2 ? 1 : -1) * (0.5 + 0.35 * k);      // nebeneinander durch die Tür, nicht ineinander
-    leavers.push({ p: q.p, x: q.x, z: q.z, path: [[off, HZ0 + 4], [off * 0.6, HZ0 - 1], [off * 0.6, PZ1 + 1.5]], i: 0, wait: 1.2 + k * 1.1, turned: false });
+    leavers.push({ p: q.p, x: q.x, z: q.z, path: outPath(off), i: 0, wait: 1.2 + k * 1.1, turned: false });
     k++;
   }
   if (IN.target && !inters.includes(IN.target)) IN.target = null;

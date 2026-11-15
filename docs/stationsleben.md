@@ -1,7 +1,8 @@
 # Leben in den Stationen (seit Alpha 1.19)
 
 Code: `src/game/interior.ts` (Aufbau in `build`, Ablauf in `updateRoomLife`), Bewegungen in `src/models/charModels.ts`.
-Gilt für alle Stationen mit Hangar und Promenade (Bastion, Außenposten, Planetenbasen). Die Städte (`city.ts`) haben ihre eigenen Läufer und sind davon nicht berührt.
+Gilt für alle Stationen mit Hangar und Promenade (Außenposten, Planetenbasen) und für den Hangar der Bastion. Die Bastion selbst hat seit
+Alpha 1.20 statt der Promenade Deck 3 (`docs/bastion-deck.md`): Personal an Tresen in den Räumen, Läufer und Gruppen nach den Angaben aus Blender. Die Städte (`city.ts`) haben ihre eigenen Läufer und sind davon nicht berührt.
 
 ## Was der Spieler sieht
 
