@@ -23,14 +23,14 @@ window.__deck = async () => {
   T.hide = () => { if (img) { img.remove(); img = null; } };
   // Zeichenlast eines ganzen Bildes (alle Durchgänge zusammen) und Zeit je Bild
   T.info = () => { const i = E.renderer.info; i.autoReset = false; i.reset(); const t0 = performance.now(); lf.tick(0.05); const ms = performance.now() - t0; const r = { calls: i.render.calls, tris: i.render.triangles, ms: Math.round(ms), geo: i.memory.geometries, tex: i.memory.textures }; i.autoReset = true; return r; };
-  // Spiel starten (Testpilot), an der Bastion andocken und den Innenraum betreten
-  T.enter = () => { ST.setPlayer(ST.newPlayer('Testpilot')); lf.tick(0.2); lf.openDock(lf.stationById('bastion')); lf.tick(0.5); I.enterInterior(lf.stationById('bastion')); const r = E.renderer.render; E.renderer.render = function () {}; let n = 0; while (lf.G.mode !== 'walk' && n++ < 40) lf.tick(1); E.renderer.render = r; return lf.G.mode; };
+  // Spiel starten (Testpilot), an der Station andocken (Bastion oder 'eisenkrone') und den Innenraum betreten
+  T.enter = (id = 'bastion') => { T.station = id; ST.setPlayer(ST.newPlayer('Testpilot')); lf.tick(0.2); lf.openDock(lf.stationById(id)); lf.tick(0.5); I.enterInterior(lf.stationById(id)); const r = E.renderer.render; E.renderer.render = function () {}; let n = 0; while (lf.G.mode !== 'walk' && n++ < 40) lf.tick(1); E.renderer.render = r; return lf.G.mode; };
   return Object.keys(DK);
 };
 // Begehbarkeit: füllt vom Hangar aus alle erreichbaren Punkte (Raster 0,25 m, dieselbe Prüfung wie beim Laufen) und meldet Zellen des Decks
 // und Ansprechpunkte, die nicht erreichbar sind. Erst nach __deck() und DT.enter().
 window.__walkAll = async () => {
-  const T = window.DT, D = await (await fetch(window.DATAFILES.deck_bastion)).json(), K = D.karte, C = D.cell, HZ0 = -50, S = 0.25;
+  const T = window.DT, D = await (await fetch(window.DATAFILES['deck_' + (T.station || 'bastion')])).json(), K = D.karte, C = D.cell, HZ0 = -50, S = 0.25;
   let hr = 0, hc = 0; K.forEach((row, r) => { const c = row.indexOf('H'); if (c >= 0) { hr = r; hc = c; } });
   const gx = y => -(y + hr * C), gz = x => HZ0 - C / 2 - (x - hc * C);
   const key = (i, j) => i * 4096 + j, seen = new Set(), qu = [[0, Math.round(-46 / S)]]; seen.add(key(0 + 2048, qu[0][1] + 2048));

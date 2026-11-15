@@ -23,25 +23,26 @@ ORT = {'T': 'Treffpunkt', 'B': 'Besprechung', 'M': 'Maschinenraum', 'S': 'Spinde
 MOOD = {'T': 'warm', 'B': 'dunkel', 'M': 'dunkel', 'S': 'hell', 'L': 'hell', 'Q': 'warm', 'W': 'hell', 'K': 'hell'}
 OFFEN = 'H'      # dieses Tor steht offen (Übergang zum Hangar)
 def kat(r, c): return KARTE[r][c] if 0 <= r < len(KARTE) and 0 <= c < len(KARTE[0]) else '.'
-PLAN = [''.join('G' if ch == 'g' else ch.upper() for ch in row) for row in KARTE]
-DOORS = set(); BULK = set()
-for r, row in enumerate(KARTE):
-    for c, ch in enumerate(row):
-        if ch == 'g': BULK.add((r, c, 3) if (kat(r, c - 1) in 'GgHP' and kat(r, c + 1) in 'GgHP') else (r, c, 2))
-        elif ch.islower():
-            for (dr, dc) in DIRS:
-                if kat(r + dr, c + dc) in 'GgHP': DOORS.add(frozenset(((r + dr, c + dc), (r, c))))
-ROOM = {}      # Raumzelle → Grenzen ihres Raums (Zeile von/bis, Spalte von/bis)
-for r, row in enumerate(PLAN):
-    for c, ch in enumerate(row):
-        if ch in '.GHP' or (r, c) in ROOM: continue
-        cells = [(r, c)]; seen = {(r, c)}
-        for (a, b) in cells:
-            for (dr, dc) in DIRS:
-                p = (a + dr, b + dc)
-                if p not in seen and at(*p) == ch: seen.add(p); cells.append(p)
-        box_ = (min(a for a, b in cells), max(a for a, b in cells), min(b for a, b in cells), max(b for a, b in cells))
-        for p in cells: ROOM[p] = box_
+def plan_setzen(karte):      # aus der Karte: Plan in der Schreibweise von bk_plan.py, Türen, Schotte, Grenzen der Räume
+    global KARTE, PLAN, DOORS, BULK, ROOM
+    KARTE = karte; PLAN = [''.join('G' if ch == 'g' else ch.upper() for ch in row) for row in KARTE]; DOORS = set(); BULK = set(); ROOM = {}
+    for r, row in enumerate(KARTE):
+        for c, ch in enumerate(row):
+            if ch == 'g': BULK.add((r, c, 3) if (kat(r, c - 1) in 'GgHP' and kat(r, c + 1) in 'GgHP') else (r, c, 2))
+            elif ch.islower():
+                for (dr, dc) in DIRS:
+                    if kat(r + dr, c + dc) in 'GgHP': DOORS.add(frozenset(((r + dr, c + dc), (r, c))))
+    for r, row in enumerate(PLAN):
+        for c, ch in enumerate(row):
+            if ch in '.GHP' or (r, c) in ROOM: continue
+            cells = [(r, c)]; seen = {(r, c)}
+            for (a, b) in cells:
+                for (dr, dc) in DIRS:
+                    p = (a + dr, b + dc)
+                    if p not in seen and at(*p) == ch: seen.add(p); cells.append(p)
+            box_ = (min(a for a, b in cells), max(a for a, b in cells), min(b for a, b in cells), max(b for a, b in cells))
+            for p in cells: ROOM[p] = box_
+plan_setzen(KARTE)
 def hull(r, c, k):      # liegt hinter dieser Wand nur noch Schiffskörper bis zum Rand (Außenwand)?
     dr, dc = DIRS[k]; a, b = r + dr, c + dc
     while 0 <= a < len(PLAN) and 0 <= b < len(PLAN[0]):
@@ -101,11 +102,11 @@ def p_tresen(tag, lamp='e_cool'):
     area('Tresenlicht', (0, -0.2, 2.2), (0, 0, 0), 1.8, 0.3, 30, COOL if lamp == 'e_cool' else WARM)
 TRESEN = {'markt': 'MARKT', 'ausruester': 'AUSRÜSTER', 'raffinerie': 'RAFFINERIE', 'lager': 'LAGER', 'werft': 'WERFT', 'werkstatt': 'WERKSTATT', 'service': 'SERVICE'}
 for k_, t_ in TRESEN.items(): PROP['tresen_' + k_] = (lambda t=t_: p_tresen(t))
-def p_schleuse():      # Übergang zum Hangar: füllt die Öffnung der Hangarrückwand (6 × 4,6 m) um das offene Tor der Gangzelle; Hangar liegt bei −x
+def p_schleuse(titel='DECK 3'):      # Übergang zum Hangar: füllt die Öffnung der Hangarrückwand (6 × 4,6 m) um das offene Tor der Gangzelle; Hangar liegt bei −x
     xa, xb = -2.55, -2.0
     prism('Schleusenrahmen', [(-3.15, 0), (-2.0, 0), (-2.0, 3.3), (-1.6, 3.7), (1.6, 3.7), (2.0, 3.3), (2.0, 0), (3.15, 0), (3.15, 4.8), (-3.15, 4.8)], xa, xb, M['frame'], 'X', 0.04)
     box('Schleuse Leuchtband', 0.04, 3.0, 0.1, xa - 0.01, 0, 3.9, M['e_teal'], 0); box('Schleuse Schild', 0.04, 3.4, 0.5, xa - 0.01, 0, 4.3, M['wall4'], 0.01)
-    text('DECK 3', 0.28, (xa - 0.035, 0.58, 4.2), RIGHT_X, RIGHT_Y, M['txtw'])
+    text(titel, 0.28, (xa - 0.035, len(titel) * 0.28 * 0.345, 4.2), RIGHT_X, RIGHT_Y, M['txtw'])
     for sy in (-1, 1):
         box('Schleuse Warnband', 0.012, 0.9, 1.0, xa - 0.006, sy * 2.6, 0.6, M['warn'], 0); cyl('Schleuse Leuchte', 0.06, 0.05, xa - 0.02, sy * 2.6, 2.6, M['e_amber'], 'X', n=12, bev=0)
         box('Schleuse Lichtfuge', 0.3, 0.06, 2.2, -2.28, sy * 1.97, 1.5, M['e_cool'], 0)
@@ -120,7 +121,7 @@ def hin_und_her(n): return n + n[-2:0:-1]
 ROUTES = [
     # Werkstatt ↔ Lager, am Hangartor vorbei
     hin_und_her([stop(12.0, -2.1, 90, [7, 14], 0.9, 'werkstatt'), [12.0, -4.6], [12.0, -6.4], Z(2, 3, 0, -0.4), Z(2, 2, 0, -0.4), Z(2, 1, 0.4, -0.4), Z(3, 1, 0.4), Z(4, 1, 0.4), Z(5, 1, 0.4), Z(6, 1, 0.4, 0.4),
-                 Z(6, 2, 0, 0.4), Z(6, 3, 0, 0.4), [12.0, -25.8], [12.0, -27.6], stop(7.8, -28.7, -90, [7, 14], 0.9, 'markt')]),
+                 Z(6, 2, 0, 0.4), Z(6, 3, 0, 0.4), [12.0, -25.8], [12.0, -27.6], stop(8.4, -28.7, -90, [7, 14], 0.9, 'markt')]),
     # Runde durch die Mitte: am Maschinenraum hinunter, durch den Treffpunkt, über den Südgang zurück
     [Z(3, 6, 0.4), Z(4, 6, 0.4), Z(5, 6, 0.4), Z(6, 6, 0.4), Z(6, 7), [30.2, -24.0], [33.0, -24.0], stop(36.0, -23.0, 90, [6, 12], 0.4), [39.0, -24.0], [41.8, -24.0], Z(6, 11), Z(6, 12), Z(6, 13, -0.4),
      Z(7, 13, -0.4), Z(8, 13, -0.4, 0.4), Z(8, 10, 0, 0.4), Z(8, 7, 0, 0.4), Z(8, 6, 0.4, 0.4), Z(7, 6, 0.4)],
@@ -152,8 +153,8 @@ def furnish():
     # Werkstatt (Zeilen 0–1, Spalten 2–4): drei Tresen vor den Werkbänken, Tür im Süden
     for (tab, x) in (('werft', 8.4), ('werkstatt', 12.0), ('service', 15.6)): put('tresen_' + tab, x, -0.5, 0.0); staff(tab, x, 0.45, -90, x, -2.0)
     put('palette', 7.4, -4.7, 0.1); put('trommel', 16.7, -4.7, 0.6); put('tonne', 14.4, -5.2)
-    # Lager (Zeilen 7–8, Spalten 2–4): vier Tresen vor den Regalen, Tür im Norden
-    for (tab, x) in (('markt', 7.8), ('ausruester', 10.6), ('raffinerie', 13.4), ('lager', 16.2)): put('tresen_' + tab, x, -30.3, PI); staff(tab, x, -31.25, 90, x, -28.8)
+    # Lager (Zeilen 7–8, Spalten 2–4): drei Tresen vor den Regalen, Tür im Norden (die Raffinerie steht seit Alpha 1.22 auf der Eisenkrone)
+    for (tab, x) in (('markt', 8.4), ('ausruester', 12.0), ('lager', 15.6)): put('tresen_' + tab, x, -30.3, PI); staff(tab, x, -31.25, 90, x, -28.8)
     put('palette', 7.2, -32.6, 0.05); put('karre', 17.0, -27.2, 1.2); put('fass', 16.9, -32.7); put('fass', 16.3, -32.9)
     # Maschinenraum, Quartiere
     put('wagen', 25.0, -6.4, 0.4); put('absperrung', 24.6, -4.4); put('fass', 29.0, -3.3)
@@ -181,8 +182,11 @@ def cameras():
     cam('K Ostgang', (67.8, -22.6, 1.5), (68.2, -12.5, 1.3), 18)
     cam('L Lager', (7.2, -26.9, 1.6), (15.0, -32.5, 1.2), 16)
     cam('M Schleuse', (-7.0, -14.6, 1.6), (0.0, -16.0, 1.9), 22)
-N_CELLS = assemble(); furnish(); cameras()
-META = {'cell': CELL, 'karte': KARTE, 'ort': ORT, 'tueren': sorted([sorted(list(d)) for d in DOORS]), 'schotte': sorted(BULK), 'offen': OFFEN,
-        'personal': SPOTS, 'wege': ROUTES, 'gruppen': CHATS, 'karte_xy': [36.0, -21.3]}
-open(os.path.join(HERE, 'deck_d_meta.json'), 'w', encoding='utf-8').write(json.dumps(META, ensure_ascii=False))
-result = {'zellen': N_CELLS, 'bausteine': len(MOD), 'instanzen': len(C_DECK.objects) + len(C_CEIL.objects), 'objekte': len(bpy.data.objects), 'tueren': len(DOORS), 'personal': len(SPOTS)}
+def meta_schreiben(datei):      # Angaben für das Spiel (bk_export.py reicht sie weiter)
+    meta = {'cell': CELL, 'karte': KARTE, 'ort': ORT, 'tueren': sorted([sorted(list(d)) for d in DOORS]), 'schotte': sorted(BULK), 'offen': OFFEN,
+            'personal': SPOTS, 'wege': ROUTES, 'gruppen': CHATS, 'karte_xy': KARTE_XY}
+    open(os.path.join(HERE, datei), 'w', encoding='utf-8').write(json.dumps(meta, ensure_ascii=False))
+KARTE_XY = [36.0, -21.3]      # Galaxiekarte (Holo-Kugel im Treffpunkt)
+if not globals().get('DECK_HELFER'):      # ein anderes Deck (bk_deck_ek.py) lädt diese Datei nur für die Helfer und baut selbst
+    N_CELLS = assemble(); furnish(); cameras(); meta_schreiben('deck_d_meta.json')
+    result = {'zellen': N_CELLS, 'bausteine': len(MOD), 'instanzen': len(C_DECK.objects) + len(C_CEIL.objects), 'objekte': len(bpy.data.objects), 'tueren': len(DOORS), 'personal': len(SPOTS)}

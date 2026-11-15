@@ -140,7 +140,7 @@ Lage im Raum statt nach festen Zellen, dazu `hull()` für Außenwände mit Fenst
   Infusionsständer), `medschrank`, `waschplatz` (mit Erste-Hilfe-Wand), `diagnose`; Objekte `utisch` (Untersuchungsliege mit
   Scannerbogen und Leuchte), `tropf`, `stellwand`, `hocker`. Das Sanitätszeichen ist ein weißes Kreuz auf Grün.
 - Seit Alpha 1.20 ist das Deck im Spiel und ersetzt in der Bastion Korridor und Promenade: siehe `docs/bastion-deck.md`. Dafür wurde der Plan
-  umgestellt: Das Lager liegt vorn am Hangar (mit Markt, Ausrüster, Raffinerie, Lager), die Werkstatt trägt Werft, Werkstatt und Service, das
+  umgestellt: Das Lager liegt vorn am Hangar (mit Markt, Ausrüster, Lager; die Raffinerie zog mit Alpha 1.22 auf die Eisenkrone), die Werkstatt trägt Werft, Werkstatt und Service, das
   Tor im Osten ist ein geschlossenes Schott zu Deck 2. `bk_deck_d.py` hält die gültige Karte; `deckplaene.cjs` zeigt noch die vier Entwürfe.
 
 ## Offen, bevor es ins Spiel kann
@@ -154,3 +154,9 @@ Lage im Raum statt nach festen Zellen, dazu `hull()` für Außenwände mit Fenst
   wo die Läufer gehen. Der Probeplan ist nur ein Vorschlag.
 - **Dreieckszahl:** `tris()` zählt für den Probeplan 1,84 Millionen gesetzte Dreiecke, 607.000 davon einmalig (jeder Baustein einmal).
   Das ist für das Spiel zu viel; abspecken heißt: Fasen nur an sichtbaren Kanten, Schrauben und Nieten in die Textur, Rundungen gröber.
+
+## Zweites Deck: Hüttendeck der Eisenkrone (Alpha 1.22)
+
+`bk_deck_ek.py` baut mit denselben Bausteinen das Innere der Raffinerie-Station (eigene Datei `EisenkroneDeck.blend`). Neu im Baukasten:
+die Fensterwand (Zustand `F` in `raum_side`), das Fenster mit Leitpult (`ofenfenster`), die Ofenhalle als ein großer Baustein hinter dem Glas
+und die Objekte `waage`, `erzkiste`, `barren`, `barren_cu`, `gildentafel`. Beschreibung: `docs/eisenkrone.md`.

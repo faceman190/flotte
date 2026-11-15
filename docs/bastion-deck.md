@@ -9,7 +9,7 @@ Maschinenraum, Spinde, Quartiere. Die Dienste der Station stehen in den Räumen.
 | Dienst | Raum | Weg vom Hangar |
 |---|---|---|
 | Werft, Werkstatt, Service | Werkstatt · Werft (links hinter der Schleuse) | etwa 20 m |
-| Markt, Ausrüster, Raffinerie, Lager | Lager · Markt (rechts hinter der Schleuse) | etwa 20 m |
+| Markt, Ausrüster, Lager | Lager · Markt (rechts hinter der Schleuse) | etwa 20 m |
 | Aufträge, Missionen | Besprechung | etwa 55 m |
 | Auskunft, Galaxiekarte | Treffpunkt (an der Holo-Kugel) | etwa 55 m |
 | Krankenstation | nur Kulisse, eine Sanitätskraft mit einem Satz | etwa 100 m |
@@ -40,7 +40,8 @@ Flecken, Deckkraft je Eckpunkt), `stars` (Fenster).
 
 **Im Spiel** (`src/game/deck.ts`, eingehängt in `src/game/interior.ts`):
 
-- `loadDeck()` lädt Modell und Daten beim Start. `buildDeck(HZ0)` setzt die Bausteine: je Bereich (Raum oder Gangstück) und Art ein Netz.
+- `loadDeck(id)` lädt Modell und Daten (Bastion beim Start). `buildDeck(id, HZ0)` setzt die Bausteine: je Bereich (Raum oder Gangstück) und Art ein Netz.
+  Seit Alpha 1.22 gibt es zwei Decks (`DECKS` in `deck.ts`): Deck 3 der Bastion und das Hüttendeck der Eisenkrone (`docs/eisenkrone.md`).
   Bereiche weiter als 46 m vom Spieler werden nicht gezeichnet.
 - Laufflächen: je Zelle ein Rechteck (an Wänden 1,7 m von der Zellmitte), dazu Türen und das Tor; Standflächen aus den Bausteinen
   (Umriss der Teile zwischen 0,2 und 1,9 m Höhe), Schotte verengen den Gang.
@@ -106,3 +107,9 @@ der Geschichte liegen wie zuvor; Landung, Start und die Wege der Läufer sind un
 - Feine Schatten fehlen (Licht nur in den Eckpunkten). Eine Lichtkarte je Raum wäre der nächste Schritt, kostet aber Speicher.
 - Die Krankenstation hat noch keine Funktion im Spiel.
 - Der Laptop mit schwacher Grafik (siehe `docs` zur Leistung) ist nicht nachgemessen.
+
+## Alpha 1.22: ohne Raffinerie
+
+Die Raffinerie ist auf die Gildehütte Eisenkrone umgezogen (`docs/eisenkrone.md`). Im Lager der Bastion stehen seitdem drei Tresen statt vier
+(Markt, Ausrüster, Lager); das Deck wurde dafür neu ausgegeben. `bk_deck_d.py` liefert jetzt auch die Helfer für andere Decks
+(`DECK_HELFER`, `plan_setzen`, `meta_schreiben`).

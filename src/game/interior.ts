@@ -27,7 +27,7 @@ import { HANGAR_BLOCKS } from '../data/hangarBlocks';
 import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, type Avatar, type NetAct } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
-import { loadDeck, buildDeck, loadHangar, buildHangar, type Deck } from './deck';
+import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, type Deck } from './deck';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -296,8 +296,8 @@ function addPromModel(parent: THREE.Object3D, accent: number) {
 // ---------- Innenraum aufbauen ----------
 function build(st: Station) {
   kind = st.kind;
-  deck = st.id === 'bastion' ? buildDeck(HZ0) : null;
-  if (st.id === 'bastion' && !deck) loadDeck();      // noch nicht da: beim nächsten Betreten
+  deck = hasDeck(st.id) ? buildDeck(st.id, HZ0) : null;
+  if (hasDeck(st.id) && !deck) loadDeck(st.id);      // noch nicht da: beim nächsten Betreten
   const dk = deck, pm = dk ? null : promMeta();
   hasProm = !!pm;
   dims = pm ? pm.dims! : PROM[kind];
@@ -589,15 +589,15 @@ function build(st: Station) {
   if (dk) {
     const here = new Set(interiorHooks.tabs()), byTab: Record<string, Stand> = {};
     for (const sp of dk.spots) {
-      const svc = sp.tab !== 'kranken';
+      const svc = sp.tab in TAB_N;      // sonst eine Figur ohne Dienst (Krankenstation, Schmelzmeister): sagt nur ihren Satz
       if (svc && !here.has(sp.tab)) continue;
-      const name = nm.pop() || 'Kim', title = svc ? TAB_N[sp.tab] : 'Krankenstation';
+      const name = nm.pop() || 'Kim', title = svc ? TAB_N[sp.tab] : sp.titel || 'Krankenstation', line = sp.satz || 'Alles ruhig hier. Wer verletzt ist, legt sich hin und wartet.';
       const p = buildPerson(R.pick(suits), R.pick(skins), R.pick(hairs), pal.accent, 'idle', staffModel(name));
       p.g.position.set(sp.x, 0, sp.z); p.g.rotation.y = sp.face; deco.add(p.g);
       const q: Stand = { p, x: sp.x, z: sp.z, face: sp.face, name, span: 1.2 };
       persons.push(q); byTab[sp.tab] = q;
       labels.push({ p: new THREE.Vector3(sp.x, 2.0, sp.z), text: `${name} · ${title}`, col: pal.css });
-      inters.push({ x: sp.tx, z: sp.tz, r: 2.3, label: () => `${name} ansprechen · ${title}`, act: svc ? () => talk(name, sp.tab) : () => say(name, 'Alles ruhig hier. Wer verletzt ist, legt sich hin und wartet.') });
+      inters.push({ x: sp.tx, z: sp.tz, r: 2.3, label: () => `${name} ansprechen · ${title}`, act: svc ? () => talk(name, sp.tab) : () => say(name, line) });
     }
     labels.push({ p: new THREE.Vector3(dk.map.x, 2.7, dk.map.z), text: 'Galaxiekarte', col: '#7cc4ff' });
     inters.push({ x: dk.map.x, z: dk.map.z, r: 2.6, label: () => 'Galaxiekarte öffnen', act: () => interiorHooks.openMap() });
@@ -778,7 +778,7 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
     say('SYSTEM', `Promenade von ${st.name}. Dein Schiff steht im Hangar.`);
   } else {
     beginSeq(-1, 4.5, null);   // Landung: das Schiff kommt durchs Tor herein und setzt auf
-    say('SYSTEM', deck ? `Willkommen auf ${st.name}. Durch die Schleuse an der Rückwand geht es auf Deck 3.` : `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
+    say('SYSTEM', deck ? `Willkommen auf ${st.name}. Durch die Schleuse an der Rückwand geht es auf ${deck.name === 'Deck 3' ? 'Deck 3' : 'das ' + deck.name}.` : `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
   }
   // Stadt: Tür am Ende der Promenade hinaus auf den Marktplatz
   if ((st.def as any).city && !onFoot) {

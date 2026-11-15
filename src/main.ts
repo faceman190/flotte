@@ -52,6 +52,7 @@ import { CITY, updateCity, insideCityGate, preloadCities, cityDoorOut, hangarPad
 import { updateBaseFx } from './game/basefx';
 import { preloadBases } from './models/stationModels';
 import { loadDeck, loadHangar } from './game/deck';
+import { loadEisenkrone } from './models/eisenkrone';
 import { updateChapter2 } from './game/chapter2';
 import { updateChapter3 } from './game/chapter3';
 import { updateChapter4 } from './game/chapter4';
@@ -585,6 +586,7 @@ let last = performance.now(), shadowSweep = 0;
 // (Alpha 0.99 bis 0.99d: Ein Zugriff auf den fehlenden Spielstand im Hauptmenü warf hier in jedem Bild, die Schleife endete, der Schirm blieb leer.)
 const hookErr = new Set<string>();
 function hook(name: string, f: () => void) { try { f(); } catch (e) { if (!hookErr.has(name)) { hookErr.add(name); console.error('Fehler in ' + name + ':', e); } } }
+let ekHail = false;      // Funkgruß der Eisenkrone schon gesendet
 function loop(now: number, manual = false) {
   if (!manual) requestAnimationFrame(t => loop(t));      // zuerst das nächste Bild anmelden: Ein Fehler weiter unten beendet die Schleife nicht
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
@@ -606,6 +608,11 @@ function loop(now: number, manual = false) {
   // Stadt: durchs offene Hallentor geflogen → andocken (Landeanflug im Hangar übernimmt)
   if (G.mode === 'play' && !G.dead && CITY.st && insideCityGate(P.x, P.y, P.z)) openDock(CITY.st);
   G.eBusy = G.mode === 'play' && (!!nearDock() || !!world.surface);
+  // Eisenkrone: Die Gildehütte meldet sich beim ersten Anflug (einmal je Sitzung)
+  if (G.mode === 'play' && !G.dead && !ekHail && world.def?.id === 'heimstatt' && !world.surface) {
+    const ek = stationById('eisenkrone');
+    if (ek && d3(P.x, P.y, P.z, ek.x, ek.y, ek.z) < 1100) { ekHail = true; radio('EISENKRONE', 'Gildehütte Eisenkrone an anfliegendes Schiff. Erz zur Annahme, Barren ab Lager. Folge der Lichterkette, das Tor ist frei.', '#ffb347'); }
+  }
   // Grundgeräusch zu Fuß: im Schiff ein tiefes Brummen, in der Station leiser
   // Grundgeräusch: zu Fuß Schiff, Hangar oder Station; auf einer Planetenoberfläche der Wind (je nach Planetenart)
   {
@@ -682,7 +689,8 @@ if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterSh
 
 // =============== Start ===============
 // Schiffsmodelle laden (kurz), dann Menü zeigen. Ohne Modelle laufen die eingebauten Ersatzmodelle.
-Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false), loadDeck().catch(() => false), loadHangar().catch(() => false)]).then(() => {
+Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false), loadDeck('bastion').catch(() => false), loadHangar().catch(() => false), loadEisenkrone().catch(() => false)]).then(() => {
+  loadDeck('eisenkrone').catch(() => false);      // Hüttendeck der Eisenkrone: im Hintergrund, es wird erst beim Betreten gebraucht
   setTimeout(preloadMeshRooms, 3000);
   setTimeout(preloadBases, 4000);    // Planetenbasen mit eigenem Modell (Schmelzwerk, Bohrturm)
   setTimeout(preloadCities, 2500);   // Städte (Hintergrund-Paket): vor dem ersten Landen auf Heimstatt II geladen

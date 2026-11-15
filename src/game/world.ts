@@ -17,6 +17,7 @@ import { sndOut as snd } from '../core/audio';   // im Inneren einer Station stu
 import { planetLook } from '../data/planets';
 import { buildModelStation, buildCarrierModel, buildBaseModel, baseLoaded, loadBase } from '../models/stationModels';
 import { SHARED } from './shared';
+import { buildEisenkrone, eisenkroneReady, loadEisenkrone } from '../models/eisenkrone';
 
 // ---------------- Typen der Sektor-Objekte ----------------
 export interface Station {
@@ -351,6 +352,8 @@ export function dropPick(x: number, y: number, z: number, k: ItemId, amt: number
 
 // ---------------- Stationen & Tore ----------------
 const Y = new THREE.Vector3(0, 1, 0);
+// Eisenkrone: Das Hangartor (im Modell +X) zeigt schräg zur Bastion, die Erzannahme am anderen Ende zum Metallfeld
+const EISENKRONE_YAW = 0.455;
 export function addStation(sd: StationDef, yaw: number) {
   let model: any;
   if (sd.city && !cityLoaded(sd.city)) {
@@ -375,7 +378,17 @@ export function addStation(sd: StationDef, yaw: number) {
     });
     return;
   }
+  if (sd.id === 'eisenkrone' && !eisenkroneReady()) {
+    // eigenes Modell noch nicht geladen: vorerst die übliche Station, danach austauschen
+    loadEisenkrone().then(ok => {
+      const i = world.stations.findIndex(s => s.id === sd.id);
+      if (!ok || i < 0 || world.def?.id !== 'heimstatt' || G.dockedAt === world.stations[i]) return;
+      const old = world.stations[i]; scene.remove(old.mesh); world.stations.splice(i, 1);
+      addStation(sd, yaw);
+    });
+  }
   if (sd.city) model = buildCityModel(sd.city);
+  else if (sd.id === 'eisenkrone' && (model = buildEisenkrone())) yaw = EISENKRONE_YAW;
   else if (sd.kind === 'carrier') {
     // neues Modell aus Blender, falls geladen; sonst die frühere Bastion aus Grundformen
     model = buildCarrierModel();

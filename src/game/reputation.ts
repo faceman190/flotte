@@ -58,9 +58,9 @@ export function nextRank(id: RepId) {
   return { n: nx.n, at: nx.at, need: Math.ceil(nx.at - v), frac: (v - RANKS[l].at) / (nx.at - RANKS[l].at) };
 }
 
-// Wem gehört eine Station? Planetenbasen der Gilde, sonst nach Zone des Sektors
+// Wem gehört eine Station? Planetenbasen und Gildehütten (Eisenkrone) der Gilde, sonst nach Zone des Sektors
 export function stationFaction(stationId: string, sectorId: string): RepId | null {
-  if (stationId.endsWith('_base')) return 'gilde';
+  if (stationId.endsWith('_base') || SECTOR[sectorId]?.stations.some(s => s.id === stationId && s.gilde)) return 'gilde';      // Planetenbasen und Gildehütten
   const f = SECTOR[sectorId]?.faction;
   return f === 'core' ? 'rat' : f === 'border' ? 'wacht' : null;
 }

@@ -24,15 +24,15 @@ type Rect = [number, number, number, number];   // x0, x1, z0, z1
 interface Part { cls: string; pos: Float32Array; nrm: Float32Array; col: Uint8Array; idx: Uint32Array }
 interface DeckJson {
   cell: number; karte: string[]; ort: Record<string, string>; tueren: number[][][]; schotte: number[][]; offen: string;
-  personal: { tab: string; x: number; y: number; face: number; tx: number; ty: number }[];
+  personal: { tab: string; x: number; y: number; face: number; tx: number; ty: number; titel?: string; satz?: string }[];
   wege: (number | { face: number; t: [number, number]; p: number; who: string | null })[][][]; gruppen: number[][]; karte_xy: number[];
   mod: { n: string; o: string; block: number[] | null }[]; inst: number[][];      // inst: Baustein, x, y, Drehung, über Kopf (0/1), Höhe
 }
-export interface DeckSpot { tab: string; x: number; z: number; face: number; tx: number; tz: number }
+export interface DeckSpot { tab: string; x: number; z: number; face: number; tx: number; tz: number; titel?: string; satz?: string }      // titel und satz: Figur ohne Dienst, sagt nur ihren Satz
 export interface DeckNode { x: number; z: number; stop: null | { face: number; t: [number, number]; p: number; who: string | null } }
 export interface Deck {
   group: THREE.Group; rects: Rect[]; blocks: Rect[]; spots: DeckSpot[]; routes: DeckNode[][]; chats: [number, number, number][];
-  map: { x: number; z: number }; inside: (z: number) => boolean; area: (x: number, z: number) => string; ceil: (x: number, z: number) => number;
+  map: { x: number; z: number }; name: string; inside: (z: number) => boolean; area: (x: number, z: number) => string; ceil: (x: number, z: number) => number;
   update: (x: number, z: number) => void; way: (off: number) => number[][]; tris: number;
   seen: (x: number, z: number) => boolean; hangarSeen: () => boolean;      // ist dieser Ort bzw. der Hangar vom Standort aus zu sehen?
 }
@@ -44,19 +44,22 @@ const GLOW_MAX = 1.25;            // Obergrenze der Strahldichte von Leuchten
 const LIT_MAX = 1.0;              // Obergrenze der Strahldichte beleuchteter Flächen
 const FAR_SMALL = 85;             // Hangar: Wandfüllungen und Kleinteile weiter weg werden nicht gezeichnet (m)
 export const deckTune = { LIGHT, GLOW, mats: () => materials() };      // zum Einstellen im Testfenster
-let DATA: DeckJson | null = null, PARTS: Record<string, Part[]> | null = null, loading: Promise<boolean> | null = null;
-export const deckReady = () => !!(DATA && PARTS);
-export function loadDeck(): Promise<boolean> {
-  if (deckReady()) return Promise.resolve(true);
-  if (loading) return loading;
-  const W = window as any, dj = W.DATAFILES?.deck_bastion as string | undefined, mu = W.BASEDATA?.BastionDeck as string | undefined;
+// Decks je Station: Daten (data/…) und Modell (base/…). Die Bastion lädt beim Start, die Eisenkrone beim Betreten ihres Sektors.
+const DECKS: Record<string, [string, string]> = { bastion: ['deck_bastion', 'BastionDeck'], eisenkrone: ['deck_eisenkrone', 'EisenkroneDeck'] };
+const LOADED: Record<string, { data: DeckJson; parts: Record<string, Part[]> }> = {}, LOADING: Record<string, Promise<boolean>> = {};
+export const hasDeck = (id: string) => id in DECKS;
+export const deckReady = (id = 'bastion') => !!LOADED[id];
+export function loadDeck(id = 'bastion'): Promise<boolean> {
+  if (LOADED[id]) return Promise.resolve(true);
+  if (id in LOADING) return LOADING[id];
+  const W = window as any, names = DECKS[id], dj = names && W.DATAFILES?.[names[0]] as string | undefined, mu = names && W.BASEDATA?.[names[1]] as string | undefined;
   if (!dj || !mu) return Promise.resolve(false);
-  return (loading = (async () => {
+  return (LOADING[id] = (async () => {
     try {
       const [data, gltf] = await Promise.all([fetch(dj).then(r => { if (!r.ok) throw new Error('Deckdaten: ' + r.status); return r.json(); }), new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
-      DATA = data; PARTS = partsOf(gltf.scene);
+      LOADED[id] = { data, parts: partsOf(gltf.scene) };
       return true;
-    } catch (e) { console.warn('Deck der Bastion nicht geladen:', e); loading = null; return false; }
+    } catch (e) { console.warn('Deck nicht geladen:', id, e); delete LOADING[id]; return false; }
   })());
 }
 
@@ -224,9 +227,10 @@ export function buildHangar(): { group: THREE.Group; blocks: Rect[]; tris: numbe
 }
 
 // ---------- Deck für den aktuellen Innenraum bauen (hz0 = Hangarrückwand, z des Tors) ----------
-export function buildDeck(hz0: number): Deck | null {
-  if (!DATA || !PARTS) return null;
-  const D = DATA, K = D.karte, RO = K.length, CO = K[0].length, C = D.cell;
+export function buildDeck(id: string, hz0: number): Deck | null {
+  const L = LOADED[id];
+  if (!L) return null;
+  const D = L.data, PARTS = L.parts, K = D.karte, RO = K.length, CO = K[0].length, C = D.cell;
   const at = (r: number, c: number) => (r >= 0 && r < RO && c >= 0 && c < CO ? K[r][c] : '.');
   const isG = (ch: string) => 'GgHP'.includes(ch), up = (ch: string) => (isG(ch) ? 'G' : ch.toUpperCase());
   let hr = 0, hc = 0; for (let r = 0; r < RO; r++) for (let c = 0; c < CO; c++) if (K[r][c] === 'H') { hr = r; hc = c; }
@@ -266,10 +270,11 @@ export function buildDeck(hz0: number): Deck | null {
   const { group, meshes, tris } = assemble(D, PARTS, (x, y, a) => [gx(y), gz(x), a + Math.PI / 2], (x, y) => zoneOf(Math.round(-y / C), Math.round(x / C)), rect, blocks);
   // Personal, Wege, Gruppen
   const yaw = (deg: number) => { const f = deg * Math.PI / 180; return Math.atan2(-Math.sin(f), -Math.cos(f)); };
-  const spots: DeckSpot[] = D.personal.map(s => ({ tab: s.tab, x: gx(s.y), z: gz(s.x), face: yaw(s.face), tx: gx(s.ty), tz: gz(s.tx) }));
+  const spots: DeckSpot[] = D.personal.map(s => ({ tab: s.tab, x: gx(s.y), z: gz(s.x), face: yaw(s.face), tx: gx(s.ty), tz: gz(s.tx), titel: s.titel, satz: s.satz }));
   const routes: DeckNode[][] = D.wege.map(w => w.map(n => { const s = n[2] as any; return { x: gx(n[1] as number), z: gz(n[0] as number), stop: s ? { face: yaw(s.face), t: s.t, p: s.p, who: s.who } : null }; }));
   const chats = D.gruppen.map(q => [gx(q[1]), gz(q[0]), q[2]] as [number, number, number]);
   const zMin = gz(CO * C);
+  let north = 0; while (isG(at(hr - north - 1, hc + 1))) north++;      // Gangzellen nördlich der Kreuzung hinter dem Tor
   // Sichtprüfung: Gezeichnet werden nur Bereiche, in die man vom Standort aus durch offene Seiten und Türen hineinsehen kann.
   // Ein Strahl läuft durch das Zellraster; an jeder Zellgrenze muss die Seite offen sein (derselbe Raum, Gang an Gang) oder eine Tür haben,
   // durch deren Öffnung er geht. Geprüft werden je Zelle die Mitte und vier Punkte nahe den Ecken.
@@ -305,7 +310,7 @@ export function buildDeck(hz0: number): Deck | null {
   };
   const cellCh = (x: number, z: number) => { const [r, c] = cellOf(x, z); return at(r, c); };
   return {
-    group, rects, blocks, spots, routes, chats, tris, map: { x: gx(D.karte_xy[1]), z: gz(D.karte_xy[0]) },
+    group, rects, blocks, spots, routes, chats, tris, map: { x: gx(D.karte_xy[1]), z: gz(D.karte_xy[0]) }, name: D.ort.G,
     inside: (z: number) => z < hz0 - 0.2 && z > zMin,
     area: (x, z) => D.ort[up(cellCh(x, z))] || D.ort.G,
     ceil: (x, z) => (isG(cellCh(x, z)) ? 2.75 : 3.25),
@@ -316,6 +321,7 @@ export function buildDeck(hz0: number): Deck | null {
     seen: (x, z) => (z > hz0 - 0.2 ? gate : Math.hypot(x - lastX, z - lastZ) < 6 || vis.has(zoneOf(...cellOf(x, z)))),
     hangarSeen: () => gate,
     // Weg der Story-Figuren vom Hangar hinaus (und umgekehrt herein): durch das Tor, an der Kreuzung dahinter nach links außer Sicht
-    way: (off: number) => [[off, hz0 + 4], [off * 0.5, hz0 - 1.2], [off * 0.5, hz0 - 5.6 - off * 0.4], [-7.4, hz0 - 5.8 - off * 0.4]],
+    // (so weit der Gang dort nach Norden reicht: auf der Bastion zwei Zellen, auf der Eisenkrone eine)
+    way: (off: number) => [[off, hz0 + 4], [off * 0.5, hz0 - 1.2], [off * 0.5, hz0 - 5.6 - off * 0.4], [-(north * C - 0.6), hz0 - 5.8 - off * 0.4]],
   };
 }

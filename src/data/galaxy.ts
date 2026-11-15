@@ -14,6 +14,8 @@ export interface StationDef {
   refinery?: boolean;
   model?: string;                 // Planetenbasis mit eigenem Modell (asset-src/glb/base, siehe PlanetDef.model)
   refineBonus?: boolean;          // Großraffinerie: 3 Rohstoff → 2 Barren zur halben Gebühr
+  no?: string[];                  // Dienste, die es hier nicht gibt (Reiter des Stationsmenüs, z. B. 'werft')
+  gilde?: boolean;                // gehört der Bergbaugilde (Ruf und Missionen wie an den Planetenbasen)
 }
 export interface FieldDef { kind: FieldKind; pos: [number, number, number]; r: number; n: number; ore?: Partial<Record<ItemId, number>> }
 export interface SectorDef {
@@ -47,8 +49,12 @@ export const SECTORS: SectorDef[] = [
     // Nebel-Mitte (Bildmitte) liegt hinter der Menüszene: Drehung π − 0,6 passt zur Menükamera (main.ts, MENU_ORBIT)
     neb: 'heimat', tint: 0xffffff, sky: { rot: [0, Math.PI - 0.6, 0], gain: 1.7 }, planet: { size: 3000, tint: 0xc8dcff, dir: [-0.6, -0.2, -0.8], atm: 0x80b0ff },
     stations: [
-      { id: 'bastion', kind: 'carrier', name: 'Bastion', pos: [0, 0, 0], prices: { schrott: 1.2 }, refinery: true },
-      { id: 'heimring', kind: 'station', name: 'Heimstatt-Ring', pos: [1100, 120, -900], prices: { zellen: 1.15 }, refinery: true },
+      { id: 'bastion', kind: 'carrier', name: 'Bastion', pos: [0, 0, 0], prices: { schrott: 1.2 } },
+      { id: 'heimring', kind: 'station', name: 'Heimstatt-Ring', pos: [1100, 120, -900], prices: { zellen: 1.15 } },
+      // Gildehütte am Metallfeld: die Raffinerie des Sektors (Alpha 1.22). Eigenes Modell (src/models/eisenkrone.ts), eigenes Deck (src/game/deck.ts).
+      // Werft, Ausrüster und Werkstatt bleiben auf der Bastion. Lage: südlich der Bastion am Ostrand des Metallfelds. Nicht nach Westen oder Nordwesten
+      // verlegen: Dort liegen die Ankerplätze der Flotte aus Kapitel 5 (SLOTS in chapter5.ts), die Schiffe bleiben sonst an der Station hängen.
+      { id: 'eisenkrone', kind: 'station', name: 'Eisenkrone', pos: [-540, 60, 1460], prices: { erz: 1.1, kupfer: 1.1, stahl: 0.95, kupferb: 0.95 }, refinery: true, gilde: true, no: ['ausruester', 'werft', 'werkstatt'] },
     ],
     fields: [{ kind: 'metal', pos: [-1800, 0, 1000], r: 900, n: 40 }, { kind: 'ice', pos: [1700, -100, 1500], r: 700, n: 22 }],
   },
@@ -56,7 +62,7 @@ export const SECTORS: SectorDef[] = [
     id: 'lichtwall', name: 'Lichtwall', faction: 'core', danger: 0, map: [270, 180], links: ['heimstatt', 'eisgarten', 'rotfels'],
     desc: 'Werftsektor. Hier entstehen die neuen Schiffe des Menschenraums, Erz ist immer gefragt.',
     neb: 'gold', tint: 0x9c9088, planet: { size: 2200, tint: 0xffd8c8, dir: [0.7, 0.3, -0.6], atm: 0xff9a60 },
-    stations: [{ id: 'lichtwerft', kind: 'station', name: 'Lichtwall-Werft', pos: [0, 0, 0], prices: { erz: 1.2, eis: 0.95, stahl: 1.2, titanb: 1.15 }, refinery: true }],
+    stations: [{ id: 'lichtwerft', kind: 'station', name: 'Lichtwall-Werft', pos: [0, 0, 0], prices: { erz: 1.2, eis: 0.95, stahl: 1.2, titanb: 1.15 } }],
     fields: [{ kind: 'mixed', pos: [1900, 100, -700], r: 1000, n: 55 }, { kind: 'metal', pos: [-1500, -200, -1500], r: 700, n: 30 }],
   },
   {
@@ -74,7 +80,7 @@ export const SECTORS: SectorDef[] = [
     id: 'neuhafen', name: 'Neuhafen', faction: 'core', danger: 1, map: [280, 430], links: ['heimstatt', 'kupferbucht', 'splitter'],
     desc: 'Handelsknoten Richtung Süden. Vereinzelt tauchen Ferrox-Späher auf.',
     neb: 'red', tint: 0xc0c0c0, planet: { size: 2600, tint: 0xffffff, dir: [0.5, -0.1, 0.8], atm: 0xff9a60 },
-    stations: [{ id: 'neuhafen', kind: 'station', name: 'Neuhafen', pos: [0, 0, 0], prices: { schrott: 1.25, kupferb: 1.15 }, refinery: true }],
+    stations: [{ id: 'neuhafen', kind: 'station', name: 'Neuhafen', pos: [0, 0, 0], prices: { schrott: 1.25, kupferb: 1.15 } }],
     fields: [{ kind: 'mixed', pos: [-1600, 0, 900], r: 900, n: 40 }],
   },
   {

@@ -236,8 +236,12 @@ def raum_side(st):
     if st == 'O': return
     box('Lichtfuge', 0.02, 3.96, 0.035, -(W - 0.012), 0, 2.165, M['e_cool'], 0)
     box('Gesims', 0.09, 4.0, 0.06, -(W - 0.045), 0, 2.215, M['frame'], 0.008)
-    for y in (-2.0, 0.0): box('Pilaster', 0.1, 0.2, RH, -(W - 0.05), y, RH / 2, M['frame'], 0.012)
-    if st == 'W':
+    for y in ((-2.0,) if st == 'F' else (-2.0, 0.0)): box('Pilaster', 0.1, 0.2, RH, -(W - 0.05), y, RH / 2, M['frame'], 0.012)
+    if st == 'F':      # Fensterwand (Leitstand der Eisenkrone): Brüstung und Sturz, dazwischen 3,6 m offen; Rahmen, Glas und Pult bringt die Wandfüllung mit
+        box('Brüstung', 0.06, 4.0, 0.9, -(W + 0.03), 0, 0.45, M['wall'], 0); box('Sturz', 0.06, 4.0, RH - 2.1, -(W + 0.03), 0, 2.1 + (RH - 2.1) / 2, M['wall'], 0)
+        for sy in (-1, 1): box('Fensterpfeiler', 0.06, 0.2, 1.2, -(W + 0.03), sy * 1.9, 1.5, M['wall'], 0)
+        plinth(); field(-1, -1.87, -0.13, 2.27, 3.3, 3); field(-1, 0.13, 1.87, 2.27, 3.3, 4)
+    elif st == 'W':
         box('Raumwand', 0.06, 4.0, RH, -(W + 0.03), 0, RH / 2, M['wall'], 0); plinth()
         field(-1, -1.87, -0.13, 2.27, 3.3, 3); field(-1, 0.13, 1.87, 2.27, 3.3, 4)
     else:

@@ -129,9 +129,11 @@ function rearm() {
 
 const dot = (k: ItemId) => itemIcon(k, 20);
 const bar = (v: number, max: number, col: string) => `<span class="bar"><i style="width:${Math.min(100, Math.round(v / Math.max(1, max) * 100))}%;background:${col}"></i></span>`;
-const hasYard = () => st().kind !== 'outpost';
+const hasYard = () => st().kind !== 'outpost' && !st().def.no?.includes('werft');
 function tabs(): Tab[] {
-  return ['markt', 'ausruester', ...(st().def.refinery ? ['raffinerie' as Tab] : []), 'auftraege', ...(stationFaction(st().id, secId()) ? ['missionen' as Tab] : []), 'lager', 'hangar', ...(hasYard() ? ['werft' as Tab] : []), 'werkstatt', 'service', 'info'];
+  const all: Tab[] = ['markt', 'ausruester', ...(st().def.refinery ? ['raffinerie' as Tab] : []), 'auftraege', ...(stationFaction(st().id, secId()) ? ['missionen' as Tab] : []), 'lager', 'hangar', ...(hasYard() ? ['werft' as Tab] : []), 'werkstatt', 'service', 'info'];
+  const no = st().def.no;      // Dienste, die es an dieser Station nicht gibt (Eisenkrone: Ausrüster, Werft und Werkstatt bleiben auf der Bastion)
+  return no ? all.filter(t => !no.includes(t)) : all;
 }
 const TAB_N: Record<Tab, string> = { ausruester: 'Ausrüster', markt: 'Markt', raffinerie: 'Raffinerie', auftraege: 'Aufträge', missionen: 'Missionen', lager: 'Lager', hangar: 'Hangar', werft: 'Werft', werkstatt: 'Werkstatt', service: 'Service', info: 'Station' };
 const n1 = (v: number) => v.toFixed(1).replace('.', ',');
@@ -174,6 +176,8 @@ function render() {
     }
     h += `</table><div class="btnRow"><span class="hint" style="margin-right:auto;align-self:center;max-width:430px">Waren von weit her bringen mehr. Stationen verkaufen, was in ihrer Zone gefördert wird. Große Mengen bewegen den Preis; der Markt erholt sich nach einigen Minuten. Frei im Frachtraum: ${room}</span>
       <button class="pri" data-a="sellall" ${total ? '' : 'disabled'}>Alles verkaufen (+${fmtN(total)} Cr)</button></div>`;
+    // seit Alpha 1.22 raffinieren die großen Stationen des Menschenraums nicht mehr selbst: Hinweis auf die Gildehütte
+    if (!s.def.refinery && def.faction === 'core') h += `<p class="hint" style="margin-bottom:0">Erz und Eis veredeln: Die Raffinerie des Menschenraums ist die Gildehütte <b>Eisenkrone</b> im Sektor Heimstatt${def.id === 'heimstatt' ? ', am Metallfeld' : ''}. Barren gibt es dort auch zu kaufen.</p>`;
   } else if (tab === 'ausruester') {
     const gname = (id: string) => { const d = gearDef(id)!; return `${gearIcon(id, 40)}<span style="color:${RARITY[d.rar].c}">${esc(d.n)}</span> <span class="hint" style="display:inline">· ${KIND_N[d.kind]}</span>`; };
     const stock = gearStock(s.id, def.danger);
