@@ -27,6 +27,10 @@ def states(r, c):
         o = at(r + dr, c + dc); door = frozenset(((r, c), (r + dr, c + dc))) in DOORS
         if ch in 'GHP': st.append((('B' if (r, c, k) in BULK else 'S') if k in (2, 3) else 'O') if o in 'GHP' else 'D' if (o != '.' and door) else 'W')
         else: st.append('O' if o == ch else 'X' if (o == 'G' and door) else 'W')
+    if ch in 'GHP':      # Innenecken (bk_kit.py, CORNERS): beide Seiten offen und die Zelle schräg gegenüber kein Gang
+        for (a, b) in ((3, 2), (2, 1), (1, 0), (0, 3)):
+            da, db = DIRS[a], DIRS[b]
+            st.append('k' if (st[a] in 'OSB' and st[b] in 'OSB' and at(r + da[0] + db[0], c + da[1] + db[1]) not in 'GHP') else '-')
     if ch in 'HP':      # das Tor liegt dem Gang gegenüber
         k = next(i for i, s in enumerate(st) if s in 'SOB'); st[(k + 2) % 4] = 'D' if ch in globals().get('OFFEN', '') else 'C'      # OFFEN: Tore, die offen stehen
     return st

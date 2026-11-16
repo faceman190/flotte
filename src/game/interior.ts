@@ -1284,8 +1284,9 @@ export function applyWalkCamera() {
     // Außensicht: über der rechten Schulter, rückt vor Wänden und unter der Decke heran
     const top = ceilY();
     tpCamPos(_c, IN.x, IN.fy + IN.jy, IN.z, IN.yaw, IN.pitch, (x, y, z) => free(x, z) && y > IN.fy + 0.3 && y < top);
+    if (deck) deck.view(_c.x, _c.z);      // die Sichtprüfung des Decks rechnet auch von der Kamera aus
     group.localToWorld(_c);
-  } else group.localToWorld(_c.set(IN.x, eyeH() + IN.bob + IN.fy + IN.jy, IN.z));
+  } else { if (deck) deck.view(1e9, 1e9); group.localToWorld(_c.set(IN.x, eyeH() + IN.bob + IN.fy + IN.jy, IN.z)); }
   camera.position.copy(_c);
   camera.rotation.order = 'YXZ';
   camera.rotation.set(IN.pitch, group.rotation.y + IN.yaw, 0);

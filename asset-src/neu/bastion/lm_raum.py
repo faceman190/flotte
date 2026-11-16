@@ -15,7 +15,7 @@ from mathutils import Matrix
 HERE = os.path.dirname(bpy.data.filepath); SC = bpy.context.scene
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 OPT = dict({'cells': [[0, 7], [0, 8], [0, 9], [1, 7], [1, 8], [1, 9]], 'hall': 'Ofenhalle', 'names': ['leitstand', 'ofenhalle'],
-            'size': [4096, 2048], 'lm': [2048, 1024], 'samples': [512, 384], 'margin': 4, 'gap': 2.0, 'mark': 'lm.txt', 'deck': 'eisenkrone',
+            'size': [4096, 2048], 'lm': [2048, 1024], 'samples': [1536, 1024], 'col_samples': 128, 'margin': 4, 'gap': 2.0, 'mark': 'lm.txt', 'deck': 'eisenkrone',
             'glb': 'LichtraumEisenkrone.glb', 'json': 'lichtraum_eisenkrone.json', 'test': False}, **globals().get('OPT', {}))
 CELL = 4.0
 STAIN = ('Laufspur', 'Rostspur', 'Staubspur', 'Fleck', 'Abrieb')
@@ -130,6 +130,11 @@ def bake(J, kind, img, samples, color=True):
         bk.normal_space = 'TANGENT'; bk.normal_r = 'POS_X'; bk.normal_g = 'POS_Y'; bk.normal_b = 'POS_Z'
         bpy.ops.object.bake(type='NORMAL')
     else: bpy.ops.object.bake(type=kind)
+def soften(x):      # Licht leicht glätten (5 × 5, Gauß): nimmt das Restrauschen, Schatten bleiben scharf genug. Die Ränder der Inseln sind
+    k = np.array([1, 4, 6, 4, 1], dtype=np.float32) / 16      # beim Backen um 4 Bildpunkte fortgesetzt, das Glätten greift nur 2 weit
+    for ax in (0, 1):
+        x = sum(np.roll(x, d, axis=ax) * k[d + 2] for d in range(-2, 3))
+    return x
 def pixels(img):
     w, h = img.size; p = np.empty(w * h * 4, dtype=np.float32); img.pixels.foreach_get(p); return p.reshape(h, w, 4)
 def save_png(arr, name, path):
@@ -183,15 +188,15 @@ def run():
     for J, name, sc, sl, spp in ((A, OPT['names'][0], OPT['size'][0], OPT['lm'][0], OPT['samples'][0]), (B, OPT['names'][1], OPT['size'][1], OPT['lm'][1], OPT['samples'][1])):
         sfx = (lambda s: '@%d' % s) if not OPT['test'] else (lambda s: '')
         path = lambda kind, s: os.path.join(tex, 'lm_%s_%s%s.png' % (name, kind, sfx(s)))
-        im = img('LM_col', sc); bake(J, 'DIFFUSE', im, 16, color=True); col = pixels(im)[..., :3]
+        im = img('LM_col', sc); bake(J, 'DIFFUSE', im, OPT['col_samples'], color=True); col = pixels(im)[..., :3]
         save_png(np.power(np.clip(col, 0, 1), 1 / 2.2), 'col', path('col', sc)); bpy.data.images.remove(im)
-        im = img('LM_lit', sl); bake(J, 'DIFFUSE', im, spp, color=False); x = pixels(im)[..., :3]
+        im = img('LM_lit', sl); bake(J, 'DIFFUSE', im, spp, color=False); x = soften(pixels(im)[..., :3])
         save_png(enc(x), 'lit', path('lit', sl)); bpy.data.images.remove(im)
         note('%s: Farbe und Licht gebacken (%.0f s), Licht Mittel %.3f, Spitze %.1f' % (name, time.time() - t0, float(x.mean()), float(x.max())))
         im = img('LM_emi', sc); bake(J, 'EMIT', im, 32); save_png(enc(pixels(im)[..., :3]), 'emi', path('emi', sc)); bpy.data.images.remove(im)      # Leuchten fein und geglättet: Bildschirme haben ein Zeilenmuster
         im = img('LM_dat', sl)
         bake(J, 'ROUGHNESS', im, 1); r = pixels(im)[..., 0]; save_png(np.stack([np.ones_like(r), r, np.zeros_like(r)], -1), 'orm', path('orm', sl))
-        bake(J, 'NORMAL', im, 4); save_png(pixels(im)[..., :3].copy(), 'nrm', path('nrm', sl)); bpy.data.images.remove(im)
+        bake(J, 'NORMAL', im, 16); save_png(pixels(im)[..., :3].copy(), 'nrm', path('nrm', sl)); bpy.data.images.remove(im)
         out[name] = {'tris': tri(J), 'col': sc, 'lit': sl}
         note('%s: Leuchten, Rauheit und Relief gebacken, Bilder geschrieben (%.0f s)' % (name, time.time() - t0))
     out[OPT['names'][0]]['arten'] = set_classes(A); out[OPT['names'][1]]['arten'] = set_classes(B)

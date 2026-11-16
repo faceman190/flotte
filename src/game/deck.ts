@@ -33,11 +33,11 @@ export interface DeckNode { x: number; z: number; stop: null | { face: number; t
 export interface Deck {
   group: THREE.Group; rects: Rect[]; blocks: Rect[]; spots: DeckSpot[]; routes: DeckNode[][]; chats: [number, number, number][];
   map: { x: number; z: number }; name: string; inside: (z: number) => boolean; area: (x: number, z: number) => string; ceil: (x: number, z: number) => number;
-  update: (x: number, z: number) => void; way: (off: number) => number[][]; tris: number;
+  update: (x: number, z: number) => void; view: (x: number, z: number) => void; way: (off: number) => number[][]; tris: number;
   seen: (x: number, z: number) => boolean; hangarSeen: () => boolean;      // ist dieser Ort bzw. der Hangar vom Standort aus zu sehen?
 }
 
-const RANGE = 46;                 // Bereiche weiter weg werden nicht gezeichnet (m)
+const RANGE = 70;                 // Bereiche weiter weg werden nicht gezeichnet (m); 46 m schnitten das Ende langer Gänge ab
 const LIGHT = { value: 1.0 };     // Stärke des vorberechneten Lichts
 const GLOW = { value: 0.7 };      // Stärke der Leuchten
 const GLOW_MAX = 1.25;            // Obergrenze der Strahldichte von Leuchten
@@ -108,7 +108,7 @@ async function lmMaterials(prefix: string) {
   // eg, cap: Stärke und Obergrenze der Leuchten. Bildschirme bleiben unter der Schwelle des Bloom (0,82): Große helle Flächen überstrahlen sonst den halben Raum
   // diff = false: Leuchten und Bildschirme zeigen nur ihr Leuchten. Ihr Streulicht stammt oft von einer Lampe direkt davor (Bildschirmlicht) und wäre riesig
   const mk = (key: string, f0: number, envK: number, eg = 1, cap = GLOW_MAX, diff = true) => {
-    const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(f0, f0, f0), metalness: 1, roughness: 1, roughnessMap: orm, normalMap: nrm, envMap: env, envMapIntensity: envK, emissive: 0xffffff, emissiveMap: lit });
+    const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(f0, f0, f0), metalness: 1, roughness: 1, roughnessMap: orm, normalMap: nrm, normalScale: new THREE.Vector2(0.7, 0.7), envMap: env, envMapIntensity: envK, emissive: 0xffffff, emissiveMap: lit });      // Relief etwas zurück: feines Korn glitzerte sonst im Glanz
     m.onBeforeCompile = (sh) => {
       sh.uniforms.bkLight = LIGHT; sh.uniforms.bkGlow = GLOW; sh.uniforms.lmCol = { value: col }; sh.uniforms.lmEmi = { value: emi };
       sh.fragmentShader = sh.fragmentShader
@@ -367,7 +367,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
       if (up(a) !== up(b)) {
         if (!doors.has(`${r},${c},${nr},${nc2}`)) return false;
         const off = ew ? y + dy * t - (-r * C) : x + dx * t - c * C;      // Abstand von der Türmitte
-        if (Math.abs(off) > 0.95) return false;
+        if (Math.abs(off) > 1.05) return false;      // Türöffnung 1,5 m, mit etwas Spiel: lieber einen Bereich zu viel zeichnen als ein Loch zeigen
       }
       r = nr; c = nc2;
     }
@@ -375,15 +375,23 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   };
   const cellsOf = new Map<string, [number, number][]>();
   for (let r = 0; r < RO; r++) for (let c = 0; c < CO; c++) if (at(r, c) !== '.') { const zn = zoneOf(r, c); cellsOf.set(zn, [...(cellsOf.get(zn) || []), [r, c]]); }
-  let lastX = 1e9, lastZ = 1e9, gate = true; const vis = new Set<string>();
-  const look = (x: number, z: number) => {
-    lastX = x; lastZ = z; vis.clear();
+  // Geprüft wird vom Standort der Figur und von der Kamera aus (Außensicht: bis 2,3 m hinter der Figur; sie sah sonst in Bereiche, die
+  // ausgeblendet waren, und durch die Lücke ins Freie). Je Zelle die Mitte, die vier Ecken und die vier Seitenmitten.
+  let lastX = 1e9, lastZ = 1e9, camX = 1e9, camZ = 1e9, lookCX = 1e9, lookCZ = 1e9, gate = true; const vis = new Set<string>();
+  const PTS = [[0, 0], [-1.5, -1.5], [1.5, -1.5], [1.5, 1.5], [-1.5, 1.5], [0, -1.8], [0, 1.8], [-1.8, 0], [1.8, 0]];
+  const toPlan = (x: number, z: number): [number, number, boolean] => {
     let px = OX + (Z0 - z), py = OY - x;                                  // Innenraum → Plan
     const out = at(Math.round(-py / C), Math.round(px / C)) === '.';
     if (out) { px = OX; py = OY; }                                        // im Hangar (oder in einer Wand): Blick vom Tor aus
-    gate = out || z > hz0 - 0.2 || sees(px, py, OX - 1.6, OY) || sees(px, py, OX - 1.6, OY + 0.6) || sees(px, py, OX - 1.6, OY - 0.6);      // sieht man durchs Tor in den Hangar?
+    return [px, py, out];
+  };
+  const look = (x: number, z: number) => {
+    lastX = x; lastZ = z; lookCX = camX; lookCZ = camZ; vis.clear();
+    const eyes = [toPlan(x, z)]; if (camX < 1e8) eyes.push(toPlan(camX, camZ));
+    gate = z > hz0 - 0.2 || camZ > hz0 - 0.2;
+    for (const [px, py, out] of eyes) gate = gate || out || sees(px, py, OX - 1.6, OY) || sees(px, py, OX - 1.6, OY + 0.6) || sees(px, py, OX - 1.6, OY - 0.6);      // sieht man durchs Tor in den Hangar?
     for (const [zn, cells] of cellsOf) {
-      search: for (const [r, c] of cells) for (const [ox, oy] of [[0, 0], [-1.4, -1.4], [1.4, -1.4], [1.4, 1.4], [-1.4, 1.4]]) if (sees(px, py, c * C + ox, -r * C + oy)) { vis.add(zn); break search; }
+      search: for (const [px, py] of eyes) for (const [r, c] of cells) for (const [ox, oy] of PTS) if (sees(px, py, c * C + ox, -r * C + oy)) { vis.add(zn); break search; }
     }
   };
   const cellCh = (x: number, z: number) => { const [r, c] = cellOf(x, z); return at(r, c); };
@@ -392,8 +400,9 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     inside: (z: number) => z < hz0 - 0.2 && z > zMin,
     area: (x, z) => D.ort[up(cellCh(x, z))] || D.ort.G,
     ceil: (x, z) => (isG(cellCh(x, z)) ? 2.75 : 3.25),
+    view: (x, z) => { camX = x; camZ = z; },      // Kamera der Außensicht (Innenraum); fern = keine
     update: (x, z) => {
-      if (Math.hypot(x - lastX, z - lastZ) > 0.6) look(x, z);
+      if (Math.hypot(x - lastX, z - lastZ) > 0.6 || Math.hypot(camX - lookCX, camZ - lookCZ) > 0.6) look(x, z);
       for (const q of meshes) { const d = Math.hypot(q.c.x - x, q.c.z - z) - q.r; q.m.visible = d < RANGE && (d < 5 || q.zn === 'x' || vis.has(q.zn)); }
     },
     seen: (x, z) => (z > hz0 - 0.2 ? gate : Math.hypot(x - lastX, z - lastZ) < 6 || vis.has(zoneOf(...cellOf(x, z)))),

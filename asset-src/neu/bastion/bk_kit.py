@@ -187,7 +187,30 @@ def gang_floor_side(is_open):
         box('Unterbau', 1.4, 1.1, 0.3, -1.3, 0, -0.165, M['frame'], 0)
         box('Rostrahmen', 0.05, 1.14, 0.05, -0.575, 0, -0.012, M['steel'], 0.006)
         box('Randlinie', 0.05, 1.3, 0.003, -0.66, 0, 0.0135, M['ochre'], 0)
+def slab(name, pts, t, m):      # ebene Platte aus vier Punkten (Innenseite), t dick nach außen (gegen die Drehrichtung der Punkte)
+    bm = bmesh.new(); a = [Vector(q) for q in pts]; n = (a[1] - a[0]).cross(a[2] - a[0]).normalized()
+    v0 = [bm.verts.new(q) for q in a]; v1 = [bm.verts.new(q - n * t) for q in a]
+    bm.faces.new(v0); bm.faces.new(list(reversed(v1)))
+    for i in range(4): bm.faces.new([v0[i], v1[i], v1[(i + 1) % 4], v0[(i + 1) % 4]])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free(); me.materials.append(m)
+    return link(bpy.data.objects.new(name, me))
+def gang_corner():
+    # Innenecke einer Gangzelle bei (−2, −2), wenn West- und Südseite offen sind (Knick oder Abzweig): Die Wände und Dachschrägen der
+    # Nachbarzellen enden an der Zellgrenze, dazwischen blieb ein Spalt von 30 cm bis unter die Decke, durch den man ins Freie sah.
+    # Hier ein Eckpfosten bis zur Schräge und zwei Schrägen, die die der Nachbarn bis zur Diagonale fortsetzen (wie ein Walmdach von innen).
+    box('Eckpfosten', 0.3, 0.3, H1, -1.85, -1.85, H1 / 2, M['frame'], 0.012)
+    box('Eckpfosten Marke', 0.304, 0.304, 0.1, -1.85, -1.85, 1.32, M['ochre'], 0.004)
+    box('Eckpfosten Fuß', 0.36, 0.36, 0.07, -1.85, -1.85, 0.035, M['frame'], 0.01)
+    w0, c0 = W, CX
+    slab('Eckschräge', [(-2.05, -w0, H1), (-2.05, -c0, HC), (-c0, -c0, HC), (-w0, -w0, H1)], 0.06, M['wall'])      # 5 cm in die Nachbarzelle: keine Haarfuge
+    slab('Eckschräge', [(-w0, -2.05, H1), (-w0, -w0, H1), (-c0, -c0, HC), (-c0, -2.05, HC)], 0.06, M['wall'])
+    box('Eckknoten', 0.3, 0.3, 0.2, -1.85, -1.85, H1 - 0.02, M['frame'], 0.02)
+CORNERS = ((3, 2, 0.0), (2, 1, PI / 2), (1, 0, PI), (0, 3, -PI / 2))      # Seitenpaar einer Ecke und Drehung der Ecke bei (−2, −2) dorthin
 def build_gang(st, cm, cd):
+    if len(st) > 4:      # Zeichen 5 bis 8: Innenecken (k = schließen), in der Reihenfolge von CORNERS
+        for i, (_a, _b, ang) in enumerate(CORNERS):
+            if st[4 + i] == 'k': CUR[0] = cm; REC[0] = []; gang_corner(); objs = REC[0]; REC[0] = None; rotz(objs, ang)
     CUR[0] = cm
     box('Grabenboden', 4.0, 4.0, 0.04, 0, 0, -0.3, M['frame'], 0)
     a = 0.62
@@ -236,7 +259,7 @@ def raum_side(st):
     if st == 'O': return
     box('Lichtfuge', 0.02, 3.96, 0.035, -(W - 0.012), 0, 2.165, M['e_cool'], 0)
     box('Gesims', 0.09, 4.0, 0.06, -(W - 0.045), 0, 2.215, M['frame'], 0.008)
-    for y in ((-2.0,) if st == 'F' else (-2.0, 0.0)): box('Pilaster', 0.1, 0.2, RH, -(W - 0.05), y, RH / 2, M['frame'], 0.012)
+    for y in ((-2.0,) if st in ('F', 'X') else (-2.0, 0.0)): box('Pilaster', 0.1, 0.2, RH, -(W - 0.05), y, RH / 2, M['frame'], 0.012)      # an Tür- und Fensterwänden nur in der Ecke
     if st == 'F':      # Fensterwand (Leitstand der Eisenkrone): Brüstung und Sturz, dazwischen 3,6 m offen; Rahmen, Glas und Pult bringt die Wandfüllung mit
         box('Brüstung', 0.06, 4.0, 0.9, -(W + 0.03), 0, 0.45, M['wall'], 0); box('Sturz', 0.06, 4.0, RH - 2.1, -(W + 0.03), 0, 2.1 + (RH - 2.1) / 2, M['wall'], 0)
         for sy in (-1, 1): box('Fensterpfeiler', 0.06, 0.2, 1.2, -(W + 0.03), sy * 1.9, 1.5, M['wall'], 0)
