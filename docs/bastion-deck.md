@@ -113,3 +113,27 @@ der Geschichte liegen wie zuvor; Landung, Start und die Wege der Läufer sind un
 Die Raffinerie ist auf die Gildehütte Eisenkrone umgezogen (`docs/eisenkrone.md`). Im Lager der Bastion stehen seitdem drei Tresen statt vier
 (Markt, Ausrüster, Lager); das Deck wurde dafür neu ausgegeben. `bk_deck_d.py` liefert jetzt auch die Helfer für andere Decks
 (`DECK_HELFER`, `plan_setzen`, `meta_schreiben`).
+
+## Alpha 1.24: Lücken geschlossen, Lückensuche
+
+Der Nutzer sah an Gangecken ins Freie (Bildschirmfoto vom 16.11.2026). Gefunden und behoben wurden vier Ursachen:
+
+1. **Schlitz neben jeder Gangtür.** Das Schott einer Tür steht auf der Zellgrenze (2,0 m), die Wand der Nachbarzelle 27 cm weiter innen,
+   darüber ihre Dachschräge. Dazwischen war an beiden Enden jeder Türwand ein Schlitz offen. Jetzt schließt eine Wange in der Zellgrenze
+   die Fläche (`door_open` in `bk_kit.py`).
+2. **Innenecken der Gänge.** Wo ein Gang abknickt oder abzweigt, enden Wände und Dachschrägen der Nachbarzellen an der Zellgrenze: 30 cm
+   blieben bis unter die Decke offen. Jetzt stehen dort ein Eckpfosten und zwei Schrägen (`gang_corner`; `bk_plan.py` setzt sie über die
+   Zustandszeichen 5 bis 8 einer Gangzelle).
+3. **Pilaster mitten in jeder Raumtür** (`raum_side`): entfernt.
+4. **Sichtprüfung des Spiels** (`deck.ts`): Sie rechnete nur vom Standort der Figur. Die Kamera der Außensicht steht bis 2,3 m dahinter und sah
+   in ausgeblendete Bereiche. Jetzt wird auch von der Kamera aus geprüft (`deck.view`), mit neun statt fünf Punkten je Zelle, Reichweite
+   70 statt 46 m, und wer eine Türöffnung sieht, bekommt beide Seiten gezeichnet.
+
+**Lückensuche:** `scripts/lueckensuche.js` (nach `decktest.js` laden). Blendet alles außer dem Innenraum aus, löscht mit Magenta und rendert
+von jeder Zelle (Mitte und vier Punkte) in acht Richtungen und zwei Neigungen klein; jedes Magenta-Pixel ist ein Loch.
+`LS.scan({from, to})` prüft mit der Sichtprüfung des Spiels, `LS.scan({from, to, all: true})` zeigt alle Bereiche und findet so Lücken in
+der Geometrie. `LS.image(...)` liefert eine Fundstelle groß. Höchstens etwa 20 Zellen je Aufruf (ein Aufruf darf 30 s dauern).
+Nach jeder Änderung am Baukasten oder an einer Karte laufen lassen.
+
+**Ausgeben ohne offenes Blender:** `blender.exe -b --python bk_lauf.py -- bk_deck_d.py BastionDeckD.blend` baut und gibt aus
+(Blender liegt auf diesem Rechner unter `C:\EXTRA\Blender`). Für die Eisenkrone siehe den Kopf von `bk_lauf.py`.

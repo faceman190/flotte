@@ -326,6 +326,12 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     rects.push(r1 === r2 ? rect(x - 1.1, x + 1.1, y - 0.86, y + 0.86) : rect(x - 0.86, x + 0.86, y - 1.1, y + 1.1));
   }
   rects.push(rect(OX - H - 1.4, OX - H + 1.1, OY - 0.86, OY + 0.86));   // offenes Tor zum Hangar
+  // Eckpfosten an den Innenecken der Gänge (bk_kit.py, gang_corner): beide Seiten Gang, schräg gegenüber keiner
+  for (let r = 0; r < RO; r++) for (let c = 0; c < CO; c++) {
+    if (!isG(at(r, c))) continue;
+    const x = c * C, y = -r * C;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) if (isG(at(r, c + sx)) && isG(at(r - sy, c)) && !isG(at(r - sy, c + sx))) blocks.push(rect(x + sx * 1.7, x + sx * 2.0, y + sy * 1.7, y + sy * 2.0));
+  }
   for (const [r, c, k] of D.schotte) {      // Schott: die Pfosten verengen den Gang auf 2,2 m
     const x = c * C, y = -r * C;
     for (const s of [-1, 1]) blocks.push(k === 3 ? rect(x - H - 0.12, x - H + 0.12, y + s * 1.12, y + s * 1.8) : rect(x + s * 1.12, x + s * 1.8, y - H - 0.12, y - H + 0.12));
@@ -392,6 +398,14 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     for (const [px, py, out] of eyes) gate = gate || out || sees(px, py, OX - 1.6, OY) || sees(px, py, OX - 1.6, OY + 0.6) || sees(px, py, OX - 1.6, OY - 0.6);      // sieht man durchs Tor in den Hangar?
     for (const [zn, cells] of cellsOf) {
       search: for (const [px, py] of eyes) for (const [r, c] of cells) for (const [ox, oy] of PTS) if (sees(px, py, c * C + ox, -r * C + oy)) { vis.add(zn); break search; }
+    }
+    // Türen: Wer eine Türöffnung sieht, sieht auch ein Stück des Raums dahinter (bei flachem Blick nur Laibung und Schwelle, die keiner der
+    // Prüfpunkte im Raum trifft). Also beide Seiten zeichnen, sobald ein Punkt in der Öffnung zu sehen ist.
+    for (const [[r1, c1], [r2, c2]] of D.tueren) {
+      const mx = (c1 + c2) / 2 * C, my = -(r1 + r2) / 2 * C, ax = r1 === r2 ? 0 : 1, ay = r1 === r2 ? 1 : 0;      // ax, ay: Richtung längs der Öffnung
+      let hit = false;
+      for (const [px, py] of eyes) for (const t of [-0.6, 0, 0.6]) for (const n of [-0.15, 0.15]) if (sees(px, py, mx + ax * t + ay * n, my + ay * t + ax * n)) hit = true;
+      if (hit) { vis.add(zoneOf(r1, c1)); vis.add(zoneOf(r2, c2)); }
     }
   };
   const cellCh = (x: number, z: number) => { const [r, c] = cellOf(x, z); return at(r, c); };

@@ -99,6 +99,12 @@ def door_open():      # Schott mit offenem Tor: Durchgang 1,5 × 2,3 m
         for sx in (-1, 1):
             cyl('Tor-LED', 0.007, 0.008, -2.0 + sx * 0.104, sy * 0.85, 1.3, M['e_green'], 'X', n=8, bev=0)
     box('Schott oben', 0.1, 4.0, 1.3, -2.0, 0, 2.95, M['wall'], 0)
+    # Wangen an beiden Enden: Das Schott steht auf der Zellgrenze (2,0 m), die Wand der Nachbarzelle 27 cm weiter innen (1,73 m) und darüber
+    # ihre Dachschräge. Dazwischen blieb an jeder Tür ein Schlitz ins Freie (bis Alpha 1.23). Die Wange füllt genau die Fläche zwischen dem
+    # Querschnitt des Nachbargangs und dem Rechteck der Türzelle; sie liegt in der Zellgrenze und ragt nicht in den Durchgang.
+    for sy in (-1, 1):
+        y0, y1 = (1.94, 2.0) if sy > 0 else (-2.0, -1.94)
+        prism('Schottwange', [(-2.05, -0.3), (-1.72, -0.3), (-1.72, 2.11), (-0.92, 2.91), (-0.92, 3.0), (-2.05, 3.0)], y0, y1, M['wall'], 'Y', 0)
     box('Torsturz', 0.22, 1.9, 0.24, -2.0, 0, 2.4, M['frame'], 0.02)
     for sx in (-1, 1): box('Tor Leuchtband', 0.02, 0.9, 0.05, -2.0 + sx * 0.115, 0, 2.4, M['e_teal'], 0)
     box('Torschwelle', 0.3, 1.5, 0.03, -2.0, 0, 0.015, M['steel'], 0.006)

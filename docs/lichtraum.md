@@ -51,5 +51,14 @@ sie sind.
 - Bewegte Dinge (Figuren, Schiffe) bekommen kein gebackenes Licht; sie stehen weiter im Licht der Spiellampen.
 - Je Raum etwa 9 MB Download: für ein ganzes Deck 50 bis 90 MB. Deshalb lohnt es sich vor allem für Räume, die man oft sieht.
 - Blender zeigt zusätzlich Dunst und eine weichere Farbumsetzung (AgX). Beides wären Effekte für das ganze Spiel (GTAO, AgX, Nebel).
-- Gefunden beim Vergleich, gilt für alle Decks seit Alpha 1.20: In jeder Raumtür steht ein Pilaster mitten in der Öffnung (`raum_side` in
-  `bk_kit.py` setzt Pilaster bei y = −2 und 0 auch an Türseiten). Beheben heißt: `bk_kit.py` ändern, beide Decks und den Lichtraum neu ausgeben.
+
+## Alpha 1.24: weniger Rauschen
+
+Dem Nutzer war der Leitstand zu verrauscht. Ursachen und Abhilfe in `lm_raum.py`:
+
+- Das Farbbild war mit 16 Abtastungen gebacken; die Materialien streuen ihre Farbe aber über einen Verdeckungsknoten, der je Abtastung
+  würfelt. Jetzt 128 Abtastungen (`col_samples`).
+- Licht mit 1536 statt 512 Abtastungen (Halle 1024), danach leicht geglättet (`soften`, 5 × 5).
+- Relief mit 16 statt 4 Abtastungen; im Spiel wirkt es nur noch zu 70 % (`normalScale`), weil feines Korn im Glanz glitzerte.
+
+Backzeit jetzt rund 8 Minuten. Vergleich vorher und nachher: `docs/bilder/lichtraum-124-rauschen.jpg`.

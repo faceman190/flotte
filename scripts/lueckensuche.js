@@ -52,6 +52,32 @@ window.LS = {
     for (let y = 0; y < H; y++) id.data.set(px8.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);      // Zeilen von unten nach oben
     g.putImageData(id, 0, 0); return { n, url: cv.toDataURL('image/jpeg', 0.9) };
   },
+  // Außensicht: die Figur steht bei (px, py) und blickt in Planrichtung yaw; gerendert wird mit der Kamera des Spiels (hinter der Figur),
+  // nach zwei Bildern, damit die Sichtprüfung den Kamerastandort kennt. So entstand das Bildschirmfoto des Nutzers mit dem Loch.
+  async shotTp(px, py, yaw, W = 192, H = 108) {
+    const T = window.DT, E = T.E, lf = T.lf;
+    if (!this.AV) { const res = performance.getEntriesByType('resource').map(r => r.name), dyn = new Function('u', 'return imp' + 'ort(u)'); this.AV = await dyn(res.find(u => u.includes('/src/game/avatar.ts'))); }
+    this.AV.VIEW.tp = true; lf.IN.x = this.gx(py); lf.IN.z = this.gz(px); lf.IN.yaw = yaw; lf.IN.pitch = 0; lf.tick(0.1); lf.tick(0.1);
+    let dg = null; E.scene.traverse(o => { if (!dg && o.isMesh && o.material && o.material.customProgramCacheKey && /^(lm|bk)-/.test(String(o.material.customProgramCacheKey()))) dg = o.parent; });
+    let root = dg; while (root.parent && root.parent !== E.scene) root = root.parent;
+    const TH = this.THREE; if (!this.block || this.block.parent !== root) { this.block = new TH.Mesh(new TH.PlaneGeometry(500, 300), new TH.MeshBasicMaterial({ color: 0x000000, side: TH.DoubleSide })); this.block.position.set(0, 50, 110); root.add(this.block); }
+    const hidden = []; for (const c of E.scene.children) if (c !== root && c.visible && !c.isLight) { hidden.push(c); c.visible = false; }
+    const r = E.renderer, bg = E.scene.background, cc = r.getClearColor(new TH.Color()), ca = r.getClearAlpha();
+    if (!this.rt2 || this.rt2.width !== W) this.rt2 = new TH.WebGLRenderTarget(W, H);
+    const cam = E.camera.clone(); cam.aspect = W / H; cam.updateProjectionMatrix();
+    E.scene.background = null; r.setClearColor(0xff00ff, 1); r.setRenderTarget(this.rt2); r.clear(); r.render(E.scene, cam);
+    const px8 = new Uint8Array(W * H * 4); r.readRenderTargetPixels(this.rt2, 0, 0, W, H, px8); r.setRenderTarget(null);
+    E.scene.background = bg; r.setClearColor(cc, ca); for (const c of hidden) c.visible = true;
+    let n = 0; for (let i = 0; i < W * H; i++) if (px8[i * 4] > 200 && px8[i * 4 + 1] < 70 && px8[i * 4 + 2] > 200) n++;
+    this.last = { px8, W, H }; return n;
+  },
+  async scanTp({ from = 0, to = 1e9, min = 3 } = {}) {
+    const out = [], C = this.C;
+    for (const [r, c, ch] of this.cells.slice(from, to)) for (const [ox, oy] of [[0, 0], [-1.1, -1.1], [1.1, 1.1]]) for (let k = 0; k < 8; k++) {
+      const n = await this.shotTp(c * C + ox, -r * C + oy, k * Math.PI / 4); if (n >= min) out.push([r, c, ch, ox, oy, k, 0, n]);
+    }
+    this.AV.VIEW.tp = false; return out;
+  },
   async scan({ from = 0, to = 1e9, all = false, min = 3 } = {}) {
     const out = [], C = this.C;
     for (const [r, c, ch] of this.cells.slice(from, to)) {
