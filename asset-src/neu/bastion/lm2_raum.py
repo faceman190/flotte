@@ -164,6 +164,14 @@ def edge_mask(me):      # je Fläche: schmaler Streifen (Breite etwa 2 · Fläch
 
 def run():
     t0 = time.time(); note('Start')
+    # Schlanker (OPT['slim'], Vorgabe aus): Fasen mit einer Stufe statt zwei, Rohre mit weniger Segmenten. Die schmalen Streifen an den Kanten
+    # bleiben (dort sitzt der Kantenabrieb), das Deck hat dann etwa 60 % der Dreiecke (voll: 2,4 Mio., 62 MB gepackt). Der Nutzer hat sich
+    # am 16.11.2026 für die volle Fassung entschieden („Warum sind 62 MB zu groß, nimm diese“).
+    if OPT.get('slim', False):
+        for ob in bpy.data.objects:
+            for md in ob.modifiers:
+                if md.type == 'BEVEL': md.segments = 1
+            if ob.type == 'CURVE': ob.data.bevel_resolution = min(ob.data.bevel_resolution, 2)
     parts = [dict(name=r['name'], cells=[list(c) for c in r['cells']], lm=r.get('lm', OPT['lm']), spp=r.get('samples', OPT['samples']), emp=[]) for r in OPT['rooms']]
     for cn in ('Deck', 'Deck Decken'):
         for e in bpy.data.collections[cn].objects:
@@ -173,6 +181,9 @@ def run():
                 if c in p['cells']: p['emp'].append(e); break
     table = {}
     tri = lambda J: sum(len(q.vertices) - 2 for q in J.data.polygons)
+    leer = [p['name'] for p in parts if not p['emp']]
+    if leer: note('ohne Bausteine, übersprungen: ' + ', '.join(leer))
+    parts = [p for p in parts if p['emp']]
     for p in parts:
         p['J'], nl = realize(p['emp'], p['name'])
         p['mats'] = [params(m) for m in p['J'].data.materials]      # vor dem Umbau fürs Backen

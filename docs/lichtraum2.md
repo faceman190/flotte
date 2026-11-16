@@ -69,3 +69,47 @@ warum die Ausgabe so lange braucht, ist noch nicht untersucht.
   (feste Farbe) oder fehlen; die Spinde brauchen sie nicht.
 - Gänge und Hangar: dieselbe Technik, noch nicht gebaut.
 - Die alten Lichträume und ihre Bilder bleiben, bis die Entscheidung gefallen ist.
+
+## Ganzes Deck der Bastion (Alpha 1.30)
+
+Der Nutzer hat die Probe freigegeben („Ja super. Ganzes Deck“). Deck 3 der Bastion ist jetzt ganz Lichtraum 2: neun Räume und acht
+Gangstücke, 105 Zellen. Vergleich: `docs/bilder/lichtraum2-130-deck.jpg`.
+
+**Backen.** `lm2_bastion.json` entsteht aus der Karte: ein Teil je Bereich des Spiels (`zoneOf` in deck.ts: Räume = zusammenhängende
+Zellen eines Buchstabens, Gänge = Blöcke von 6 × 5 Zellen). So gilt die Sichtprüfung des Decks unverändert. Lichtkarte 1024, ab zehn
+Zellen 1536. Gemessen für das ganze Deck: 30 Minuten, davon 20 Minuten Auflösen der Bausteine und 10,5 Minuten Backen (17 Teile).
+Der alte Weg hätte für dasselbe gut zwei Stunden gebraucht (hochgerechnet aus 62 Minuten für die neun Räume).
+
+**Geometrie.** Volle Fasen: 2,4 Mio. Dreiecke, gepackt 62 MB. Eine schlankere Fassung (`OPT['slim']`, Fasen mit einer Stufe, etwa 60 %
+der Dreiecke) ist vorbereitet; der Nutzer hat sich für die volle entschieden („Warum sind 62 MB zu groß, nimm diese“).
+
+**Neu im Material:** Warnschraffur und Bildschirmzeilen (`bk_lib.stripes` legt seine Angaben wie `mk` am Material ab; das Spiel rechnet
+die Bänder, in der Ferne fließen sie zur Mischfarbe), Noppenblech (Raster von 42 Noppen je Meter als Gefälle), Sternenfenster und Glas
+wie im alten Lichtraum.
+
+**Im Spiel.**
+- Wo ein Satz der neuen Art da ist, lädt das Deck die alten Sätze nicht mehr. Der alte Satz der Bastion (Treffpunkt, Lager) bleibt nur
+  als Rückfall für die Artifact-Fassung; die Bilder und Modelle der sieben Räume aus Alpha 1.28 sind entfernt.
+- Raumspiegelung: 256 statt 512 je Seite (6 statt 25 MB je Bereich), sie wird mit den Bildern des Bereichs freigegeben. Aufgenommen
+  wird in der Zelle, die der Mitte des Bereichs am nächsten liegt (Gänge knicken ab, ihre Mitte kann in einer Wand liegen).
+- Später Umbau: Ist das Deck ohne Lichträume gebaut worden, weil die Daten noch luden, tauscht der Innenraum es aus, sobald sie da
+  sind (`deck.stale()`). Im Test: Start mit Bausteinen, Umschalten nach einer Sekunde.
+
+**Gemessen** (RTX 3060 Ti, 1280 × 720, Testfenster; Bausteine → Lichtraum 2):
+
+| Blick | Bildzeit | Dreiecke je Bild |
+| --- | --- | --- |
+| Gang | 3,3 bis 3,5 → 5,5 ms | 0,66 → 1,46 Mio. |
+| Treffpunkt | 2,4 bis 2,5 → 4,9 bis 5,4 ms | 0,76 → 1,66 Mio. |
+| Werkstatt | 3,7 → 5,1 bis 5,7 ms | 0,64 → 1,35 Mio. |
+| Besprechung | 4,1 bis 4,3 → 5,0 bis 5,1 ms | 0,58 → 1,03 Mio. |
+
+Herunterzuladen: Deckmodell 62 MB und 17 Lichtkarten mit zusammen 3 MB (vorher 48 MB für die neun Räume in der alten Art).
+
+**Geprüft:** Lückensuche über alle 105 Zellen ohne Fund, Begehbarkeit wie vorher, Story-Durchlauf sauber.
+
+**Artifact-Fassung.** Das Deckmodell passt nicht (gebündelt 82 MB, Grenze 256 MiB je Fassung). Dort bleibt die Bastion beim Stand von
+Alpha 1.27: Treffpunkt und Lager in der alten Art, sonst Bausteine.
+
+**Offen:** Hangar und Eisenkrone sind noch nicht umgestellt. Schmutz in Ecken fehlt weiter. Das Deckmodell ist eine einzige große
+Datei; es in Teile zu zerlegen, würde den ersten Besuch beschleunigen.

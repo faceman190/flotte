@@ -36,7 +36,8 @@ export interface Deck {
   map: { x: number; z: number }; name: string; inside: (z: number) => boolean; area: (x: number, z: number) => string; ceil: (x: number, z: number) => number;
   update: (x: number, z: number) => void; view: (x: number, z: number) => void; way: (off: number) => number[][]; tris: number;
   seen: (x: number, z: number) => boolean; hangarSeen: () => boolean;
-  release: () => void;      // beim Verlassen des Innenraums: Grafikspeicher der Lichtraum-Bilder freigeben      // ist dieser Ort bzw. der Hangar vom Standort aus zu sehen?
+  release: () => void;      // beim Verlassen des Innenraums: Grafikspeicher der Lichtraum-Bilder freigeben
+  stale: () => boolean;     // ohne Lichträume gebaut, die inzwischen geladen sind: Der Innenraum baut das Deck dann neu      // ist dieser Ort bzw. der Hangar vom Standort aus zu sehen?
 }
 
 const RANGE = 70;                 // Bereiche weiter weg werden nicht gezeichnet (m); 46 m schnitten das Ende langer Gänge ab
@@ -78,7 +79,9 @@ export function loadDeck(id = 'bastion'): Promise<boolean> {
 // Die Bausteine in den Zellen des Raums entfallen dann (ihre Standflächen bleiben). Daten: data/lichtraum_<Deck>, Modell: base/Lichtraum<Deck>.
 interface LmJson { raeume: { name: string; zellen: number[][]; teile: Record<string, string> }[] }
 // je Deck ein oder mehrere Sätze (Daten, Modell): Die Räume der Bastion sind in zwei Läufen gebacken
-const LICHT: Record<string, [string, string][]> = { eisenkrone: [['lichtraum_eisenkrone', 'LichtraumEisenkrone']], bastion: [['lichtraum_bastion', 'LichtraumBastion'], ['lichtraum_bastion2', 'LichtraumBastion2']] };
+// Die Bastion ist seit Alpha 1.30 ganz auf Lichtraum 2 umgestellt (LICHT2 weiter unten). Ihr alter Satz (Treffpunkt und Lager) bleibt nur
+// als Rückfall für die Artifact-Fassung, in die das neue Deckmodell nicht passt; wo ein Satz der neuen Art da ist, wird er nicht geladen.
+const LICHT: Record<string, [string, string][]> = { eisenkrone: [['lichtraum_eisenkrone', 'LichtraumEisenkrone']], bastion: [['lichtraum_bastion', 'LichtraumBastion']] };
 // Nebenstrahler der Mischform je Deck und Raum, in Modelllage (x Ost, y oben, z Süd): Ort, Richtung, Farbe. Eisenkrone: der Glutschein
 // der Öfen, der durch die drei Fenster des Leitstands fällt (im Baukasten die Flächenleuchten „Glutschein“ innen vor den Scheiben).
 const LM_SIDE: Record<string, Record<string, number[][]>> = { eisenkrone: { leitstand: [28, 32, 36].map(x => [x, 1.5, -1.58, 0, -0.25, 1, 1.0, 0.42, 0.14]) } };
@@ -105,17 +108,17 @@ async function loadLichtSet(dj: string, mu: string): Promise<LmRoom[]> {
 function loadLicht(id: string): Promise<boolean> {
   if (LM[id]) return Promise.resolve(true);
   if (id in LMLOADING) return LMLOADING[id];
-  const W = window as any, sets = (LICHT[id] || []).map(([j, m]) => [W.DATAFILES?.[j], W.BASEDATA?.[m]]).filter(q => q[0] && q[1]) as [string, string][];
-  if (!sets.length) return Promise.resolve(false);
+  const W = window as any, pick = (L: [string, string][] | undefined) => (L || []).map(([j, m]) => [W.DATAFILES?.[j], W.BASEDATA?.[m]]).filter(q => q[0] && q[1]) as [string, string][];
+  const sets2 = pick(LICHT2[id]), sets = sets2.length ? [] : pick(LICHT[id]);      // die neue Art ersetzt die alte ganz
+  if (!sets.length && !sets2.length) return Promise.resolve(false);
   return (LMLOADING[id] = (async () => {
     // jeder Satz für sich: Fehlt einer (Datei nicht geladen), bleiben seine Räume Bausteine
     const got = await Promise.all(sets.map(([dj, mu]) => loadLichtSet(dj, mu).catch(e => { console.warn('Lichtraum nicht geladen:', id, e); return [] as LmRoom[]; })));
-    const rooms = got.flat();
-    if (!rooms.length) { delete LMLOADING[id]; return false; }
-    // Lichtraum 2: dieselben Räume in der neuen Art; buildDeck nimmt sie statt der alten, solange deckTune.scharf an ist
-    const sets2 = (LICHT2[id] || []).map(([j, m]) => [W.DATAFILES?.[j], W.BASEDATA?.[m]]).filter(q => q[0] && q[1]) as [string, string][];
+    // Lichtraum 2: Räume und Gänge in der neuen Art; gibt es einen Raum in beiden Arten, nimmt buildDeck die neue, solange deckTune.scharf an ist
     const got2 = await Promise.all(sets2.map(([dj, mu]) => loadLicht2Set(dj, mu).catch(e => { console.warn('Lichtraum 2 nicht geladen:', id, e); return [] as LmRoom[]; })));
-    LM[id] = { rooms, rooms2: got2.flat() };
+    const rooms = got.flat(), rooms2 = got2.flat();
+    if (!rooms.length && !rooms2.length) { delete LMLOADING[id]; return false; }
+    LM[id] = { rooms, rooms2 };
     return true;
   })());
 }
@@ -171,7 +174,7 @@ async function lmMaterials(prefix: string) {
 // selbst, nach der Lage der Fläche und beliebig scharf. Aus Blender kommen nur noch: das Modell mit dem Materialnamen je Fläche, eine grobe
 // Lichtkarte für die großen Flächen, Licht je Eckpunkt für die kleinen (ihre Abwicklung liegt bei x = −1) und im Alphakanal der Eckfarben
 // die Marke „schmaler Streifen“ (Fase an einer Kante: dort sitzt der Kantenabrieb).
-interface L2Mat { kind: string; col?: number[]; metal?: number; rough?: number; var?: number; rvar?: number; scale?: number; emit?: number[] | null; es?: number; grime?: boolean; wear?: number; bump?: number; bscale?: number; streak?: number }
+interface L2Mat { kind: string; col?: number[]; metal?: number; rough?: number; var?: number; rvar?: number; scale?: number; emit?: number[] | null; es?: number; grime?: boolean; wear?: number; bump?: number; bscale?: number; streak?: number; studs?: boolean; stripes?: boolean; a?: number[]; c?: number[]; duty?: number; dir?: string }
 interface L2Json { raeume: { name: string; zellen: number[][]; lit: string }[]; mats: Record<string, L2Mat> }
 const LICHT2: Record<string, [string, string][]> = { bastion: [['lichtraum2_bastion', 'Lichtraum2Bastion']] };
 let L2NOISE: [THREE.DataTexture, THREE.DataTexture] | null = null;
@@ -203,6 +206,19 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
   for (const [name, p] of Object.entries(mats)) {
     if (p.kind === 'stars') { out[name] = M.stars; continue; }
     if (p.kind === 'glass') { const g = (M.glass as THREE.MeshStandardMaterial).clone(); g.userData.env = [env, g.envMapIntensity, 2.2]; out[name] = g; continue; }
+    if (p.kind === 'screen' && p.stripes) {
+      // Bildschirm: waagerechte Zeilen in zwei Farben (bk_lib.stripes, Wellenbänder entlang der Höhe); in der Ferne fließen sie zur Mischfarbe
+      const A = p.a || [0.1, 0.7, 0.7], Cc = p.c || [0, 0.05, 0.06], gain = (p.es || 1) * 0.4, mx = Math.max(A[0], A[1], A[2], 0.001);
+      const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      m.onBeforeCompile = (sh) => {
+        sh.uniforms.bkGlow = GLOW; sh.uniforms.lmCap = LMCAP;
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vL2P;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvL2P = position;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float bkGlow; uniform float lmCap; varying vec3 vL2P;')
+          .replace('#include <color_fragment>', `float l2ph = vL2P.y * ${f((p.scale || 30) * 20)}; float l2se = clamp(fwidth(l2ph) * 0.35, 0.02, 0.5); diffuseColor.rgb = mix(${v3(Cc)}, ${v3(A)}, smoothstep(${f(p.duty ?? 0.5)} - l2se, ${f(p.duty ?? 0.5)} + l2se, 0.5 + 0.5 * sin(l2ph - 1.5708))) * min(bkGlow * ${f(gain)}, 0.7 * lmCap / ${f(mx)});`);
+      };
+      m.customProgramCacheKey = () => 'l2s-' + name;
+      out[name] = m; continue;
+    }
     if (p.kind === 'glow' || p.kind === 'screen') {
       // Leuchten: feste Farbe aus dem Material, gedeckelt wie bisher (Bildschirme bleiben unter der Schwelle des Bloom)
       const e = p.emit || p.col || [1, 1, 1], gain = (p.es || 1) * (p.kind === 'screen' ? 0.4 : 1), cap = p.kind === 'screen' ? 0.7 : GLOW_MAX, mx = Math.max(e[0], e[1], e[2], 0.001);
@@ -234,13 +250,17 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
           `float l2val = mix(${f(1 - vr * 1.6)}, ${f(1 + vr * 0.5)}, clamp(((texture2D(l2NoiseA, l2q * ${f(sc / 16)}).r - 0.5) * 0.55 + 0.2) / 0.4, 0.0, 1.0));`,      // 0.55: unser Rauschen streut breiter als das von Blender, sonst wirken die Flecken wolkig
           grime ? 'l2val *= mix(0.6, 1.0, clamp(vL2P.y / 0.5, 0.0, 1.0));' : '',
           streak ? `if (l2an.y < 0.5) l2val *= mix(1.0, ${f(1 - streak)}, clamp((texture2D(l2NoiseA, vec2((l2an.x >= l2an.z ? vL2P.z : vL2P.x) * 26.0, vL2P.y * 1.3) / 16.0).g - 0.5) / 0.25, 0.0, 1.0));` : '',
-          `vec3 l2alb = ${v3(col)} * l2val;`,
+          p.stripes      // Warnschraffur: schräge Bänder in zwei Farben
+            ? `float l2ph = (vL2P.x + vL2P.y + vL2P.z) * ${f((p.scale || 9) * 10)}; float l2se = clamp(fwidth(l2ph) * 0.35, 0.02, 0.5); vec3 l2alb = mix(${v3(p.c || [0.02, 0.02, 0.02])}, ${v3(p.a || [0.8, 0.6, 0.05])}, smoothstep(${f(p.duty ?? 0.5)} - l2se, ${f(p.duty ?? 0.5)} + l2se, 0.5 + 0.5 * sin(l2ph - 1.5708))) * l2val;`
+            : `vec3 l2alb = ${v3(col)} * l2val;`,
           `float l2rough = mix(${f(Math.max(0.04, rough - rv))}, ${f(Math.min(1, rough + rv * 1.4))}, clamp(((texture2D(l2NoiseA, l2q * ${f(sc * 2.7 / 16)}).g - 0.5) * 0.55 + 0.2) / 0.4, 0.0, 1.0));`,
           `float l2metal = ${f(metal)};`,
           wear ? `float l2w = l2edge * clamp(((texture2D(l2NoiseA, l2q * 2.875).r - 0.5) * 0.55 + 0.08) / 0.18, 0.0, 1.0) * ${f(wear * 0.85)}; l2alb = mix(l2alb, vec3(0.36, 0.34, 0.31), l2w); l2metal = mix(l2metal, 1.0, l2w); l2rough = mix(l2rough, 0.34, l2w);` : '',
         ].join('\n'))
         .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp(l2rough, 0.06, 1.0);')
-        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (bump ? `{ vec2 l2g = (texture2D(l2NoiseN, l2q * ${f(bs / 32)}).rg - 0.5) * ${f(bump * 1.5)}; normal = normalize(normal + l2T * l2g.x + l2B * l2g.y); }` : ''))
+        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (bump ? `{ vec2 l2g = (texture2D(l2NoiseN, l2q * ${f(bs / 32)}).rg - 0.5) * ${f(bump * 1.5)}; normal = normalize(normal + l2T * l2g.x + l2B * l2g.y); }` : '')
+          // Noppenblech: ein Raster von 42 Noppen je Meter, jede ein kleiner Ring aus Gefälle; in der Ferne ausgeblendet
+          + (p.studs ? '{ vec2 l2c = fract(l2q * 42.0) - 0.5; float l2d = length(l2c); float l2k = smoothstep(0.34, 0.22, l2d) * smoothstep(0.06, 0.2, l2d) * clamp(1.0 - fwidth(l2q.x) * 63.0, 0.0, 1.0); normal = normalize(normal + (l2T * l2c.x + l2B * l2c.y) / max(l2d, 0.001) * l2k * 0.6); }' : ''))
         .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\nmaterial.diffuseColor = vec3(0.0); material.specularColor = mix(vec3(0.04), l2alb, l2metal * 0.7); material.specularF90 = 1.0;')
         .replace('#include <lights_fragment_begin>', LM_LIGHTS)
         .replace('#include <lights_fragment_end>', [
@@ -279,17 +299,19 @@ async function loadLicht2Set(dj: string, mu: string): Promise<LmRoom[]> {
 
 // Raumspiegelung: einmal von der Raummitte aus aufnehmen (nur die Flächen des Lichtraums, mit ihrem gebackenen Licht) und für den Glanz
 // vorfiltern. Leuchten dürfen dabei heller sein als im Bild (lmCap): Erst so spiegeln sich Lampen als helle Flecken in Glas und Metall.
+const lmFree = (R: LmRoom) => { for (const t of R.tex) t.dispose(); if (R.env) { R.env.userData.rt?.dispose(); R.env = null; } };      // Grafikspeicher eines Raums freigeben: Bilder und Raumspiegelung
 function lmProbe(ms: LmMesh[], T: THREE.Matrix4, at: THREE.Vector3) {      // T: Lage der Netze in der Welt, at: Raummitte in der Welt
   const sc = new THREE.Scene();
   for (const q of ms) {
     if (q.mat.transparent) continue;
     const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(T, q.mw); m.frustumCulled = false; sc.add(m);
   }
-  const rt = new THREE.WebGLCubeRenderTarget(512, { type: THREE.HalfFloatType });
+  const rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType });      // 256 je Seite: vorgefiltert 6 MB je Raum (512 wären 25 MB, bei 17 Bereichen zu viel)
   const cc = new THREE.CubeCamera(0.15, 90, rt); cc.position.copy(at);
   const g0 = GLOW.value; GLOW.value = g0 * 4; LMCAP.value = 4;
   try { cc.update(renderer, sc); } finally { GLOW.value = g0; LMCAP.value = 1; }
-  const pm = new THREE.PMREMGenerator(renderer), env = pm.fromCubemap(rt.texture).texture;
+  const pm = new THREE.PMREMGenerator(renderer), out = pm.fromCubemap(rt.texture), env = out.texture;
+  env.userData.rt = out;      // zum Freigeben (lmFree)
   pm.dispose(); rt.dispose();
   return env;
 }
@@ -529,6 +551,8 @@ export function buildDeck(id: string, hz0: number): Deck | null {
       }
       const cells = R.cells.map(([r, c]) => [gx(-r * C), gz(c * C)] as [number, number]);
       let x = cells.reduce((a, q) => a + q[0], 0) / cells.length, z = cells.reduce((a, q) => a + q[1], 0) / cells.length;
+      // Gänge knicken ab: Ihr Mittelpunkt kann in einem Raum oder einer Wand liegen. Also die Zellmitte nehmen, die ihm am nächsten ist.
+      { const near = cells.reduce((a, q) => (Math.hypot(q[0] - x, q[1] - z) < Math.hypot(a[0] - x, a[1] - z) ? q : a)); x = near[0]; z = near[1]; }
       // Die Raumspiegelung wird an einem freien Punkt aufgenommen: Steht in der Raummitte ein Tisch, sähe die Kamera nur dessen Inneres
       const spot = [[0, 0], [1.3, 0], [-1.3, 0], [0, 1.3], [0, -1.3], [1.6, 1.6], [-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6]].find(([dx, dz]) => !inBlock(x + dx, z + dz));
       if (spot) { x += spot[0]; z += spot[1]; }
@@ -559,7 +583,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
       if (!q.meshes.some(m => m.visible)) {
         // Grafikspeicher: Die Bilder eines Raums (bis 170 MB) freigeben, wenn er 20 s nicht zu sehen war und über 24 m entfernt ist.
         // Beim nächsten Blick lädt three sie aus dem Arbeitsspeicher wieder hoch.
-        if (q.gpu && d > 24 && now - q.seen > 20000) { for (const t of q.R.tex) t.dispose(); q.gpu = false; }
+        if (q.gpu && d > 24 && now - q.seen > 20000) { lmFree(q.R); q.gpu = false; }
         return;
       }
       q.seen = now; q.gpu = true;
@@ -678,7 +702,8 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     },
     seen: (x, z) => (z > hz0 - 0.2 ? gate : Math.hypot(x - lastX, z - lastZ) < 6 || vis.has(zoneOf(...cellOf(x, z)))),
     hangarSeen: () => gate,
-    release: () => { for (const q of lmRooms) { if (q.gpu) for (const t of q.R.tex) t.dispose(); q.gpu = false; } },
+    release: () => { for (const q of lmRooms) { if (q.gpu) lmFree(q.R); q.gpu = false; } },
+    stale: () => !lm && deckTune.lichtraum && !!LM[id],
     // Weg der Story-Figuren vom Hangar hinaus (und umgekehrt herein): durch das Tor, an der Kreuzung dahinter nach links außer Sicht
     // (so weit der Gang dort nach Norden reicht: auf der Bastion zwei Zellen, auf der Eisenkrone eine)
     way: (off: number) => [[off, hz0 + 4], [off * 0.5, hz0 - 1.2], [off * 0.5, hz0 - 5.6 - off * 0.4], [-(north * C - 0.6), hz0 - 5.8 - off * 0.4]],

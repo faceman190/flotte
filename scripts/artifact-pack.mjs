@@ -13,13 +13,16 @@ const man = JSON.parse(fs.readFileSync(path.join(SRC, 'assets', 'manifest.json')
 // Größengrenze: Eine Fassung auf claude.ai fasst höchstens 256 MiB (und 511 Dateien). Mit allen Lichträumen wären es 310 MB.
 // Diese Lichtraum-Sätze (Daten, Modell) bleiben deshalb hier heraus; fehlt ein Satz, baut das Spiel für seine Räume die Bausteine
 // (loadLicht in src/game/deck.ts). Auf dem eigenen Server (Render) sind alle Sätze da.
-const SKIP_SETS = [['lichtraum_bastion2', 'LichtraumBastion2']];
+// Seit Alpha 1.30: das Deck der Bastion in der neuen Art (Lichtraum 2, volle Geometrie, gebündelt 82 MB). Auf claude.ai zeigt die Bastion
+// deshalb weiter Treffpunkt und Lager in der alten Art und sonst die Bausteine.
+const SKIP_SETS = [['lichtraum2_bastion', 'Lichtraum2Bastion']];
 let skipped = 0;
 for (const [dj, mo] of SKIP_SETS) {
   const d = man.files['data/' + dj];
   if (!d) continue;
-  const teile = JSON.parse(fs.readFileSync(path.join(SRC, d.url), 'utf8')).raeume.flatMap(R => Object.values(R.teile));
-  const drop = ['data/' + dj, 'base/' + mo, ...Object.keys(man.files).filter(k => teile.some(p => k.startsWith('tex/' + p + '_')))];
+  const raeume = JSON.parse(fs.readFileSync(path.join(SRC, d.url), 'utf8')).raeume;
+  const teile = raeume.flatMap(R => Object.values(R.teile || {})), karten = raeume.map(R => R.lit).filter(Boolean);      // alte Art: Bildsatz je Teil; neue Art: eine Lichtkarte je Raum
+  const drop = ['data/' + dj, 'base/' + mo, ...Object.keys(man.files).filter(k => teile.some(p => k.startsWith('tex/' + p + '_')) || karten.includes(k.slice(4)))];
   for (const k of drop) { const e = man.files[k]; if (!e) continue; fs.rmSync(path.join(OUT, e.url), { force: true }); delete man.files[k]; skipped++; }
 }
 if (skipped) console.log(`Artifact-Fassung: ${skipped} Dateien der Lichtraum-Sätze ${SKIP_SETS.map(q => q[0]).join(', ')} ausgelassen (Größengrenze)`);

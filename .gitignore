@@ -25,3 +25,7 @@ Thumbs.db
 
 # Heruntergeladene Soundpakete (Rohdaten); ins Spiel kommen nur ausgewählte Dateien unter asset-src/sound/
 /asset-src/sound-packs/
+
+# Rohes Deckmodell des Lichtraums 2 (191 MB, über der Dateigrenze von GitHub). Das Spiel nutzt die gepackte Fassung in public/;
+# neu erzeugen: asset-src/neu/bastion/lm_lauf.py mit lm2_bastion.json und lm2_raum.py (docs/lichtraum2.md)
+/asset-src/glb/base/Lichtraum2Bastion.glb

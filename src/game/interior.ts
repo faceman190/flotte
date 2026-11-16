@@ -1098,6 +1098,16 @@ export function updateWalk(dt: number) {
   IN.area = room ? room.area(IN.x, IN.z) : IN.z > HZ0 ? 'Hangardeck' : deck ? deck.area(IN.x, IN.z) : IN.z > PZ1 ? 'Korridor' : PAL[kind].hall;
   if (hangarUpdate && !room) hangarUpdate(IN.x, IN.z);      // Hangar der Bastion: ferne Kleinteile ausblenden
   if (deck && !room) {      // ferne Bereiche des Decks ausblenden; eine Lampe geht mit, damit die Figuren im Deck Licht haben
+    if (deck.stale() && IN.station) {
+      // Die Lichträume sind erst nach dem Betreten fertig geladen (erster Start, großes Deckmodell): Deck neu bauen und austauschen.
+      // Laufflächen, Standflächen und Personal stammen aus denselben Deckdaten und bleiben, wie sie sind.
+      const neu = buildDeck(IN.station.id, HZ0), par = deck.group.parent;
+      if (neu && par) {
+        par.remove(deck.group); par.add(neu.group);
+        deck.group.traverse((c: any) => { if (c.geometry && !c.userData.shared) c.geometry.dispose(); if (c.isLight && c.dispose) c.dispose(); });
+        deck = neu;
+      }
+    }
     deck.update(IN.x, IN.z);
     const on = deck.inside(IN.z);
     if (on && group) group.localToWorld(lamps[1].position.set(IN.x, 2.3, IN.z));

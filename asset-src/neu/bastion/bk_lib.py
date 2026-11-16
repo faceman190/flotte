@@ -80,6 +80,8 @@ def stripes(name, a, c, scale=9.0, emit=0.0, direction='DIAGONAL', duty=0.5):   
     m = bpy.data.materials.new(name); m.use_nodes = True
     nt = m.node_tree; N = nt.nodes; K = nt.links
     b = next(n for n in N if n.type == 'BSDF_PRINCIPLED'); I(b, 'Roughness').default_value = 0.6
+    import json as _json      # Angaben am Material ablegen (lm2_raum.py): Das Spiel rechnet die Bänder selbst
+    m['bk'] = _json.dumps(dict(stripes=True, a=list(a), c=list(c), scale=float(scale), duty=float(duty), es=float(emit), dir=direction, rough=0.6, metal=0.0))
     tc = N.new('ShaderNodeTexCoord'); wv = N.new('ShaderNodeTexWave'); wv.wave_type = 'BANDS'; wv.bands_direction = direction; I(wv, 'Scale').default_value = scale
     K.new(tc.outputs['Object'], wv.inputs['Vector'])
     gt = N.new('ShaderNodeMath'); gt.operation = 'GREATER_THAN'; gt.inputs[1].default_value = duty; K.new(wv.outputs[0], gt.inputs[0])
