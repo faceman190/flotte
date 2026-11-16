@@ -49,7 +49,7 @@ const LM_MAX = 1.6;               // Lichtraum: Obergrenze der Strahldichte bele
 // Mischform im Lichtraum (seit Alpha 1.26): hybrid = echte Strahler und Raumspiegelung an; key = Lichtstärke je Strahler (cd);
 // shade = wie stark der Schatten einer Figur das gebackene Licht abdunkelt (0 bis 1); envK = Stärke der Raumspiegelung;
 // spec = Verstärkung des Glanzes der Flächen auf die Strahler; side = Lichtstärke der Nebenstrahler (Glutschein an den Fenstern)
-export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true, hybrid: true, key: 2.6, shade: 0.5, envK: 1, spec: 2.2, side: 3 };
+export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true, hybrid: true, key: 2.6, shade: 0.5, envK: 1, spec: 2.2, side: 3, scharf: true };      // scharf: Lichtraum 2 (Material im Spiel) dort nehmen, wo es ihn gibt
 const LMCAP = { value: 1 }, LMSHADE = { value: 0 }, LMSPEC = { value: 1 };      // Obergrenzen-Faktor (nur beim Aufnehmen der Raumspiegelung > 1), Schattenstärke, Kehrwert der Beleuchtung unter einem Strahler      // zum Einstellen im Testfenster; lichtraum = false zeigt den Raum aus Bausteinen
 // Decks je Station: Daten (data/…) und Modell (base/…). Die Bastion lädt beim Start, die Eisenkrone beim Betreten ihres Sektors.
 const DECKS: Record<string, [string, string]> = { bastion: ['deck_bastion', 'BastionDeck'], eisenkrone: ['deck_eisenkrone', 'EisenkroneDeck'] };
@@ -86,7 +86,7 @@ const SPOTS_MAX = 9;     // so viele Schlüssellampen höchstens (jeder Strahler
 const KEYS_MAX = 6;      // so viele Strahler werfen Schatten (je Strahler eine Schattenkarte in jedem beleuchteten Material der Szene)
 interface LmMesh { geo: THREE.BufferGeometry; mat: THREE.Material; mw: THREE.Matrix4; tris: number }
 interface LmRoom { name: string; cells: number[][]; meshes: LmMesh[]; mats: THREE.MeshStandardMaterial[]; tex: THREE.Texture[]; env: THREE.Texture | null }
-const LM: Record<string, { rooms: LmRoom[] }> = {}, LMLOADING: Record<string, Promise<boolean>> = {};
+const LM: Record<string, { rooms: LmRoom[]; rooms2: LmRoom[] }> = {}, LMLOADING: Record<string, Promise<boolean>> = {};
 async function loadLichtSet(dj: string, mu: string): Promise<LmRoom[]> {
   const [data, gltf] = await Promise.all([fetch(dj).then(r => r.json()) as Promise<LmJson>, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
   const sets: Record<string, Record<string, THREE.Material>> = {}, texOf: Record<string, THREE.Texture[]> = {}, roomOf: Record<string, number> = {};
@@ -112,7 +112,10 @@ function loadLicht(id: string): Promise<boolean> {
     const got = await Promise.all(sets.map(([dj, mu]) => loadLichtSet(dj, mu).catch(e => { console.warn('Lichtraum nicht geladen:', id, e); return [] as LmRoom[]; })));
     const rooms = got.flat();
     if (!rooms.length) { delete LMLOADING[id]; return false; }
-    LM[id] = { rooms };
+    // Lichtraum 2: dieselben Räume in der neuen Art; buildDeck nimmt sie statt der alten, solange deckTune.scharf an ist
+    const sets2 = (LICHT2[id] || []).map(([j, m]) => [W.DATAFILES?.[j], W.BASEDATA?.[m]]).filter(q => q[0] && q[1]) as [string, string][];
+    const got2 = await Promise.all(sets2.map(([dj, mu]) => loadLicht2Set(dj, mu).catch(e => { console.warn('Lichtraum 2 nicht geladen:', id, e); return [] as LmRoom[]; })));
+    LM[id] = { rooms, rooms2: got2.flat() };
     return true;
   })());
 }
@@ -162,6 +165,118 @@ async function lmMaterials(prefix: string) {
   const set = { metal: mk('metal', 0.09, 0.3, 0.9), paint: mk('paint', 0.04, 0.22, 0.8), soft: mk('soft', 0.02, 0.1, 0.4), gloss: mk('gloss', 0.3, 0.6, 1.2), glow: mk('glow', 0.02, 0.05, 0.2, 1, GLOW_MAX, false), screen: mk('screen', 0.04, 0.15, 0.6, 0.4, 0.7, false), glass, stars: M.stars } as Record<string, THREE.Material>;      // stars: Fenster ins All, das Sternfeld des Baukastens (ohne Lichtkarte)
   return [set, [col, lit, emi, orm, nrm]] as [Record<string, THREE.Material>, THREE.Texture[]];
 }
+// ---------- Lichtraum 2 (Probe seit Alpha 1.29, asset-src/neu/bastion/lm2_raum.py): Material im Spiel, gebacken wird nur das Licht ----------
+// Die gebackenen Farbbilder des Lichtraums haben nur 51 bis 78 Bildpunkte je Meter, aus der Nähe wirkt alles verwaschen. Die Materialien des
+// Baukastens sind aber Rechenmuster (bk_lib.mk: fleckige Helligkeit und Rauheit, Laufspuren, Korn, Kantenabrieb). Hier rechnet sie das Spiel
+// selbst, nach der Lage der Fläche und beliebig scharf. Aus Blender kommen nur noch: das Modell mit dem Materialnamen je Fläche, eine grobe
+// Lichtkarte für die großen Flächen, Licht je Eckpunkt für die kleinen (ihre Abwicklung liegt bei x = −1) und im Alphakanal der Eckfarben
+// die Marke „schmaler Streifen“ (Fase an einer Kante: dort sitzt der Kantenabrieb).
+interface L2Mat { kind: string; col?: number[]; metal?: number; rough?: number; var?: number; rvar?: number; scale?: number; emit?: number[] | null; es?: number; grime?: boolean; wear?: number; bump?: number; bscale?: number; streak?: number }
+interface L2Json { raeume: { name: string; zellen: number[][]; lit: string }[]; mats: Record<string, L2Mat> }
+const LICHT2: Record<string, [string, string][]> = { bastion: [['lichtraum2_bastion', 'Lichtraum2Bastion']] };
+let L2NOISE: [THREE.DataTexture, THREE.DataTexture] | null = null;
+// Rauschbilder (kachelbar, 256 Punkte): A = zwei unabhängige Fleckenmuster (r, g) und das Korn (b); N = Gefälle des Korns für das Relief
+function l2Noise() {
+  if (L2NOISE) return L2NOISE;
+  const S = 256, A = new Uint8Array(S * S * 4), N = new Uint8Array(S * S * 4), H = new Float32Array(S * S);
+  const hash = (x: number, y: number, k: number) => { let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(k, 2147483629)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
+  const vn = (x: number, y: number, P: number, k: number) => {      // Wertrauschen mit Periode P
+    const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0, ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), w = (q: number) => ((q % P) + P) % P;
+    const a = hash(w(x0), w(y0), k), b = hash(w(x0 + 1), w(y0), k), c = hash(w(x0), w(y0 + 1), k), d = hash(w(x0 + 1), w(y0 + 1), k);
+    return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+  };
+  const fbm = (u: number, v: number, P: number, oct: number, k: number) => { let t = 0, amp = 0.5, n = 0; for (let o = 0; o < oct; o++) { t += amp * vn(u * P, v * P, P, k + o * 17); n += amp; amp *= 0.5; P *= 2; } return t / n; };
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = (y * S + x) * 4, u = x / S, v = y / S;
+    A[i] = fbm(u, v, 16, 4, 1) * 255; A[i + 1] = fbm(u, v, 16, 4, 91) * 255; A[i + 2] = (H[y * S + x] = fbm(u, v, 32, 3, 173)) * 255; A[i + 3] = 255;
+  }
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = (y * S + x) * 4, h = (a: number, b: number) => H[((b + S) % S) * S + ((a + S) % S)];
+    N[i] = Math.max(0, Math.min(255, 127.5 + (h(x - 1, y) - h(x + 1, y)) * 900)); N[i + 1] = Math.max(0, Math.min(255, 127.5 + (h(x, y - 1) - h(x, y + 1)) * 900)); N[i + 2] = 255; N[i + 3] = 255;
+  }
+  const mk = (d: Uint8Array) => { const t = new THREE.DataTexture(d, S, S, THREE.RGBAFormat); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 8; t.colorSpace = THREE.NoColorSpace; t.needsUpdate = true; return t; };
+  return (L2NOISE = [mk(A), mk(N)]);
+}
+function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
+  const env = interiorEnv(), M = materials(), [nA, nN] = l2Noise(), out: Record<string, THREE.Material> = {};
+  const f = (v: number) => v.toFixed(4), v3 = (c: number[]) => `vec3(${c.slice(0, 3).map(f).join(', ')})`;
+  for (const [name, p] of Object.entries(mats)) {
+    if (p.kind === 'stars') { out[name] = M.stars; continue; }
+    if (p.kind === 'glass') { const g = (M.glass as THREE.MeshStandardMaterial).clone(); g.userData.env = [env, g.envMapIntensity, 2.2]; out[name] = g; continue; }
+    if (p.kind === 'glow' || p.kind === 'screen') {
+      // Leuchten: feste Farbe aus dem Material, gedeckelt wie bisher (Bildschirme bleiben unter der Schwelle des Bloom)
+      const e = p.emit || p.col || [1, 1, 1], gain = (p.es || 1) * (p.kind === 'screen' ? 0.4 : 1), cap = p.kind === 'screen' ? 0.7 : GLOW_MAX, mx = Math.max(e[0], e[1], e[2], 0.001);
+      const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      m.onBeforeCompile = (sh) => {
+        sh.uniforms.bkGlow = GLOW; sh.uniforms.lmCap = LMCAP;
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float bkGlow; uniform float lmCap;')
+          .replace('#include <color_fragment>', `diffuseColor.rgb = ${v3(e)} * min(bkGlow * ${f(gain)}, ${f(cap)} * lmCap / ${f(mx)});`);
+      };
+      m.customProgramCacheKey = () => 'l2g-' + name;
+      out[name] = m; continue;
+    }
+    const col = p.col || [0.2, 0.2, 0.2], metal = p.metal ?? 0, rough = p.rough ?? 0.5, vr = p.var ?? 0, rv = p.rvar ?? 0, sc = p.scale ?? 7, bump = p.bump ?? 0, bs = p.bscale ?? 170, wear = p.wear ?? 0, streak = p.streak ?? 0, grime = p.grime !== false && p.var !== undefined;
+    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 1, vertexColors: true, envMap: env, envMapIntensity: 0.3 });
+    m.userData.env = [env, 0.3, 0.9];
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.bkLight = LIGHT; sh.uniforms.lmCap = LMCAP; sh.uniforms.lmShadeK = LMSHADE; sh.uniforms.lmSpec = LMSPEC;
+      sh.uniforms.l2Lit = { value: lit }; sh.uniforms.l2NoiseA = { value: nA }; sh.uniforms.l2NoiseN = { value: nN };
+      const VAR = 'varying vec3 vL2P; varying vec3 vL2N; varying vec2 vL2Uv; varying vec3 vL2X; varying vec3 vL2Y; varying vec3 vL2Z;';
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VAR)
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvL2P = position; vL2N = normal; vL2Uv = uv; vL2X = normalMatrix * vec3(1.0, 0.0, 0.0); vL2Y = normalMatrix * vec3(0.0, 1.0, 0.0); vL2Z = normalMatrix * vec3(0.0, 0.0, 1.0);');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float bkLight; uniform float lmCap; uniform float lmShadeK; uniform float lmSpec; uniform sampler2D l2Lit; uniform sampler2D l2NoiseA; uniform sampler2D l2NoiseN; ' + VAR)
+        // Lage der Fläche: Muster entlang der beiden Achsen, die in der Fläche liegen (l2T, l2B: dieselben Achsen im Blickraum, für das Relief)
+        .replace('#include <color_fragment>', [
+          'vec3 l2an = abs(vL2N); vec2 l2q; vec3 l2T; vec3 l2B;',
+          'if (l2an.y >= l2an.x && l2an.y >= l2an.z) { l2q = vL2P.xz; l2T = vL2X; l2B = vL2Z; } else if (l2an.x >= l2an.z) { l2q = vL2P.zy; l2T = vL2Z; l2B = vL2Y; } else { l2q = vL2P.xy; l2T = vL2X; l2B = vL2Y; }',
+          '#ifdef USE_COLOR_ALPHA\nfloat l2edge = vColor.a;\n#else\nfloat l2edge = 0.0;\n#endif',
+          `float l2val = mix(${f(1 - vr * 1.6)}, ${f(1 + vr * 0.5)}, clamp(((texture2D(l2NoiseA, l2q * ${f(sc / 16)}).r - 0.5) * 0.55 + 0.2) / 0.4, 0.0, 1.0));`,      // 0.55: unser Rauschen streut breiter als das von Blender, sonst wirken die Flecken wolkig
+          grime ? 'l2val *= mix(0.6, 1.0, clamp(vL2P.y / 0.5, 0.0, 1.0));' : '',
+          streak ? `if (l2an.y < 0.5) l2val *= mix(1.0, ${f(1 - streak)}, clamp((texture2D(l2NoiseA, vec2((l2an.x >= l2an.z ? vL2P.z : vL2P.x) * 26.0, vL2P.y * 1.3) / 16.0).g - 0.5) / 0.25, 0.0, 1.0));` : '',
+          `vec3 l2alb = ${v3(col)} * l2val;`,
+          `float l2rough = mix(${f(Math.max(0.04, rough - rv))}, ${f(Math.min(1, rough + rv * 1.4))}, clamp(((texture2D(l2NoiseA, l2q * ${f(sc * 2.7 / 16)}).g - 0.5) * 0.55 + 0.2) / 0.4, 0.0, 1.0));`,
+          `float l2metal = ${f(metal)};`,
+          wear ? `float l2w = l2edge * clamp(((texture2D(l2NoiseA, l2q * 2.875).r - 0.5) * 0.55 + 0.08) / 0.18, 0.0, 1.0) * ${f(wear * 0.85)}; l2alb = mix(l2alb, vec3(0.36, 0.34, 0.31), l2w); l2metal = mix(l2metal, 1.0, l2w); l2rough = mix(l2rough, 0.34, l2w);` : '',
+        ].join('\n'))
+        .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp(l2rough, 0.06, 1.0);')
+        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (bump ? `{ vec2 l2g = (texture2D(l2NoiseN, l2q * ${f(bs / 32)}).rg - 0.5) * ${f(bump * 1.5)}; normal = normalize(normal + l2T * l2g.x + l2B * l2g.y); }` : ''))
+        .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\nmaterial.diffuseColor = vec3(0.0); material.specularColor = mix(vec3(0.04), l2alb, l2metal * 0.7); material.specularF90 = 1.0;')
+        .replace('#include <lights_fragment_begin>', LM_LIGHTS)
+        .replace('#include <lights_fragment_end>', [
+          '#include <lights_fragment_end>',
+          'reflectedLight.directDiffuse = vec3(0.0); reflectedLight.directSpecular *= lmSpec;',
+          'vec3 l2I = vL2Uv.x < -0.5 ? vColor.rgb : texture2D(l2Lit, vL2Uv).rgb; l2I *= l2I; l2I = l2I / max(vec3(0.02), 1.0 - l2I);',
+          'vec3 l2R = l2alb * (1.0 - 0.15 * l2metal) * l2I * bkLight;',
+          'l2R *= min(1.0, ' + LM_MAX.toFixed(2) + ' * lmCap / max(0.001, max(l2R.r, max(l2R.g, l2R.b))));',
+          'totalEmissiveRadiance = l2R * lmShade;'].join('\n'));
+    };
+    m.customProgramCacheKey = () => 'l2-' + name;
+    out[name] = m;
+  }
+  return out;
+}
+async function loadLicht2Set(dj: string, mu: string): Promise<LmRoom[]> {
+  const [data, gltf] = await Promise.all([fetch(dj).then(r => r.json()) as Promise<L2Json>, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
+  const TD = (window as any).TEXDATA || {}, ld = new THREE.TextureLoader(), rooms: LmRoom[] = [], by: Record<string, { set: Record<string, THREE.Material>; i: number }> = {};
+  for (const R of data.raeume) {
+    const u = TD[R.lit] as string | undefined; if (!u) throw new Error('Bild fehlt: ' + R.lit);
+    const lit = await ld.loadAsync(u); lit.flipY = false; lit.colorSpace = THREE.NoColorSpace; lit.anisotropy = 4; lit.needsUpdate = true;
+    const set = l2Materials(data.mats, lit);
+    by[R.name] = { set, i: rooms.length };
+    rooms.push({ name: R.name, cells: R.zellen, meshes: [], env: null, tex: [lit], mats: [...new Set(Object.values(set))].filter(m => m.userData.env) as THREE.MeshStandardMaterial[] });
+  }
+  gltf.scene.updateMatrixWorld(true);
+  gltf.scene.traverse((o: any) => {
+    if (!o.isMesh) return;
+    let a: THREE.Object3D | null = o; while (a && !by[a.name]) a = a.parent;      // Raum nach dem Namen des Objekts in Blender
+    const q = by[a ? a.name : data.raeume[0].name], key = String(o.material?.name || '').replace(/^ext_l2_/, '');
+    const g = o.geometry as THREE.BufferGeometry; g.computeBoundingSphere();
+    rooms[q.i].meshes.push({ geo: g, mat: q.set[key] || Object.values(q.set)[0], mw: o.matrixWorld.clone(), tris: (g.index ? g.index.count : g.attributes.position.count) / 3 });
+  });
+  return rooms;
+}
+
 // Raumspiegelung: einmal von der Raummitte aus aufnehmen (nur die Flächen des Lichtraums, mit ihrem gebackenen Licht) und für den Glanz
 // vorfiltern. Leuchten dürfen dabei heller sein als im Bild (lmCap): Erst so spiegeln sich Lampen als helle Flecken in Glas und Metall.
 function lmProbe(ms: LmMesh[], T: THREE.Matrix4, at: THREE.Vector3) {      // T: Lage der Netze in der Welt, at: Raummitte in der Welt
@@ -391,7 +506,8 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   // Bausteine setzen: je Bereich und Art ein Netz
   // Lichtraum: Seine Zellen bekommen keine Bausteine, an ihre Stelle tritt das gebackene Modell (im selben Bereich, also mit derselben Sichtprüfung)
   const lm = deckTune.lichtraum ? LM[id] : undefined, lmZone = new Set<string>();
-  if (lm) for (const R of lm.rooms) for (const [r, c] of R.cells) lmZone.add(zoneOf(r, c));
+  const lmUse = lm ? [...lm.rooms.map(R => (deckTune.scharf && lm.rooms2.find(q => q.name === R.name)) || R), ...(deckTune.scharf ? lm.rooms2.filter(q => !lm.rooms.some(R => R.name === q.name)) : [])] : [];      // je Raum die neue Art, wenn vorhanden
+  for (const R of lmUse) for (const [r, c] of R.cells) lmZone.add(zoneOf(r, c));
   const placed = assemble(D, PARTS, (x, y, a) => [gx(y), gz(x), a + Math.PI / 2], (x, y) => { const z = zoneOf(Math.round(-y / C), Math.round(x / C)); return lmZone.has(z) ? '' : z; }, rect, blocks);
   const { group, meshes } = placed; let tris = placed.tris;
   for (const q of meshes) { q.m.userData.sh = false; q.m.castShadow = q.m.receiveShadow = false; }
@@ -403,7 +519,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     // Modell in Planlage (glTF: x, oben, −y) → Innenraum, wie ein Baustein bei (0, 0) ohne Drehung
     const T = lmT = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0));
     const inBlock = (x: number, z: number) => blocks.some(b => x > b[0] - 0.3 && x < b[1] + 0.3 && z > b[2] - 0.3 && z < b[3] + 0.3);
-    for (const R of lm.rooms) {
+    for (const R of lmUse) {
       const zn = zoneOf(R.cells[0][0], R.cells[0][1]), ms: THREE.Mesh[] = [];
       for (const q of R.meshes) {
         const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(T, q.mw); m.userData.shared = true;      // Netz und Bilder gehören dem geladenen Modell

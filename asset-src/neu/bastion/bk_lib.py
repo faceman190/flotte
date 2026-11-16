@@ -10,6 +10,10 @@ def mk(name, col, metal=0.0, rough=0.5, var=0.18, rvar=0.12, scale=7.0, emit=Non
     m = bpy.data.materials.new(name); m.use_nodes = True
     nt = m.node_tree; N = nt.nodes; K = nt.links
     b = next(n for n in N if n.type == 'BSDF_PRINCIPLED'); out = next(n for n in N if n.type == 'OUTPUT_MATERIAL')
+    # die Angaben am Material ablegen: lm2_raum.py gibt sie ans Spiel, das die Muster selbst rechnet
+    import json as _json
+    m['bk'] = _json.dumps(dict(col=list(col), metal=float(metal), rough=float(rough), var=float(var), rvar=float(rvar), scale=float(scale), emit=list(emit) if emit else None, es=float(es),
+                               grime=bool(grime), wear=float(wear), bump=float(bump), bscale=float(bscale), streak=float(streak), studs=bool(studs), trans=float(trans)))
     I(b, 'Base Color').default_value = (*col, 1); I(b, 'Metallic').default_value = metal; I(b, 'Roughness').default_value = rough
     if emit: I(b, 'Emission Color', 'Emission').default_value = (*emit, 1); I(b, 'Emission Strength').default_value = es
     if trans:

@@ -1,0 +1,237 @@
+# Lichtraum 2 (Probe, Alpha 1.29): Material im Spiel, gebacken wird nur das Licht.
+# Läuft in der Datei des gebauten Decks (wie lm_raum.py). ACHTUNG: verändert die Szene, danach NICHT speichern.
+#
+# Warum: lm_raum.py backt Farbe, Rauheit und Relief je Raum in ein eigenes Bild. Nachgemessen sind das nur 51 bis 78 Bildpunkte je Meter
+# (üblich: etwa 500), die Flächen wirken aus der Nähe verwaschen, und das Backen dauert Minuten je Raum. Die Materialien des Baukastens sind
+# aber reine Rechenmuster (bk_lib.mk: Flecken, Rauheit, Korn, Noppen, Kantenabrieb). Das Spiel rechnet sie deshalb selbst, beliebig scharf.
+#
+# Ablauf:
+#   1. Bausteine der Zellen auflösen (wie lm_raum.py), die Materialien bleiben je Fläche erhalten.
+#   2. Materialtabelle: je Material die Angaben aus bk_lib.mk (dort als Eigenschaft „bk“ abgelegt) und die Art
+#      (lit beleuchtet, glow Leuchte, screen, stars, glass).
+#   3. Licht in zwei Formen, beide ohne Farbe (Bestrahlung direkt und indirekt, w = Wurzel(x / (1 + x))):
+#        große Flächen (ab OPT['big'] m²): grobe Lichtkarte, eigene Abwicklung nur dieser Flächen
+#        alle Flächen: Licht je Eckpunkt (Farbattribut); das Spiel nimmt es für die kleinen Flächen (deren Abwicklung liegt bei −1, −1)
+#      Im Alphakanal der Eckfarben steht, ob die Fläche ein schmaler Streifen ist (Fase an einer Kante): Dort sitzt der Kantenabrieb.
+#   4. Ausgabe: asset-src/tex-world/l2_<raum>_lit@<größe>.png, asset-src/glb/base/<glb> (Materialnamen ext_l2_<Material>),
+#      asset-src/data/<json> (Räume und Materialtabelle).
+import bpy, bmesh, math, os, json, time, traceback
+import numpy as np
+from mathutils import Matrix
+HERE = os.path.dirname(bpy.data.filepath); SC = bpy.context.scene
+ROOT = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
+OPT = dict({'rooms': [], 'lm': 1024, 'samples': 256, 'vsamples': 48, 'big': 0.03, 'margin': 3, 'gap': 2.0, 'mark': 'lm2.txt',
+            'glb': 'Lichtraum2.glb', 'json': 'lichtraum2.json'}, **globals().get('OPT', {}))
+CELL = 4.0
+STAIN = ('Laufspur', 'Rostspur', 'Staubspur', 'Fleck', 'Abrieb')
+LOG = []
+def note(s):
+    LOG.append(s); open(os.path.join(HERE, OPT['mark']), 'w', encoding='utf-8').write('\n'.join(LOG))
+def principled(m): return [n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'] if (m and m.node_tree) else []
+def sock(n, *names): return next((n.inputs[k] for k in names if k in n.inputs), None)
+
+# ---------- Materialtabelle ----------
+def kind(m):
+    P = principled(m); b = P[0] if P else None; nm = m.name.split('.')[0]
+    if b is None: return 'lit'
+    es = sock(b, 'Emission Strength'); tr = sock(b, 'Transmission Weight', 'Transmission')
+    if nm in ('Bildschirm', 'Wandbild'): return 'screen'
+    if nm == 'Sternfeld': return 'stars'
+    if es is not None and (es.is_linked or es.default_value > 0): return 'glow'
+    if tr is not None and tr.default_value > 0.5: return 'glass'
+    return 'lit'
+def params(m):
+    if m is None: return 'ohne', dict(kind='lit', col=[0.2, 0.2, 0.2], metal=0.0, rough=0.6)
+    nm = m.name.split('.')[0]; P = principled(m); b = P[0] if P else None
+    d = json.loads(m['bk']) if 'bk' in m.keys() else {}
+    if not d and b is not None:      # Materialien ohne bk_lib.mk (Schrift, Schilder): die festen Werte des Knotens
+        bc = sock(b, 'Base Color').default_value; d = dict(col=[bc[0], bc[1], bc[2]], metal=sock(b, 'Metallic').default_value, rough=sock(b, 'Roughness').default_value)
+        e = sock(b, 'Emission Color', 'Emission'); es = sock(b, 'Emission Strength')
+        if e is not None and es is not None and es.default_value > 0: d['emit'] = list(e.default_value)[:3]; d['es'] = es.default_value
+    d['kind'] = kind(m)
+    return nm, {k: (round(v, 4) if isinstance(v, float) else v) for k, v in d.items()}
+
+# ---------- Auflösen (wie lm_raum.py) ----------
+def cell_of(ob): return [round(-ob.location.y / CELL), round(ob.location.x / CELL)]
+def flat(objs, T):
+    for ob in objs:
+        if ob.type == 'EMPTY' and ob.instance_type == 'COLLECTION' and ob.instance_collection: yield from flat(ob.instance_collection.objects, T @ ob.matrix_world)
+        else: yield ob, T @ ob.matrix_world
+def realize(empties, name):
+    dg = bpy.context.evaluated_depsgraph_get(); tmp = []; nl = 0
+    for e in empties:
+        for ob, MW in flat(e.instance_collection.objects, e.matrix_world):
+            if ob.type == 'LIGHT':
+                l = ob.copy(); l.matrix_world = MW; SC.collection.objects.link(l); nl += 1; continue
+            if ob.type not in ('MESH', 'CURVE', 'FONT'): continue
+            if ob.type == 'FONT' and not ob.data.body.strip(): continue
+            mats = [s.material for s in ob.material_slots if s.material]
+            if mats and mats[0].name.split('.')[0] in STAIN: continue
+            me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg), depsgraph=dg)
+            if not me.polygons: bpy.data.meshes.remove(me); continue
+            o = bpy.data.objects.new('tmp', me); o.matrix_world = MW; SC.collection.objects.link(o); tmp.append(o)
+    for e in empties: e.instance_type = 'NONE'
+    datas = [o.data for o in tmp[1:]]
+    with bpy.context.temp_override(active_object=tmp[0], object=tmp[0], selected_editable_objects=tmp, selected_objects=tmp): bpy.ops.object.join()
+    for d in datas:
+        if d.users == 0: bpy.data.meshes.remove(d)
+    J = tmp[0]; J.name = name; me = J.data; me.transform(J.matrix_world); J.matrix_world = Matrix.Identity(4)
+    for uv in list(me.uv_layers): me.uv_layers.remove(uv)
+    for ca in list(me.color_attributes): me.color_attributes.remove(ca)
+    return J, nl
+
+# ---------- Abwickeln: nur die großen beleuchteten Flächen ----------
+def area_ctx():
+    for w in bpy.context.window_manager.windows:
+        for a in w.screen.areas:
+            if a.type == 'VIEW_3D': return dict(window=w, area=a, region=next(r for r in a.regions if r.type == 'WINDOW'))
+    return {}
+def poly_arrays(me):
+    npol = len(me.polygons); nl = len(me.loops)
+    ar = np.empty(npol, dtype=np.float32); me.polygons.foreach_get('area', ar)
+    mi = np.empty(npol, dtype=np.int32); me.polygons.foreach_get('material_index', mi)
+    lt = np.empty(npol, dtype=np.int32); me.polygons.foreach_get('loop_total', lt); ls = np.empty(npol, dtype=np.int32); me.polygons.foreach_get('loop_start', ls)
+    return npol, nl, ar, mi, lt, ls
+def unwrap_big(J, size, kinds):
+    me = J.data; npol, nl, ar, mi, lt, ls = poly_arrays(me)
+    lit = np.array([k == 'lit' for k in kinds], dtype=bool)[mi]
+    big = (ar >= OPT['big']) & lit
+    me.uv_layers.new(name='LM'); me.uv_layers.active = me.uv_layers['LM']
+    for o in bpy.context.view_layer.objects: o.select_set(False)
+    J.select_set(True); bpy.context.view_layer.objects.active = J
+    ctx = area_ctx()
+    with bpy.context.temp_override(**ctx, active_object=J, object=J, selected_objects=[J], selected_editable_objects=[J]):
+        bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.reveal()
+        # Die kleinen Flächen ausblenden: Abwickeln und Packen gelten dann nur den großen. Bloßes Auswählen reicht nicht, „uv.select_all“
+        # wählt (ohne Fenster) alle Flächen des Netzes mit aus, und das Packen quetscht die großen zwischen die kleinen.
+        bm = bmesh.from_edit_mesh(me); bm.faces.ensure_lookup_table()
+        for f, sel in zip(bm.faces, big.tolist()): f.hide_set(not sel)
+        bmesh.update_edit_mesh(me)
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.001, area_weight=0.0, correct_aspect=True, scale_to_bounds=False)
+        bpy.ops.uv.select_all(action='SELECT')
+        bpy.ops.uv.pack_islands(rotate=True, margin_method='ADD', margin=OPT['gap'] / size, shape_method='CONVEX')
+        bpy.ops.mesh.reveal()
+        bpy.ops.object.mode_set(mode='OBJECT')
+    me = J.data; a = np.empty(nl * 2, dtype=np.float32); me.uv_layers['LM'].data.foreach_get('uv', a); a = a.reshape(-1, 2)
+    lbig = np.repeat(big, lt)
+    a[~lbig] = -1.0      # kleine Flächen: außerhalb des Bildes, das Spiel nimmt für sie das Licht der Eckpunkte
+    me.uv_layers['LM'].data.foreach_set('uv', a.ravel())
+    cover = sum(0.5 * abs(float(np.dot(a[s:s + t, 0], np.roll(a[s:s + t, 1], 1)) - np.dot(a[s:s + t, 1], np.roll(a[s:s + t, 0], 1)))) for s, t, g in zip(ls, lt, big) if g)
+    return cover, float(ar[big].sum()), float(ar.sum()), int(big.sum())
+
+# ---------- Backen ----------
+def prep_materials():      # Metall zählt beim Backen als Lack (das Spiel rechnet den Glanz selbst), kein Dunst
+    for m in bpy.data.materials:
+        for b in principled(m):
+            s = sock(b, 'Metallic')
+            for l in list(s.links): m.node_tree.links.remove(l)
+            s.default_value = 0.0
+    wd = SC.world
+    if wd and wd.node_tree:
+        wo = next((n for n in wd.node_tree.nodes if n.type == 'OUTPUT_WORLD'), None)
+        if wo:
+            for l in list(wo.inputs['Volume'].links): wd.node_tree.links.remove(l)
+def target(J, img):
+    for m in J.data.materials:
+        if not m or not m.node_tree: continue
+        N = m.node_tree.nodes; n = N.get('LM_Ziel') or N.new('ShaderNodeTexImage'); n.name = 'LM_Ziel'; n.image = img; N.active = n
+def pick(J):
+    for o in bpy.context.view_layer.objects: o.select_set(False)
+    J.select_set(True); bpy.context.view_layer.objects.active = J
+def pixels(img):
+    w, h = img.size; p = np.empty(w * h * 4, dtype=np.float32); img.pixels.foreach_get(p); return p.reshape(h, w, 4)
+def save_png(arr, name, path):
+    h, w = arr.shape[:2]; out = bpy.data.images.new(name, w, h, alpha=False)
+    out.colorspace_settings.name = 'Non-Color'
+    rgba = np.ones((h, w, 4), dtype=np.float32); rgba[..., :3] = arr[..., :3]
+    out.pixels.foreach_set(rgba.ravel()); out.filepath_raw = path; out.file_format = 'PNG'; out.save()
+    bpy.data.images.remove(out)
+def soften(x):
+    k = np.array([1, 2, 1], dtype=np.float32) / 4
+    for ax in (0, 1): x = sum(np.roll(x, d, axis=ax) * k[d + 1] for d in range(-1, 2))
+    return x
+enc = lambda x: np.sqrt(np.clip(x, 0, 40) / (1 + np.clip(x, 0, 40)))
+
+def edge_mask(me):      # je Fläche: schmaler Streifen (Breite etwa 2 · Fläche / Umfang unter 13 mm)? Das sind die Fasen an den Kanten.
+    npol, nl, ar, mi, lt, ls = poly_arrays(me)
+    co = np.empty(len(me.vertices) * 3, dtype=np.float32); me.vertices.foreach_get('co', co); co = co.reshape(-1, 3)
+    lv = np.empty(nl, dtype=np.int32); me.loops.foreach_get('vertex_index', lv)
+    nxt = np.arange(nl) + 1; nxt[ls + lt - 1] = ls
+    el = np.linalg.norm(co[lv] - co[lv[nxt]], axis=1); per = np.add.reduceat(el, ls)
+    thin = (2.0 * ar / np.maximum(per, 1e-6)) < 0.013
+    return np.repeat(thin, lt), lt
+
+def run():
+    t0 = time.time(); note('Start')
+    parts = [dict(name=r['name'], cells=[list(c) for c in r['cells']], lm=r.get('lm', OPT['lm']), spp=r.get('samples', OPT['samples']), emp=[]) for r in OPT['rooms']]
+    for cn in ('Deck', 'Deck Decken'):
+        for e in bpy.data.collections[cn].objects:
+            if e.type != 'EMPTY' or e.instance_type != 'COLLECTION' or not e.instance_collection: continue
+            c = cell_of(e)
+            for p in parts:
+                if c in p['cells']: p['emp'].append(e); break
+    table = {}
+    tri = lambda J: sum(len(q.vertices) - 2 for q in J.data.polygons)
+    for p in parts:
+        p['J'], nl = realize(p['emp'], p['name'])
+        p['mats'] = [params(m) for m in p['J'].data.materials]      # vor dem Umbau fürs Backen
+        for nm, d in p['mats']: table[nm] = d
+        note('aufgelöst: %s %d Instanzen, %d Dreiecke, %d Lampen, %d Materialien (%.0f s)' % (p['name'], len(p['emp']), tri(p['J']), nl, len(set(n for n, _ in p['mats'])), time.time() - t0))
+    for p in parts:
+        cov, abig, aall, nbig = unwrap_big(p['J'], p['lm'], [d['kind'] for _, d in p['mats']])
+        p['dichte'] = math.sqrt(cov * p['lm'] ** 2 / max(abig, 1e-6))
+        note('abgewickelt: %s %d große Flächen, %.0f von %.0f m², Bild belegt %.0f %%, %.0f Bildpunkte je Meter (%.0f s)' % (p['name'], nbig, abig, aall, cov * 100, p['dichte'], time.time() - t0))
+    cp = bpy.context.preferences.addons['cycles'].preferences; cp.compute_device_type = 'OPTIX'; cp.get_devices()
+    for d in cp.devices: d.use = d.type == 'OPTIX'
+    SC.render.engine = 'CYCLES'; SC.cycles.device = 'GPU'
+    prep_materials()
+    tex = os.path.join(ROOT, 'asset-src', 'tex-world'); info = {}
+    for p in parts:
+        J, name, s = p['J'], p['name'], p['lm']; me = J.data; tb = time.time()
+        # 1. Lichtkarte der großen Flächen
+        im = bpy.data.images.new('L2_lit', s, s, alpha=False, float_buffer=True); target(J, im); pick(J)
+        SC.cycles.samples = p['spp']; bk = SC.render.bake
+        bk.margin = OPT['margin']; bk.margin_type = 'EXTEND'; bk.target = 'IMAGE_TEXTURES'; bk.use_clear = True
+        bk.use_pass_direct = True; bk.use_pass_indirect = True; bk.use_pass_color = False
+        bpy.ops.object.bake(type='DIFFUSE')
+        x = soften(pixels(im)[..., :3]); save_png(enc(x), 'lit', os.path.join(tex, 'l2_%s_lit@%d.png' % (name, s))); bpy.data.images.remove(im)
+        t1 = time.time() - tb
+        # 2. Licht je Eckpunkt (für die kleinen Flächen)
+        col = me.color_attributes.new('Col', 'FLOAT_COLOR', 'CORNER'); me.color_attributes.active_color = col; me.color_attributes.render_color_index = me.color_attributes.find('Col')
+        pick(J); SC.cycles.samples = OPT['vsamples']
+        bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'}, target='VERTEX_COLORS', use_clear=True)
+        nl = len(me.loops); c = np.empty(nl * 4, dtype=np.float32); me.color_attributes['Col'].data.foreach_get('color', c); c = c.reshape(nl, 4)
+        c[~np.isfinite(c)] = 0.0
+        thin, _ = edge_mask(me)
+        c[:, :3] = enc(c[:, :3]); c[:, 3] = thin.astype(np.float32)
+        me.color_attributes['Col'].data.foreach_set('color', c.ravel()); me.update()
+        info[name] = {'tris': tri(J), 'lit': s, 'dichte': round(p['dichte']), 'sek_karte': round(t1), 'sek_ecken': round(time.time() - tb - t1), 'kanten': round(float(thin.mean()), 3)}
+        note('%s: Lichtkarte %d² in %.0f s, Eckpunkte in %.0f s, Licht Mittel %.3f (%.0f s)' % (name, s, t1, time.time() - tb - t1, float(x.mean()), time.time() - t0))
+    # Materialien je Fläche: Platzhalter mit dem Namen des Materials (das Spiel baut daraus sein eigenes)
+    for p in parts:
+        me = p['J'].data; names = [n for n, _ in p['mats']]; uniq = sorted(set(names)); idx = {n: i for i, n in enumerate(uniq)}
+        mi = np.empty(len(me.polygons), dtype=np.int32); me.polygons.foreach_get('material_index', mi)
+        new = np.array([idx[n] for n in names], dtype=np.int32)[mi]
+        me.materials.clear()
+        for n in uniq:
+            m = bpy.data.materials.get('ext_l2_' + n) or bpy.data.materials.new('ext_l2_' + n); m.use_nodes = True; me.materials.append(m)
+        me.polygons.foreach_set('material_index', new); me.update()
+    for o in bpy.context.view_layer.objects: o.select_set(False)
+    for p in parts: p['J'].select_set(True)
+    bpy.context.view_layer.objects.active = parts[0]['J']
+    bpy.ops.export_scene.gltf(filepath=os.path.join(ROOT, 'asset-src', 'glb', 'base', OPT['glb']), export_format='GLB', use_selection=True, export_apply=False, export_yup=True,
+                              export_normals=True, export_texcoords=True, export_materials='EXPORT', export_vertex_color='ACTIVE', export_all_vertex_colors=False,
+                              export_active_vertex_color_when_no_material=True, export_attributes=False, export_extras=False, export_cameras=False, export_lights=False,
+                              export_animations=False, export_skins=False, export_morph=False, export_image_format='NONE')
+    data = {'raeume': [{'name': p['name'], 'zellen': p['cells'], 'lit': 'l2_' + p['name'] + '_lit'} for p in parts], 'mats': table, 'info': info}
+    open(os.path.join(ROOT, 'asset-src', 'data', OPT['json']), 'w', encoding='utf-8').write(json.dumps(data, ensure_ascii=False))
+    cp.compute_device_type = 'NONE'
+    note('FERTIG %s (%.0f s)' % (json.dumps(info, ensure_ascii=False), time.time() - t0))
+def start():
+    def go():
+        try: run()
+        except Exception: note('FEHLER ' + traceback.format_exc()[-2500:])
+        return None
+    bpy.app.timers.register(go, first_interval=0.3)
+if not globals().get("NO_START"): start()

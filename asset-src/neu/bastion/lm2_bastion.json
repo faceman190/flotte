@@ -1,0 +1,21 @@
+{
+ "rooms": [
+  {
+   "name": "spinde",
+   "cells": [
+    [
+     4,
+     3
+    ],
+    [
+     5,
+     3
+    ]
+   ],
+   "lm": 1024
+  }
+ ],
+ "glb": "Lichtraum2Bastion.glb",
+ "json": "lichtraum2_bastion.json",
+ "mark": "lm2-bastion.txt"
+}

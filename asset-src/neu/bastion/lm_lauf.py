@@ -1,5 +1,5 @@
 # Lichträume ohne Fenster backen (Blender im Hintergrund): baut das Deck frisch und führt lm_raum.py darin aus.
-#   blender.exe -b --python lm_lauf.py -- <deck.py> <datei.blend> <opt.json>
+#   blender.exe -b --python lm_lauf.py -- <deck.py> <datei.blend> <opt.json> [skript.py, Vorgabe lm_raum.py; lm2_raum.py für Lichtraum 2]
 # Beispiel Bastion: … -- bk_deck_d.py BastionDeckD.blend lm_bastion.json
 # opt.json: die Einstellungen für lm_raum.py (OPT), z. B. rooms, glb, json, mark. Die .blend wird nach dem Bauen gespeichert, nach dem
 # Backen nicht mehr (lm_raum.py löst die Bausteine der Räume auf).
@@ -17,6 +17,6 @@ try:
     bpy.ops.wm.save_mainfile()
     open(mark, 'w', encoding='utf-8').write('ok ' + str(ns.get('result')))
     bpy.app.timers.register = lambda fn, first_interval=0, persistent=False: fn()
-    p = os.path.join(B, 'lm_raum.py'); exec(compile(open(p, encoding='utf-8').read(), p, 'exec'), {'__name__': '__main__', 'OPT': opt})
+    p = os.path.join(B, a[3] if len(a) > 3 else 'lm_raum.py'); exec(compile(open(p, encoding='utf-8').read(), p, 'exec'), {'__name__': '__main__', 'OPT': opt})
 except Exception:
     open(mark, 'w', encoding='utf-8').write('FEHLER ' + traceback.format_exc()[-2500:])
