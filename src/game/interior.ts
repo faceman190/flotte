@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { scene, camera, view, ux, gl, setExposure, ambient, rim, sun } from '../core/engine';
+import { scene, camera, view, ux, gl, setExposure, ambient, rim, sun, warmScene } from '../core/engine';
 import { texMat, std, boxUV, lightmapTex, WHITE_TEX } from '../core/textures';
 import { keys, mouse } from '../core/input';
 import { rng, hashStr, clamp, fmtN } from '../core/util';
@@ -797,6 +797,8 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
     group.add(door);
     inters.push({ x: 0, z: PZ0 + 1.2, r: 2.4, label: () => `Hinaus in die Stadt ${st.name}`, act: () => interiorHooks.toCity() });
   }
+  // Shader des Innenraums im Hintergrund übersetzen, so lange steht das Spiel hinter einer kurzen Blende (statt eines Standbilds mitten in der Landung)
+  warmScene(onFoot || fromCity ? 'Eintreten' : 'Andocken', () => deck?.prime());
 }
 export function leaveInterior() {
   if (room) leaveShip();
@@ -1106,6 +1108,7 @@ export function updateWalk(dt: number) {
         par.remove(deck.group); par.add(neu.group);
         deck.group.traverse((c: any) => { if (c.geometry && !c.userData.shared) c.geometry.dispose(); if (c.isLight && c.dispose) c.dispose(); });
         deck = neu;
+        warmScene('Deck wird geladen', () => deck?.prime());      // neue Lichtlage (Strahler des Decks): alle Shader brauchen eine neue Fassung
       }
     }
     deck.update(IN.x, IN.z);

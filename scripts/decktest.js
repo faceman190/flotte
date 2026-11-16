@@ -24,7 +24,14 @@ window.__deck = async () => {
   // Zeichenlast eines ganzen Bildes (alle Durchgänge zusammen) und Zeit je Bild
   T.info = () => { const i = E.renderer.info; i.autoReset = false; i.reset(); const t0 = performance.now(); lf.tick(0.05); const ms = performance.now() - t0; const r = { calls: i.render.calls, tris: i.render.triangles, ms: Math.round(ms), geo: i.memory.geometries, tex: i.memory.textures }; i.autoReset = true; return r; };
   // Spiel starten (Testpilot), an der Station andocken (Bastion oder 'eisenkrone') und den Innenraum betreten
-  T.enter = (id = 'bastion') => { T.station = id; ST.setPlayer(ST.newPlayer('Testpilot')); lf.tick(0.2); lf.openDock(lf.stationById(id)); lf.tick(0.5); I.enterInterior(lf.stationById(id)); const r = E.renderer.render; E.renderer.render = function () {}; let n = 0; while (lf.G.mode !== 'walk' && n++ < 40) lf.tick(1); E.renderer.render = r; return lf.G.mode; };
+  T.enter = (id = 'bastion') => { T.station = id; ST.setPlayer(ST.newPlayer('Testpilot')); lf.tick(0.2); lf.openDock(lf.stationById(id)); lf.tick(0.5); I.enterInterior(lf.stationById(id));
+    // Die Landung ohne Zeichnen durchlaufen. Die Mischform bleibt so lange aus: Sonst nähme das Deck Raumspiegelungen auf, während
+    // nichts gezeichnet wird, und behielte die schwarzen Bilder.
+    const r = E.renderer.render, hy = DK.deckTune.hybrid; E.renderer.render = function () {}; DK.deckTune.hybrid = false;
+    let n = 0; while (lf.G.mode !== 'walk' && n++ < 40) lf.tick(1);
+    E.renderer.render = r; DK.deckTune.hybrid = hy; return lf.G.mode; };
+  // nach DT.enter(): warten, bis das Vorwärmen des Innenraums fertig ist (engine.ts, warmScene; läuft nebenher)
+  T.ready = async () => { const p = () => new Promise(q => { const c = new MessageChannel(); c.port1.onmessage = () => q(); c.port2.postMessage(0); }); const t = performance.now(); while (E.warm && E.warm.hold && performance.now() - t < 15000) await p(); lf.tick(0.2); return !(E.warm && E.warm.hold); };
   return Object.keys(DK);
 };
 // Begehbarkeit: füllt vom Hangar aus alle erreichbaren Punkte (Raster 0,25 m, dieselbe Prüfung wie beim Laufen) und meldet Zellen des Decks

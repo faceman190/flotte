@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { interiorEnv } from './meshRoom';
-import { renderer } from '../core/engine';
+import { renderer, compileFor, warm } from '../core/engine';
 
 // =====================================================================================
 // Deck 3 der Bastion (Plan D): ersetzt dort Korridor und Promenade. Das Deck kommt aus dem Bastion-Baukasten in Blender
@@ -37,6 +37,7 @@ export interface Deck {
   update: (x: number, z: number) => void; view: (x: number, z: number) => void; way: (off: number) => number[][]; tris: number;
   seen: (x: number, z: number) => boolean; hangarSeen: () => boolean;
   release: () => void;      // beim Verlassen des Innenraums: Grafikspeicher der Lichtraum-Bilder freigeben
+  prime: () => void;        // beim Betreten, hinter der Blende: alle Raumspiegelungen aufnehmen
   stale: () => boolean;     // ohne Lichträume gebaut, die inzwischen geladen sind: Der Innenraum baut das Deck dann neu      // ist dieser Ort bzw. der Hangar vom Standort aus zu sehen?
 }
 
@@ -50,13 +51,14 @@ const LM_MAX = 1.6;               // Lichtraum: Obergrenze der Strahldichte bele
 // Mischform im Lichtraum (seit Alpha 1.26): hybrid = echte Strahler und Raumspiegelung an; key = Lichtstärke je Strahler (cd);
 // shade = wie stark der Schatten einer Figur das gebackene Licht abdunkelt (0 bis 1); envK = Stärke der Raumspiegelung;
 // spec = Verstärkung des Glanzes der Flächen auf die Strahler; side = Lichtstärke der Nebenstrahler (Glutschein an den Fenstern)
-export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true, hybrid: true, key: 2.6, shade: 0.5, envK: 1, spec: 2.2, side: 3, scharf: true };      // scharf: Lichtraum 2 (Material im Spiel) dort nehmen, wo es ihn gibt
+export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true, hybrid: true, key: 2.6, shade: 0.5, envK: 1, spec: 2.2, side: 3, scharf: true, licht: () => LM };      // scharf: Lichtraum 2 (Material im Spiel) dort nehmen, wo es ihn gibt
 const LMCAP = { value: 1 }, LMSHADE = { value: 0 }, LMSPEC = { value: 1 };      // Obergrenzen-Faktor (nur beim Aufnehmen der Raumspiegelung > 1), Schattenstärke, Kehrwert der Beleuchtung unter einem Strahler      // zum Einstellen im Testfenster; lichtraum = false zeigt den Raum aus Bausteinen
 // Decks je Station: Daten (data/…) und Modell (base/…). Die Bastion lädt beim Start, die Eisenkrone beim Betreten ihres Sektors.
 const DECKS: Record<string, [string, string]> = { bastion: ['deck_bastion', 'BastionDeck'], eisenkrone: ['deck_eisenkrone', 'EisenkroneDeck'] };
 const LOADED: Record<string, { data: DeckJson; parts: Record<string, Part[]> }> = {}, LOADING: Record<string, Promise<boolean>> = {};
 export const hasDeck = (id: string) => id in DECKS;
 export const deckReady = (id = 'bastion') => !!LOADED[id];
+export const lichtReady = (id = 'bastion') => !!LM[id] && !LM_BUSY;      // Lichträume geladen und für die Raumspiegelung vorbereitet (Tests)
 export function loadDeck(id = 'bastion'): Promise<boolean> {
   if (LOADED[id]) return Promise.resolve(true);
   if (id in LOADING) return LOADING[id];
@@ -88,7 +90,7 @@ const LM_SIDE: Record<string, Record<string, number[][]>> = { eisenkrone: { leit
 const SPOTS_MAX = 9;     // so viele Schlüssellampen höchstens (jeder Strahler wird in jedem beleuchteten Material der Szene mitgerechnet)
 const KEYS_MAX = 6;      // so viele Strahler werfen Schatten (je Strahler eine Schattenkarte in jedem beleuchteten Material der Szene)
 interface LmMesh { geo: THREE.BufferGeometry; mat: THREE.Material; mw: THREE.Matrix4; tris: number }
-interface LmRoom { name: string; cells: number[][]; meshes: LmMesh[]; mats: THREE.MeshStandardMaterial[]; tex: THREE.Texture[]; env: THREE.Texture | null }
+interface LmRoom { name: string; cells: number[][]; meshes: LmMesh[]; mats: THREE.MeshStandardMaterial[]; tex: THREE.Texture[]; env: THREE.Texture | null; keep?: boolean }      // keep: nie freigeben (Lichtraum 2: Lichtkarte und Spiegelung sind klein)
 const LM: Record<string, { rooms: LmRoom[]; rooms2: LmRoom[] }> = {}, LMLOADING: Record<string, Promise<boolean>> = {};
 async function loadLichtSet(dj: string, mu: string): Promise<LmRoom[]> {
   const [data, gltf] = await Promise.all([fetch(dj).then(r => r.json()) as Promise<LmJson>, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
@@ -103,6 +105,7 @@ async function loadLichtSet(dj: string, mu: string): Promise<LmRoom[]> {
     const g = o.geometry as THREE.BufferGeometry; g.computeBoundingSphere();
     rooms[roomOf[part]].meshes.push({ geo: g, mat: set[cls] || set.paint, mw: o.matrixWorld.clone(), tris: (g.index ? g.index.count : g.attributes.position.count) / 3 });
   });
+  lmPrecompile(rooms);
   return rooms;
 }
 function loadLicht(id: string): Promise<boolean> {
@@ -200,67 +203,84 @@ function l2Noise() {
   const mk = (d: Uint8Array) => { const t = new THREE.DataTexture(d, S, S, THREE.RGBAFormat); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 8; t.colorSpace = THREE.NoColorSpace; t.needsUpdate = true; return t; };
   return (L2NOISE = [mk(A), mk(N)]);
 }
+// Seit Alpha 1.31 teilen sich die Materialien wenige Shader: Ihre Angaben sind Uniformen, keine festen Zahlen im Quelltext. Vorher hatte
+// jedes der 49 Materialien einen eigenen Shader, und jeder kostete beim ersten Anblick bis zu einer halben Sekunde Übersetzen (mal zwei:
+// einmal für das Bild, einmal für die Aufnahme der Raumspiegelung). Jetzt sind es drei für beleuchtete Flächen (einfach, mit Schraffur,
+// mit Laufspuren/Abrieb/Korn/Noppen), einer für Leuchten und einer für Bildschirme.
 function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
   const env = interiorEnv(), M = materials(), [nA, nN] = l2Noise(), out: Record<string, THREE.Material> = {};
-  const f = (v: number) => v.toFixed(4), v3 = (c: number[]) => `vec3(${c.slice(0, 3).map(f).join(', ')})`;
+  const V3 = (c: number[]) => ({ value: new THREE.Vector3(c[0], c[1], c[2]) }), V4 = (a: number, b: number, c: number, d: number) => ({ value: new THREE.Vector4(a, b, c, d) });
   for (const [name, p] of Object.entries(mats)) {
     if (p.kind === 'stars') { out[name] = M.stars; continue; }
     if (p.kind === 'glass') { const g = (M.glass as THREE.MeshStandardMaterial).clone(); g.userData.env = [env, g.envMapIntensity, 2.2]; out[name] = g; continue; }
     if (p.kind === 'screen' && p.stripes) {
       // Bildschirm: waagerechte Zeilen in zwei Farben (bk_lib.stripes, Wellenbänder entlang der Höhe); in der Ferne fließen sie zur Mischfarbe
       const A = p.a || [0.1, 0.7, 0.7], Cc = p.c || [0, 0.05, 0.06], gain = (p.es || 1) * 0.4, mx = Math.max(A[0], A[1], A[2], 0.001);
+      const U = { l2E: V3(A), l2ColB: V3(Cc), l2G: V4((p.scale || 30) * 20, p.duty ?? 0.5, gain, 0.7 / mx) };      // l2G: Zeilen je Meter, Anteil, Helligkeit, Deckel
       const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
       m.onBeforeCompile = (sh) => {
-        sh.uniforms.bkGlow = GLOW; sh.uniforms.lmCap = LMCAP;
+        Object.assign(sh.uniforms, U); sh.uniforms.bkGlow = GLOW; sh.uniforms.lmCap = LMCAP;
         sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vL2P;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvL2P = position;');
-        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float bkGlow; uniform float lmCap; varying vec3 vL2P;')
-          .replace('#include <color_fragment>', `float l2ph = vL2P.y * ${f((p.scale || 30) * 20)}; float l2se = clamp(fwidth(l2ph) * 0.35, 0.02, 0.5); diffuseColor.rgb = mix(${v3(Cc)}, ${v3(A)}, smoothstep(${f(p.duty ?? 0.5)} - l2se, ${f(p.duty ?? 0.5)} + l2se, 0.5 + 0.5 * sin(l2ph - 1.5708))) * min(bkGlow * ${f(gain)}, 0.7 * lmCap / ${f(mx)});`);
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float bkGlow; uniform float lmCap; uniform vec3 l2E; uniform vec3 l2ColB; uniform vec4 l2G; varying vec3 vL2P;')
+          .replace('#include <color_fragment>', 'float l2ph = vL2P.y * l2G.x; float l2se = clamp(fwidth(l2ph) * 0.35, 0.02, 0.5); diffuseColor.rgb = mix(l2ColB, l2E, smoothstep(l2G.y - l2se, l2G.y + l2se, 0.5 + 0.5 * sin(l2ph - 1.5708))) * min(bkGlow * l2G.z, l2G.w * lmCap);');
       };
-      m.customProgramCacheKey = () => 'l2s-' + name;
+      m.customProgramCacheKey = () => 'l2screen';
       out[name] = m; continue;
     }
     if (p.kind === 'glow' || p.kind === 'screen') {
       // Leuchten: feste Farbe aus dem Material, gedeckelt wie bisher (Bildschirme bleiben unter der Schwelle des Bloom)
       const e = p.emit || p.col || [1, 1, 1], gain = (p.es || 1) * (p.kind === 'screen' ? 0.4 : 1), cap = p.kind === 'screen' ? 0.7 : GLOW_MAX, mx = Math.max(e[0], e[1], e[2], 0.001);
+      const U = { l2E: V3(e), l2G: V4(gain, cap / mx, 0, 0) };
       const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
       m.onBeforeCompile = (sh) => {
-        sh.uniforms.bkGlow = GLOW; sh.uniforms.lmCap = LMCAP;
-        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float bkGlow; uniform float lmCap;')
-          .replace('#include <color_fragment>', `diffuseColor.rgb = ${v3(e)} * min(bkGlow * ${f(gain)}, ${f(cap)} * lmCap / ${f(mx)});`);
+        Object.assign(sh.uniforms, U); sh.uniforms.bkGlow = GLOW; sh.uniforms.lmCap = LMCAP;
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float bkGlow; uniform float lmCap; uniform vec3 l2E; uniform vec4 l2G;')
+          .replace('#include <color_fragment>', 'diffuseColor.rgb = l2E * min(bkGlow * l2G.x, l2G.y * lmCap);');
       };
-      m.customProgramCacheKey = () => 'l2g-' + name;
+      m.customProgramCacheKey = () => 'l2glow';
       out[name] = m; continue;
     }
     const col = p.col || [0.2, 0.2, 0.2], metal = p.metal ?? 0, rough = p.rough ?? 0.5, vr = p.var ?? 0, rv = p.rvar ?? 0, sc = p.scale ?? 7, bump = p.bump ?? 0, bs = p.bscale ?? 170, wear = p.wear ?? 0, streak = p.streak ?? 0, grime = p.grime !== false && p.var !== undefined;
+    const S = !!p.stripes, F = !!(streak || wear || bump || p.studs);      // Fassung: mit Schraffur, mit den teuren Zusätzen (je ein Griff ins Rauschbild)
+    const U = {
+      l2Col: V3(S ? p.a || [0.8, 0.6, 0.05] : col), l2ColB: V3(p.c || [0.02, 0.02, 0.02]),      // Farbe; bei Schraffur die beiden Bandfarben
+      l2V: V4(1 - vr * 1.6, 1 + vr * 0.5, sc / 16, grime ? 0.6 : 1),                            // Helligkeit: unten, oben, Maßstab der Flecken, Schmutz in Bodennähe
+      l2Rg: V4(Math.max(0.04, rough - rv), Math.min(1, rough + rv * 1.4), sc * 2.7 / 16, metal), // Rauheit: unten, oben, Maßstab; Metall
+      l2F: V4(streak, wear * 0.85, bump * 1.5, bs / 32),                                        // Laufspuren, Kantenabrieb, Korn (Stärke, Maßstab)
+      l2S: V4(p.studs ? 1 : 0, (p.scale || 9) * 10, p.duty ?? 0.5, 0),                          // Noppen; Schraffur: Bänder je Meter, Anteil
+    };
     const m = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 1, vertexColors: true, envMap: env, envMapIntensity: 0.3 });
     m.userData.env = [env, 0.3, 0.9];
     m.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, U);
       sh.uniforms.bkLight = LIGHT; sh.uniforms.lmCap = LMCAP; sh.uniforms.lmShadeK = LMSHADE; sh.uniforms.lmSpec = LMSPEC;
       sh.uniforms.l2Lit = { value: lit }; sh.uniforms.l2NoiseA = { value: nA }; sh.uniforms.l2NoiseN = { value: nN };
       const VAR = 'varying vec3 vL2P; varying vec3 vL2N; varying vec2 vL2Uv; varying vec3 vL2X; varying vec3 vL2Y; varying vec3 vL2Z;';
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VAR)
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvL2P = position; vL2N = normal; vL2Uv = uv; vL2X = normalMatrix * vec3(1.0, 0.0, 0.0); vL2Y = normalMatrix * vec3(0.0, 1.0, 0.0); vL2Z = normalMatrix * vec3(0.0, 0.0, 1.0);');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float bkLight; uniform float lmCap; uniform float lmShadeK; uniform float lmSpec; uniform sampler2D l2Lit; uniform sampler2D l2NoiseA; uniform sampler2D l2NoiseN; ' + VAR)
+        .replace('#include <common>', '#include <common>\nuniform float bkLight; uniform float lmCap; uniform float lmShadeK; uniform float lmSpec; uniform sampler2D l2Lit; uniform sampler2D l2NoiseA; uniform sampler2D l2NoiseN; uniform vec3 l2Col; uniform vec3 l2ColB; uniform vec4 l2V; uniform vec4 l2Rg; uniform vec4 l2F; uniform vec4 l2S; ' + VAR)
         // Lage der Fläche: Muster entlang der beiden Achsen, die in der Fläche liegen (l2T, l2B: dieselben Achsen im Blickraum, für das Relief)
         .replace('#include <color_fragment>', [
           'vec3 l2an = abs(vL2N); vec2 l2q; vec3 l2T; vec3 l2B;',
           'if (l2an.y >= l2an.x && l2an.y >= l2an.z) { l2q = vL2P.xz; l2T = vL2X; l2B = vL2Z; } else if (l2an.x >= l2an.z) { l2q = vL2P.zy; l2T = vL2Z; l2B = vL2Y; } else { l2q = vL2P.xy; l2T = vL2X; l2B = vL2Y; }',
           '#ifdef USE_COLOR_ALPHA\nfloat l2edge = vColor.a;\n#else\nfloat l2edge = 0.0;\n#endif',
-          `float l2val = mix(${f(1 - vr * 1.6)}, ${f(1 + vr * 0.5)}, clamp(((texture2D(l2NoiseA, l2q * ${f(sc / 16)}).r - 0.5) * 0.55 + 0.2) / 0.4, 0.0, 1.0));`,      // 0.55: unser Rauschen streut breiter als das von Blender, sonst wirken die Flecken wolkig
-          grime ? 'l2val *= mix(0.6, 1.0, clamp(vL2P.y / 0.5, 0.0, 1.0));' : '',
-          streak ? `if (l2an.y < 0.5) l2val *= mix(1.0, ${f(1 - streak)}, clamp((texture2D(l2NoiseA, vec2((l2an.x >= l2an.z ? vL2P.z : vL2P.x) * 26.0, vL2P.y * 1.3) / 16.0).g - 0.5) / 0.25, 0.0, 1.0));` : '',
-          p.stripes      // Warnschraffur: schräge Bänder in zwei Farben
-            ? `float l2ph = (vL2P.x + vL2P.y + vL2P.z) * ${f((p.scale || 9) * 10)}; float l2se = clamp(fwidth(l2ph) * 0.35, 0.02, 0.5); vec3 l2alb = mix(${v3(p.c || [0.02, 0.02, 0.02])}, ${v3(p.a || [0.8, 0.6, 0.05])}, smoothstep(${f(p.duty ?? 0.5)} - l2se, ${f(p.duty ?? 0.5)} + l2se, 0.5 + 0.5 * sin(l2ph - 1.5708))) * l2val;`
-            : `vec3 l2alb = ${v3(col)} * l2val;`,
-          `float l2rough = mix(${f(Math.max(0.04, rough - rv))}, ${f(Math.min(1, rough + rv * 1.4))}, clamp(((texture2D(l2NoiseA, l2q * ${f(sc * 2.7 / 16)}).g - 0.5) * 0.55 + 0.2) / 0.4, 0.0, 1.0));`,
-          `float l2metal = ${f(metal)};`,
-          wear ? `float l2w = l2edge * clamp(((texture2D(l2NoiseA, l2q * 2.875).r - 0.5) * 0.55 + 0.08) / 0.18, 0.0, 1.0) * ${f(wear * 0.85)}; l2alb = mix(l2alb, vec3(0.36, 0.34, 0.31), l2w); l2metal = mix(l2metal, 1.0, l2w); l2rough = mix(l2rough, 0.34, l2w);` : '',
+          'float l2val = mix(l2V.x, l2V.y, clamp(((texture2D(l2NoiseA, l2q * l2V.z).r - 0.5) * 0.55 + 0.2) / 0.4, 0.0, 1.0));',      // 0.55: unser Rauschen streut breiter als das von Blender, sonst wirken die Flecken wolkig
+          'l2val *= mix(l2V.w, 1.0, clamp(vL2P.y / 0.5, 0.0, 1.0));',      // Schmutz in Bodennähe
+          F ? 'l2val *= 1.0 - l2F.x * (l2an.y < 0.5 ? 1.0 : 0.0) * clamp((texture2D(l2NoiseA, vec2((l2an.x >= l2an.z ? vL2P.z : vL2P.x) * 26.0, vL2P.y * 1.3) / 16.0).g - 0.5) / 0.25, 0.0, 1.0);' : '',      // Laufspuren an Wänden
+          S      // Warnschraffur: schräge Bänder in zwei Farben
+            ? 'float l2ph = (vL2P.x + vL2P.y + vL2P.z) * l2S.y; float l2se = clamp(fwidth(l2ph) * 0.35, 0.02, 0.5); vec3 l2alb = mix(l2ColB, l2Col, smoothstep(l2S.z - l2se, l2S.z + l2se, 0.5 + 0.5 * sin(l2ph - 1.5708))) * l2val;'
+            : 'vec3 l2alb = l2Col * l2val;',
+          'float l2rough = mix(l2Rg.x, l2Rg.y, clamp(((texture2D(l2NoiseA, l2q * l2Rg.z).g - 0.5) * 0.55 + 0.2) / 0.4, 0.0, 1.0));',
+          'float l2metal = l2Rg.w;',
+          F ? 'float l2w = l2edge * clamp(((texture2D(l2NoiseA, l2q * 2.875).r - 0.5) * 0.55 + 0.08) / 0.18, 0.0, 1.0) * l2F.y; l2alb = mix(l2alb, vec3(0.36, 0.34, 0.31), l2w); l2metal = mix(l2metal, 1.0, l2w); l2rough = mix(l2rough, 0.34, l2w);' : '',
         ].join('\n'))
         .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp(l2rough, 0.06, 1.0);')
-        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (bump ? `{ vec2 l2g = (texture2D(l2NoiseN, l2q * ${f(bs / 32)}).rg - 0.5) * ${f(bump * 1.5)}; normal = normalize(normal + l2T * l2g.x + l2B * l2g.y); }` : '')
+        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (F
+          ? '{ vec2 l2g = (texture2D(l2NoiseN, l2q * l2F.w).rg - 0.5) * l2F.z; normal = normalize(normal + l2T * l2g.x + l2B * l2g.y); }\n'
           // Noppenblech: ein Raster von 42 Noppen je Meter, jede ein kleiner Ring aus Gefälle; in der Ferne ausgeblendet
-          + (p.studs ? '{ vec2 l2c = fract(l2q * 42.0) - 0.5; float l2d = length(l2c); float l2k = smoothstep(0.34, 0.22, l2d) * smoothstep(0.06, 0.2, l2d) * clamp(1.0 - fwidth(l2q.x) * 63.0, 0.0, 1.0); normal = normalize(normal + (l2T * l2c.x + l2B * l2c.y) / max(l2d, 0.001) * l2k * 0.6); }' : ''))
+          + '{ vec2 l2c = fract(l2q * 42.0) - 0.5; float l2d = length(l2c); float l2k = smoothstep(0.34, 0.22, l2d) * smoothstep(0.06, 0.2, l2d) * clamp(1.0 - fwidth(l2q.x) * 63.0, 0.0, 1.0) * l2S.x; normal = normalize(normal + (l2T * l2c.x + l2B * l2c.y) / max(l2d, 0.001) * l2k * 0.6); }'
+          : ''))
         .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\nmaterial.diffuseColor = vec3(0.0); material.specularColor = mix(vec3(0.04), l2alb, l2metal * 0.7); material.specularF90 = 1.0;')
         .replace('#include <lights_fragment_begin>', LM_LIGHTS)
         .replace('#include <lights_fragment_end>', [
@@ -271,12 +291,15 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
           'l2R *= min(1.0, ' + LM_MAX.toFixed(2) + ' * lmCap / max(0.001, max(l2R.r, max(l2R.g, l2R.b))));',
           'totalEmissiveRadiance = l2R * lmShade;'].join('\n'));
     };
-    m.customProgramCacheKey = () => 'l2-' + name;
+    m.customProgramCacheKey = () => 'l2lit' + (S ? '-s' : '') + (F ? '-f' : '');
     out[name] = m;
   }
   return out;
 }
+let MESHOPT_WORKERS = false;
 async function loadLicht2Set(dj: string, mu: string): Promise<LmRoom[]> {
+  // Das Deckmodell ist groß (62 MB): in Hilfsfäden entpacken, sonst steht das Bild, während es ankommt
+  if (!MESHOPT_WORKERS) { MESHOPT_WORKERS = true; try { (MeshoptDecoder as any).useWorkers?.(2); } catch (e) { /* dann eben im Hauptfaden */ } }
   const [data, gltf] = await Promise.all([fetch(dj).then(r => r.json()) as Promise<L2Json>, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
   const TD = (window as any).TEXDATA || {}, ld = new THREE.TextureLoader(), rooms: LmRoom[] = [], by: Record<string, { set: Record<string, THREE.Material>; i: number }> = {};
   for (const R of data.raeume) {
@@ -284,7 +307,7 @@ async function loadLicht2Set(dj: string, mu: string): Promise<LmRoom[]> {
     const lit = await ld.loadAsync(u); lit.flipY = false; lit.colorSpace = THREE.NoColorSpace; lit.anisotropy = 4; lit.needsUpdate = true;
     const set = l2Materials(data.mats, lit);
     by[R.name] = { set, i: rooms.length };
-    rooms.push({ name: R.name, cells: R.zellen, meshes: [], env: null, tex: [lit], mats: [...new Set(Object.values(set))].filter(m => m.userData.env) as THREE.MeshStandardMaterial[] });
+    rooms.push({ name: R.name, cells: R.zellen, meshes: [], env: null, keep: true, tex: [lit], mats: [...new Set(Object.values(set))].filter(m => m.userData.env) as THREE.MeshStandardMaterial[] });
   }
   gltf.scene.updateMatrixWorld(true);
   gltf.scene.traverse((o: any) => {
@@ -294,11 +317,27 @@ async function loadLicht2Set(dj: string, mu: string): Promise<LmRoom[]> {
     const g = o.geometry as THREE.BufferGeometry; g.computeBoundingSphere();
     rooms[q.i].meshes.push({ geo: g, mat: q.set[key] || Object.values(q.set)[0], mw: o.matrixWorld.clone(), tris: (g.index ? g.index.count : g.attributes.position.count) / 3 });
   });
+  lmPrecompile(rooms);
   return rooms;
 }
 
 // Raumspiegelung: einmal von der Raummitte aus aufnehmen (nur die Flächen des Lichtraums, mit ihrem gebackenen Licht) und für den Glanz
 // vorfiltern. Leuchten dürfen dabei heller sein als im Bild (lmCap): Erst so spiegeln sich Lampen als helle Flecken in Glas und Metall.
+// ---------- Vorwärmen (seit Alpha 1.31): keine Standbilder beim ersten Anblick eines Bereichs ----------
+// Die Raumspiegelung wird ohne Lampen aufgenommen, das sind eigene Shader-Fassungen: nach dem Laden je Shader einmal nebenläufig übersetzen
+// (engine.ts, compileFor). Aufgenommen wird erst, wenn das fertig ist. Die Fassungen für das Bild übersetzt warmScene beim Betreten.
+function lmPrecompile(rooms: LmRoom[]) {
+  const uniq = new Map<string, LmMesh>();
+  for (const R of rooms) for (const q of R.meshes) {
+    if (q.mat.transparent) continue;
+    const k = ((q.mat as any).customProgramCacheKey?.() || q.mat.uuid) + (q.geo.attributes.color ? q.geo.attributes.color.itemSize : 0);      // Eckfarben mit und ohne Alpha sind eigene Fassungen
+    if (!uniq.has(k)) uniq.set(k, q);
+  }
+  const tmp = new THREE.Scene(); for (const q of uniq.values()) tmp.add(new THREE.Mesh(q.geo, q.mat));
+  LM_BUSY++; compileFor(tmp, null, true).then(() => { LM_BUSY--; });
+}
+let LM_BUSY = 0;             // so viele Sätze übersetzen noch die Shader für die Aufnahme der Raumspiegelung
+let LM_PM: THREE.PMREMGenerator | null = null;      // ein Filter für alle Raumspiegelungen (jeder neue müsste seine Shader neu übersetzen)
 const lmFree = (R: LmRoom) => { for (const t of R.tex) t.dispose(); if (R.env) { R.env.userData.rt?.dispose(); R.env = null; } };      // Grafikspeicher eines Raums freigeben: Bilder und Raumspiegelung
 function lmProbe(ms: LmMesh[], T: THREE.Matrix4, at: THREE.Vector3) {      // T: Lage der Netze in der Welt, at: Raummitte in der Welt
   const sc = new THREE.Scene();
@@ -306,13 +345,16 @@ function lmProbe(ms: LmMesh[], T: THREE.Matrix4, at: THREE.Vector3) {      // T:
     if (q.mat.transparent) continue;
     const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(T, q.mw); m.frustumCulled = false; sc.add(m);
   }
-  const rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType });      // 256 je Seite: vorgefiltert 6 MB je Raum (512 wären 25 MB, bei 17 Bereichen zu viel)
+  // 256 je Seite: vorgefiltert 6 MB je Raum (512 wären 25 MB). Das Format der Spiegelung steht im Shader: Ein Material, das von der
+  // Umgebung der Station (interiorEnv, kleiner) auf die Raumspiegelung wechselt, braucht eine neue Fassung. Deshalb bekommen die
+  // Materialien ihre Spiegelung beim Betreten, bevor die Shader übersetzt werden (prime).
+  const rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType });
   const cc = new THREE.CubeCamera(0.15, 90, rt); cc.position.copy(at);
   const g0 = GLOW.value; GLOW.value = g0 * 4; LMCAP.value = 4;
   try { cc.update(renderer, sc); } finally { GLOW.value = g0; LMCAP.value = 1; }
-  const pm = new THREE.PMREMGenerator(renderer), out = pm.fromCubemap(rt.texture), env = out.texture;
+  const pm = (LM_PM = LM_PM || new THREE.PMREMGenerator(renderer)), out = pm.fromCubemap(rt.texture), env = out.texture;
   env.userData.rt = out;      // zum Freigeben (lmFree)
-  pm.dispose(); rt.dispose();
+  rt.dispose();
   return env;
 }
 
@@ -536,7 +578,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   // Lichträume dieses Decks: Netze, Zellmitten (Innenraum), Mitte für die Raumspiegelung, Nebenstrahler
   const lmRooms: { R: LmRoom; meshes: THREE.Mesh[]; cells: [number, number][]; x: number; z: number; side: number[][]; seen: number; gpu: boolean }[] = [];
   const keys: THREE.SpotLight[] = [], more: THREE.SpotLight[] = [], sides: THREE.SpotLight[] = [];      // Strahler mit Schatten, ohne Schatten, Nebenstrahler
-  let lmT: THREE.Matrix4 | null = null, lmState = '', lmLive = false, lmTick = 0;
+  let lmT: THREE.Matrix4 | null = null, lmState = '', lmLive = false, lmTick = 0, lmQueue = 0;
   if (lm) {
     // Modell in Planlage (glTF: x, oben, −y) → Innenraum, wie ein Baustein bei (0, 0) ohne Drehung
     const T = lmT = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0));
@@ -572,6 +614,11 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   }
   // Mischform an- und abschalten, Raumspiegelungen aufnehmen, Strahler verteilen. Die Strahler bekommt der sichtbare Lichtraum, der dem
   // Standort am nächsten ist; die mit Schatten stehen auf den Zellen nächst dem Piloten.
+  const lmCapture = (w: (typeof lmRooms)[number]) => {
+    // in Weltlage aufnehmen: Der Innenraum liegt und dreht sich mit der Station, gespiegelt wird in Weltrichtungen
+    try { group.updateWorldMatrix(true, false); w.R.env = lmProbe(w.R.meshes, new THREE.Matrix4().multiplyMatrices(group.matrixWorld, lmT!), new THREE.Vector3(w.x, 1.7, w.z).applyMatrix4(group.matrixWorld)); w.gpu = true; }
+    catch (e) { console.warn('Raumspiegelung nicht aufgenommen:', w.R.name, e); w.R.env = (w.R.mats[0]?.userData.env?.[0] as THREE.Texture) || null; }
+  };
   const lmApply = (px: number, pz: number) => {
     if (!lm) return;
     const hy = deckTune.hybrid;
@@ -583,17 +630,22 @@ export function buildDeck(id: string, hz0: number): Deck | null {
       if (!q.meshes.some(m => m.visible)) {
         // Grafikspeicher: Die Bilder eines Raums (bis 170 MB) freigeben, wenn er 20 s nicht zu sehen war und über 24 m entfernt ist.
         // Beim nächsten Blick lädt three sie aus dem Arbeitsspeicher wieder hoch.
-        if (q.gpu && d > 24 && now - q.seen > 20000) { lmFree(q.R); q.gpu = false; }
+        if (!q.R.keep && q.gpu && d > 24 && now - q.seen > 20000) { lmFree(q.R); q.gpu = false; }
         return;
       }
       q.seen = now; q.gpu = true;
-      if (hy && !q.R.env) {
-        // in Weltlage aufnehmen: Der Innenraum liegt und dreht sich mit der Station, gespiegelt wird in Weltrichtungen
-        try { group.updateWorldMatrix(true, false); q.R.env = lmProbe(q.R.meshes, new THREE.Matrix4().multiplyMatrices(group.matrixWorld, lmT!), new THREE.Vector3(q.x, 1.7, q.z).applyMatrix4(group.matrixWorld)); nEnv++; }
-        catch (e) { console.warn('Raumspiegelung nicht aufgenommen:', q.R.name, e); }
-      }
       if (d < bd) { bd = d; act = i; }
     });
+    // Raumspiegelungen vorwärmen: je viertem Bild eine, der nächste Bereich zuerst, auch wenn er noch nicht zu sehen ist. Die Aufnahme lädt
+    // dabei auch die Netze des Bereichs in den Grafikspeicher. Beim Andocken geschieht das während der Landung, nicht erst beim Hineinlaufen.
+    // Was davon schon beim Betreten hinter der Blende aufgenommen wurde (prime), fehlt hier nicht mehr. Räume der alten Art geben ihre
+    // Bilder in der Ferne frei: Sie kommen erst wieder dran, wenn sie zu sehen sind.
+    // Nicht während des Vorwärmens (warm.hold): Dann folgt prime ohnehin, und Tests rechnen in dieser Zeit Bilder, ohne zu zeichnen.
+    if (hy && !LM_BUSY && !warm.hold && (lmQueue++ & 3) === 0) {
+      let w: (typeof lmRooms)[number] | null = null, wd = 1e9;
+      for (const q of lmRooms) { if (q.R.env || (!q.R.keep && !q.meshes.some(m => m.visible))) continue; const d = Math.hypot(q.x - px, q.z - pz); if (d < wd) { wd = d; w = q; } }
+      if (w) { lmCapture(w); nEnv++; }
+    }
     const q = hy && act >= 0 ? lmRooms[act] : null;
     const order = q ? q.cells.map((_, i) => i).sort((a, b) => Math.hypot(q.cells[a][0] - px, q.cells[a][1] - pz) - Math.hypot(q.cells[b][0] - px, q.cells[b][1] - pz)) : [];
     const near = order.slice(0, keys.length).sort((a, b) => a - b), far = order.slice(keys.length, keys.length + more.length);
@@ -702,7 +754,15 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     },
     seen: (x, z) => (z > hz0 - 0.2 ? gate : Math.hypot(x - lastX, z - lastZ) < 6 || vis.has(zoneOf(...cellOf(x, z)))),
     hangarSeen: () => gate,
-    release: () => { for (const q of lmRooms) { if (q.gpu) lmFree(q.R); q.gpu = false; } },
+    // Lichtraum 2 (keep) behält Lichtkarten und Raumspiegelungen auch nach dem Verlassen (zusammen rund 200 MB Grafikspeicher für das Deck
+    // der Bastion): Beim nächsten Andocken sind sie sofort da, sonst kostete jedes Andocken knapp eine Sekunde Aufnehmen und Hochladen.
+    release: () => { for (const q of lmRooms) { if (q.gpu && !q.R.keep) lmFree(q.R); q.gpu = false; } },
+    // beim Betreten, hinter der Blende (engine.ts, warmScene): alle Raumspiegelungen auf einmal aufnehmen. So ändert sich im Bild später nichts mehr.
+    // Die Materialien bekommen ihre Spiegelung gleich mit: Die Shader werden danach für sie übersetzt (ihr Format steht im Shader).
+    prime: () => {
+      if (!lm || !deckTune.hybrid) return;
+      for (const q of lmRooms) { if (!q.R.env) lmCapture(q); if (q.R.env) for (const m of q.R.mats) if (m.envMap !== q.R.env) { m.envMap = q.R.env; m.needsUpdate = true; } }
+    },
     stale: () => !lm && deckTune.lichtraum && !!LM[id],
     // Weg der Story-Figuren vom Hangar hinaus (und umgekehrt herein): durch das Tor, an der Kreuzung dahinter nach links außer Sicht
     // (so weit der Gang dort nach Norden reicht: auf der Bastion zwei Zellen, auf der Eisenkrone eine)

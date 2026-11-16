@@ -1,7 +1,7 @@
 import './core/boot';   // zuerst: Spieldaten laden (Ladebalken), alles Weitere wartet darauf
 import { dockBark } from './game/barks';
 import * as THREE from 'three';
-import { camera, render, scene, aimShadows, markShadows, gl } from './core/engine';
+import { warm, camera, render, scene, aimShadows, markShadows, gl } from './core/engine';
 import { updateSky, sunDir, sky } from './core/sky';
 import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience';
 import { ux } from './core/engine';
@@ -590,6 +590,8 @@ function loop(now: number, manual = false) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
   perfFrameStart();
+  // Vorwärmen (engine.ts, warmScene): Solange die Shader eines neuen Innenraums übersetzt werden, steht das Spiel hinter der Blende
+  if (warm.hold && (!manual || warm.strict)) { perfFrameEnd(); return; }
   simulate(dt);
   if (G.mode === 'scene' && IN.active) updateRoomLife(dt);   // in Kinoszenen steht die Welt, die Figuren im Raum sprechen aber weiter
   hook('Vorspann', () => updateIntro(dt));

@@ -113,3 +113,67 @@ Alpha 1.27: Treffpunkt und Lager in der alten Art, sonst Bausteine.
 
 **Offen:** Hangar und Eisenkrone sind noch nicht umgestellt. Schmutz in Ecken fehlt weiter. Das Deckmodell ist eine einzige große
 Datei; es in Teile zu zerlegen, würde den ersten Besuch beschleunigen.
+
+## Standbilder beim Andocken und im Deck (Alpha 1.31)
+
+Meldung des Nutzers zu Alpha 1.30 (mit Leistungsbericht, RTX 3060 Ti): „Einige Ruckler, Standbilder, wenn ich durch die Gänge laufe,
+langes Standbild, wenn ich im Hangar andocke.“ Die Bildrate war hoch (145 bis 170), einzelne Bilder dauerten aber 155 bis 2186 ms.
+
+**Ursachen**, nachgemessen mit `scripts/rucktest.js`:
+
+1. Jedes der 49 Materialien hatte einen eigenen Shader (seine Angaben standen als feste Zahlen im Quelltext). three übersetzt einen
+   Shader erst, wenn sein Material zum ersten Mal ins Bild kommt, und wartet dabei auf den Grafiktreiber: bis zu einer halben Sekunde
+   je Shader. Dazu kam jede Fassung zweimal (für das Bild und, ohne Lampen, für die Aufnahme der Raumspiegelung) und ein drittes Mal,
+   sobald ein Raum seine Spiegelung bekam (ihr Format steht im Shader).
+2. Beim Andocken ändert sich die Lichtlage (die Strahler des Decks kommen dazu): Auch Hangar, Schiff und Figuren brauchen dann neue
+   Fassungen ihrer Shader, alle im ersten Bild.
+3. Die Raumspiegelung wurde beim ersten Blick in einen Bereich aufgenommen, mit einem jedes Mal neu gebauten Filter.
+4. Am Ende der Landung kamen alle Netze und Lichtkarten des Decks auf einmal in den Grafikspeicher (0,6 s).
+
+**Was jetzt anders ist:**
+
+- **Wenige gemeinsame Shader.** Die Angaben der Materialien sind Uniformen. Es gibt drei Shader für beleuchtete Flächen (einfach,
+  mit Schraffur, mit Laufspuren/Abrieb/Korn/Noppen), einen für Leuchten, einen für Bildschirme (`l2Materials`,
+  `customProgramCacheKey`). Die Rechnung ist dieselbe: Zwölf Vergleichsansichten weichen im Mittel um höchstens 0,4 von 255 ab
+  (wo keine Figur durchs Bild läuft).
+- **Vorwärmen hinter einer Blende** (`warmScene` in `src/core/engine.ts`, aufgerufen am Ende von `enterInterior` und beim späten
+  Umbau des Decks). Ablauf: schwarze Blende, das Spiel steht (`warm.hold`, die Hauptschleife fragt es ab); das Deck nimmt alle
+  Raumspiegelungen auf und gibt sie den Materialien (`deck.prime`); dann übersetzt der Treiber alle Shader der Szene nebenläufig
+  (`compileFor`, mit gebundenem Zwischenbild, damit die Fassung zum Bild passt); ein Bild ohne Sichtkegelprüfung lädt alle Netze und
+  Bilder hoch (`primeFrame`); nach zwei fertigen Bildern geht die Blende auf, und die Landung beginnt. Dauert es länger als eine
+  halbe Sekunde, zeigt die Blende ein Wort („Andocken“, „Eintreten“). Notbremse nach 9 s.
+- `compileFor` fragt selbst nach, ob die Shader fertig sind. `renderer.compileAsync` wirft, wenn ein Material inzwischen entsorgt
+  wurde, und meldet dann nie mehr „fertig“ (im Story-Durchlauf aufgefallen).
+- Die Shader-Fassungen für die Aufnahme der Raumspiegelung werden gleich nach dem Laden der Lichträume übersetzt (`lmPrecompile`).
+- Ein Filter für alle Raumspiegelungen (`LM_PM`). Lichtraum 2 behält Lichtkarten und Spiegelungen auch nach dem Verlassen (zusammen
+  rund 200 MB Grafikspeicher): Das zweite Andocken braucht keine Vorarbeit mehr.
+- Das Deckmodell wird in Hilfsfäden entpackt (`MeshoptDecoder.useWorkers(2)`).
+
+**Gemessen** (Testfenster, RTX 3060 Ti; ein „Bild“ ist ein von Hand gerechnetes Bild mit `gl.finish()`):
+
+| | Alpha 1.30 | Alpha 1.31 |
+| --- | --- | --- |
+| Andocken, längste Bilder | 4,8 s, 25 s und 15,8 s (Shader zum ersten Mal übersetzt; beim Nutzer bis 2,2 s) | keines über 22 ms |
+| Blende beim ersten Andocken | – | 1,1 bis 2,5 s |
+| Blende beim erneuten Andocken | – | 0,5 bis 1,1 s |
+| Rundgang durch alle 105 Zellen | 16 Bilder über 25 ms, bis 1,3 s | keines über 39 ms |
+| zweiter Rundgang | ein Bild mit 1,2 s | keines über 24 ms |
+| Shader in der Sitzung | 191 | 93 |
+
+**Geprüft:** Story-Durchlauf (65 Schritte, kein Fehler), Begehbarkeit Bastion und Eisenkrone wie vorher, Heimring, die Stadt auf der Oberfläche (heimstatt_base),
+Leitstand der Eisenkrone (alte Art) mit Blende.
+
+**Nicht behoben:** In der ersten Minute nach dem Start, solange im Hintergrund Modelle nachladen, hält die Speicherbereinigung des
+Browsers im Testfenster vereinzelt 0,3 bis 2 s an (ein- bis zweimal je Lauf). Das Spiel selbst fordert je Bild praktisch keinen
+Speicher an (0,03 MB, gemessen im Stand und im Rundgang); im eingeschwungenen Zustand (neun Runden, 1.900 Bilder) trat keine Pause
+mehr auf. Ob das im sichtbaren Fenster des Nutzers auch vorkommt, ist nicht gemessen. Die Netzdaten nach dem Hochladen freizugeben
+(190 MB) hat daran nichts geändert und ist wieder ausgebaut.
+
+**Fallen:**
+
+- Testhelfer, die das Zeichnen abschalten (`DT.enter`, `T.stub` im Probelauf), dürfen dabei keine Raumspiegelung aufnehmen lassen:
+  Sie bliebe schwarz. Während des Vorwärmens nimmt das Deck deshalb nichts auf, und `DT.enter` schaltet die Mischform so lange aus.
+  Nach `DT.enter()` mit `await DT.ready()` auf das Ende des Vorwärmens warten.
+- Im versteckten Testfenster läuft `requestAnimationFrame` nicht; das Vorwärmen hat dafür Zeitgeber als Ersatz. Die echte
+  Bildschleife (Blende im laufenden Spiel) ist deshalb nur über von Hand gerechnete Bilder geprüft (`warm.strict`).
+- `rucktest.js` zählt mit `opt.profil` jede Art von Grafikaufruf mit; der Aufsatz erzeugt selbst Abfall für die Speicherbereinigung.

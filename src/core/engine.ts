@@ -129,6 +129,80 @@ export const overlay: { scene: THREE.Scene | null; camera: THREE.Camera | null }
 // Vor dem Bild: Wer hier eine Funktion einträgt, darf erst selbst etwas zeichnen (Schiffsansicht im Werft-Terminal, src/ui/shipPreview.ts).
 // Das Spielbild übermalt es danach wieder.
 export const prePass: { fn: null | (() => void) } = { fn: null };
+
+// ---------- Vorwärmen (seit Alpha 1.31): keine Standbilder beim Betreten eines Innenraums ----------
+// three übersetzt einen Shader erst, wenn sein Material zum ersten Mal ins Bild kommt, und wartet dabei auf den Grafiktreiber (je Shader
+// bis zu einer halben Sekunde). Beim Andocken wechselt die Lichtlage (Strahler des Decks), also braucht jedes beleuchtete Material eine
+// neue Fassung: Das waren die langen Standbilder. compileFor lässt den Treiber nebenläufig übersetzen und meldet, wenn alles fertig ist.
+// Übersetzt wird in der Fassung, die das Bild wirklich braucht: Das Spiel zeichnet in ein Zwischenbild (Bloom), und three wählt danach
+// Filmkurve und Farbraum des Shaders. Ohne gebundenes Zwischenbild entstünde eine Fassung, die nie benutzt wird.
+const WARM_RT = new THREE.WebGLRenderTarget(4, 4);
+export function compileFor(root: THREE.Object3D, target: THREE.Scene | null = null, toTarget = view.hiQ && !!composer): Promise<void> {
+  const rt0 = renderer.getRenderTarget();
+  let mats = new Set<THREE.Material>();
+  try { if (toTarget) renderer.setRenderTarget(WARM_RT); mats = renderer.compile(root, camera, target as any) as any || mats; } catch (e) { console.warn('Shader vorab übersetzen:', e); }
+  renderer.setRenderTarget(rt0);
+  // Selbst nachfragen, ob alles fertig ist (nicht renderer.compileAsync): Dessen Abfrage wirft, sobald ein Material in der Zwischenzeit
+  // entsorgt wurde (Figur verschwindet, Innenraum wieder verlassen), und meldet dann nie mehr, dass es fertig ist.
+  return new Promise<void>(res => {
+    const t0 = performance.now();
+    const check = () => {
+      for (const m of [...mats]) {
+        let ready = true;
+        try { const p = (renderer.properties.get(m) as any).currentProgram; ready = !p || p.isReady(); } catch (e) { /* gilt als fertig */ }
+        if (ready) mats.delete(m);
+      }
+      if (!mats.size || performance.now() - t0 > 20000) res(); else setTimeout(check, 10);
+    };
+    check();
+  });
+}
+// warmScene: die ganze Szene vorwärmen und so lange nichts rechnen und nichts zeichnen (warm.hold; die Hauptschleife fragt es ab). Darüber
+// liegt eine schwarze Blende, die nach dem ersten fertigen Bild wieder aufgeht; dauert es länger als eine halbe Sekunde, zeigt sie ein Wort.
+// Sind die Shader fertig, lädt ein Bild ohne Sichtkegelprüfung noch alle Netze und Bilder hoch (primeFrame), ebenfalls hinter der Blende.
+// Von Hand gerechnete Bilder (Tests, lf.tick) laufen weiter, außer warm.strict ist gesetzt.
+export const warm = { hold: false, strict: false, ms: 0, count: 0, parts: [0, 0, 0] };      // parts: Vorarbeit, Übersetzen, erstes Bild (ms, zuletzt)
+let warmEl: HTMLElement | null = null, warmN = 0;
+// Ein Bild ohne Sichtkegelprüfung zeichnen: lädt die Netze und Bilder von allem, was sichtbar geschaltet ist, in den Grafikspeicher.
+// Sonst geschähe das in dem Bild, in dem ein Teil zum ersten Mal vor die Kamera kommt (am Ende der Landung: das ganze Deck, 0,6 s).
+function primeFrame() {
+  const off: THREE.Object3D[] = [];
+  scene.traverseVisible((o: any) => { if (o.frustumCulled && (o.isMesh || o.isPoints || o.isLine || o.isSprite)) { o.frustumCulled = false; off.push(o); } });
+  try { render(); } finally { for (const o of off) o.frustumCulled = true; }
+}
+export function warmScene(label: string, prime: null | (() => void) = null, maxMs = 9000): Promise<void> {
+  const n = ++warmN, t0 = performance.now();
+  if (!warmEl) { warmEl = document.createElement('div'); warmEl.id = 'warm'; warmEl.appendChild(document.createElement('span')); document.body.appendChild(warmEl); }
+  warmEl.firstElementChild!.textContent = label; warmEl.classList.add('on');
+  warm.hold = true;
+  return new Promise<void>(res => {
+    let begun = false, fin = false, tb = t0, t1 = t0;
+    const done = () => {
+      if (fin) return; fin = true;
+      if (n !== warmN) { res(); return; }      // inzwischen läuft ein neueres Vorwärmen, das gibt frei
+      const t2 = performance.now();
+      try { primeFrame(); } catch (e) { console.warn('Vorwärmen:', e); }
+      warm.parts = [t1 - tb, t2 - t1, performance.now() - t2];
+      warm.hold = false; warm.ms = performance.now() - t0; warm.count++;
+      // die Blende erst nach zwei fertigen Bildern öffnen
+      let open = false; const show = () => { if (!open && n === warmN) { open = true; warmEl!.classList.remove('on'); } };
+      requestAnimationFrame(() => requestAnimationFrame(show)); setTimeout(show, 400);
+      res();
+    };
+    // Erst muss die Blende im Bild sein (zwei Bilder abwarten), sonst stünde während der Vorarbeit das letzte Bild des Flugs.
+    // Dann die Vorarbeit des Aufrufers (prime: die Raumspiegelungen des Decks, das blockiert kurz), danach die Shader: So werden sie
+    // gleich für die endgültigen Spiegelungen übersetzt.
+    const begin = () => {
+      if (begun) return; begun = true;
+      if (n !== warmN) { res(); return; }
+      tb = performance.now();
+      try { if (prime) prime(); } catch (e) { console.warn('Vorwärmen:', e); }
+      t1 = performance.now();
+      compileFor(scene).then(done); setTimeout(done, maxMs);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(begin)); setTimeout(begin, 150);
+  });
+}
 export function render() {
   if (prePass.fn) prePass.fn();
   if (vignettePass) vignettePass.uniforms.time.value = (performance.now() % 10000) / 1000;
