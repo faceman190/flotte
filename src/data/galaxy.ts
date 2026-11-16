@@ -14,7 +14,7 @@ export interface StationDef {
   refinery?: boolean;
   model?: string;                 // Planetenbasis mit eigenem Modell (asset-src/glb/base, siehe PlanetDef.model)
   refineBonus?: boolean;          // Großraffinerie: 3 Rohstoff → 2 Barren zur halben Gebühr
-  no?: string[];                  // Dienste, die es hier nicht gibt (Reiter des Stationsmenüs, z. B. 'werft')
+  no?: string[];                  // Dienste, die es hier nicht gibt (Kennung des Terminals, z. B. 'werft')
   gilde?: boolean;                // gehört der Bergbaugilde (Ruf und Missionen wie an den Planetenbasen)
 }
 export interface FieldDef { kind: FieldKind; pos: [number, number, number]; r: number; n: number; ore?: Partial<Record<ItemId, number>> }

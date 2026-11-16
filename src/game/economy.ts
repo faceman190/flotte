@@ -107,6 +107,40 @@ export function refine(k: ItemId) {
   return bars;
 }
 
+// Schmelzaufträge (seit Alpha 1.25): Die Hütte nimmt Erz und Gebühr sofort, die Barren sind nach kurzer Zeit abholbereit.
+// sel: gewählte Chargen je Rohstoff. Die Zeit läuft nach der Uhr weiter, auch wenn man ablegt oder das Spiel schließt.
+export const refineTime = (bars: number) => Math.min(75, 10 + 0.6 * bars);   // Sekunden für einen Auftrag
+export function refineStart(stId: string, sel: Partial<Record<ItemId, number>>) {
+  const todo: { k: ItemId; b: number; batch: number; out: number; to: ItemId }[] = [];
+  let fee = 0, bars = 0;
+  for (const k of Object.keys(REFINE) as ItemId[]) {
+    const r = refineInfo(k);
+    if (!r) continue;
+    const b = Math.min(sel[k] || 0, Math.floor(P.cargo[k] / r.batch));
+    if (b <= 0) continue;
+    todo.push({ k, b, batch: r.batch, out: r.out, to: r.to });
+    fee += b * r.out * r.fee; bars += b * r.out;
+  }
+  if (!bars || fee > P.credits) return null;
+  const secs = refineTime(bars), end = Date.now() + secs * 1000;
+  if (!P.refJobs) P.refJobs = [];
+  for (const t of todo) { P.cargo[t.k] -= t.b * t.batch; P.refJobs.push({ st: stId, to: t.to, n: t.b * t.out, end }); }
+  P.credits -= fee;
+  addRep('gilde', bars * 0.25);
+  return { bars, fee, secs };
+}
+// Fertige Barren abholen: ins Schiff (so viel passt) oder ins Lager der Station. Liefert die bewegte Menge.
+export function refineCollect(i: number, toStore: boolean) {
+  const jobs = P.refJobs || [], j = jobs[i];
+  if (!j || Date.now() < j.end) return 0;
+  let m = j.n;
+  if (toStore) { if (!P.storage[j.st]) P.storage[j.st] = {}; P.storage[j.st][j.to] = (P.storage[j.st][j.to] || 0) + m; }
+  else { m = Math.min(m, stats().cargo - cargoUsed()); if (m <= 0) return 0; P.cargo[j.to] += m; }
+  j.n -= m;
+  if (j.n <= 0) jobs.splice(i, 1);
+  return m;
+}
+
 // =============== Lieferaufträge ===============
 // Jede Station hat drei Angebots-Plätze. Angebote sind deterministisch und wechseln, wenn man eins annimmt.
 const WANTS: Record<Zone, ItemId[]> = {

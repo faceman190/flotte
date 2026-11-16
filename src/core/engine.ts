@@ -126,7 +126,11 @@ export function setQuality(hi: boolean) {
 // Zweite Ebene über dem Bild (eigene Szene, eigene Kamera, eigenes Licht): die Waffe in der Ich-Sicht. Sie wird nach dem Bild mit leerem
 // Tiefenpuffer gezeichnet und kann deshalb nie in Wände ragen; ihr Licht hängt nicht an den Lampen der Welt.
 export const overlay: { scene: THREE.Scene | null; camera: THREE.Camera | null } = { scene: null, camera: null };
+// Vor dem Bild: Wer hier eine Funktion einträgt, darf erst selbst etwas zeichnen (Schiffsansicht im Werft-Terminal, src/ui/shipPreview.ts).
+// Das Spielbild übermalt es danach wieder.
+export const prePass: { fn: null | (() => void) } = { fn: null };
 export function render() {
+  if (prePass.fn) prePass.fn();
   if (vignettePass) vignettePass.uniforms.time.value = (performance.now() % 10000) / 1000;
   if (view.hiQ && composer) composer.render();
   else renderer.render(scene, camera);

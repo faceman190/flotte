@@ -136,7 +136,7 @@ input[type=range]{padding:0;accent-color:var(--acc)}
 .ctrl{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:15px;color:var(--mut);margin:6px 0 10px;align-items:center;font-weight:500}
 .ctrl kbd{justify-self:start}
 
-/* ---------- Stationsmenü ---------- */
+/* ---------- Tabellen und Leisten der Fenster (das Stationsmenü selbst steht seit Alpha 1.25 ganz unten: Stationsterminals) ---------- */
 .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--line)}
 .top h2{margin-bottom:2px;font-size:30px}
 .stats{display:flex;gap:8px;font-size:14px;flex-wrap:wrap;margin-top:12px}
@@ -302,3 +302,127 @@ button.mini{padding:3px 8px;font-size:12px;letter-spacing:.5px}
 .itabs button.on{border-color:var(--acc);color:#eafaff;background:rgba(40,140,190,.35)}
 .gico{display:inline-block;vertical-align:middle;background-repeat:no-repeat;flex:none}
 td .gico{margin-right:8px}
+
+/* ---------- Stationsterminals (Alpha 1.25): ein Dienst, ein Ort ----------
+   Eigener Look der Terminals: dunkler Stahl, abgeschrägte Platten, Daten in Türkis, Bernstein für die Handlung.
+   Schriften: Saira Condensed (Titel, Etiketten), IBM Plex Sans (Text), IBM Plex Mono (Zahlen). Alles gilt nur unter .tm. */
+#dock{padding:16px;background:rgba(3,5,7,.86)}
+#dockCard{display:contents}
+.tm{--tb:#0b0f12;--tp:#131a1f;--tr:#182128;--ts:#222e37;--td:#10161a;--tl:#2a363f;--tx:#d6dde3;--th:#f2f5f7;--tu:#93a4b1;--tn:#b9c4cc;--tt:#4fd6c4;--ta:#e9a13b;--tw:#ff8f73;
+  --fh:'Saira Condensed','Arial Narrow',sans-serif;--fm:'IBM Plex Mono',Consolas,monospace;--c14:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));--c8:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));
+  position:relative;width:min(1440px,100%);height:min(810px,100%);background:var(--tb);color:var(--tx);font:15px/1.35 'IBM Plex Sans',system-ui,sans-serif;padding:30px 34px 18px;display:flex;flex-direction:column;gap:16px;box-shadow:0 30px 90px rgba(0,0,0,.7)}
+.tm.in{animation:fadeUp .2s ease-out}
+.tm::before{content:'';position:absolute;left:0;top:0;width:100%;height:3px;background:var(--tt)}
+.tm *{box-sizing:border-box}
+.tm p{margin:0;color:var(--tn);line-height:1.4}
+.tm h1,.tm h2,.tm h3{font-family:var(--fh);text-transform:uppercase;letter-spacing:.06em;margin:0;color:var(--th);display:block}
+.tm h2{font-size:32px;font-weight:700;line-height:1.05}
+.tm h3{font-size:21px;font-weight:600;padding:8px 2px 0;flex:none}
+.tm h3::after{display:none}
+.tm h3:first-child,.tm .lb+h3,.tm .pt h3{padding-top:0}
+.tm .lb{font:600 14px var(--fh);letter-spacing:.14em;text-transform:uppercase;color:var(--tu)}
+.tm .mo{font-family:var(--fm);font-variant-numeric:tabular-nums}
+.tm .hint{font-size:13px;color:var(--tu)}
+.tm small{display:block;font-size:13px;color:var(--tu);font-weight:400}
+.tm i{font-style:normal}
+.tm s{color:var(--tu);font-weight:400}
+.tm .up{color:var(--tt)}.tm .dn{color:var(--tw)}.tm .hi{color:var(--th)}.tm .dim{color:var(--tu)}.tm .acc{color:var(--ta)}
+.tm .r{text-align:right;justify-self:end}
+.tm .end{margin-top:auto;padding-top:8px}
+/* Kopf, Meldung, Fuß */
+.tmH{display:flex;align-items:center;gap:20px;flex:none}
+.tmPlate{background:var(--ta);color:#14100a;padding:12px 18px 9px;font:700 24px var(--fh);letter-spacing:.06em;clip-path:var(--c14)}
+.tmT{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.tm .tmT h1{font-size:38px;font-weight:700;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tmK{display:flex;gap:26px;align-items:flex-end}
+.tmK>div{display:flex;flex-direction:column;gap:2px;align-items:flex-end}
+.tmK b{font:600 22px var(--fm);color:var(--th);white-space:nowrap}
+.tmN{background:var(--td);border-left:3px solid var(--tt);padding:8px 14px;color:var(--th);flex:none}
+.tmB{flex:1;min-height:0;display:grid;gap:16px}
+.tmF{display:flex;align-items:center;gap:14px;border-top:1px solid var(--tl);padding-top:10px;font-size:14px;flex:none}
+.tm .tmF p{color:var(--tu)}.tm .tmF .acc{color:var(--ta);white-space:nowrap}
+/* Platten */
+.tm .pn{background:var(--tp);padding:16px;display:flex;flex-direction:column;gap:6px;min-height:0;min-width:0;overflow:auto;clip-path:var(--c14)}
+.tm .pn.deep{background:var(--td)}
+.tm .pn.flush{padding:0;gap:0}
+.tm aside.pn{padding:20px 22px;gap:12px}
+.tm .pt{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex:none}
+.tm .box{background:var(--td);padding:12px 14px;display:flex;flex-direction:column;gap:6px;flex:none;clip-path:var(--c8)}
+.tm .pn.deep .box{background:var(--tr)}
+.tm .box>b{color:var(--th);font-weight:600;font-size:16px}
+.tm .sep{height:1px;background:var(--tl);flex:none}
+/* Zeilen */
+.tm .rh,.tm .rw,.tm button.row{display:grid;align-items:center;gap:12px;padding:0 14px;flex:none}
+.tm .rh{padding-top:2px;font:600 14px var(--fh);letter-spacing:.14em;text-transform:uppercase;color:var(--tu)}
+.tm .rw,.tm button.row{background:var(--tr);min-height:50px}
+.tm .rw>.mo,.tm button.row>.mo{white-space:nowrap}
+.tm .rw.sel,.tm button.row.sel{background:var(--ts);box-shadow:inset 4px 0 0 var(--ta)}
+.tm .rw.off{opacity:.45}
+.tm .rw.trust{box-shadow:inset 4px 0 0 var(--ta)}
+.tm .nm{display:flex;align-items:center;gap:10px;min-width:0}
+.tm .nm b,.tm .row b{font-weight:600;color:var(--th);font-size:16px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tm .nm small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tm .nm>span{min-width:0}
+.tm .ico{flex:none}
+.tm .gM{grid-template-columns:minmax(0,1fr) 70px 100px 196px 96px}
+.tm .gR{grid-template-columns:minmax(0,1fr) 70px 196px}
+.tm .gJ{grid-template-columns:minmax(0,1fr) auto auto}
+.tm .gL{grid-template-columns:minmax(0,1fr) 50px 84px 116px}
+.tm .gU{grid-template-columns:52px minmax(0,1fr) 150px 120px 140px}
+.tm .gS{grid-template-columns:150px 120px minmax(60px,1fr) 180px 100px}
+.tm .gG{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) 90px 100px}
+.tm .gI{grid-template-columns:minmax(0,1fr) 34px auto}
+.tm .gA{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 110px 120px}
+.tm .gH{grid-template-columns:minmax(0,1fr) 110px 100px 330px}
+/* Knöpfe */
+.tm button{font:600 16px var(--fh);letter-spacing:.06em;text-transform:uppercase;color:var(--th);background:var(--tl);border:0;padding:9px 14px 7px;min-height:36px;cursor:pointer;text-shadow:none;box-shadow:none;clip-path:var(--c8)}
+.tm button:hover:not(:disabled){background:#364651;border:0;color:#fff;box-shadow:none}
+.tm button:disabled{opacity:.35;cursor:not-allowed}
+.tm button.pri{background:var(--ta);color:#14100a}
+.tm button.pri:hover:not(:disabled){background:#f4b558;color:#14100a;box-shadow:none}
+.tm button.warn,.tm button.warn:hover:not(:disabled){background:var(--tw);color:#14100a}
+.tm button.big{display:flex;justify-content:space-between;align-items:center;gap:14px;width:100%;font-size:24px;font-weight:700;padding:17px 20px 14px;min-height:60px;flex:none;white-space:nowrap;clip-path:var(--c14)}
+.tm button.big .mo{font-size:18px;font-weight:600;letter-spacing:0}
+.tm button.tmX{background:#1c262d;font-size:18px;padding:13px 18px 11px;min-height:46px;white-space:nowrap}
+.tm button.row{width:100%;text-align:left;font:15px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;color:var(--tx);clip-path:none}
+.tm button.row:hover:not(:disabled){background:var(--ts);color:var(--tx)}
+.tm nav button.row{display:flex;justify-content:space-between;min-height:54px}
+.tm .stp{display:flex;align-items:center;gap:6px}
+.tm .stp b{font:600 16px var(--fm);color:var(--th);width:44px;text-align:center}
+.tm button.st{width:34px;height:34px;min-height:0;padding:0;font:500 18px var(--fm);clip-path:none;text-align:center}
+.tm button.sm{font-size:14px;padding:6px 9px 4px;min-height:34px;clip-path:none}
+.tm .act{margin-top:auto;display:flex;flex-direction:column;gap:10px;padding-top:8px;flex:none}
+.tm section .act{flex-direction:row;justify-content:flex-end}
+/* Einzelteile */
+.tm .ln{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--tl)}
+.tm .ln b{font:600 15px var(--fm);color:var(--th);text-align:right;white-space:nowrap}
+.tm .ln b.up{color:var(--tt)}.tm .ln b.dn{color:var(--tw)}.tm .ln b.dim{color:var(--tu)}
+.tm .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;flex:none;padding:4px 0}
+.tm .tiles>div{background:var(--tr);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.tm .tiles b{font-size:17px;font-weight:600;color:var(--th)}
+.tm .chips{display:flex;flex-wrap:wrap;gap:6px;flex:none}
+.tm .chips>span{background:var(--tr);padding:6px 10px;display:flex;align-items:center;gap:7px}
+.tm .chips b{color:var(--th);font-weight:500}
+.tm .ol{display:grid;grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr) 84px;align-items:center;gap:8px;background:var(--tr);padding:0 14px;min-height:50px;flex:none}
+.tm .ol>i{color:var(--tu)}
+.tm .br{height:8px;background:var(--tb);flex:none}
+.tm .br i{display:block;height:8px;background:var(--tt)}
+.tm .br.wide{margin:0 0 6px}
+.tm .br.wide i{background:var(--ta)}
+.tm .br i.dn{background:var(--tw)}.tm .br i.mut{background:var(--tl)}
+.tm .cp{display:flex;flex-direction:column;gap:5px;flex:none}
+.tm .cp>div:first-child{display:flex;justify-content:space-between}
+.tm .cp b{color:var(--th);font-weight:600}
+.tm .pips{display:flex;gap:4px}
+.tm .pips i{width:13px;height:8px;background:var(--tl)}
+.tm .pips i.f{background:var(--tt)}.tm .pips i.n{background:var(--ta)}
+.tm .prev{flex:1;min-height:0;background:#0d1215;border-bottom:1px solid var(--tl);display:flex}
+.tm .prev canvas{position:static;inset:auto;display:block;width:100%;height:100%;object-fit:cover}
+.tm .pd{padding:16px 22px 18px;display:flex;flex-direction:column;gap:6px;flex:none}
+.tm .paints{display:flex;flex-wrap:wrap;gap:6px;flex:none}
+.tm .paints button{display:flex;align-items:center;gap:8px}
+.tm .paints button.on{box-shadow:inset 0 -3px 0 var(--ta);opacity:1}
+.tm .paints i{width:14px;height:14px;display:block}
+.tm ::-webkit-scrollbar-thumb{background:var(--tl)}
+@media (max-height:800px){.tm{padding:20px 24px 12px;gap:10px}.tm .tmT h1{font-size:30px}.tm .rw,.tm button.row,.tm .ol{min-height:44px}.tm button.big{min-height:52px;padding:13px 18px 10px;font-size:22px}.tm aside.pn{padding:16px 18px;gap:9px}}
+@media (max-width:1180px){.tm{padding-left:20px;padding-right:20px}.tmK>div:nth-child(n+2){display:none}.tm button.tmX{font-size:15px;padding:10px 12px 8px}}

@@ -267,7 +267,7 @@ onKey(code => {
   if (code === 'Escape') {
     if (G.mode === 'map') closeMap();
     else if (G.mode === 'play' || G.mode === 'walk' || G.mode === 'rover' || G.mode === 'dungeon') pause();
-    else if (G.mode === 'dock' && G.inside) closeMenu();
+    else if (G.mode === 'dock') closeMenu();
     else if (G.mode === 'pause') { if (pauseSubOpen()) closePauseSub(); else resume(); }
     return;
   }
@@ -308,12 +308,10 @@ onKey(code => {
   // F: aus dem Rover aussteigen / wieder einsteigen
   if (code === 'KeyF' && G.mode === 'rover' && !G.dead) { if (FOOT.active) { if (footNearRover()) enterRover(); } else leaveRover(); return; }
   if (code === 'KeyV' && G.mode === 'play') { CAM.lock = !CAM.lock; radio('SYSTEM', CAM.lock ? 'Freie Kamera: Maus schaut um das Schiff, Pfeiltasten lenken. V beendet sie.' : 'Kamera wieder hinter dem Schiff.'); return; }
-  if (G.mode === 'walk' && code === 'Tab') { showMenu(); return; }
   if (G.mode === 'walk' && code === 'Space') { jump(); return; }
   if (code === 'KeyE') {
     if (G.mode === 'walk') interact();
     else if (G.mode === 'dungeon') dungeonKey(code);
-    else if (G.mode === 'dock' && !G.inside) undock();
     else if (G.mode === 'rover') {
       // im Rover oder zu Fuß (FOOT): Schiff, Mine, Rover
       const atShip = FOOT.active ? footNearShip() : nearShip();

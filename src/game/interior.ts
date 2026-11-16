@@ -771,6 +771,11 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
     sign.position.set(0, 2.95, HZ0 - 0.62); sign.rotation.y = Math.PI; door.add(sign);
     group.add(door);
     inters.push({ x: 0, z: HZ0 - 1.4, r: 2.4, label: () => `${st.name} verlassen`, act: () => interiorHooks.leaveBase() });
+    // Landefeld-Terminal links neben der Tür: Schiffe wechseln, verkaufen, lackieren. Seit Alpha 1.25 gibt es kein Stationsmenü mehr,
+    // und in der Basis fehlt der Hangar mit dem Deckmeister; das Schiff steht draußen auf dem Landefeld.
+    const lt = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.3), mat(new THREE.MeshBasicMaterial({ map: signTex('Landefeld', PAL[kind].css), toneMapped: false })));
+    lt.position.set(-2.15, 1.7, HZ0 - 0.62); lt.rotation.y = Math.PI; door.add(lt);
+    inters.push({ x: -2.1, z: HZ0 - 1.3, r: 1.5, label: () => 'Landefeld-Terminal · deine Schiffe', act: () => interiorHooks.openTab('hangar', 'Landefeld-Terminal: deine Schiffe an dieser Basis.') });
     IN.x = 0; IN.z = HZ0 - 2.6; IN.yaw = 0;
     say('SYSTEM', `Willkommen in ${st.name}. Der Gang führt zur ${PAL[kind].hall}.`);
   } else if (fromCity) {

@@ -221,7 +221,7 @@ const STEPS: Step[] = [
   { // 6: zurück, andocken, verkaufen
     title: 'Prolog · Heimkehr',
     enter: () => { S.docked = false; talk(['ACHTERBERG', 'Sauber. Ich hab schon Schlechtere vereidigt. Bring das Erz nach Hause: an der Bastion andocken und im Markt verkaufen.']); },
-    lines: () => [['An der Bastion andocken · <b>E</b>', S.docked, false], ['Eisenerz verkaufen · Stationsmenü (Tab) → Markt', P.cargo.erz === 0, false]],
+    lines: () => [['An der Bastion andocken · <b>E</b>', S.docked, false], ['Eisenerz verkaufen · am Markt-Tresen auf Deck 3 (Raum Lager)', P.cargo.erz === 0, false]],
     done: () => S.docked && P.cargo.erz === 0,
     markers: () => { const b = bastion(); return b && !S.docked ? [{ x: b.dock.x, y: b.dock.y, z: b.dock.z, label: 'BASTION · ANDOCKEN', col: '#ffb347', big: true }] : []; },
   },

@@ -6,7 +6,7 @@
 <title>Letzte Crew</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&family=Saira+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="./src/style.css">
 <meta name="theme-color" content="#05090e">
 <link rel="manifest" href="./app.webmanifest">
@@ -76,7 +76,7 @@
     </div>
     <div class="hint" id="mAcc" style="margin-top:14px"></div>
     <div class="gpuHint hidden" id="mGpu"></div>
-    <div class="ver">Alpha 1.24 · Lücken an Türen und Gangecken geschlossen, Leitstand ohne Rauschen</div>
+    <div class="ver">Alpha 1.25 · Stationsterminals: jeder Dienst an seinem Ort, Schmelzaufträge mit Wartezeit</div>
   </div>
 </div>
 
@@ -133,7 +133,6 @@
     <label>Sichtfeld <span id="sFovV"></span><input type="range" id="sFov" min="55" max="90" step="1"></label>
     <label>Maus-Empfindlichkeit <span id="sSensV"></span><input type="range" id="sSens" min="0.4" max="2" step="0.05"></label>
     <label class="chk"><input type="checkbox" id="sInvert"> Y-Achse umkehren</label>
-    <label class="chk"><input type="checkbox" id="sWalk"> Stationen zu Fuß betreten (sonst direkt ins Stationsmenü)</label>
     <label>Musik <span id="sMusicV"></span><input type="range" id="sMusic" min="0" max="1" step="0.05"></label>
     <label>Stimmen <span id="sVoiceV"></span><input type="range" id="sVoice" min="0" max="1" step="0.05"></label>
     <label>Effekte <span id="sVolV"></span><input type="range" id="sVol" min="0" max="1" step="0.05"></label>
@@ -164,12 +163,12 @@
     <kbd>Mausrad</kbd><span>Kamera näher / weiter</span>
     <kbd>R</kbd><span>Scanner: zeigt Erze in Asteroiden</span>
     <kbd>F / Rechtsklick</kbd><span>Rakete auf erfasstes Ziel</span>
-    <kbd>E</kbd><span>An Station andocken / in der Station: benutzen, ansprechen</span>
+    <kbd>E</kbd><span>An Station andocken / in der Station: benutzen, ansprechen. Jeder Dienst (Markt, Werft, Lager …) hat seinen eigenen Tresen: hinlaufen und E drücken</span>
     <kbd>WASD / Umschalt</kbd><span>In der Station laufen / rennen, auf Planeten Rover fahren</span>
     <kbd>Leertaste (zu Fuß)</kbd><span>Springen</span>
     <kbd>E (Planet)</kbd><span>Tief und langsam: landen und Rover aussetzen · mit dem Rover am Schiff: an Bord gehen</span>
     <kbd>E (Schiff)</kbd><span>Im Hangar am eigenen Schiff: an Bord gehen · drinnen Pilotensitz, Logbuch, Werkbank, Luke</span>
-    <kbd>Tab</kbd><span>Flug: Werkzeug wechseln · Station: Stationsmenü</span>
+    <kbd>Tab</kbd><span>Flug: Werkzeug wechseln</span>
     <kbd>B / F1</kbd><span>Flottenband: Übersicht, Aufträge, Karte, Fuhrpark, Fracht, Funk</span>
     <kbd>F3</kbd><span>Leistungsanzeige ein/aus (F4 kopiert einen Bericht)</span>
     <kbd>M</kbd><span>Galaxiekarte im Flottenband (Routenplanung)</span>
@@ -193,7 +192,7 @@
 </div></div>
 
 <!-- Station -->
-<div id="dock" class="overlay hidden"><div class="card wide" id="dockCard"></div></div>
+<div id="dock" class="overlay hidden"><div id="dockCard"></div></div>
 
 <!-- Galaxiekarte -->
 <!-- Flottenband: Armbandrechner der Piloten (Übersicht, Aufträge, Karte, Fuhrpark, Fracht, Funk) -->

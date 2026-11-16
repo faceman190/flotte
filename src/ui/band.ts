@@ -180,7 +180,7 @@ function startApp() {
     <div class="bcard"><h4>Aktueller Auftrag</h4>${c ? `<div style="font-size:18px;font-weight:700">${itemIcon(c.item, 22)}${c.amount}× ${ITEMS[c.item].n}</div>
       <div class="row" style="margin-top:8px"><span>Ziel</span><b>${esc(c.stName)}</b></div><div class="row"><span>Sektor</span><b>${esc(SECTOR[c.sector]?.name || '')}</b></div>
       <div class="row"><span>An Bord</span><b>${Math.min(P.cargo[c.item], c.amount)}/${c.amount}</b></div>${meter(P.cargo[c.item], c.amount, 'var(--grn)')}
-      <div class="row"><span>Belohnung</span><b class="amb">${fmtN(c.reward)} Cr</b></div>` : '<p>Kein Auftrag angenommen. Aufträge gibt es im Stationsmenü.</p>'}
+      <div class="row"><span>Belohnung</span><b class="amb">${fmtN(c.reward)} Cr</b></div>` : '<p>Kein Auftrag angenommen. Aufträge gibt es am Auftragsbrett der Stationen.</p>'}
       <div class="btnRow" style="justify-content:flex-start"><button data-a="app" data-k="auftraege">Alle Aufträge</button></div></div>
     <div class="bcard"><h4>Piloten online</h4>${NET.status === 'online' ? NET.roster.map(r => `<div class="row" style="align-items:center"><span style="color:${r.id === NET.id ? 'var(--amb)' : 'var(--grn)'}">${esc(r.name)}${r.id === NET.id ? ' (du)' : ''}</span><b>${here.has(r.id) ? `<button class="mini" data-a="trAsk" data-k="${r.id}">Handeln</button>` : esc(roomName(r.room))}</b></div>`).join('') : '<p class="hint">Nicht mit einem Mehrspieler-Server verbunden. Verbinden: Pausenmenü → Mehrspieler.</p>'}</div>
     <div class="bcard"><h4>Ruf</h4>${REP_IDS.map(id => { const nx = nextRank(id); return `<div class="row"><span style="color:${REP[id].c}">${REP[id].n}</span><b>${esc(rankName(id))}</b></div>${meter(nx ? Math.max(0, nx.frac) * 100 : 100, 100, REP[id].c)}`; }).join('')}
@@ -211,7 +211,7 @@ function jobsApp() {
           <button data-a="mdrop" data-k="${m.id}">${dropArm === m.id ? 'Wirklich abbrechen?' : 'Abbrechen'}</button></div></div>
       <div style="text-align:right"><div class="amb" style="font-family:var(--mono);font-size:20px">${fmtN(m.reward)} Cr</div><div class="sm">+${m.rep} Ruf</div></div></div>`;
   }).join('')}</div>` : '';
-  if (!P.contracts.length) return story + mis + (ms.length ? '' : `<div class="bcard" style="max-width:560px;margin-bottom:12px"><h4>Keine Missionen</h4><p>Fraktionsmissionen bekommst du an Stationen: Stationsmenü → Missionen. Sie bringen viel Ruf.</p></div>`) + `<div class="bcard" style="max-width:560px"><h4>Keine Aufträge</h4><p>Lieferaufträge nimmst du an Stationen an: Stationsmenü → Aufträge. Angenommene Aufträge erscheinen hier und rechts oben im HUD.</p></div>`;
+  if (!P.contracts.length) return story + mis + (ms.length ? '' : `<div class="bcard" style="max-width:560px;margin-bottom:12px"><h4>Keine Missionen</h4><p>Fraktionsmissionen bekommst du an Stationen, am Tresen für Missionen. Sie bringen viel Ruf.</p></div>`) + `<div class="bcard" style="max-width:560px"><h4>Keine Aufträge</h4><p>Lieferaufträge nimmst du an Stationen an: Stationsmenü → Aufträge. Angenommene Aufträge erscheinen hier und rechts oben im HUD.</p></div>`;
   const tr = trackedContract();
   return story + mis + `<h4 class="bh">LIEFERAUFTRÄGE</h4><div class="blist">${P.contracts.map(c => {
     const have = Math.min(P.cargo[c.item], c.amount), r = findRoute(P.sector, c.sector), j = r ? r.length - 1 : 0, on = tr === c;
@@ -309,7 +309,7 @@ function cargoApp() {
     ${rover ? `<div class="bcard"><h4>Rover</h4>${cargoTable(rover)}</div>` : ''}
     ${P.fleet.filter(r => ITEM_IDS.some(k => r.cargo[k])).map(r => `<div class="bcard"><h4>${esc(r.name)} (geparkt)</h4><div class="hint" style="margin-bottom:6px">${esc(stationName(r.loc.station).name)}</div>${cargoTable(r.cargo)}</div>`).join('')}
     ${stores.map(([id, v]) => { const s = stationName(id); return `<div class="bcard"><h4>Lager · ${esc(s.name)}</h4><div class="hint" style="margin-bottom:6px">${esc(SECTOR[s.sector]?.name || '')}</div>${cargoTable(v as any)}</div>`; }).join('')}
-    ${!stores.length ? '<div class="bcard"><h4>Stationslager</h4><p class="hint">Noch nichts eingelagert. Lagern kannst du im Stationsmenü unter „Lager“.</p></div>' : ''}
+    ${!stores.length ? '<div class="bcard"><h4>Stationslager</h4><p class="hint">Noch nichts eingelagert. Lagern kannst du am Lager-Tresen einer Station.</p></div>' : ''}
   </div>`;
 }
 
@@ -342,7 +342,7 @@ function tradeApp() {
         <td class="trQ">${btn(k, 0, '0', n > 0)}${btn(k, n - 10, '−10', n > 0)}${btn(k, n - 1, '−1', n > 0)}<b class="${n > have ? 'bad' : ''}">${n}</b>${btn(k, n + 1, '+1', n < have)}${btn(k, n + 10, '+10', n < have)}${btn(k, have, 'Alles', n < have)}</td></tr>`;
     }).join('');
     const mine = `<div class="bcard"><h4>Dein Angebot</h4>
-      ${ks.length ? `<table class="trT"><tbody>${rows}</tbody></table>` : '<p class="hint">Dein Frachtraum ist leer. Waren aus dem Stationslager holst du vorher im Stationsmenü (Lager) an Bord.</p>'}
+      ${ks.length ? `<table class="trT"><tbody>${rows}</tbody></table>` : '<p class="hint">Dein Frachtraum ist leer. Waren aus dem Stationslager holst du vorher am Lager-Tresen an Bord.</p>'}
       <div class="row" style="margin-top:12px;align-items:center"><span>Credits (du hast ${fmtN(P.credits)})</span><input id="trCr" type="number" min="0" max="${Math.floor(P.credits)}" step="10" value="${TRADE.mine.cr}" style="width:130px;text-align:right"></div>
       <div class="row"><span>Richtwert der Waren</span><b>${fmtN(tradeValue(TRADE.mine))} Cr</b></div>
       ${ok ? '' : '<p class="bad">Dein Angebot ist nicht mehr gedeckt (Frachtraum oder Credits geändert).</p>'}</div>`;

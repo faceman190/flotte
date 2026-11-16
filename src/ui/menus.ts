@@ -77,7 +77,6 @@ function syncSettingsUI() {
   ($('sFov') as HTMLInputElement).value = String(settings.fov);
   ($('sSens') as HTMLInputElement).value = String(settings.sens);
   ($('sInvert') as HTMLInputElement).checked = settings.invertY;
-  ($('sWalk') as HTMLInputElement).checked = settings.walk;
   ($('sVol') as HTMLInputElement).value = String(settings.volume);
   ($('sMusic') as HTMLInputElement).value = String(settings.music);
   ($('sVoice') as HTMLInputElement).value = String(settings.voice ?? 1);
@@ -96,7 +95,6 @@ $('sQuality').onchange = e => { settings.quality = (e.target as HTMLSelectElemen
 $('sFov').oninput = e => { settings.fov = +(e.target as HTMLInputElement).value; labels(); };
 $('sSens').oninput = e => { settings.sens = +(e.target as HTMLInputElement).value; labels(); };
 $('sInvert').onchange = e => { settings.invertY = (e.target as HTMLInputElement).checked; };
-$('sWalk').onchange = e => { settings.walk = (e.target as HTMLInputElement).checked; };
 $('sVol').oninput = e => { settings.volume = +(e.target as HTMLInputElement).value; audio.volume = settings.volume; labels(); };
 $('sVol').onchange = () => snd(660, 0.1, 'sine', 0.05);
 $('sVoice').oninput = e => { settings.voice = +(e.target as HTMLInputElement).value; audio.voice = settings.voice; labels(); };
