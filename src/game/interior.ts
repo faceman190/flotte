@@ -808,7 +808,7 @@ export function leaveInterior() {
   stationGroup = null;
   if (group) {
     scene.remove(group);
-    group.traverse((c: any) => { if (c.geometry && !c.userData.shared) c.geometry.dispose(); });
+    group.traverse((c: any) => { if (c.geometry && !c.userData.shared) c.geometry.dispose(); if (c.isLight && c.dispose) c.dispose(); });      // Lichter: Schattenkarten freigeben (Strahler im Lichtraum, deck.ts)
   }
   for (const d of disposables) d.dispose();
   disposables.length = 0;

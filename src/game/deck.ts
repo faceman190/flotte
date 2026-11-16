@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { interiorEnv } from './meshRoom';
+import { renderer } from '../core/engine';
 
 // =====================================================================================
 // Deck 3 der Bastion (Plan D): ersetzt dort Korridor und Promenade. Das Deck kommt aus dem Bastion-Baukasten in Blender
@@ -44,7 +45,11 @@ const GLOW_MAX = 1.25;            // Obergrenze der Strahldichte von Leuchten
 const LIT_MAX = 1.0;              // Obergrenze der Strahldichte beleuchteter Flächen
 const FAR_SMALL = 85;             // Hangar: Wandfüllungen und Kleinteile weiter weg werden nicht gezeichnet (m)
 const LM_MAX = 1.6;               // Lichtraum: Obergrenze der Strahldichte beleuchteter Flächen (Lichtkarten sind sauber, die Grenze darf höher liegen)
-export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true };      // zum Einstellen im Testfenster; lichtraum = false zeigt den Raum aus Bausteinen
+// Mischform im Lichtraum (seit Alpha 1.26): hybrid = echte Strahler und Raumspiegelung an; key = Lichtstärke je Strahler (cd);
+// shade = wie stark der Schatten einer Figur das gebackene Licht abdunkelt (0 bis 1); envK = Stärke der Raumspiegelung;
+// spec = Verstärkung des Glanzes der Flächen auf die Strahler; side = Lichtstärke der Nebenstrahler (Glutschein an den Fenstern)
+export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true, hybrid: true, key: 2.6, shade: 0.5, envK: 1, spec: 3, side: 3 };
+const LMCAP = { value: 1 }, LMSHADE = { value: 0 }, LMSPEC = { value: 1 };      // Obergrenzen-Faktor (nur beim Aufnehmen der Raumspiegelung > 1), Schattenstärke, Kehrwert der Beleuchtung unter einem Strahler      // zum Einstellen im Testfenster; lichtraum = false zeigt den Raum aus Bausteinen
 // Decks je Station: Daten (data/…) und Modell (base/…). Die Bastion lädt beim Start, die Eisenkrone beim Betreten ihres Sektors.
 const DECKS: Record<string, [string, string]> = { bastion: ['deck_bastion', 'BastionDeck'], eisenkrone: ['deck_eisenkrone', 'EisenkroneDeck'] };
 const LOADED: Record<string, { data: DeckJson; parts: Record<string, Part[]> }> = {}, LOADING: Record<string, Promise<boolean>> = {};
@@ -72,7 +77,10 @@ export function loadDeck(id = 'bastion'): Promise<boolean> {
 // Die Bausteine in den Zellen des Raums entfallen dann (ihre Standflächen bleiben). Daten: data/lichtraum_<Deck>, Modell: base/Lichtraum<Deck>.
 interface LmJson { raeume: { name: string; zellen: number[][]; teile: Record<string, string> }[] }
 const LICHT: Record<string, [string, string]> = { eisenkrone: ['lichtraum_eisenkrone', 'LichtraumEisenkrone'] };
-const LM: Record<string, { data: LmJson; meshes: { geo: THREE.BufferGeometry; mat: THREE.Material; mw: THREE.Matrix4; tris: number }[] }> = {}, LMLOADING: Record<string, Promise<boolean>> = {};
+// Nebenstrahler der Mischform je Deck, in Modelllage (x Ost, y oben, z Süd): Ort, Richtung, Farbe. Eisenkrone: der Glutschein der Öfen,
+// der durch die drei Fenster des Leitstands fällt (im Baukasten die Flächenleuchten „Glutschein“ innen vor den Scheiben).
+const LM_SIDE: Record<string, number[][]> = { eisenkrone: [28, 32, 36].map(x => [x, 1.5, -1.58, 0, -0.25, 1, 1.0, 0.42, 0.14]) };
+const LM: Record<string, { data: LmJson; meshes: { geo: THREE.BufferGeometry; mat: THREE.Material; mw: THREE.Matrix4; tris: number }[]; mats: THREE.MeshStandardMaterial[]; env: THREE.Texture | null }> = {}, LMLOADING: Record<string, Promise<boolean>> = {};
 function loadLicht(id: string): Promise<boolean> {
   if (LM[id]) return Promise.resolve(true);
   if (id in LMLOADING) return LMLOADING[id];
@@ -92,11 +100,20 @@ function loadLicht(id: string): Promise<boolean> {
         const g = o.geometry as THREE.BufferGeometry; g.computeBoundingSphere();
         meshes.push({ geo: g, mat: set[cls] || set.paint, mw: o.matrixWorld.clone(), tris: (g.index ? g.index.count : g.attributes.position.count) / 3 });
       });
-      LM[id] = { data, meshes };
+      LM[id] = { data, meshes, mats: [...new Set(Object.values(sets).flatMap(q => Object.values(q)))] as THREE.MeshStandardMaterial[], env: null };
       return true;
     } catch (e) { console.warn('Lichtraum nicht geladen:', id, e); delete LMLOADING[id]; return false; }
   })());
 }
+// Lichtschleife der Lichtraum-Flächen: Es zählen nur Strahler, also die Schlüssellampen des Raums. Punkt-, Richtungs-, Flächen- und
+// Himmelslicht der Station entfallen (das Licht des Raums ist gebacken). Der Schatten eines Strahlers nimmt ihm seinen Glanz und dunkelt
+// zusätzlich das gebackene Licht ab (lmShade): So werfen Figuren Schatten, obwohl das Streulicht der Lampe im Bild steckt.
+// Gewichtet wird nach dem Winkel im Lichtkegel, nicht nach der wahren Beleuchtungsstärke: Rechnerisch nimmt eine von sechs Deckenlampen
+// am Ort ihres Schattens nur etwa 6 % des Lichts weg, das sieht niemand. So bleibt je Lampe ein weicher, lesbarer Schatten.
+const LM_LIGHTS = 'float lmShade = 1.0; float lmS = 1.0;\n' + THREE.ShaderChunk.lights_fragment_begin
+  .replace(/\bNUM_(POINT|DIR|RECT_AREA|HEMI)_LIGHTS\b/g, '0')
+  .replace('directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( spotShadowMap[ i ]', 'lmS = ( directLight.visible && receiveShadow ) ? getShadow( spotShadowMap[ i ]')
+  .replace('vSpotLightCoord[ i ] ) : 1.0;', 'vSpotLightCoord[ i ] ) : 1.0;\n\t\tlmShade *= 1.0 - lmShadeK * ( 1.0 - lmS ) * clamp( dot( geometryNormal, directLight.direction ) * 2.0, 0.0, 1.0 ) * smoothstep( 0.56, 0.8, dot( directLight.direction, spotLight.direction ) );\n\t\tdirectLight.color *= lmS;');
 async function lmMaterials(prefix: string) {
   const TD = (window as any).TEXDATA || {}, ld = new THREE.TextureLoader();
   const T = async (k: string, srgb = false) => {
@@ -107,25 +124,47 @@ async function lmMaterials(prefix: string) {
   const env = interiorEnv(), M = materials(), dec = (v: string) => `${v} *= ${v}; ${v} = ${v} / max(vec3(0.02), 1.0 - ${v});`;
   // eg, cap: Stärke und Obergrenze der Leuchten. Bildschirme bleiben unter der Schwelle des Bloom (0,82): Große helle Flächen überstrahlen sonst den halben Raum
   // diff = false: Leuchten und Bildschirme zeigen nur ihr Leuchten. Ihr Streulicht stammt oft von einer Lampe direkt davor (Bildschirmlicht) und wäre riesig
-  const mk = (key: string, f0: number, envK: number, eg = 1, cap = GLOW_MAX, diff = true) => {
+  // envH: Stärke der Raumspiegelung in der Mischform (userData.env merkt beide Fassungen: [Umgebung der Station, Stärke, Stärke mit Raumspiegelung])
+  const mk = (key: string, f0: number, envK: number, envH: number, eg = 1, cap = GLOW_MAX, diff = true) => {
     const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(f0, f0, f0), metalness: 1, roughness: 1, roughnessMap: orm, normalMap: nrm, normalScale: new THREE.Vector2(0.7, 0.7), envMap: env, envMapIntensity: envK, emissive: 0xffffff, emissiveMap: lit });      // Relief etwas zurück: feines Korn glitzerte sonst im Glanz
+    m.userData.env = [env, envK, envH];
     m.onBeforeCompile = (sh) => {
       sh.uniforms.bkLight = LIGHT; sh.uniforms.bkGlow = GLOW; sh.uniforms.lmCol = { value: col }; sh.uniforms.lmEmi = { value: emi };
+      sh.uniforms.lmCap = LMCAP; sh.uniforms.lmShadeK = LMSHADE; sh.uniforms.lmSpec = LMSPEC;
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float bkLight; uniform float bkGlow; uniform sampler2D lmCol; uniform sampler2D lmEmi;')
-        .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directSpecular = vec3(0.0); reflectedLight.directDiffuse = vec3(0.0);')
+        .replace('#include <common>', '#include <common>\nuniform float bkLight; uniform float bkGlow; uniform sampler2D lmCol; uniform sampler2D lmEmi; uniform float lmCap; uniform float lmShadeK; uniform float lmSpec;')
+        .replace('#include <lights_fragment_begin>', LM_LIGHTS)
+        .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directDiffuse = vec3(0.0); reflectedLight.directSpecular *= lmSpec;\ntotalEmissiveRadiance = ' + (diff ? 'lmR * lmShade + lmE;' : 'lmE;'))
         .replace('#include <emissivemap_fragment>', [
           'vec3 lmI = texture2D(emissiveMap, vEmissiveMapUv).rgb; ' + dec('lmI'),
           'vec3 lmR = texture2D(lmCol, vEmissiveMapUv).rgb * lmI * bkLight;',
-          'lmR *= min(1.0, ' + LM_MAX.toFixed(2) + ' / max(0.001, max(lmR.r, max(lmR.g, lmR.b))));',
+          'lmR *= min(1.0, ' + LM_MAX.toFixed(2) + ' * lmCap / max(0.001, max(lmR.r, max(lmR.g, lmR.b))));',
           'vec3 lmE = texture2D(lmEmi, vEmissiveMapUv).rgb; ' + dec('lmE') + ' lmE *= bkGlow * ' + eg.toFixed(2) + ';',
-          'lmE *= min(1.0, ' + cap.toFixed(2) + ' / max(0.001, max(lmE.r, max(lmE.g, lmE.b))));',
-          diff ? 'totalEmissiveRadiance = lmR + lmE;' : 'totalEmissiveRadiance = lmE;'].join('\n'));
+          'lmE *= min(1.0, ' + cap.toFixed(2) + ' * lmCap / max(0.001, max(lmE.r, max(lmE.g, lmE.b))));',
+          'totalEmissiveRadiance = vec3(0.0);'].join('\n'));
     };
-    m.customProgramCacheKey = () => 'lm-' + key;
+    m.customProgramCacheKey = () => 'lm2-' + key;
     return m;
   };
-  return { metal: mk('metal', 0.09, 0.3), paint: mk('paint', 0.04, 0.22), soft: mk('soft', 0.02, 0.1), gloss: mk('gloss', 0.3, 0.6), glow: mk('glow', 0.02, 0.05, 1, GLOW_MAX, false), screen: mk('screen', 0.04, 0.15, 0.4, 0.7, false), glass: M.glass } as Record<string, THREE.Material>;
+  const glass = (M.glass as THREE.MeshStandardMaterial).clone();      // eigenes Glas je Lichtraum: spiegelt den Raum statt der Umgebung der Station
+  glass.userData.env = [env, glass.envMapIntensity, 2.2];
+  return { metal: mk('metal', 0.09, 0.3, 0.9), paint: mk('paint', 0.04, 0.22, 0.8), soft: mk('soft', 0.02, 0.1, 0.4), gloss: mk('gloss', 0.3, 0.6, 1.2), glow: mk('glow', 0.02, 0.05, 0.2, 1, GLOW_MAX, false), screen: mk('screen', 0.04, 0.15, 0.6, 0.4, 0.7, false), glass } as Record<string, THREE.Material>;
+}
+// Raumspiegelung: einmal von der Raummitte aus aufnehmen (nur die Flächen des Lichtraums, mit ihrem gebackenen Licht) und für den Glanz
+// vorfiltern. Leuchten dürfen dabei heller sein als im Bild (lmCap): Erst so spiegeln sich Lampen als helle Flecken in Glas und Metall.
+function lmProbe(L: (typeof LM)[string], T: THREE.Matrix4, at: THREE.Vector3) {      // T: Lage der Netze in der Welt, at: Raummitte in der Welt
+  const sc = new THREE.Scene();
+  for (const q of L.meshes) {
+    if (q.mat.transparent) continue;
+    const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(T, q.mw); m.frustumCulled = false; sc.add(m);
+  }
+  const rt = new THREE.WebGLCubeRenderTarget(512, { type: THREE.HalfFloatType });
+  const cc = new THREE.CubeCamera(0.15, 90, rt); cc.position.copy(at);
+  const g0 = GLOW.value; GLOW.value = g0 * 4; LMCAP.value = 4;
+  try { cc.update(renderer, sc); } finally { GLOW.value = g0; LMCAP.value = 1; }
+  const pm = new THREE.PMREMGenerator(renderer), env = pm.fromCubemap(rt.texture).texture;
+  pm.dispose(); rt.dispose();
+  return env;
 }
 
 // Netze eines geladenen Modells je Baustein (Objekt m<Nr>) und Art (Materialname ext_bk_<Art>), in Bausteinlage
@@ -343,15 +382,59 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   if (lm) for (const R of lm.data.raeume) for (const [r, c] of R.zellen) lmZone.add(zoneOf(r, c));
   const placed = assemble(D, PARTS, (x, y, a) => [gx(y), gz(x), a + Math.PI / 2], (x, y) => { const z = zoneOf(Math.round(-y / C), Math.round(x / C)); return lmZone.has(z) ? '' : z; }, rect, blocks);
   const { group, meshes } = placed; let tris = placed.tris;
+  for (const q of meshes) { q.m.userData.sh = false; q.m.castShadow = q.m.receiveShadow = false; }
+  const lmMeshes: THREE.Mesh[] = [], keys: THREE.SpotLight[] = [], sides: THREE.SpotLight[] = [];
+  let lmX = 0, lmZ = 0, lmT: THREE.Matrix4 | null = null, lmState = '', lmLive = false, lmTick = 0;
   if (lm) {
     // Modell in Planlage (glTF: x, oben, −y) → Innenraum, wie ein Baustein bei (0, 0) ohne Drehung
     const T = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0)), zn = [...lmZone][0];
     for (const q of lm.meshes) {
       const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(T, q.mw); m.userData.shared = true;      // Netz und Bilder gehören dem geladenen Modell
-      if (q.mat === materials().glass) m.renderOrder = 3;
+      if (q.mat.transparent) m.renderOrder = 3;
+      m.userData.sh = false; m.castShadow = false; m.receiveShadow = !q.mat.transparent; lmMeshes.push(m);
       group.add(m); meshes.push({ m, c: q.geo.boundingSphere!.center.clone().applyMatrix4(m.matrix), r: q.geo.boundingSphere!.radius, zn }); tris += q.tris;
     }
   }
+  if (lm) {
+    // Schlüssellampen: je Zelle des Lichtraums ein Strahler unter der Deckenleuchte (dort sitzt im Baukasten das Raumlicht). Sie geben den
+    // Flächen Glanzlichter, beleuchten die Figuren und werfen deren Schatten. Schatten werfen nur Figuren: Die des Raums selbst sind gebacken.
+    const cells = lm.data.raeume.flatMap(R => R.zellen);
+    for (const [r, c] of cells) {
+      const sp = new THREE.SpotLight(new THREE.Color().setRGB(0.82, 0.9, 1.0), 0, 8, 1.0, 1, 2);
+      sp.position.set(gx(-r * C), 3.15, gz(c * C)); sp.target.position.set(gx(-r * C), 0, gz(c * C));
+      sp.castShadow = true; sp.shadow.mapSize.set(512, 512); sp.shadow.camera.near = 0.4; sp.shadow.bias = -0.0015; sp.shadow.normalBias = 0.02; sp.shadow.radius = 4; sp.shadow.autoUpdate = false;
+      group.add(sp, sp.target); keys.push(sp);
+      lmX += gx(-r * C) / cells.length; lmZ += gz(c * C) / cells.length;
+    }
+    lmT = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0));
+    // Nebenstrahler (ohne Schatten): Modelllage → Innenraum wie bei den Netzen (x → z, z → x)
+    for (const [x, y, z, dx, dy, dz, r, g, b] of LM_SIDE[id] || []) {
+      const sp = new THREE.SpotLight(new THREE.Color().setRGB(r, g, b), 0, 10, 1.2, 1, 2);
+      sp.position.set(gx(-z), y, gz(x)); sp.target.position.set(gx(-z) + dz * 3, y + dy * 3, gz(x) - dx * 3);
+      group.add(sp, sp.target); sides.push(sp);
+    }
+  }
+  // Mischform an- und abschalten (und die Raumspiegelung beim ersten Blick in den Raum aufnehmen). on: Der Lichtraum ist zu sehen.
+  const lmApply = (on: boolean) => {
+    if (!lm) return;
+    const hy = deckTune.hybrid, st = `${hy}|${on}|${deckTune.key}|${deckTune.shade}|${deckTune.envK}|${deckTune.spec}|${deckTune.side}`;
+    if (st === lmState) return;
+    lmState = st;
+    if (hy && on && !lm.env) {
+      // in Weltlage aufnehmen: Der Innenraum liegt und dreht sich mit der Station, gespiegelt wird in Weltrichtungen
+      try { group.updateWorldMatrix(true, false); lm.env = lmProbe(lm, new THREE.Matrix4().multiplyMatrices(group.matrixWorld, lmT!), new THREE.Vector3(lmX, 1.7, lmZ).applyMatrix4(group.matrixWorld)); }
+      catch (e) { console.warn('Raumspiegelung nicht aufgenommen:', e); }
+    }
+    for (const m of lm.mats) {
+      const [e0, k0, kh] = m.userData.env as [THREE.Texture, number, number], use = hy && lm.env ? lm.env : e0;
+      if (m.envMap !== use) { m.envMap = use; m.needsUpdate = true; }
+      m.envMapIntensity = hy && lm.env ? kh * deckTune.envK : k0;
+    }
+    for (const sp of keys) { sp.intensity = hy && on ? deckTune.key : 0; sp.shadow.needsUpdate = true; }
+    lmLive = hy && on;
+    for (const sp of sides) sp.intensity = hy && on ? deckTune.side : 0;
+    LMSHADE.value = hy ? deckTune.shade : 0; LMSPEC.value = deckTune.spec;
+  };
   // Personal, Wege, Gruppen
   const yaw = (deg: number) => { const f = deg * Math.PI / 180; return Math.atan2(-Math.sin(f), -Math.cos(f)); };
   const spots: DeckSpot[] = D.personal.map(s => ({ tab: s.tab, x: gx(s.y), z: gz(s.x), face: yaw(s.face), tx: gx(s.ty), tz: gz(s.tx), titel: s.titel, satz: s.satz }));
@@ -418,6 +501,11 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     update: (x, z) => {
       if (Math.hypot(x - lastX, z - lastZ) > 0.6 || Math.hypot(camX - lookCX, camZ - lookCZ) > 0.6) look(x, z);
       for (const q of meshes) { const d = Math.hypot(q.c.x - x, q.c.z - z) - q.r; q.m.visible = d < RANGE && (d < 5 || q.zn === 'x' || vis.has(q.zn)); }
+      if (lm) {
+        lmApply(lmMeshes.some(m => m.visible));
+        // Schattenkarten reihum: je Bild zwei der Strahler (jede Figur steckt sonst in allen sechs Karten, das waren 1,7 Mio. Dreiecke je Bild)
+        if (lmLive) { lmTick++; keys.forEach((sp, i) => { if ((i + lmTick) % 3 === 0) sp.shadow.needsUpdate = true; }); }
+      }
     },
     seen: (x, z) => (z > hz0 - 0.2 ? gate : Math.hypot(x - lastX, z - lastZ) < 6 || vis.has(zoneOf(...cellOf(x, z)))),
     hangarSeen: () => gate,

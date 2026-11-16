@@ -62,3 +62,48 @@ Dem Nutzer war der Leitstand zu verrauscht. Ursachen und Abhilfe in `lm_raum.py`
 - Relief mit 16 statt 4 Abtastungen; im Spiel wirkt es nur noch zu 70 % (`normalScale`), weil feines Korn im Glanz glitzerte.
 
 Backzeit jetzt rund 8 Minuten. Vergleich vorher und nachher: `docs/bilder/lichtraum-124-rauschen.jpg`.
+
+## Mischform (Alpha 1.26)
+
+Schritt 2 des Plans nach der WebGPU-Probe (docs/webgpu-probe.md): der Leitstand im heutigen WebGL-Renderer, gebackenes Licht plus
+echte Lampen. Vergleich: `docs/bilder/hybrid-126-vergleich.jpg`.
+
+**Was im Spiel dazukommt** (alles in `src/game/deck.ts`, Schalter `deckTune.hybrid`):
+
+- **Raumspiegelung.** Beim ersten Blick in den Raum nimmt eine Würfelkamera in der Raummitte die Flächen des Lichtraums auf (512 je
+  Seite, in Weltlage, weil der Innenraum mit der Station gedreht ist) und filtert sie für den Glanz vor. Leuchten dürfen dabei
+  viermal heller sein als im Bild (`lmCap`), sonst spiegeln sich Lampen nicht als helle Flecken. Boden, Metall und Glas spiegeln
+  jetzt den Raum statt der allgemeinen Umgebung der Station.
+- **Schlüssellampen.** Je Zelle des Raums ein Strahler unter der Deckenleuchte (sechs im Leitstand, 2,6 cd). Sie geben den Flächen
+  Glanzlichter, beleuchten die Figuren und werfen deren Schatten.
+- **Nebenstrahler.** Der Glutschein der Öfen fällt als drei warme Strahler durch die Fenster (`LM_SIDE`, ohne Schatten). Von ihnen
+  kommen die warmen Glanzbahnen auf dem Boden.
+- **Figurenschatten.** Nur Figuren stehen in den Schattenkarten (512 je Strahler). Der Schatten nimmt dem Strahler seinen Glanz und
+  dunkelt zusätzlich das gebackene Licht ab (`deckTune.shade`). Je Bild werden zwei der sechs Karten erneuert.
+
+**Was anders ist als im Plan, und warum**
+
+- Das direkte Licht der Lampen bleibt gebacken. Geplant war, nur das indirekte Licht zu backen und das direkte von echten Lampen zu
+  rechnen. Die gebackenen Flächenleuchten geben aber weiche Schatten, die drei bis sechs Strahler nicht hinbekommen; und es braucht
+  kein neues Backen. Die echten Lampen liefern, was Backen nicht kann: Glanz, der mit dem Blick wandert, und Licht und Schatten für
+  bewegte Figuren.
+- Die Lichtschleife der Lichtraum-Flächen ist eine eigene Fassung des three-Bausteins `lights_fragment_begin`: Sie rechnet nur
+  Strahler. Punkt-, Richtungs- und Himmelslicht der Station würden das gebackene Licht verdoppeln.
+- Das Schattengewicht folgt dem Winkel im Lichtkegel, nicht der wahren Beleuchtungsstärke. Rechnerisch nimmt eine von sechs
+  Deckenlampen am Ort ihres Schattens nur etwa 6 % Licht weg; das sah niemand.
+- **AgX verworfen.** Die Filmkurve macht den dunklen Raum flacher und grauer, das Orange der Glut stumpf. ACES bleibt.
+- **GTAO verworfen.** Der Durchgang zeichnet die Szene ein zweites Mal (0,97 → 1,47 Mio. Dreiecke je Bild). Im Lichtraum steckt die
+  Verdeckung schon im gebackenen Licht, der sichtbare Gewinn war gering.
+
+**Kosten** (RTX 3060 Ti, 1280 × 720, Testfenster): 4,0 bis 4,4 ms je Bild ohne, 4,3 bis 5,7 ms mit Mischform. Die Schattenkarten
+kosten rund 0,5 Mio. Dreiecke je Bild, weil die Figuren fein aufgelöst sind. Ohne das reihum Erneuern waren es 1,7 Mio.
+
+**Fallen**
+
+- three rollt die Lichtschleife ohne eigene Klammern aus: Eine Variable, die im Schleifenrumpf vereinbart wird, ist doppelt vereinbart.
+- `markShadows` (engine.ts) setzt auf jedes Netz mit Standardmaterial Schattenwurf. Netze der Decks tragen deshalb
+  `userData.sh = false`; sonst zeichnet jeder Strahler das halbe Deck in seine Schattenkarte.
+- Die Raumspiegelung in Raumlage aufgenommen sah zuerst eindrucksvoller aus, war aber um den Stationswinkel verdreht.
+
+**Offen:** Die Spiegelung stammt von einem Punkt in der Raummitte, in Scheiben nah an der Wand stimmt sie nur ungefähr. Schwache
+Rechner sind nicht gemessen. Weitere Räume (Bastion Treffpunkt und Lager, dann der Hangar) brauchen erst Lichtkarten.
