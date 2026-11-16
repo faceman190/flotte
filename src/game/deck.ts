@@ -48,7 +48,7 @@ const LM_MAX = 1.6;               // Lichtraum: Obergrenze der Strahldichte bele
 // Mischform im Lichtraum (seit Alpha 1.26): hybrid = echte Strahler und Raumspiegelung an; key = Lichtstärke je Strahler (cd);
 // shade = wie stark der Schatten einer Figur das gebackene Licht abdunkelt (0 bis 1); envK = Stärke der Raumspiegelung;
 // spec = Verstärkung des Glanzes der Flächen auf die Strahler; side = Lichtstärke der Nebenstrahler (Glutschein an den Fenstern)
-export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true, hybrid: true, key: 2.6, shade: 0.5, envK: 1, spec: 3, side: 3 };
+export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true, hybrid: true, key: 2.6, shade: 0.5, envK: 1, spec: 2.2, side: 3 };
 const LMCAP = { value: 1 }, LMSHADE = { value: 0 }, LMSPEC = { value: 1 };      // Obergrenzen-Faktor (nur beim Aufnehmen der Raumspiegelung > 1), Schattenstärke, Kehrwert der Beleuchtung unter einem Strahler      // zum Einstellen im Testfenster; lichtraum = false zeigt den Raum aus Bausteinen
 // Decks je Station: Daten (data/…) und Modell (base/…). Die Bastion lädt beim Start, die Eisenkrone beim Betreten ihres Sektors.
 const DECKS: Record<string, [string, string]> = { bastion: ['deck_bastion', 'BastionDeck'], eisenkrone: ['deck_eisenkrone', 'EisenkroneDeck'] };
@@ -76,11 +76,14 @@ export function loadDeck(id = 'bastion'): Promise<boolean> {
 // Im Spiel: Strahldichte = Farbe × Licht + Leuchten, dazu der Glanz aus der Raumumgebung mit Rauheit und Relief aus den Bildern.
 // Die Bausteine in den Zellen des Raums entfallen dann (ihre Standflächen bleiben). Daten: data/lichtraum_<Deck>, Modell: base/Lichtraum<Deck>.
 interface LmJson { raeume: { name: string; zellen: number[][]; teile: Record<string, string> }[] }
-const LICHT: Record<string, [string, string]> = { eisenkrone: ['lichtraum_eisenkrone', 'LichtraumEisenkrone'] };
-// Nebenstrahler der Mischform je Deck, in Modelllage (x Ost, y oben, z Süd): Ort, Richtung, Farbe. Eisenkrone: der Glutschein der Öfen,
-// der durch die drei Fenster des Leitstands fällt (im Baukasten die Flächenleuchten „Glutschein“ innen vor den Scheiben).
-const LM_SIDE: Record<string, number[][]> = { eisenkrone: [28, 32, 36].map(x => [x, 1.5, -1.58, 0, -0.25, 1, 1.0, 0.42, 0.14]) };
-const LM: Record<string, { data: LmJson; meshes: { geo: THREE.BufferGeometry; mat: THREE.Material; mw: THREE.Matrix4; tris: number }[]; mats: THREE.MeshStandardMaterial[]; env: THREE.Texture | null }> = {}, LMLOADING: Record<string, Promise<boolean>> = {};
+const LICHT: Record<string, [string, string]> = { eisenkrone: ['lichtraum_eisenkrone', 'LichtraumEisenkrone'], bastion: ['lichtraum_bastion', 'LichtraumBastion'] };
+// Nebenstrahler der Mischform je Deck und Raum, in Modelllage (x Ost, y oben, z Süd): Ort, Richtung, Farbe. Eisenkrone: der Glutschein
+// der Öfen, der durch die drei Fenster des Leitstands fällt (im Baukasten die Flächenleuchten „Glutschein“ innen vor den Scheiben).
+const LM_SIDE: Record<string, Record<string, number[][]>> = { eisenkrone: { leitstand: [28, 32, 36].map(x => [x, 1.5, -1.58, 0, -0.25, 1, 1.0, 0.42, 0.14]) } };
+const KEYS_MAX = 6;      // so viele Strahler werfen Schatten (je Strahler eine Schattenkarte in jedem beleuchteten Material der Szene)
+interface LmMesh { geo: THREE.BufferGeometry; mat: THREE.Material; mw: THREE.Matrix4; tris: number }
+interface LmRoom { name: string; cells: number[][]; meshes: LmMesh[]; mats: THREE.MeshStandardMaterial[]; env: THREE.Texture | null }
+const LM: Record<string, { rooms: LmRoom[] }> = {}, LMLOADING: Record<string, Promise<boolean>> = {};
 function loadLicht(id: string): Promise<boolean> {
   if (LM[id]) return Promise.resolve(true);
   if (id in LMLOADING) return LMLOADING[id];
@@ -89,18 +92,18 @@ function loadLicht(id: string): Promise<boolean> {
   return (LMLOADING[id] = (async () => {
     try {
       const [data, gltf] = await Promise.all([fetch(dj).then(r => r.json()) as Promise<LmJson>, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
-      const sets: Record<string, Record<string, THREE.Material>> = {};
-      for (const R of data.raeume) for (const [part, prefix] of Object.entries(R.teile)) sets[part] = await lmMaterials(prefix);
-      const meshes: (typeof LM)[string]['meshes'] = [];
+      const sets: Record<string, Record<string, THREE.Material>> = {}, roomOf: Record<string, number> = {};
+      for (const [i, R] of data.raeume.entries()) for (const [part, prefix] of Object.entries(R.teile)) { sets[part] = await lmMaterials(prefix); roomOf[part] = i; }
+      const rooms: LmRoom[] = data.raeume.map(R => ({ name: R.name, cells: R.zellen, meshes: [], env: null, mats: [...new Set(Object.keys(R.teile).flatMap(p => Object.values(sets[p])))] as THREE.MeshStandardMaterial[] }));
       gltf.scene.updateMatrixWorld(true);
       gltf.scene.traverse((o: any) => {
         if (!o.isMesh) return;
-        let a: THREE.Object3D | null = o; while (a && !sets[a.name]) a = a.parent;      // Teil (raum, halle) nach dem Namen des Objekts in Blender
-        const set = sets[a ? a.name : Object.keys(sets)[0]], cls = String(o.material?.name || '').replace(/^ext_lm_/, '');
+        let a: THREE.Object3D | null = o; while (a && !sets[a.name]) a = a.parent;      // Teil (raum, halle oder der Name des Raums) nach dem Namen des Objekts in Blender
+        const part = a ? a.name : Object.keys(sets)[0], set = sets[part], cls = String(o.material?.name || '').replace(/^ext_lm_/, '');
         const g = o.geometry as THREE.BufferGeometry; g.computeBoundingSphere();
-        meshes.push({ geo: g, mat: set[cls] || set.paint, mw: o.matrixWorld.clone(), tris: (g.index ? g.index.count : g.attributes.position.count) / 3 });
+        rooms[roomOf[part]].meshes.push({ geo: g, mat: set[cls] || set.paint, mw: o.matrixWorld.clone(), tris: (g.index ? g.index.count : g.attributes.position.count) / 3 });
       });
-      LM[id] = { data, meshes, mats: [...new Set(Object.values(sets).flatMap(q => Object.values(q)))] as THREE.MeshStandardMaterial[], env: null };
+      LM[id] = { rooms };
       return true;
     } catch (e) { console.warn('Lichtraum nicht geladen:', id, e); delete LMLOADING[id]; return false; }
   })());
@@ -152,9 +155,9 @@ async function lmMaterials(prefix: string) {
 }
 // Raumspiegelung: einmal von der Raummitte aus aufnehmen (nur die Flächen des Lichtraums, mit ihrem gebackenen Licht) und für den Glanz
 // vorfiltern. Leuchten dürfen dabei heller sein als im Bild (lmCap): Erst so spiegeln sich Lampen als helle Flecken in Glas und Metall.
-function lmProbe(L: (typeof LM)[string], T: THREE.Matrix4, at: THREE.Vector3) {      // T: Lage der Netze in der Welt, at: Raummitte in der Welt
+function lmProbe(ms: LmMesh[], T: THREE.Matrix4, at: THREE.Vector3) {      // T: Lage der Netze in der Welt, at: Raummitte in der Welt
   const sc = new THREE.Scene();
-  for (const q of L.meshes) {
+  for (const q of ms) {
     if (q.mat.transparent) continue;
     const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(T, q.mw); m.frustumCulled = false; sc.add(m);
   }
@@ -379,60 +382,93 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   // Bausteine setzen: je Bereich und Art ein Netz
   // Lichtraum: Seine Zellen bekommen keine Bausteine, an ihre Stelle tritt das gebackene Modell (im selben Bereich, also mit derselben Sichtprüfung)
   const lm = deckTune.lichtraum ? LM[id] : undefined, lmZone = new Set<string>();
-  if (lm) for (const R of lm.data.raeume) for (const [r, c] of R.zellen) lmZone.add(zoneOf(r, c));
+  if (lm) for (const R of lm.rooms) for (const [r, c] of R.cells) lmZone.add(zoneOf(r, c));
   const placed = assemble(D, PARTS, (x, y, a) => [gx(y), gz(x), a + Math.PI / 2], (x, y) => { const z = zoneOf(Math.round(-y / C), Math.round(x / C)); return lmZone.has(z) ? '' : z; }, rect, blocks);
   const { group, meshes } = placed; let tris = placed.tris;
   for (const q of meshes) { q.m.userData.sh = false; q.m.castShadow = q.m.receiveShadow = false; }
-  const lmMeshes: THREE.Mesh[] = [], keys: THREE.SpotLight[] = [], sides: THREE.SpotLight[] = [];
-  let lmX = 0, lmZ = 0, lmT: THREE.Matrix4 | null = null, lmState = '', lmLive = false, lmTick = 0;
+  // Lichträume dieses Decks: Netze, Zellmitten (Innenraum), Mitte für die Raumspiegelung, Nebenstrahler
+  const lmRooms: { R: LmRoom; meshes: THREE.Mesh[]; cells: [number, number][]; x: number; z: number; side: number[][] }[] = [];
+  const keys: THREE.SpotLight[] = [], more: THREE.SpotLight[] = [], sides: THREE.SpotLight[] = [];      // Strahler mit Schatten, ohne Schatten, Nebenstrahler
+  let lmT: THREE.Matrix4 | null = null, lmState = '', lmLive = false, lmTick = 0;
   if (lm) {
     // Modell in Planlage (glTF: x, oben, −y) → Innenraum, wie ein Baustein bei (0, 0) ohne Drehung
-    const T = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0)), zn = [...lmZone][0];
-    for (const q of lm.meshes) {
-      const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(T, q.mw); m.userData.shared = true;      // Netz und Bilder gehören dem geladenen Modell
-      if (q.mat.transparent) m.renderOrder = 3;
-      m.userData.sh = false; m.castShadow = false; m.receiveShadow = !q.mat.transparent; lmMeshes.push(m);
-      group.add(m); meshes.push({ m, c: q.geo.boundingSphere!.center.clone().applyMatrix4(m.matrix), r: q.geo.boundingSphere!.radius, zn }); tris += q.tris;
+    const T = lmT = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0));
+    const inBlock = (x: number, z: number) => blocks.some(b => x > b[0] - 0.3 && x < b[1] + 0.3 && z > b[2] - 0.3 && z < b[3] + 0.3);
+    for (const R of lm.rooms) {
+      const zn = zoneOf(R.cells[0][0], R.cells[0][1]), ms: THREE.Mesh[] = [];
+      for (const q of R.meshes) {
+        const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(T, q.mw); m.userData.shared = true;      // Netz und Bilder gehören dem geladenen Modell
+        if (q.mat.transparent) m.renderOrder = 3;
+        m.userData.sh = false; m.castShadow = false; m.receiveShadow = !q.mat.transparent; ms.push(m);
+        group.add(m); meshes.push({ m, c: q.geo.boundingSphere!.center.clone().applyMatrix4(m.matrix), r: q.geo.boundingSphere!.radius, zn }); tris += q.tris;
+      }
+      const cells = R.cells.map(([r, c]) => [gx(-r * C), gz(c * C)] as [number, number]);
+      let x = cells.reduce((a, q) => a + q[0], 0) / cells.length, z = cells.reduce((a, q) => a + q[1], 0) / cells.length;
+      // Die Raumspiegelung wird an einem freien Punkt aufgenommen: Steht in der Raummitte ein Tisch, sähe die Kamera nur dessen Inneres
+      const spot = [[0, 0], [1.3, 0], [-1.3, 0], [0, 1.3], [0, -1.3], [1.6, 1.6], [-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6]].find(([dx, dz]) => !inBlock(x + dx, z + dz));
+      if (spot) { x += spot[0]; z += spot[1]; }
+      lmRooms.push({ R, meshes: ms, cells, x, z, side: (LM_SIDE[id] || {})[R.name] || [] });
     }
-  }
-  if (lm) {
-    // Schlüssellampen: je Zelle des Lichtraums ein Strahler unter der Deckenleuchte (dort sitzt im Baukasten das Raumlicht). Sie geben den
-    // Flächen Glanzlichter, beleuchten die Figuren und werfen deren Schatten. Schatten werfen nur Figuren: Die des Raums selbst sind gebacken.
-    const cells = lm.data.raeume.flatMap(R => R.zellen);
-    for (const [r, c] of cells) {
+    // Strahler-Vorrat. Schlüssellampen: unter jeder Deckenleuchte des Raums einer (im Baukasten sitzt dort das Raumlicht), höchstens KEYS_MAX
+    // mit Schatten; hat ein Raum mehr Zellen, bekommen die übrigen Strahler ohne Schatten. Sie geben den Flächen Glanzlichter, beleuchten
+    // die Figuren und werfen deren Schatten. Schatten werfen nur Figuren: Die des Raums selbst sind gebacken.
+    const most = Math.max(...lmRooms.map(q => q.cells.length)), nSide = Math.max(...lmRooms.map(q => q.side.length));
+    for (let i = 0; i < most; i++) {
       const sp = new THREE.SpotLight(new THREE.Color().setRGB(0.82, 0.9, 1.0), 0, 8, 1.0, 1, 2);
-      sp.position.set(gx(-r * C), 3.15, gz(c * C)); sp.target.position.set(gx(-r * C), 0, gz(c * C));
-      sp.castShadow = true; sp.shadow.mapSize.set(512, 512); sp.shadow.camera.near = 0.4; sp.shadow.bias = -0.0015; sp.shadow.normalBias = 0.02; sp.shadow.radius = 4; sp.shadow.autoUpdate = false;
-      group.add(sp, sp.target); keys.push(sp);
-      lmX += gx(-r * C) / cells.length; lmZ += gz(c * C) / cells.length;
+      sp.userData.room = -1;
+      if (i < KEYS_MAX) { sp.castShadow = true; sp.shadow.mapSize.set(512, 512); sp.shadow.camera.near = 0.4; sp.shadow.bias = -0.0015; sp.shadow.normalBias = 0.02; sp.shadow.radius = 4; sp.shadow.autoUpdate = false; }
+      group.add(sp, sp.target); (i < KEYS_MAX ? keys : more).push(sp);
     }
-    lmT = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0));
-    // Nebenstrahler (ohne Schatten): Modelllage → Innenraum wie bei den Netzen (x → z, z → x)
-    for (const [x, y, z, dx, dy, dz, r, g, b] of LM_SIDE[id] || []) {
-      const sp = new THREE.SpotLight(new THREE.Color().setRGB(r, g, b), 0, 10, 1.2, 1, 2);
-      sp.position.set(gx(-z), y, gz(x)); sp.target.position.set(gx(-z) + dz * 3, y + dy * 3, gz(x) - dx * 3);
-      group.add(sp, sp.target); sides.push(sp);
-    }
+    for (let i = 0; i < nSide; i++) { const sp = new THREE.SpotLight(0xffffff, 0, 10, 1.2, 1, 2); group.add(sp, sp.target); sides.push(sp); }      // Nebenstrahler (ohne Schatten)
   }
-  // Mischform an- und abschalten (und die Raumspiegelung beim ersten Blick in den Raum aufnehmen). on: Der Lichtraum ist zu sehen.
-  const lmApply = (on: boolean) => {
+  // Mischform an- und abschalten, Raumspiegelungen aufnehmen, Strahler verteilen. Die Strahler bekommt der sichtbare Lichtraum, der dem
+  // Standort am nächsten ist; die mit Schatten stehen auf den Zellen nächst dem Piloten.
+  const lmApply = (px: number, pz: number) => {
     if (!lm) return;
-    const hy = deckTune.hybrid, st = `${hy}|${on}|${deckTune.key}|${deckTune.shade}|${deckTune.envK}|${deckTune.spec}|${deckTune.side}`;
+    const hy = deckTune.hybrid;
+    let act = -1, bd = 1e9, nEnv = 0;
+    lmRooms.forEach((q, i) => {
+      if (q.R.env) nEnv++;
+      if (!q.meshes.some(m => m.visible)) return;
+      if (hy && !q.R.env) {
+        // in Weltlage aufnehmen: Der Innenraum liegt und dreht sich mit der Station, gespiegelt wird in Weltrichtungen
+        try { group.updateWorldMatrix(true, false); q.R.env = lmProbe(q.R.meshes, new THREE.Matrix4().multiplyMatrices(group.matrixWorld, lmT!), new THREE.Vector3(q.x, 1.7, q.z).applyMatrix4(group.matrixWorld)); nEnv++; }
+        catch (e) { console.warn('Raumspiegelung nicht aufgenommen:', q.R.name, e); }
+      }
+      const d = Math.min(...q.cells.map(([cx, cz]) => Math.hypot(cx - px, cz - pz)));
+      if (d < bd) { bd = d; act = i; }
+    });
+    const q = hy && act >= 0 ? lmRooms[act] : null;
+    const order = q ? q.cells.map((_, i) => i).sort((a, b) => Math.hypot(q.cells[a][0] - px, q.cells[a][1] - pz) - Math.hypot(q.cells[b][0] - px, q.cells[b][1] - pz)) : [];
+    const near = order.slice(0, keys.length).sort((a, b) => a - b), far = order.slice(keys.length);
+    const st = `${hy}|${q ? act : -1}|${near.join(',')}|${nEnv}|${deckTune.key}|${deckTune.shade}|${deckTune.envK}|${deckTune.spec}|${deckTune.side}`;
     if (st === lmState) return;
     lmState = st;
-    if (hy && on && !lm.env) {
-      // in Weltlage aufnehmen: Der Innenraum liegt und dreht sich mit der Station, gespiegelt wird in Weltrichtungen
-      try { group.updateWorldMatrix(true, false); lm.env = lmProbe(lm, new THREE.Matrix4().multiplyMatrices(group.matrixWorld, lmT!), new THREE.Vector3(lmX, 1.7, lmZ).applyMatrix4(group.matrixWorld)); }
-      catch (e) { console.warn('Raumspiegelung nicht aufgenommen:', e); }
-    }
-    for (const m of lm.mats) {
-      const [e0, k0, kh] = m.userData.env as [THREE.Texture, number, number], use = hy && lm.env ? lm.env : e0;
+    for (const o of lmRooms) for (const m of o.R.mats) {
+      const [e0, k0, kh] = m.userData.env as [THREE.Texture, number, number], use = hy && o.R.env ? o.R.env : e0;
       if (m.envMap !== use) { m.envMap = use; m.needsUpdate = true; }
-      m.envMapIntensity = hy && lm.env ? kh * deckTune.envK : k0;
+      m.envMapIntensity = hy && o.R.env ? kh * deckTune.envK : k0;
     }
-    for (const sp of keys) { sp.intensity = hy && on ? deckTune.key : 0; sp.shadow.needsUpdate = true; }
-    lmLive = hy && on;
-    for (const sp of sides) sp.intensity = hy && on ? deckTune.side : 0;
+    // Wer schon auf einer der gewünschten Zellen steht, bleibt dort: Sonst spränge sein Schatten, sobald der Pilot eine Zelle weitergeht
+    const place = (L: THREE.SpotLight[], want: number[]) => {
+      const free = new Set(want), todo: THREE.SpotLight[] = [];
+      for (const sp of L) { if (q && sp.userData.room === act && free.has(sp.userData.cell)) free.delete(sp.userData.cell); else todo.push(sp); }
+      const rest = [...free];
+      for (const sp of todo) {
+        const k = rest.pop();
+        if (!q || k === undefined) { sp.intensity = 0; sp.userData.room = -1; continue; }
+        sp.position.set(q.cells[k][0], 3.15, q.cells[k][1]); sp.target.position.set(q.cells[k][0], 0, q.cells[k][1]); sp.userData.room = act; sp.userData.cell = k;
+      }
+      for (const sp of L) if (sp.userData.room === act && q) { sp.intensity = deckTune.key; if (sp.castShadow) sp.shadow.needsUpdate = true; }
+    };
+    place(keys, near); place(more, far);
+    sides.forEach((sp, i) => {
+      const d = q && q.side[i];
+      if (!d) { sp.intensity = 0; return; }
+      const [x, y, z, dx, dy, dz, r, g, b] = d;      // Modelllage → Innenraum wie bei den Netzen (x → z, z → x)
+      sp.color.setRGB(r, g, b); sp.position.set(gx(-z), y, gz(x)); sp.target.position.set(gx(-z) + dz * 3, y + dy * 3, gz(x) - dx * 3); sp.intensity = deckTune.side;
+    });
+    lmLive = !!q;
     LMSHADE.value = hy ? deckTune.shade : 0; LMSPEC.value = deckTune.spec;
   };
   // Personal, Wege, Gruppen
@@ -502,9 +538,10 @@ export function buildDeck(id: string, hz0: number): Deck | null {
       if (Math.hypot(x - lastX, z - lastZ) > 0.6 || Math.hypot(camX - lookCX, camZ - lookCZ) > 0.6) look(x, z);
       for (const q of meshes) { const d = Math.hypot(q.c.x - x, q.c.z - z) - q.r; q.m.visible = d < RANGE && (d < 5 || q.zn === 'x' || vis.has(q.zn)); }
       if (lm) {
-        lmApply(lmMeshes.some(m => m.visible));
-        // Schattenkarten reihum: je Bild zwei der Strahler (jede Figur steckt sonst in allen sechs Karten, das waren 1,7 Mio. Dreiecke je Bild)
-        if (lmLive) { lmTick++; keys.forEach((sp, i) => { if ((i + lmTick) % 3 === 0) sp.shadow.needsUpdate = true; }); }
+        lmApply(x, z);
+        // Schattenkarten reihum: je Bild eine (jede Figur steckt sonst in allen sechs Karten; im Treffpunkt mit seinen vielen Figuren
+        // waren schon zwei Karten je Bild 0,8 Mio. Dreiecke). Die Schatten sind weich und schwach, sechs Bilder Verzug sieht man nicht.
+        if (lmLive) { lmTick++; const sp = keys[lmTick % keys.length]; if (sp.intensity > 0) sp.shadow.needsUpdate = true; }
       }
     },
     seen: (x, z) => (z > hz0 - 0.2 ? gate : Math.hypot(x - lastX, z - lastZ) < 6 || vis.has(zoneOf(...cellOf(x, z)))),

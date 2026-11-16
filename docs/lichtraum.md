@@ -107,3 +107,34 @@ kosten rund 0,5 Mio. Dreiecke je Bild, weil die Figuren fein aufgelöst sind. Oh
 
 **Offen:** Die Spiegelung stammt von einem Punkt in der Raummitte, in Scheiben nah an der Wand stimmt sie nur ungefähr. Schwache
 Rechner sind nicht gemessen. Weitere Räume (Bastion Treffpunkt und Lager, dann der Hangar) brauchen erst Lichtkarten.
+
+## Bastion: Treffpunkt und Lager (Alpha 1.27)
+
+Schritt 3 des Plans: die Mischform für zwei Räume der Bastion. Vergleich: `docs/bilder/lichtraum-127-bastion.jpg`.
+
+**Backen.** `lm_raum.py` backt jetzt mehrere Räume eines Decks in einem Lauf (`OPT['rooms']`: Name und Zellen je Raum, wahlweise `size`,
+`lm`, `samples`, `emi`). Das Objekt im Modell heißt wie der Raum, die Bilder `lm_<raum>_…`. Die alte Form (ein Raum und seine Halle,
+Eisenkrone) bleibt. Ohne offenes Blender: `blender.exe -b --python lm_lauf.py -- bk_deck_d.py BastionDeckD.blend lm_bastion.json`
+baut das Deck frisch, speichert es und backt dann (danach wird nicht mehr gespeichert). Dauer für beide Räume: 23 Minuten
+(Treffpunkt 9 Zellen, 148 Tsd. Dreiecke, 51 Lampen; Lager 6 Zellen, 115 Tsd. Dreiecke, 27 Lampen). Das Leuchtenbild ist hier 2048 statt
+4096 groß. Die Abwicklung belegt nur 41 % und 49 % der Bilder (Leitstand: gut 75 %).
+
+**Im Spiel** (`src/game/deck.ts`):
+
+- Ein Deck kann mehrere Lichträume haben (`LM[id].rooms`), jeder mit eigenen Netzen, Materialien und eigener Raumspiegelung. Die
+  Spiegelung wird an einem freien Punkt nahe der Raummitte aufgenommen: Im Treffpunkt steht dort der Kartentisch.
+- Die Strahler sind ein Vorrat je Deck: so viele, wie der größte Raum Zellen hat, davon höchstens sechs mit Schatten (`KEYS_MAX`).
+  Sie stehen im sichtbaren Lichtraum, der dem Piloten am nächsten ist. Im Treffpunkt (neun Zellen) stehen die sechs mit Schatten auf
+  den Zellen nächst dem Piloten; wer schon auf einer gewünschten Zelle steht, bleibt dort, damit sein Schatten nicht springt.
+- Je Bild wird nur noch eine Schattenkarte erneuert. Im Treffpunkt mit seinen vielen Figuren kosteten zwei Karten 0,8 Mio. Dreiecke je Bild.
+- Glanz der Strahler von 3 auf 2,2: Neun Deckenlampen machten den Boden sonst milchig.
+- Nebenstrahler (`LM_SIDE`) gibt es je Deck und Raum; die Bastion-Räume haben keine.
+
+**Kosten** (RTX 3060 Ti, 1280 × 720, Testfenster, ms je Bild): Treffpunkt 2,9 mit Bausteinen, 3,2 nur Lichtkarte, 3,5 bis 4,3 Mischform.
+Lager 3,3, dann 3,5, dann 3,5 bis 3,65. Herunterzuladen sind je Raum rund 5 MB mehr (im Hintergrund nach dem Start).
+
+**Geprüft:** Lückensuche über alle 105 Zellen der Bastion ohne Fund (auch an den Nähten zwischen gebackenem Raum und Gang),
+Begehbarkeit wie vorher, Story-Durchlauf sauber.
+
+**Offen:** Der Hangar (dritter Raum des Plans) hat eine eigene Lichtkarte anderer Art und ist nicht umgestellt. Die übrigen Räume der
+Bastion (Werkstatt, Besprechung, Krankenstation, Quartier, Maschinenraum, Spinde) sind weiter Bausteine mit Licht je Eckpunkt.

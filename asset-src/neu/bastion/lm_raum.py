@@ -160,19 +160,32 @@ def set_classes(J):
 
 def run():
     t0 = time.time(); note('Start')
-    cells = [list(c) for c in OPT['cells']]; room, hall = [], []
+    # Teile: je Teil ein Netz mit eigenem Bildsatz. Alte Form (Eisenkrone): ein Raum („raum“) und der große Baustein dahinter („halle“).
+    # Neue Form (OPT['rooms'], seit Alpha 1.27): mehrere Räume eines Decks in einem Lauf, das Objekt heißt wie der Raum.
+    if OPT.get('rooms'):
+        parts = [dict(obj=r['name'], name=r['name'], cells=[list(c) for c in r['cells']], only=None, skip=None, size=r.get('size', OPT['size'][0]),
+                      lm=r.get('lm', OPT['lm'][0]), spp=r.get('samples', OPT['samples'][0]), emi=r.get('emi', r.get('size', OPT['size'][0]))) for r in OPT['rooms']]
+        rooms = [dict(name=r['name'], zellen=[list(c) for c in r['cells']], teile={r['name']: 'lm_' + r['name']}) for r in OPT['rooms']]
+    else:
+        cells = [list(c) for c in OPT['cells']]
+        parts = [dict(obj='raum', name=OPT['names'][0], cells=cells, only=None, skip=OPT['hall'], size=OPT['size'][0], lm=OPT['lm'][0], spp=OPT['samples'][0], emi=OPT['size'][0]),
+                 dict(obj='halle', name=OPT['names'][1], cells=cells, only=OPT['hall'], skip=None, size=OPT['size'][1], lm=OPT['lm'][1], spp=OPT['samples'][1], emi=OPT['size'][1])]
+        rooms = [dict(name=OPT['names'][0], zellen=cells, teile={'raum': 'lm_' + OPT['names'][0], 'halle': 'lm_' + OPT['names'][1]})]
+    for p in parts: p['emp'] = []
     for cn in ('Deck', 'Deck Decken'):
         for e in bpy.data.collections[cn].objects:
             if e.type != 'EMPTY' or e.instance_type != 'COLLECTION' or not e.instance_collection: continue
-            if cell_of(e) not in cells: continue
-            (hall if e.instance_collection.name == OPT['hall'] else room).append(e)
+            c = cell_of(e); n = e.instance_collection.name
+            for p in parts:
+                if c in p['cells'] and (p['only'] is None or n == p['only']) and (p['skip'] is None or n != p['skip']): p['emp'].append(e); break
     for m in bpy.data.materials: classify(m)      # vor dem Umbau fürs Backen
-    A, la = realize(room, 'raum'); B, lb = realize(hall, 'halle')
-    tri = lambda J: sum(len(p.vertices) - 2 for p in J.data.polygons)
-    note('aufgelöst: raum %d Instanzen, %d Dreiecke, %d Lampen; halle %d Dreiecke, %d Lampen (%.0f s)' % (len(room), tri(A), la, tri(B), lb, time.time() - t0))
+    tri = lambda J: sum(len(q.vertices) - 2 for q in J.data.polygons)
+    for p in parts:
+        p['J'], nl = realize(p['emp'], p['obj'])
+        note('aufgelöst: %s %d Instanzen, %d Dreiecke, %d Lampen (%.0f s)' % (p['name'], len(p['emp']), tri(p['J']), nl, time.time() - t0))
     # Der Rand zwischen den Inseln richtet sich nach dem gröbsten Bild (Licht): OPT['gap'] Bildpunkte dort
-    cov = [unwrap(J, s) for J, s in ((A, OPT['lm'][0]), (B, OPT['lm'][1]))]
-    note('abgewickelt, belegt %.0f %% und %.0f %% (%.0f s)' % (cov[0] * 100, cov[1] * 100, time.time() - t0))
+    for p in parts:
+        cov = unwrap(p['J'], p['lm']); note('abgewickelt: %s belegt %.0f %% (%.0f s)' % (p['name'], cov * 100, time.time() - t0))
     cp = bpy.context.preferences.addons['cycles'].preferences; cp.compute_device_type = 'OPTIX'; cp.get_devices()
     for d in cp.devices: d.use = d.type == 'OPTIX'
     SC.render.engine = 'CYCLES'; SC.cycles.device = 'GPU'
@@ -185,7 +198,8 @@ def run():
     #   emi  Leuchten (Strahldichte), orm Rauheit im Grünkanal, nrm Relief im Tangentenraum
     def img(n, s): return bpy.data.images.new(n, s, s, alpha=False, float_buffer=True)
     enc = lambda x: np.sqrt(np.clip(x, 0, 40) / (1 + np.clip(x, 0, 40)))
-    for J, name, sc, sl, spp in ((A, OPT['names'][0], OPT['size'][0], OPT['lm'][0], OPT['samples'][0]), (B, OPT['names'][1], OPT['size'][1], OPT['lm'][1], OPT['samples'][1])):
+    for p in parts:
+        J, name, sc, sl, spp, se = p['J'], p['name'], p['size'], p['lm'], p['spp'], p['emi']
         sfx = (lambda s: '@%d' % s) if not OPT['test'] else (lambda s: '')
         path = lambda kind, s: os.path.join(tex, 'lm_%s_%s%s.png' % (name, kind, sfx(s)))
         im = img('LM_col', sc); bake(J, 'DIFFUSE', im, OPT['col_samples'], color=True); col = pixels(im)[..., :3]
@@ -193,20 +207,22 @@ def run():
         im = img('LM_lit', sl); bake(J, 'DIFFUSE', im, spp, color=False); x = soften(pixels(im)[..., :3])
         save_png(enc(x), 'lit', path('lit', sl)); bpy.data.images.remove(im)
         note('%s: Farbe und Licht gebacken (%.0f s), Licht Mittel %.3f, Spitze %.1f' % (name, time.time() - t0, float(x.mean()), float(x.max())))
-        im = img('LM_emi', sc); bake(J, 'EMIT', im, 32); save_png(enc(pixels(im)[..., :3]), 'emi', path('emi', sc)); bpy.data.images.remove(im)      # Leuchten fein und geglättet: Bildschirme haben ein Zeilenmuster
+        im = img('LM_emi', se); bake(J, 'EMIT', im, 32); save_png(enc(pixels(im)[..., :3]), 'emi', path('emi', se)); bpy.data.images.remove(im)      # Leuchten fein und geglättet: Bildschirme haben ein Zeilenmuster
         im = img('LM_dat', sl)
         bake(J, 'ROUGHNESS', im, 1); r = pixels(im)[..., 0]; save_png(np.stack([np.ones_like(r), r, np.zeros_like(r)], -1), 'orm', path('orm', sl))
         bake(J, 'NORMAL', im, 16); save_png(pixels(im)[..., :3].copy(), 'nrm', path('nrm', sl)); bpy.data.images.remove(im)
         out[name] = {'tris': tri(J), 'col': sc, 'lit': sl}
         note('%s: Leuchten, Rauheit und Relief gebacken, Bilder geschrieben (%.0f s)' % (name, time.time() - t0))
-    out[OPT['names'][0]]['arten'] = set_classes(A); out[OPT['names'][1]]['arten'] = set_classes(B)
+    for p in parts: out[p['name']]['arten'] = set_classes(p['J'])
     for o in bpy.context.view_layer.objects: o.select_set(False)
-    A.select_set(True); B.select_set(True); bpy.context.view_layer.objects.active = A
+    for p in parts: p['J'].select_set(True)
+    bpy.context.view_layer.objects.active = parts[0]['J']
     glb = os.path.join(ROOT, 'asset-src', 'glb', 'base', OPT['glb']) if not OPT['test'] else os.path.join(tex, OPT['glb'])
     bpy.ops.export_scene.gltf(filepath=glb, export_format='GLB', use_selection=True, export_apply=False, export_yup=True, export_normals=True, export_texcoords=True,
                               export_materials='EXPORT', export_vertex_color='NONE', export_attributes=False, export_extras=False, export_cameras=False, export_lights=False,
                               export_animations=False, export_skins=False, export_morph=False, export_image_format='NONE')
-    data = {'raeume': [{'name': OPT['names'][0], 'zellen': cells, 'teile': {'raum': 'lm_' + OPT['names'][0], 'halle': 'lm_' + OPT['names'][1]}, 'info': out}]}
+    for R in rooms: R['info'] = {n[3:]: out[n[3:]] for n in R['teile'].values()}
+    data = {'raeume': rooms}
     jp = os.path.join(ROOT, 'asset-src', 'data', OPT['json']) if not OPT['test'] else os.path.join(tex, OPT['json'])
     open(jp, 'w', encoding='utf-8').write(json.dumps(data, ensure_ascii=False))
     cp.compute_device_type = 'NONE'
