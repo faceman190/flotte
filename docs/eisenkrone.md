@@ -53,8 +53,32 @@ Einstellen im Testfenster: `ekTune.u.uGain.value` (Helligkeit der Rumpffarben), 
 
 ## Innen: Hangar und Hüttendeck
 
-Der Hangar ist der übliche Stationshangar. Hinter der Schleuse liegt das **Hüttendeck**, gebaut mit dem Baukasten der Bastion
-(`asset-src/neu/bastion/bk_deck_ek.py`, eigene Datei `EisenkroneDeck.blend`, Ausgabe mit `bk_export.py`; siehe `docs/bastion-deck.md`).
+Der Hangar ist der übliche Stationshangar. Hinter der Schleuse liegt das **Hüttendeck**.
+
+**Seit Alpha 1.34** ist es aus dem eigenen Hütten-Baukasten gebaut (6-m-Zellen, 4,6 m breite Gänge, Mennige, Gildenpetrol, Messing,
+Natriumlicht; siehe `docs/huette-baukasten.md`) und kommt als Lichtraum 2 ins Spiel (Material im Shader, nur Licht gebacken):
+
+```
+..AAA.EEE..      A Annahme · E Leitstand mit Fensterwand zur Ofenhalle · O Gildenkontor · C Kantine
+..AaA.EeE..      S Spinde · M Maschinenraum · G Gang · g Schott · H Tor zum Hangar
+HGGGGgGGGG.
+.G.sSG.mMG.      57 Zellen, 8 Figuren mit Diensten wie bisher (Raffinerie, Markt, Lager, Service, Aufträge,
+.G.SSG.MMG.      Missionen, Auskunft) und der Schmelzmeister
+.GGGGGgGGG.
+..OoO..CcC.
+..OOO..CCC.
+```
+
+Bauen und backen: `blender.exe -b --python asset-src/neu/huette/hk_deck_lauf.py -- backen` (Deckplan, Einrichtung und Personal in
+`hk_deck_ek.py`; schreibt `asset-src/data/deck_huette_ek.json` und `lm2_huette_ek.json`, backt mit `../bastion/lm2_raum.py`, gut 7 Minuten),
+danach `npm run assets`. Das Spiel nimmt das erste Deck aus `DECKS.eisenkrone` (`src/game/deck.ts`), dessen Daten da sind; die Maße des
+Decks (Wandabstand, Türbreite, Schott, Deckenhöhen, Lampen) stehen in `masse` in den Daten. Das Artifact lässt das neue Deck weg
+(`SKIP_SETS`, `SKIP_DATA` in `scripts/artifact-pack.mjs`) und zeigt das alte.
+
+### Bis Alpha 1.33: Hüttendeck aus dem Bastion-Baukasten
+
+Gebaut mit dem Baukasten der Bastion (`asset-src/neu/bastion/bk_deck_ek.py`, eigene Datei `EisenkroneDeck.blend`, Ausgabe mit
+`bk_export.py`; siehe `docs/bastion-deck.md`). Bleibt als Rückfall im Spiel (Artifact).
 
 ```
 ..AAA..EEE..     A Annahme: Tresen Raffinerie, Markt, Lager; Erzwaage, Erzkisten, Barrenstapel

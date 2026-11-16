@@ -37,7 +37,7 @@ window.__deck = async () => {
 // Begehbarkeit: füllt vom Hangar aus alle erreichbaren Punkte (Raster 0,25 m, dieselbe Prüfung wie beim Laufen) und meldet Zellen des Decks
 // und Ansprechpunkte, die nicht erreichbar sind. Erst nach __deck() und DT.enter().
 window.__walkAll = async () => {
-  const T = window.DT, D = await (await fetch(window.DATAFILES['deck_' + (T.station || 'bastion')])).json(), K = D.karte, C = D.cell, HZ0 = -50, S = 0.25;
+  const T = window.DT, D = (T.DK.deckData && T.DK.deckData(T.station || 'bastion')) || await (await fetch(window.DATAFILES['deck_' + (T.station || 'bastion')])).json(), K = D.karte, C = D.cell, HZ0 = -50, S = 0.25;      // das Deck, das das Spiel geladen hat
   let hr = 0, hc = 0; K.forEach((row, r) => { const c = row.indexOf('H'); if (c >= 0) { hr = r; hc = c; } });
   const gx = y => -(y + hr * C), gz = x => HZ0 - C / 2 - (x - hc * C);
   const key = (i, j) => i * 4096 + j, seen = new Set(), qu = [[0, Math.round(-46 / S)]]; seen.add(key(0 + 2048, qu[0][1] + 2048));
@@ -45,7 +45,7 @@ window.__walkAll = async () => {
     const [i, j] = qu.pop();
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const a = i + di, b = j + dj, x = a * S, z = b * S;
-      if (z > -44 || z < -150 || Math.abs(x) > 30 || seen.has(key(a + 2048, b + 2048)) || !T.I.walkFree(x, z)) continue;
+      if (z > -44 || z < -170 || Math.abs(x) > 70 || seen.has(key(a + 2048, b + 2048)) || !T.I.walkFree(x, z)) continue;
       seen.add(key(a + 2048, b + 2048)); qu.push([a, b]);
     }
   }

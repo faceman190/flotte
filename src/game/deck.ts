@@ -28,6 +28,9 @@ interface DeckJson {
   personal: { tab: string; x: number; y: number; face: number; tx: number; ty: number; titel?: string; satz?: string }[];
   wege: (number | { face: number; t: [number, number]; p: number; who: string | null })[][][]; gruppen: number[][]; karte_xy: number[];
   mod: { n: string; o: string; block: number[] | null }[]; inst: number[][];      // inst: Baustein, x, y, Drehung, über Kopf (0/1), Höhe
+  // Maße des Decks (seit Alpha 1.34; ohne Angabe die des Bastion-Baukastens): Wandfläche ab Zellmitte, halbe Laufbreite der Türen, halbe Türöffnung
+  // für die Sichtprüfung, Schott (halbe Öffnung, halbe Dicke), Ecksäule ab Zellmitte, Decke (Gang, Raum), Strahler (Höhe, Reichweite)
+  masse?: { wand?: number; tuer?: number; tuerSicht?: number; schott?: number[]; eck?: number; decke?: number[]; spot?: number[] };
 }
 export interface DeckSpot { tab: string; x: number; z: number; face: number; tx: number; tz: number; titel?: string; satz?: string }      // titel und satz: Figur ohne Dienst, sagt nur ihren Satz
 export interface DeckNode { x: number; z: number; stop: null | { face: number; t: [number, number]; p: number; who: string | null } }
@@ -56,20 +59,30 @@ const L2DBG = { value: 0 };
 export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true, hybrid: true, key: 2.6, shade: 0.5, envK: 1, spec: 2.2, side: 3, scharf: true, licht: () => LM, dbg: L2DBG };      // scharf: Lichtraum 2 (Material im Spiel) dort nehmen, wo es ihn gibt
 const LMCAP = { value: 1 }, LMSHADE = { value: 0 }, LMSPEC = { value: 1 };      // Obergrenzen-Faktor (nur beim Aufnehmen der Raumspiegelung > 1), Schattenstärke, Kehrwert der Beleuchtung unter einem Strahler      // zum Einstellen im Testfenster; lichtraum = false zeigt den Raum aus Bausteinen
 // Decks je Station: Daten (data/…) und Modell (base/…). Die Bastion lädt beim Start, die Eisenkrone beim Betreten ihres Sektors.
-const DECKS: Record<string, [string, string]> = { bastion: ['deck_bastion', 'BastionDeck'], eisenkrone: ['deck_eisenkrone', 'EisenkroneDeck'] };
-const LOADED: Record<string, { data: DeckJson; parts: Record<string, Part[]> }> = {}, LOADING: Record<string, Promise<boolean>> = {};
+// Je Station eine Liste in der Reihenfolge der Wahl: Das erste Deck, dessen Dateien da sind, gilt. Seit Alpha 1.34 hat die Eisenkrone ein Deck aus
+// dem Hütten-Baukasten (6-m-Raster, asset-src/neu/huette): nur Daten, ohne Bausteinmodell (es steht ganz im Lichtraum 2). Die Artifact-Fassung,
+// in die dessen Modell nicht passt, nimmt das alte Hüttendeck aus dem Bastion-Baukasten.
+const DECKS: Record<string, [string, string][]> = { bastion: [['deck_bastion', 'BastionDeck']], eisenkrone: [['deck_huette_ek', ''], ['deck_eisenkrone', 'EisenkroneDeck']] };
+const LOADED: Record<string, { data: DeckJson; parts: Record<string, Part[]>; neu: boolean }> = {}, LOADING: Record<string, Promise<boolean>> = {};
+function pickDeck(id: string): [string, string, boolean] | null {
+  const W = window as any;
+  for (const [d, m] of DECKS[id] || []) { const dj = W.DATAFILES?.[d] as string | undefined, mu = m ? W.BASEDATA?.[m] as string | undefined : ''; if (dj && (mu || !m)) return [dj, mu || '', !m]; }
+  return null;
+}
 export const hasDeck = (id: string) => id in DECKS;
 export const deckReady = (id = 'bastion') => !!LOADED[id];
+export const deckData = (id = 'bastion') => LOADED[id]?.data;      // Daten des geladenen Decks (Prüfwerkzeuge: decktest.js, lueckensuche.js)
 export const lichtReady = (id = 'bastion') => !!LM[id] && !LM_BUSY;      // Lichträume geladen und für die Raumspiegelung vorbereitet (Tests)
 export function loadDeck(id = 'bastion'): Promise<boolean> {
   if (LOADED[id]) return Promise.resolve(true);
   if (id in LOADING) return LOADING[id];
-  const W = window as any, names = DECKS[id], dj = names && W.DATAFILES?.[names[0]] as string | undefined, mu = names && W.BASEDATA?.[names[1]] as string | undefined;
-  if (!dj || !mu) return Promise.resolve(false);
+  const pk = pickDeck(id);
+  if (!pk) return Promise.resolve(false);
+  const [dj, mu, neu] = pk;
   return (LOADING[id] = (async () => {
     try {
-      const [data, gltf] = await Promise.all([fetch(dj).then(r => { if (!r.ok) throw new Error('Deckdaten: ' + r.status); return r.json(); }), new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
-      LOADED[id] = { data, parts: partsOf(gltf.scene) };
+      const [data, gltf] = await Promise.all([fetch(dj).then(r => { if (!r.ok) throw new Error('Deckdaten: ' + r.status); return r.json(); }), mu ? new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu) : Promise.resolve(null)]);
+      LOADED[id] = { data, parts: gltf ? partsOf(gltf.scene) : {}, neu };
       loadLicht(id).catch(() => false);      // Lichtraum (falls vorhanden) im Hintergrund dazu
       return true;
     } catch (e) { console.warn('Deck nicht geladen:', id, e); delete LOADING[id]; return false; }
@@ -88,7 +101,7 @@ interface LmJson { raeume: { name: string; zellen: number[][]; teile: Record<str
 const LICHT: Record<string, [string, string][]> = { eisenkrone: [['lichtraum_eisenkrone', 'LichtraumEisenkrone']], bastion: [['lichtraum_bastion', 'LichtraumBastion']] };
 // Nebenstrahler der Mischform je Deck und Raum, in Modelllage (x Ost, y oben, z Süd): Ort, Richtung, Farbe. Eisenkrone: der Glutschein
 // der Öfen, der durch die drei Fenster des Leitstands fällt (im Baukasten die Flächenleuchten „Glutschein“ innen vor den Scheiben).
-const LM_SIDE: Record<string, Record<string, number[][]>> = { eisenkrone: { leitstand: [28, 32, 36].map(x => [x, 1.5, -1.58, 0, -0.25, 1, 1.0, 0.42, 0.14]) } };
+const LM_SIDE: Record<string, Record<string, number[][]>> = { eisenkrone: { leitstand: [28, 32, 36].map(x => [x, 1.5, -1.58, 0, -0.25, 1, 1.0, 0.42, 0.14]), huette_leitstand: [36, 42, 48].map(x => [x, 2.0, -1.9, 0, -0.25, 1, 1.0, 0.42, 0.14]) } };      // huette_: Hüttendeck seit Alpha 1.34 (Fenster an der Nordwand bei y = 2,3)
 const SPOTS_MAX = 9;     // so viele Schlüssellampen höchstens (jeder Strahler wird in jedem beleuchteten Material der Szene mitgerechnet)
 const KEYS_MAX = 6;      // so viele Strahler werfen Schatten (je Strahler eine Schattenkarte in jedem beleuchteten Material der Szene)
 interface LmMesh { geo: THREE.BufferGeometry; mat: THREE.Material; mw: THREE.Matrix4; tris: number }
@@ -114,7 +127,7 @@ function loadLicht(id: string): Promise<boolean> {
   if (LM[id]) return Promise.resolve(true);
   if (id in LMLOADING) return LMLOADING[id];
   const W = window as any, pick = (L: [string, string][] | undefined) => (L || []).map(([j, m]) => [W.DATAFILES?.[j], W.BASEDATA?.[m]]).filter(q => q[0] && q[1]) as [string, string][];
-  const sets2 = pick(LICHT2[id]), sets = sets2.length ? [] : pick(LICHT[id]);      // die neue Art ersetzt die alte ganz
+  const sets2 = pick(LICHT2[id]), sets = sets2.length || LOADED[id]?.neu ? [] : pick(LICHT[id]);      // die neue Art ersetzt die alte ganz; ein Deck ohne Bausteinmodell hat nur die neue
   if (!sets.length && !sets2.length) return Promise.resolve(false);
   return (LMLOADING[id] = (async () => {
     // jeder Satz für sich: Fehlt einer (Datei nicht geladen), bleiben seine Räume Bausteine
@@ -181,7 +194,7 @@ async function lmMaterials(prefix: string) {
 // die Marke „schmaler Streifen“ (Fase an einer Kante: dort sitzt der Kantenabrieb).
 interface L2Mat { kind: string; col?: number[]; metal?: number; rough?: number; var?: number; rvar?: number; scale?: number; emit?: number[] | null; es?: number; grime?: boolean; wear?: number; bump?: number; bscale?: number; streak?: number; studs?: boolean; stripes?: boolean; a?: number[]; c?: number[]; duty?: number; dir?: string }
 interface L2Json { raeume: { name: string; zellen: number[][]; lit: string }[]; mats: Record<string, L2Mat> }
-const LICHT2: Record<string, [string, string][]> = { bastion: [['lichtraum2_bastion', 'Lichtraum2Bastion']] };
+const LICHT2: Record<string, [string, string][]> = { bastion: [['lichtraum2_bastion', 'Lichtraum2Bastion']], eisenkrone: [['lichtraum2_huette_ek', 'Lichtraum2HuetteEk']] };
 let L2NOISE: [THREE.DataTexture, THREE.DataTexture] | null = null;
 // Rauschbilder (kachelbar, 256 Punkte): A = zwei unabhängige Fleckenmuster (r, g) und das Korn (b); N = Gefälle des Korns für das Relief
 function l2Noise() {
@@ -476,7 +489,7 @@ function assemble(D: Pick<DeckJson, 'mod' | 'inst'>, PARTS: Record<string, Part[
   const M = materials();
   const zones = new Map<string, { n: number; ni: number; list: [Part, number, number, number, number][] }>();
   for (const [mi, x, y, a, over, h] of D.inst) {
-    const md = D.mod[mi], parts = PARTS[md.o]; if (!parts) continue;
+    const md = D.mod[mi], parts = PARTS[md.o] || []; if (!PARTS[md.o] && !md.block) continue;      // ohne Teile (Deck ganz im Lichtraum 2): nur die Standfläche
     const zn = zone(x, y, over, md.n);
     if (zn) for (const p of parts) {
       const k = zn + '|' + p.cls; let z = zones.get(k); if (!z) zones.set(k, (z = { n: 0, ni: 0, list: [] }));
@@ -614,7 +627,9 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   const zoneOf = (r: number, c: number) => { const ch = at(r, c); return ch === '.' ? 'x' : isG(ch) ? `g${Math.floor(c / 6)}_${Math.floor(r / 5)}` : 'r' + comp.get(r * 100 + c); };
 
   // Laufflächen: je Zelle ein Rechteck (an Wänden 1,7 m von der Mitte, an offenen Seiten bis zur Zellgrenze), dazu die Türen
-  const rects: Rect[] = [], blocks: Rect[] = [], open = (a: string, b: string) => b !== '.' && up(a) === up(b), W = 1.7, H = C / 2;
+  // Maße je Deck (Vorgabe: Bastion-Baukasten, 4-m-Zellen); das Hüttendeck der Eisenkrone bringt eigene mit (Zelle 6 m, Gang 4,6 m, Tore 3,2 m)
+  const MS = { wand: 1.7, tuer: 0.86, tuerSicht: 1.05, schott: [1.12, 0.12], eck: 1.7, decke: [2.75, 3.25], spot: [3.15, 8], ...(D.masse || {}) };
+  const rects: Rect[] = [], blocks: Rect[] = [], open = (a: string, b: string) => b !== '.' && up(a) === up(b), W = MS.wand, H = C / 2, DL = H - W + 0.8, TW = MS.tuer;
   for (let r = 0; r < RO; r++) for (let c = 0; c < CO; c++) {
     const ch = at(r, c); if (ch === '.') continue;
     const x = c * C, y = -r * C;
@@ -622,18 +637,18 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   }
   for (const [[r1, c1], [r2, c2]] of D.tueren) {
     const x = (c1 + c2) / 2 * C, y = -(r1 + r2) / 2 * C;
-    rects.push(r1 === r2 ? rect(x - 1.1, x + 1.1, y - 0.86, y + 0.86) : rect(x - 0.86, x + 0.86, y - 1.1, y + 1.1));
+    rects.push(r1 === r2 ? rect(x - DL, x + DL, y - TW, y + TW) : rect(x - TW, x + TW, y - DL, y + DL));
   }
-  rects.push(rect(OX - H - 1.4, OX - H + 1.1, OY - 0.86, OY + 0.86));   // offenes Tor zum Hangar
+  rects.push(rect(OX - H - 1.4, OX - H + DL, OY - TW, OY + TW));   // offenes Tor zum Hangar
   // Eckpfosten an den Innenecken der Gänge (bk_kit.py, gang_corner): beide Seiten Gang, schräg gegenüber keiner
   for (let r = 0; r < RO; r++) for (let c = 0; c < CO; c++) {
     if (!isG(at(r, c))) continue;
     const x = c * C, y = -r * C;
-    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) if (isG(at(r, c + sx)) && isG(at(r - sy, c)) && !isG(at(r - sy, c + sx))) blocks.push(rect(x + sx * 1.7, x + sx * 2.0, y + sy * 1.7, y + sy * 2.0));
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) if (isG(at(r, c + sx)) && isG(at(r - sy, c)) && !isG(at(r - sy, c + sx))) blocks.push(rect(x + sx * MS.eck, x + sx * H, y + sy * MS.eck, y + sy * H));
   }
   for (const [r, c, k] of D.schotte) {      // Schott: die Pfosten verengen den Gang auf 2,2 m
     const x = c * C, y = -r * C;
-    for (const s of [-1, 1]) blocks.push(k === 3 ? rect(x - H - 0.12, x - H + 0.12, y + s * 1.12, y + s * 1.8) : rect(x + s * 1.12, x + s * 1.8, y - H - 0.12, y - H + 0.12));
+    const [so, st] = MS.schott; for (const s of [-1, 1]) blocks.push(k === 3 ? rect(x - H - st, x - H + st, y + s * so, y + s * (W + 0.1)) : rect(x + s * so, x + s * (W + 0.1), y - H - st, y - H + st));
   }
 
   // Bausteine setzen: je Bereich und Art ein Netz
@@ -674,7 +689,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     // die Figuren und werfen deren Schatten. Schatten werfen nur Figuren: Die des Raums selbst sind gebacken.
     const most = Math.min(SPOTS_MAX, Math.max(...lmRooms.map(q => q.cells.length))), nSide = Math.max(...lmRooms.map(q => q.side.length));
     for (let i = 0; i < most; i++) {
-      const sp = new THREE.SpotLight(new THREE.Color().setRGB(0.82, 0.9, 1.0), 0, 8, 1.0, 1, 2);
+      const sp = new THREE.SpotLight(new THREE.Color().setRGB(0.82, 0.9, 1.0), 0, MS.spot[1], 1.0, 1, 2);
       sp.userData.room = -1;
       if (i < KEYS_MAX) { sp.castShadow = true; sp.shadow.mapSize.set(512, 512); sp.shadow.camera.near = 0.4; sp.shadow.bias = -0.0015; sp.shadow.normalBias = 0.02; sp.shadow.radius = 4; sp.shadow.autoUpdate = false; }
       group.add(sp, sp.target); (i < KEYS_MAX ? keys : more).push(sp);
@@ -734,7 +749,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
       for (const sp of todo) {
         const k = rest.pop();
         if (!q || k === undefined) { sp.intensity = 0; sp.userData.room = -1; continue; }
-        sp.position.set(q.cells[k][0], 3.15, q.cells[k][1]); sp.target.position.set(q.cells[k][0], 0, q.cells[k][1]); sp.userData.room = act; sp.userData.cell = k;
+        sp.position.set(q.cells[k][0], MS.spot[0], q.cells[k][1]); sp.target.position.set(q.cells[k][0], 0, q.cells[k][1]); sp.userData.room = act; sp.userData.cell = k;
       }
       for (const sp of L) if (sp.userData.room === act && q) { sp.intensity = deckTune.key; if (sp.castShadow) sp.shadow.needsUpdate = true; }
     };
@@ -755,6 +770,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   const chats = D.gruppen.map(q => [gx(q[1]), gz(q[0]), q[2]] as [number, number, number]);
   const zMin = gz(CO * C);
   let north = 0; while (isG(at(hr - north - 1, hc + 1))) north++;      // Gangzellen nördlich der Kreuzung hinter dem Tor
+  let south = 0; while (isG(at(hr + south + 1, hc + 1))) south++;      // … und südlich (Hüttendeck: Der Weg hinter dem Tor führt nach Süden)
   // Sichtprüfung: Gezeichnet werden nur Bereiche, in die man vom Standort aus durch offene Seiten und Türen hineinsehen kann.
   // Ein Strahl läuft durch das Zellraster; an jeder Zellgrenze muss die Seite offen sein (derselbe Raum, Gang an Gang) oder eine Tür haben,
   // durch deren Öffnung er geht. Geprüft werden je Zelle die Mitte und vier Punkte nahe den Ecken.
@@ -769,7 +785,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
       if (up(a) !== up(b)) {
         if (!doors.has(`${r},${c},${nr},${nc2}`)) return false;
         const off = ew ? y + dy * t - (-r * C) : x + dx * t - c * C;      // Abstand von der Türmitte
-        if (Math.abs(off) > 1.05) return false;      // Türöffnung 1,5 m, mit etwas Spiel: lieber einen Bereich zu viel zeichnen als ein Loch zeigen
+        if (Math.abs(off) > MS.tuerSicht) return false;      // Türöffnung 1,5 m, mit etwas Spiel: lieber einen Bereich zu viel zeichnen als ein Loch zeigen
       }
       r = nr; c = nc2;
     }
@@ -780,7 +796,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   // Geprüft wird vom Standort der Figur und von der Kamera aus (Außensicht: bis 2,3 m hinter der Figur; sie sah sonst in Bereiche, die
   // ausgeblendet waren, und durch die Lücke ins Freie). Je Zelle die Mitte, die vier Ecken und die vier Seitenmitten.
   let lastX = 1e9, lastZ = 1e9, camX = 1e9, camZ = 1e9, lookCX = 1e9, lookCZ = 1e9, gate = true; const vis = new Set<string>();
-  const PTS = [[0, 0], [-1.5, -1.5], [1.5, -1.5], [1.5, 1.5], [-1.5, 1.5], [0, -1.8], [0, 1.8], [-1.8, 0], [1.8, 0]];
+  const PTS = [[0, 0], [-1.5, -1.5], [1.5, -1.5], [1.5, 1.5], [-1.5, 1.5], [0, -1.8], [0, 1.8], [-1.8, 0], [1.8, 0]].map(([a, b]) => [a * C / 4, b * C / 4]);
   const toPlan = (x: number, z: number): [number, number, boolean] => {
     let px = OX + (Z0 - z), py = OY - x;                                  // Innenraum → Plan
     const out = at(Math.round(-py / C), Math.round(px / C)) === '.';
@@ -791,7 +807,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     lastX = x; lastZ = z; lookCX = camX; lookCZ = camZ; vis.clear();
     const eyes = [toPlan(x, z)]; if (camX < 1e8) eyes.push(toPlan(camX, camZ));
     gate = z > hz0 - 0.2 || camZ > hz0 - 0.2;
-    for (const [px, py, out] of eyes) gate = gate || out || sees(px, py, OX - 1.6, OY) || sees(px, py, OX - 1.6, OY + 0.6) || sees(px, py, OX - 1.6, OY - 0.6);      // sieht man durchs Tor in den Hangar?
+    for (const [px, py, out] of eyes) gate = gate || out || sees(px, py, OX - (H - 0.4), OY) || sees(px, py, OX - (H - 0.4), OY + 0.6) || sees(px, py, OX - (H - 0.4), OY - 0.6);      // sieht man durchs Tor in den Hangar?
     for (const [zn, cells] of cellsOf) {
       search: for (const [px, py] of eyes) for (const [r, c] of cells) for (const [ox, oy] of PTS) if (sees(px, py, c * C + ox, -r * C + oy)) { vis.add(zn); break search; }
     }
@@ -800,7 +816,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     for (const [[r1, c1], [r2, c2]] of D.tueren) {
       const mx = (c1 + c2) / 2 * C, my = -(r1 + r2) / 2 * C, ax = r1 === r2 ? 0 : 1, ay = r1 === r2 ? 1 : 0;      // ax, ay: Richtung längs der Öffnung
       let hit = false;
-      for (const [px, py] of eyes) for (const t of [-0.6, 0, 0.6]) for (const n of [-0.15, 0.15]) if (sees(px, py, mx + ax * t + ay * n, my + ay * t + ax * n)) hit = true;
+      for (const [px, py] of eyes) for (const t0 of [-0.6, 0, 0.6]) for (const n of [-0.15, 0.15]) { const t = t0 * TW / 0.86; if (sees(px, py, mx + ax * t + ay * n, my + ay * t + ax * n)) hit = true; }
       if (hit) { vis.add(zoneOf(r1, c1)); vis.add(zoneOf(r2, c2)); }
     }
   };
@@ -809,7 +825,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     group, rects, blocks, spots, routes, chats, tris, map: { x: gx(D.karte_xy[1]), z: gz(D.karte_xy[0]) }, name: D.ort.G,
     inside: (z: number) => z < hz0 - 0.2 && z > zMin,
     area: (x, z) => D.ort[up(cellCh(x, z))] || D.ort.G,
-    ceil: (x, z) => (isG(cellCh(x, z)) ? 2.75 : 3.25),
+    ceil: (x, z) => (isG(cellCh(x, z)) ? MS.decke[0] : MS.decke[1]),
     view: (x, z) => { camX = x; camZ = z; },      // Kamera der Außensicht (Innenraum); fern = keine
     update: (x, z) => {
       if (Math.hypot(x - lastX, z - lastZ) > 0.6 || Math.hypot(camX - lookCX, camZ - lookCZ) > 0.6) look(x, z);
@@ -835,6 +851,6 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     stale: () => !lm && deckTune.lichtraum && !!LM[id],
     // Weg der Story-Figuren vom Hangar hinaus (und umgekehrt herein): durch das Tor, an der Kreuzung dahinter nach links außer Sicht
     // (so weit der Gang dort nach Norden reicht: auf der Bastion zwei Zellen, auf der Eisenkrone eine)
-    way: (off: number) => [[off, hz0 + 4], [off * 0.5, hz0 - 1.2], [off * 0.5, hz0 - 5.6 - off * 0.4], [-(north * C - 0.6), hz0 - 5.8 - off * 0.4]],
+    way: (off: number) => [[off, hz0 + 4], [off * 0.5, hz0 - 1.2], [off * 0.5, hz0 - C * 1.5 + 0.4 - off * 0.4], [north || !south ? -(north * C - 0.6) : south * C - 0.6, hz0 - C * 1.5 + 0.2 - off * 0.4]],
   };
 }

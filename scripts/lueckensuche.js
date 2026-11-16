@@ -8,9 +8,9 @@ window.LS = {
   async prep() {
     const T = window.DT, E = T.E, res = performance.getEntriesByType('resource').map(r => r.name), dyn = new Function('u', 'return imp' + 'ort(u)');
     this.SKY = await dyn(res.find(u => u.includes('/src/core/sky.ts')));
-    const id = T.station || 'bastion', D = await (await fetch(window.DATAFILES['deck_' + id])).json(), K = D.karte, C = D.cell;
+    const id = T.station || 'bastion', D = (T.DK.deckData && T.DK.deckData(id)) || await (await fetch(window.DATAFILES['deck_' + id])).json(), K = D.karte, C = D.cell;
     let hr = 0, hc = 0; K.forEach((row, r) => { const c = row.indexOf('H'); if (c >= 0) { hr = r; hc = c; } });
-    const OX = hc * C, OY = -hr * C, Z0 = -52;
+    const OX = hc * C, OY = -hr * C, Z0 = -50 - C / 2;      // Hangarrückwand bei z = −50, die Torzelle davor
     this.gx = y => -(y - OY); this.gz = x => Z0 - (x - OX);
     this.cells = []; K.forEach((row, r) => [...row].forEach((ch, c) => { if (ch !== '.') this.cells.push([r, c, ch]); }));
     this.K = K; this.C = C; this.THREE = await dyn(res.find(u => u.includes('deps/three.js')) ||res.find(u => /three/.test(u) && /deps/.test(u)));
@@ -21,7 +21,7 @@ window.LS = {
     const T = window.DT, E = T.E, lf = T.lf, ix = this.gx(py), iz = this.gz(px);
     lf.IN.x = ix; lf.IN.z = iz; lf.tick(0.05);
     let dg = null; const kit = [];
-    E.scene.traverse(o => { if (o.isMesh && o.material && o.material.customProgramCacheKey && /^(lm|bk)-/.test(String(o.material.customProgramCacheKey()))) { kit.push(o); dg = dg || o.parent; } });
+    E.scene.traverse(o => { if (o.isMesh && o.material && o.material.customProgramCacheKey && /^(lm-|bk-|l2)/.test(String(o.material.customProgramCacheKey()))) { kit.push(o); dg = dg || o.parent; } });
     if (all) for (const m of kit) m.visible = true;
     let root = dg; while (root.parent && root.parent !== E.scene) root = root.parent;
     // Das offene Hangartor (z = 112 im Innenraum) zeigt zu Recht den Weltraum: dort eine schwarze Wand, damit es nicht als Loch zählt
@@ -58,7 +58,7 @@ window.LS = {
     const T = window.DT, E = T.E, lf = T.lf;
     if (!this.AV) { const res = performance.getEntriesByType('resource').map(r => r.name), dyn = new Function('u', 'return imp' + 'ort(u)'); this.AV = await dyn(res.find(u => u.includes('/src/game/avatar.ts'))); }
     this.AV.VIEW.tp = true; lf.IN.x = this.gx(py); lf.IN.z = this.gz(px); lf.IN.yaw = yaw; lf.IN.pitch = 0; lf.tick(0.1); lf.tick(0.1);
-    let dg = null; E.scene.traverse(o => { if (!dg && o.isMesh && o.material && o.material.customProgramCacheKey && /^(lm|bk)-/.test(String(o.material.customProgramCacheKey()))) dg = o.parent; });
+    let dg = null; E.scene.traverse(o => { if (!dg && o.isMesh && o.material && o.material.customProgramCacheKey && /^(lm-|bk-|l2)/.test(String(o.material.customProgramCacheKey()))) dg = o.parent; });
     let root = dg; while (root.parent && root.parent !== E.scene) root = root.parent;
     const TH = this.THREE; if (!this.block || this.block.parent !== root) { this.block = new TH.Mesh(new TH.PlaneGeometry(500, 300), new TH.MeshBasicMaterial({ color: 0x000000, side: TH.DoubleSide })); this.block.position.set(0, 50, 110); root.add(this.block); }
     const hidden = []; for (const c of E.scene.children) if (c !== root && c.visible && !c.isLight) { hidden.push(c); c.visible = false; }

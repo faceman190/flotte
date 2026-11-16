@@ -15,7 +15,10 @@ const man = JSON.parse(fs.readFileSync(path.join(SRC, 'assets', 'manifest.json')
 // (loadLicht in src/game/deck.ts). Auf dem eigenen Server (Render) sind alle Sätze da.
 // Seit Alpha 1.30: das Deck der Bastion in der neuen Art (Lichtraum 2, volle Geometrie, gebündelt 82 MB). Auf claude.ai zeigt die Bastion
 // deshalb weiter Treffpunkt und Lager in der alten Art und sonst die Bausteine.
-const SKIP_SETS = [['lichtraum2_bastion', 'Lichtraum2Bastion'], ['lichtraum2_hangar', 'Lichtraum2Hangar']];
+// Seit Alpha 1.34: das Hüttendeck der Eisenkrone aus dem Hütten-Baukasten. Mit seinen Daten (ohne Bausteinmodell) fällt auch das Deck selbst
+// heraus; das Spiel nimmt dann das alte Hüttendeck aus dem Bastion-Baukasten (DECKS in src/game/deck.ts).
+const SKIP_SETS = [['lichtraum2_bastion', 'Lichtraum2Bastion'], ['lichtraum2_hangar', 'Lichtraum2Hangar'], ['lichtraum2_huette_ek', 'Lichtraum2HuetteEk']];
+const SKIP_DATA = ['deck_huette_ek'];
 let skipped = 0;
 for (const [dj, mo] of SKIP_SETS) {
   const d = man.files['data/' + dj];
@@ -25,6 +28,7 @@ for (const [dj, mo] of SKIP_SETS) {
   const drop = ['data/' + dj, 'base/' + mo, ...Object.keys(man.files).filter(k => teile.some(p => k.startsWith('tex/' + p + '_')) || karten.includes(k.slice(4)))];
   for (const k of drop) { const e = man.files[k]; if (!e) continue; fs.rmSync(path.join(OUT, e.url), { force: true }); delete man.files[k]; skipped++; }
 }
+for (const dj of SKIP_DATA) { const e = man.files['data/' + dj]; if (!e) continue; fs.rmSync(path.join(OUT, e.url), { force: true }); delete man.files['data/' + dj]; skipped++; }
 if (skipped) console.log(`Artifact-Fassung: ${skipped} Dateien der Lichtraum-Sätze ${SKIP_SETS.map(q => q[0]).join(', ')} ausgelassen (Größengrenze)`);
 for (const [k, f] of Object.entries(man.files)) {
   if (!f.url.endsWith('.glb')) continue;

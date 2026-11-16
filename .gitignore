@@ -32,3 +32,6 @@ Thumbs.db
 
 # Rohes Hangarmodell des Lichtraums 2 (ebenfalls über der Dateigrenze); neu erzeugen: asset-src/neu/bastion/lm2_hangar_lauf.py mit lm2_hangar.json
 /asset-src/glb/base/Lichtraum2Hangar.glb
+
+# Rohes Hüttendeck der Eisenkrone im Lichtraum 2 (81 MB); neu erzeugen: asset-src/neu/huette/hk_deck_lauf.py -- backen
+/asset-src/glb/base/Lichtraum2HuetteEk.glb

@@ -22,7 +22,7 @@ HERE = os.path.dirname(bpy.data.filepath); SC = bpy.context.scene
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 OPT = dict({'rooms': [], 'lm': 1024, 'samples': 256, 'vsamples': 48, 'big': 0.03, 'margin': 3, 'gap': 2.0, 'mark': 'lm2.txt',
             'glb': 'Lichtraum2.glb', 'json': 'lichtraum2.json'}, **globals().get('OPT', {}))
-CELL = 4.0
+CELL = float(OPT.get('cell', 4.0))      # Zellmaß des Decks (Bastion 4 m, Hüttendeck der Eisenkrone 6 m)
 STAIN = ('Laufspur', 'Rostspur', 'Staubspur', 'Fleck', 'Abrieb')
 LOG = []
 def note(s):
@@ -215,9 +215,11 @@ def run():
                 if p: p['emp'].append(e)
                 else: note('kein Teil für ' + e.name + ' (' + key + ')')
     else:
-        for cn in ('Deck', 'Deck Decken'):
+        for cn in ('Deck', 'Deck Decken', 'Deck Schilder'):      # dazu freie Objekte (Schilder und Schrift an Toren und auf dem Boden)
+            if cn not in bpy.data.collections: continue
             for e in bpy.data.collections[cn].objects:
-                if e.type != 'EMPTY' or e.instance_type != 'COLLECTION' or not e.instance_collection: continue
+                if e.type == 'EMPTY' and not (e.instance_type == 'COLLECTION' and e.instance_collection): continue
+                if e.type not in ('EMPTY', 'MESH', 'CURVE', 'FONT'): continue
                 c = cell_of(e)
                 for p in parts:
                     if c in p['cells']: p['emp'].append(e); break

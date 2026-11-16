@@ -48,7 +48,7 @@ window.__ruck = async (id = 'bastion', opt = {}) => {
   for (let i = 0; i < 180; i++) await tick('Ankunft ' + i);
   // alle Zellen ablaufen: von Zelle zu Zelle (Sprünge von 4 m, härter als Laufen), je Zelle in vier Richtungen schauen
   part('rundgang');
-  const D = await (await fetch(window.DATAFILES['deck_' + id])).json(), K = D.karte, C = D.cell, HZ0 = -50;
+  const D = (T.DK.deckData && T.DK.deckData(id)) || await (await fetch(window.DATAFILES['deck_' + id])).json(), K = D.karte, C = D.cell, HZ0 = -50;
   let hr = 0, hc = 0; K.forEach((row, r) => { const c = row.indexOf('H'); if (c >= 0) { hr = r; hc = c; } });
   const gx = y => -(y + hr * C), gz = x => HZ0 - C / 2 - (x - hc * C);
   // Reihenfolge: Breitensuche vom Tor aus, damit benachbarte Zellen nacheinander kommen
