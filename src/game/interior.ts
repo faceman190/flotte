@@ -27,7 +27,7 @@ import { HANGAR_BLOCKS } from '../data/hangarBlocks';
 import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, type Avatar, type NetAct } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
-import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, type Deck } from './deck';
+import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, type Deck, type HangarBuild } from './deck';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -266,6 +266,7 @@ const PROM_LIGHT = 2.0;   // Stärke des vorberechneten Lichts
 let hasProm = false;
 // Bastion: Deck 3 aus dem Bastion-Baukasten ersetzt Korridor und Promenade (src/game/deck.ts). Ist das Modell nicht geladen, bleibt es beim alten Aufbau.
 let deck: Deck | null = null, hangarBody: THREE.Object3D | null = null, hangarUpdate: null | ((x: number, z: number) => void) = null;
+let hangarBuild: HangarBuild | null = null;      // Hangar der Bastion (deck.ts): für den späten Austausch gegen die neue Art und ihre Raumspiegelung
 // Weg der Story-Figuren vom Hangar hinaus (herein in umgekehrter Folge): durch den Korridor oder durch die Schleuse aufs Deck
 const outPath = (off: number): number[][] => (deck ? deck.way(off) : [[off, HZ0 + 4], [off * 0.6, HZ0 - 1], [off * 0.6, PZ1 + 1.5]]);
 // In Korridor und Promenade trägt das vorberechnete Licht: Grundlicht und Gegenlicht des Spiels werden dort zurückgenommen (0 = Hangar, 1 = Halle)
@@ -328,8 +329,8 @@ function build(st: Station) {
   if (st.id === 'bastion' && !nh) loadHangar();
   const hm = nh ? true : addHangarModel(g, pal);
   if (nh) { g.add(nh.group); kitHangar = true; }      // vorberechnetes Licht wie beim Baukasten-Hangar (zoneLight)
-  hangarUpdate = nh ? nh.update : null;
-  hangarBody = hm ? g.children[g.children.length - 1] : null;
+  hangarUpdate = nh ? nh.update : null; hangarBuild = nh;
+  hangarBody = nh ? nh.group : hm ? g.children[g.children.length - 1] : null;
   if (!hm) {
   box(S, mFloor, HW * 2, 0.5, HL, 0, -0.25, HC);
   box(S, mCeil, HW * 2, 0.5, HL, 0, HH + 0.25, HC);
@@ -798,7 +799,7 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
     inters.push({ x: 0, z: PZ0 + 1.2, r: 2.4, label: () => `Hinaus in die Stadt ${st.name}`, act: () => interiorHooks.toCity() });
   }
   // Shader des Innenraums im Hintergrund übersetzen, so lange steht das Spiel hinter einer kurzen Blende (statt eines Standbilds mitten in der Landung)
-  warmScene(onFoot || fromCity ? 'Eintreten' : 'Andocken', () => deck?.prime());
+  warmScene(onFoot || fromCity ? 'Eintreten' : 'Andocken', () => { deck?.prime(); hangarBuild?.prime(); });
 }
 export function leaveInterior() {
   if (room) leaveShip();
@@ -815,7 +816,7 @@ export function leaveInterior() {
   for (const d of disposables) d.dispose();
   disposables.length = 0;
   if (deck) deck.release();
-  group = null; field = null; holo = null; standGroup = null; deck = null; hangarBody = null; hangarUpdate = null;
+  group = null; field = null; holo = null; standGroup = null; deck = null; hangarBody = null; hangarUpdate = null; hangarBuild = null;
   for (const l of lamps) l.intensity = 0;
   setExposure(1);
   if (IN.station) IN.station.mesh.visible = true;
@@ -1098,6 +1099,17 @@ export function updateWalk(dt: number) {
     if (IN.jy <= 0) { IN.jy = 0; IN.jv = 0; stepT = 0; }   // kein eigener Ton beim Aufkommen: der nächste Schritt folgt sofort
   }
   IN.area = room ? room.area(IN.x, IN.z) : IN.z > HZ0 ? 'Hangardeck' : deck ? deck.area(IN.x, IN.z) : IN.z > PZ1 ? 'Korridor' : PAL[kind].hall;
+  // Hangar der Bastion: Ist die neue Art (Lichtraum 2) erst nach dem Betreten fertig geladen, den Hangar austauschen (hinter der Blende).
+  // Standflächen und Personal bleiben, sie stammen aus denselben Daten.
+  if (hangarBuild && !room && hangarBuild.stale()) {
+    const nh = buildHangar(), old = hangarBuild.group, par = old.parent;
+    if (nh && par) {
+      par.remove(old); par.add(nh.group);
+      old.traverse((c: any) => { if (c.geometry && !c.userData.shared) c.geometry.dispose(); });
+      hangarBuild = nh; hangarUpdate = nh.update; hangarBody = nh.group;
+      warmScene('Hangar wird geladen', () => { deck?.prime(); nh.prime(); });
+    }
+  }
   if (hangarUpdate && !room) hangarUpdate(IN.x, IN.z);      // Hangar der Bastion: ferne Kleinteile ausblenden
   if (deck && !room) {      // ferne Bereiche des Decks ausblenden; eine Lampe geht mit, damit die Figuren im Deck Licht haben
     if (deck.stale() && IN.station) {
@@ -1108,7 +1120,7 @@ export function updateWalk(dt: number) {
         par.remove(deck.group); par.add(neu.group);
         deck.group.traverse((c: any) => { if (c.geometry && !c.userData.shared) c.geometry.dispose(); if (c.isLight && c.dispose) c.dispose(); });
         deck = neu;
-        warmScene('Deck wird geladen', () => deck?.prime());      // neue Lichtlage (Strahler des Decks): alle Shader brauchen eine neue Fassung
+        warmScene('Deck wird geladen', () => { deck?.prime(); hangarBuild?.prime(); });      // neue Lichtlage (Strahler des Decks): alle Shader brauchen eine neue Fassung
       }
     }
     deck.update(IN.x, IN.z);

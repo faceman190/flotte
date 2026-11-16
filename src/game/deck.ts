@@ -51,7 +51,9 @@ const LM_MAX = 1.6;               // Lichtraum: Obergrenze der Strahldichte bele
 // Mischform im Lichtraum (seit Alpha 1.26): hybrid = echte Strahler und Raumspiegelung an; key = Lichtstärke je Strahler (cd);
 // shade = wie stark der Schatten einer Figur das gebackene Licht abdunkelt (0 bis 1); envK = Stärke der Raumspiegelung;
 // spec = Verstärkung des Glanzes der Flächen auf die Strahler; side = Lichtstärke der Nebenstrahler (Glutschein an den Fenstern)
-export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true, hybrid: true, key: 2.6, shade: 0.5, envK: 1, spec: 2.2, side: 3, scharf: true, licht: () => LM };      // scharf: Lichtraum 2 (Material im Spiel) dort nehmen, wo es ihn gibt
+// Fehlersuche im Material des Lichtraums 2: 0 normal, 1 nur Licht, 2 nur Farbe, 3 nur Spiegelung (deckTune.dbg.value)
+const L2DBG = { value: 0 };
+export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true, hybrid: true, key: 2.6, shade: 0.5, envK: 1, spec: 2.2, side: 3, scharf: true, licht: () => LM, dbg: L2DBG };      // scharf: Lichtraum 2 (Material im Spiel) dort nehmen, wo es ihn gibt
 const LMCAP = { value: 1 }, LMSHADE = { value: 0 }, LMSPEC = { value: 1 };      // Obergrenzen-Faktor (nur beim Aufnehmen der Raumspiegelung > 1), Schattenstärke, Kehrwert der Beleuchtung unter einem Strahler      // zum Einstellen im Testfenster; lichtraum = false zeigt den Raum aus Bausteinen
 // Decks je Station: Daten (data/…) und Modell (base/…). Die Bastion lädt beim Start, die Eisenkrone beim Betreten ihres Sektors.
 const DECKS: Record<string, [string, string]> = { bastion: ['deck_bastion', 'BastionDeck'], eisenkrone: ['deck_eisenkrone', 'EisenkroneDeck'] };
@@ -253,13 +255,13 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
     m.userData.env = [env, 0.3, 0.9];
     m.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U);
-      sh.uniforms.bkLight = LIGHT; sh.uniforms.lmCap = LMCAP; sh.uniforms.lmShadeK = LMSHADE; sh.uniforms.lmSpec = LMSPEC;
+      sh.uniforms.bkLight = LIGHT; sh.uniforms.lmCap = LMCAP; sh.uniforms.lmShadeK = LMSHADE; sh.uniforms.lmSpec = LMSPEC; sh.uniforms.l2Dbg = L2DBG;
       sh.uniforms.l2Lit = { value: lit }; sh.uniforms.l2NoiseA = { value: nA }; sh.uniforms.l2NoiseN = { value: nN };
       const VAR = 'varying vec3 vL2P; varying vec3 vL2N; varying vec2 vL2Uv; varying vec3 vL2X; varying vec3 vL2Y; varying vec3 vL2Z;';
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VAR)
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvL2P = position; vL2N = normal; vL2Uv = uv; vL2X = normalMatrix * vec3(1.0, 0.0, 0.0); vL2Y = normalMatrix * vec3(0.0, 1.0, 0.0); vL2Z = normalMatrix * vec3(0.0, 0.0, 1.0);');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float bkLight; uniform float lmCap; uniform float lmShadeK; uniform float lmSpec; uniform sampler2D l2Lit; uniform sampler2D l2NoiseA; uniform sampler2D l2NoiseN; uniform vec3 l2Col; uniform vec3 l2ColB; uniform vec4 l2V; uniform vec4 l2Rg; uniform vec4 l2F; uniform vec4 l2S; ' + VAR)
+        .replace('#include <common>', '#include <common>\nuniform float l2Dbg; uniform float bkLight; uniform float lmCap; uniform float lmShadeK; uniform float lmSpec; uniform sampler2D l2Lit; uniform sampler2D l2NoiseA; uniform sampler2D l2NoiseN; uniform vec3 l2Col; uniform vec3 l2ColB; uniform vec4 l2V; uniform vec4 l2Rg; uniform vec4 l2F; uniform vec4 l2S; ' + VAR)
         // Lage der Fläche: Muster entlang der beiden Achsen, die in der Fläche liegen (l2T, l2B: dieselben Achsen im Blickraum, für das Relief)
         .replace('#include <color_fragment>', [
           'vec3 l2an = abs(vL2N); vec2 l2q; vec3 l2T; vec3 l2B;',
@@ -273,7 +275,8 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
             : 'vec3 l2alb = l2Col * l2val;',
           'float l2rough = mix(l2Rg.x, l2Rg.y, clamp(((texture2D(l2NoiseA, l2q * l2Rg.z).g - 0.5) * 0.55 + 0.2) / 0.4, 0.0, 1.0));',
           'float l2metal = l2Rg.w;',
-          F ? 'float l2w = l2edge * clamp(((texture2D(l2NoiseA, l2q * 2.875).r - 0.5) * 0.55 + 0.08) / 0.18, 0.0, 1.0) * l2F.y; l2alb = mix(l2alb, vec3(0.36, 0.34, 0.31), l2w); l2metal = mix(l2metal, 1.0, l2w); l2rough = mix(l2rough, 0.34, l2w);' : '',
+          // Kantenabrieb mit der Entfernung ausblenden (12 bis 40 m): Aus der Ferne wurden die hellen Kanten der vielen kleinen Schraubenköpfe zu Glitzerpunkten (Hangar, Alpha 1.33)
+          F ? 'float l2w = l2edge * clamp(((texture2D(l2NoiseA, l2q * 2.875).r - 0.5) * 0.55 + 0.08) / 0.18, 0.0, 1.0) * l2F.y * (1.0 - clamp((length(vViewPosition) - 12.0) / 28.0, 0.0, 1.0)); l2alb = mix(l2alb, vec3(0.36, 0.34, 0.31), l2w); l2metal = mix(l2metal, 1.0, l2w); l2rough = mix(l2rough, 0.34, l2w);' : '',
         ].join('\n'))
         .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp(l2rough, 0.06, 1.0);')
         .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (F
@@ -289,9 +292,11 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
           'vec3 l2I = vL2Uv.x < -0.5 ? vColor.rgb : texture2D(l2Lit, vL2Uv).rgb; l2I *= l2I; l2I = l2I / max(vec3(0.02), 1.0 - l2I);',
           'vec3 l2R = l2alb * (1.0 - 0.15 * l2metal) * l2I * bkLight;',
           'l2R *= min(1.0, ' + LM_MAX.toFixed(2) + ' * lmCap / max(0.001, max(l2R.r, max(l2R.g, l2R.b))));',
-          'totalEmissiveRadiance = l2R * lmShade;'].join('\n'));
+          'totalEmissiveRadiance = l2R * lmShade;',
+          'if (l2Dbg > 0.5) { reflectedLight.indirectSpecular *= step(2.5, l2Dbg); reflectedLight.directSpecular *= step(2.5, l2Dbg); totalEmissiveRadiance = l2Dbg < 1.5 ? l2I * 0.15 : l2Dbg < 2.5 ? l2alb : vec3(0.0); }'].join('\n'));
     };
     m.customProgramCacheKey = () => 'l2lit' + (S ? '-s' : '') + (F ? '-f' : '');
+    m.name = name;      // Name des Materials aus Blender (Fehlersuche, Strahl durch einen Bildpunkt)
     out[name] = m;
   }
   return out;
@@ -318,6 +323,14 @@ async function loadLicht2Set(dj: string, mu: string): Promise<LmRoom[]> {
     rooms[q.i].meshes.push({ geo: g, mat: q.set[key] || Object.values(q.set)[0], mw: o.matrixWorld.clone(), tris: (g.index ? g.index.count : g.attributes.position.count) / 3 });
   });
   lmPrecompile(rooms);
+  // Arbeitsspeicher: Liegen die Netze auf der Grafikkarte, braucht das Spiel ihre Daten nicht mehr (Deck der Bastion rund 190 MB, Hangar 250 MB).
+  // Sie gehören dem geladenen Modell, werden nie entsorgt und also nie ein zweites Mal hochgeladen. Hochgeladen wird spätestens beim
+  // Vorwärmen hinter der Blende (engine.ts, primeFrame). Danach lässt sich nicht mehr mit einem Strahl auf diese Netze zielen.
+  const drop = function (this: any) { this.array = null; };
+  for (const R of rooms) for (const q of R.meshes) {
+    for (const a of Object.values(q.geo.attributes) as any[]) (a.isInterleavedBufferAttribute ? a.data : a).onUpload(drop);
+    if (q.geo.index) q.geo.index.onUpload(drop);
+  }
   return rooms;
 }
 
@@ -339,7 +352,7 @@ function lmPrecompile(rooms: LmRoom[]) {
 let LM_BUSY = 0;             // so viele Sätze übersetzen noch die Shader für die Aufnahme der Raumspiegelung
 let LM_PM: THREE.PMREMGenerator | null = null;      // ein Filter für alle Raumspiegelungen (jeder neue müsste seine Shader neu übersetzen)
 const lmFree = (R: LmRoom) => { for (const t of R.tex) t.dispose(); if (R.env) { R.env.userData.rt?.dispose(); R.env = null; } };      // Grafikspeicher eines Raums freigeben: Bilder und Raumspiegelung
-function lmProbe(ms: LmMesh[], T: THREE.Matrix4, at: THREE.Vector3) {      // T: Lage der Netze in der Welt, at: Raummitte in der Welt
+function lmProbe(ms: LmMesh[], T: THREE.Matrix4, at: THREE.Vector3, far = 90) {      // T: Lage der Netze in der Welt, at: Raummitte in der Welt
   const sc = new THREE.Scene();
   for (const q of ms) {
     if (q.mat.transparent) continue;
@@ -349,7 +362,7 @@ function lmProbe(ms: LmMesh[], T: THREE.Matrix4, at: THREE.Vector3) {      // T:
   // Umgebung der Station (interiorEnv, kleiner) auf die Raumspiegelung wechselt, braucht eine neue Fassung. Deshalb bekommen die
   // Materialien ihre Spiegelung beim Betreten, bevor die Shader übersetzt werden (prime).
   const rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType });
-  const cc = new THREE.CubeCamera(0.15, 90, rt); cc.position.copy(at);
+  const cc = new THREE.CubeCamera(0.15, far, rt); cc.position.copy(at);
   const g0 = GLOW.value; GLOW.value = g0 * 4; LMCAP.value = 4;
   try { cc.update(renderer, sc); } finally { GLOW.value = g0; LMCAP.value = 1; }
   const pm = (LM_PM = LM_PM || new THREE.PMREMGenerator(renderer)), out = pm.fromCubemap(rt.texture), env = out.texture;
@@ -444,6 +457,16 @@ function materials() {
   });
 }
 
+// ---------- Standflächen der Bausteine (dieselbe Rechnung wie in assemble, ohne Netze) ----------
+function instBlocks(D: Pick<DeckJson, 'mod' | 'inst'>, PARTS: Record<string, Part[]>, rect: (x0: number, x1: number, y0: number, y1: number) => Rect, blocks: Rect[]) {
+  for (const [mi, x, y, a] of D.inst) {
+    const md = D.mod[mi]; if (!PARTS[md.o] || !md.block) continue;
+    const [bx0, bx1, by0, by1] = md.block, cs = Math.cos(a), sn = Math.sin(a); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const [px, py] of [[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1]]) { const wx = x + px * cs - py * sn, wy = y + px * sn + py * cs; x0 = Math.min(x0, wx); x1 = Math.max(x1, wx); y0 = Math.min(y0, wy); y1 = Math.max(y1, wy); }
+    blocks.push(rect(x0, x1, y0, y1));
+  }
+}
+
 // ---------- Bausteine setzen: je Bereich und Art ein Netz ----------
 // place: Lage eines Bausteins im Innenraum aus seiner Lage im Plan (x, y, Drehung) → [x, z, Drehung um die Hochachse]
 // zone: Bereich, zu dem ein Baustein gehört; rect: Rechteck im Plan → Rechteck im Innenraum; blocks: nimmt die Standflächen auf
@@ -505,20 +528,66 @@ export function loadHangar(): Promise<boolean> {
     try {
       const [data, gltf] = await Promise.all([fetch(dj).then(r => { if (!r.ok) throw new Error('Hangardaten: ' + r.status); return r.json(); }), new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
       HPARTS = partsOf(gltf.scene); HDATA = data;
+      // Hangar in der neuen Art (Lichtraum 2) im Hintergrund dazu, bis dahin steht der alte. Erst nach dem Deck: Beide großen Modelle
+      // zugleich entpackt trieben den Arbeitsspeicher beim Laden auf über 3 GB (Grenze des Browsers gut 4 GB).
+      const deckLicht = LMLOADING.bastion ?? (LM.bastion ? Promise.resolve(true) : loadDeck('bastion').then(() => LMLOADING.bastion ?? false));
+      Promise.resolve(deckLicht).catch(() => false).then(() => loadHangar2());
       return true;
     } catch (e) { console.warn('Hangar der Bastion nicht geladen:', e); hloading = null; return false; }
   })());
 }
-export function buildHangar(): { group: THREE.Group; blocks: Rect[]; tris: number; update: (x: number, z: number) => void } | null {
+// ---------- Hangar der Bastion als Lichtraum 2 (seit Alpha 1.33; asset-src/neu/bastion/lm2_hangar_lauf.py, docs/lichtraum2.md) ----------
+// Material im Spiel gerechnet, gebacken nur das Licht, wie im Deck. Teile: hangar_h<i><j> (Halle in 3 × 3 Feldern), hangar_k<i><j>
+// (Wandfüllungen und Kleinteile, in der Ferne ausgeblendet), hangar_dach. Die Standflächen kommen weiter aus den Daten des alten Hangars.
+const H2SET: [string, string] = ['lichtraum2_hangar', 'Lichtraum2Hangar'];
+let H2: LmRoom[] | null = null, h2loading: Promise<boolean> | null = null, H2ENV: THREE.Texture | null = null;
+export function loadHangar2(): Promise<boolean> {
+  if (H2) return Promise.resolve(true);
+  if (h2loading) return h2loading;
+  const W = window as any, dj = W.DATAFILES?.[H2SET[0]] as string | undefined, mu = W.BASEDATA?.[H2SET[1]] as string | undefined;
+  if (!dj || !mu) return Promise.resolve(false);      // Artifact-Fassung: Der Satz passt nicht hinein, es bleibt beim alten Hangar
+  return (h2loading = loadLicht2Set(dj, mu).then(r => { H2 = r; return true; }, e => { console.warn('Hangar (Lichtraum 2) nicht geladen:', e); h2loading = null; return false; }));
+}
+export const hangar2Ready = () => !!H2;      // Hangar der neuen Art geladen (Tests)
+export interface HangarBuild { group: THREE.Group; blocks: Rect[]; tris: number; update: (x: number, z: number) => void; stale: () => boolean; prime: () => void }
+export function buildHangar(): HangarBuild | null {
   if (!HDATA || !HPARTS) return null;
   const blocks: Rect[] = [];
+  const hrect = (x0: number, x1: number, y0: number, y1: number): Rect => [Math.min(x0, x1), Math.max(x0, x1), -Math.max(y0, y1), -Math.min(y0, y1)];
+  if (H2 && deckTune.lichtraum && deckTune.scharf) {
+    instBlocks(HDATA, HPARTS, hrect, blocks);
+    // glTF (x, oben, −y aus Blender) ist schon die Lage im Innenraum (x = x, z = −y): keine weitere Drehung
+    const group = new THREE.Group(), small: { m: THREE.Mesh; c: THREE.Vector3; r: number }[] = [], all: LmMesh[] = []; let tris = 0;
+    for (const R of H2) {
+      const sm = /_k\d\d$/.test(R.name);
+      for (const q of R.meshes) {
+        const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.copy(q.mw); m.userData.shared = true; m.userData.sh = false;
+        m.castShadow = false; m.receiveShadow = false; if (q.mat.transparent) m.renderOrder = 3;
+        group.add(m); all.push(q); tris += q.tris;
+        if (sm) small.push({ m, c: q.geo.boundingSphere!.center.clone().applyMatrix4(q.mw), r: q.geo.boundingSphere!.radius });
+      }
+    }
+    // Raumspiegelung: einmal aus der Hallenmitte in 6 m Höhe (über dem mittleren Stellplatz), Sichtweite über die ganze Halle.
+    // Aufgenommen beim Betreten hinter der Blende (engine.ts, warmScene); sie bleibt für alle weiteren Besuche.
+    const prime = () => {
+      if (!deckTune.hybrid || !H2) return;
+      if (!H2ENV) { try { group.updateWorldMatrix(true, false); H2ENV = lmProbe(all, group.matrixWorld, new THREE.Vector3(0, 6, 31).applyMatrix4(group.matrixWorld), 260); } catch (e) { console.warn('Raumspiegelung des Hangars nicht aufgenommen:', e); return; } }
+      // Spiegelung halb so stark wie im Deck: Der Hallenboden glänzt, und die orangen Leuchtstreifen am Tor färbten ihn sonst bräunlich
+      for (const R of H2) for (const m of R.mats) {
+        if (m.envMap !== H2ENV) { m.envMap = H2ENV; m.needsUpdate = true; }
+        m.envMapIntensity = (m.userData.env as [THREE.Texture, number, number])[2] * deckTune.envK * 0.5;
+      }
+    };
+    return { group, blocks, tris, update: (x, z) => { for (const q of small) q.m.visible = Math.hypot(q.c.x - x, q.c.z - z) - q.r < FAR_SMALL; }, stale: () => false, prime };
+  }
   // Bereiche: Dach, alles Ganze (Boden, Stellplätze) und ein Raster aus 3 × 3 Feldern; three zeichnet nur, was im Bild liegt
   // Wandfüllungen und Kleinteile des Gang-Baukastens liegen in feineren Feldern (36 m) und fallen in der Ferne weg: Von ihnen stehen über 200 an den Wänden
   const zone = (x: number, y: number, over: number, name: string) => (over ? 'dach' : name.startsWith('Ganz ') ? 'ganz' : /^(Wand|Objekt) /.test(name) ? 'w' + Math.floor(x / 36) + '_' + Math.floor(y / 36)
     : 'h' + Math.min(2, Math.max(0, Math.floor((x + 92) / 61.4))) + Math.min(2, Math.max(0, Math.floor((y + 112) / 54.1))));
-  const { group, meshes, tris } = assemble(HDATA, HPARTS, (x, y, a) => [x, -y, a], zone, (x0, x1, y0, y1) => [Math.min(x0, x1), Math.max(x0, x1), -Math.max(y0, y1), -Math.min(y0, y1)], blocks);
+  const { group, meshes, tris } = assemble(HDATA, HPARTS, (x, y, a) => [x, -y, a], zone, hrect, blocks);
   const small = meshes.filter(q => q.zn[0] === 'w');
-  return { group, blocks, tris, update: (x, z) => { for (const q of small) q.m.visible = Math.hypot(q.c.x - x, q.c.z - z) - q.r < FAR_SMALL; } };
+  // stale: Der Hangar der neuen Art ist inzwischen geladen; der Innenraum tauscht ihn dann aus (interior.ts)
+  return { group, blocks, tris, update: (x, z) => { for (const q of small) q.m.visible = Math.hypot(q.c.x - x, q.c.z - z) - q.r < FAR_SMALL; }, stale: () => !!H2 && deckTune.lichtraum && deckTune.scharf, prime: () => {} };
 }
 
 // ---------- Deck für den aktuellen Innenraum bauen (hz0 = Hangarrückwand, z des Tors) ----------

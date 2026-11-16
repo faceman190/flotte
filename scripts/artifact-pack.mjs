@@ -15,7 +15,7 @@ const man = JSON.parse(fs.readFileSync(path.join(SRC, 'assets', 'manifest.json')
 // (loadLicht in src/game/deck.ts). Auf dem eigenen Server (Render) sind alle Sätze da.
 // Seit Alpha 1.30: das Deck der Bastion in der neuen Art (Lichtraum 2, volle Geometrie, gebündelt 82 MB). Auf claude.ai zeigt die Bastion
 // deshalb weiter Treffpunkt und Lager in der alten Art und sonst die Bausteine.
-const SKIP_SETS = [['lichtraum2_bastion', 'Lichtraum2Bastion']];
+const SKIP_SETS = [['lichtraum2_bastion', 'Lichtraum2Bastion'], ['lichtraum2_hangar', 'Lichtraum2Hangar']];
 let skipped = 0;
 for (const [dj, mo] of SKIP_SETS) {
   const d = man.files['data/' + dj];

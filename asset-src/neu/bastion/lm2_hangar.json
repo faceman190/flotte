@@ -1,0 +1,134 @@
+{
+ "split": "hangar",
+ "prefix": "hangar_",
+ "rooms": [
+  {
+   "name": "hangar_h00",
+   "lm": 2048,
+   "samples": 192,
+   "big": 0.25
+  },
+  {
+   "name": "hangar_k00",
+   "lm": 1024,
+   "samples": 160,
+   "big": 0.03
+  },
+  {
+   "name": "hangar_h01",
+   "lm": 2048,
+   "samples": 192,
+   "big": 0.25
+  },
+  {
+   "name": "hangar_k01",
+   "lm": 1024,
+   "samples": 160,
+   "big": 0.03
+  },
+  {
+   "name": "hangar_h02",
+   "lm": 2048,
+   "samples": 192,
+   "big": 0.25
+  },
+  {
+   "name": "hangar_k02",
+   "lm": 1024,
+   "samples": 160,
+   "big": 0.03
+  },
+  {
+   "name": "hangar_h10",
+   "lm": 2048,
+   "samples": 192,
+   "big": 0.25
+  },
+  {
+   "name": "hangar_k10",
+   "lm": 1024,
+   "samples": 160,
+   "big": 0.03
+  },
+  {
+   "name": "hangar_h11",
+   "lm": 2048,
+   "samples": 192,
+   "big": 0.25
+  },
+  {
+   "name": "hangar_k11",
+   "lm": 1024,
+   "samples": 160,
+   "big": 0.03
+  },
+  {
+   "name": "hangar_h12",
+   "lm": 2048,
+   "samples": 192,
+   "big": 0.25
+  },
+  {
+   "name": "hangar_k12",
+   "lm": 1024,
+   "samples": 160,
+   "big": 0.03
+  },
+  {
+   "name": "hangar_h20",
+   "lm": 2048,
+   "samples": 192,
+   "big": 0.25
+  },
+  {
+   "name": "hangar_k20",
+   "lm": 1024,
+   "samples": 160,
+   "big": 0.03
+  },
+  {
+   "name": "hangar_h21",
+   "lm": 2048,
+   "samples": 192,
+   "big": 0.25
+  },
+  {
+   "name": "hangar_k21",
+   "lm": 1024,
+   "samples": 160,
+   "big": 0.03
+  },
+  {
+   "name": "hangar_h22",
+   "lm": 2048,
+   "samples": 192,
+   "big": 0.25
+  },
+  {
+   "name": "hangar_k22",
+   "lm": 1024,
+   "samples": 160,
+   "big": 0.03
+  },
+  {
+   "name": "hangar_dach",
+   "lm": 1024,
+   "samples": 128,
+   "big": 1
+  }
+ ],
+ "hide": [
+  "Dunst"
+ ],
+ "hide_colls": [
+  "Draussen"
+ ],
+ "clamp_direct": 1.5,
+ "clamp_indirect": 0.5,
+ "glb": "Lichtraum2Hangar.glb",
+ "json": "lichtraum2_hangar.json",
+ "mark": "lm2-hangar.txt",
+ "vsamples": 128,
+ "deflicker": 2.5,
+ "vsmooth": 0.35
+}

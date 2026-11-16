@@ -190,3 +190,55 @@ kam dort nie dran). Der Aufruf ist wieder entfernt; einen messbaren Gewinn hatte
 **Lehre:** Vor dem Veröffentlichen die gebaute Fassung prüfen, wie sie online läuft (`dist`, Vorschau „lf-dist“ auf Port 5180):
 neues Spiel über das Menü starten, in den Innenraum laufen, Konsole lesen. Ein Test auf dem Entwicklungsserver und der Blick ins
 Menü der Artifact-Fassung reichen nicht.
+
+## Hangar der Bastion (Alpha 1.33)
+
+Der Nutzer hat die Umstellung freigegeben („Check mach das“). Der Hangar der Bastion ist jetzt auch Lichtraum 2. Vergleichsbild:
+`docs/bilder/lichtraum2-133-hangar.jpg` (links Alpha 1.32, rechts Alpha 1.33).
+
+**Backen.** `asset-src/neu/bastion/lm2_hangar_lauf.py` baut den Hangar in der Fassung fürs Spiel (`SPIEL = True`, `bk_hangar.py`,
+`bk_halle.py`) frisch in `Lichtraum2Hangar.blend` und ruft `lm2_raum.py` mit `lm2_hangar.json` auf. Neu in `lm2_raum.py`:
+
+- `OPT['split'] = 'hangar'`: Teile nach Lage statt nach Deckzellen, wie die Bereiche im Spiel. `hangar_h<i><j>`: Halle in 3 × 3 Feldern,
+  Lichtkarte 2048. `hangar_k<i><j>`: Wandfüllungen und Kleinteile des Gang-Baukastens in denselben Feldern, Lichtkarte 1024 (das Spiel
+  blendet sie ab 85 m aus). `hangar_dach`: Dach, 1024. Freie Objekte (Schriften an Wand und Boden) werden mit aufgelöst.
+- `big` je Teil (Mindestfläche für die Lichtkarte, Halle 0,25 m²), `hide` und `hide_colls` (Dunstkasten, Sammlung „Draussen“).
+- Gegen „Glühwürmchen“: `clamp_direct` 1,5 und `clamp_indirect` 0,5 (Begrenzung der Abtastwerte in Cycles), `deflicker` (Bildpunkte der
+  Lichtkarte über dem 2,5-Fachen des Medians ihrer Nachbarn begrenzen), Ausreißer je Fläche im Eckpunkt-Licht (über dem Dreifachen der
+  übrigen Ecken), `vsmooth` 0,35 (Eckpunkt-Licht je Würfel von 35 cm und Flächenrichtung gemittelt), 128 Abtastungen je Ecke.
+
+Gemessen: 3,9 Mio. Dreiecke (das Deck hat 2,4 Mio.), Lauf 15 Minuten (Auflösen 4, Abwickeln 2, Backen 9). Gepackt 53 MB, dazu
+16 Lichtkarten. Die Lichtkarten der Halle haben nur 7 bis 14 Bildpunkte je Meter (die Halle hat je Feld 24.000 bis 38.000 m² Fläche);
+das Licht im Hangar ist weich, das reicht.
+
+**Was beim ersten Blick falsch war.** Erster Lauf ohne Gegenmittel: Die Wände waren voller weißer Glitzerpunkte, aus der Ferne
+flimmernd. Ursache (mit einer Diagnoseansicht im Shader gefunden, `deckTune.dbg.value`: 1 nur Licht, 2 nur Farbe, 3 nur Spiegelung):
+Zufallstreffer der hundert starken Hallenleuchten beim Backen, je Ecke bei nur 48 Abtastungen und je Bildpunkt der Lichtkarte, bei
+9 Bildpunkten je Meter durch das Weichzeichnen zu 40 cm großen Quadraten aufgeblasen. Im Deck fiel das nicht auf (schwächere, nähere
+Lampen, vierfache Dichte). Ein Zwischenversuch, Kleinteile im Spiel mit der Entfernung abzudunkeln, machte die Schriften unlesbar und
+ist wieder ausgebaut; die Ursache ist beim Backen behoben. Die bräunliche Färbung des Bodens am Tor war die Spiegelung der orangen
+Leuchtstreifen: Im Hangar ist die Raumspiegelung halb so stark wie im Deck.
+
+**Im Spiel** (`deck.ts`, Abschnitt „Hangar der Bastion als Lichtraum 2“): `loadHangar2` lädt den Satz im Hintergrund, erst nachdem die
+Lichträume des Decks geladen sind (beide Modelle zugleich entpackt trieben den Arbeitsspeicher auf 3,1 GB, jetzt 1,8 GB). Bis dahin
+steht der alte Hangar; ist man schon drin, tauscht der Innenraum ihn hinter der Blende aus (`HangarBuild.stale`, „Hangar wird geladen“).
+Standflächen kommen weiter aus den Daten des alten Hangars (`instBlocks`). Eine Raumspiegelung aus der Hallenmitte in 6 m Höhe mit 260 m
+Sichtweite (`prime`, beim Betreten hinter der Blende). Nach dem Hochladen gibt das Spiel die Netzdaten von Deck und Hangar frei
+(Arbeitsspeicher im Betrieb rund 700 MB statt 1,3 GB). Neu im Material: Kantenabrieb wird zwischen 12 und 40 m ausgeblendet.
+
+**Gemessen** (RTX 3060 Ti, 1280 × 720, Testfenster; alter Hangar → neuer):
+
+| Blick | Bildzeit | Dreiecke je Bild |
+| --- | --- | --- |
+| Ankunft, Rückwand | 3,8 → 6,5 ms | 0,89 → 2,32 Mio. |
+| vom Tor in die Halle | 3,8 → 6,5 ms | 0,79 → 2,39 Mio. |
+| Stellplatz | 4,0 → 5,2 ms | 0,55 → 1,52 Mio. |
+| quer durch die Halle | 4,3 → 4,5 ms | 0,42 → 0,87 Mio. |
+
+Die Grafikkarte ist hier von der Menge der Dreiecke begrenzt, nicht von der Auflösung (mit einem Viertel der Bildpunkte gleiche Zeit).
+Andocken ohne Standbild (längstes Bild 21 ms, Blende 2 bis 2,3 s), Story-Durchlauf und Begehbarkeit wie vorher.
+
+**Offen:** Der Hangar ist dunkler als vorher, vor allem der Boden zum Tor hin (die Farben aus Blender sind dunkel, und die alte Fassung
+hellte den Boden durch grobe Eckpunkt-Verläufe auf). Eine schlankere Fassung (`OPT['slim']`, 2,3 statt 3,9 Mio. Dreiecke) ist
+vorbereitet, falls schwächere Rechner zu langsam sind. Die seltenen Pausen der Speicherbereinigung (Alpha 1.31) treten weiter ein- bis
+zweimal je Lauf auf. Die Artifact-Fassung behält den alten Hangar (`SKIP_SETS`).
