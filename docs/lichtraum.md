@@ -163,6 +163,10 @@ neun Zellen nächst dem Piloten.
 **Artifact-Fassung.** claude.ai fasst höchstens 511 Dateien je Fassung. `scripts/artifact-pack.mjs` bündelt die Bilder der Lichträume
 (`tex/lm_…`) jetzt wie die Modelle in JSON-Teile (`assets/lm-<n>.json`); der Lader (`src/core/assets.ts`) macht daraus wieder
 Bilder im Speicher. Sie laden dort beim Start mit.
+Dazu kommt eine zweite Grenze: 256 MiB je Fassung. Mit allen Lichträumen wären es 310 MB. Der zweite Satz der Bastion (die sieben
+Räume aus Alpha 1.28) bleibt deshalb aus der Artifact-Fassung heraus (`SKIP_SETS` im Packskript); das Spiel baut dort für diese Räume
+die Bausteine. Die Artifact-Fassung zeigt also Leitstand, Treffpunkt und Lager als Lichträume, der eigene Server (Render) alle zehn.
+Stand: 492 Dateien, 245 MiB. Für weitere Räume ist auf claude.ai kein Platz mehr.
 
 **Kosten** (RTX 3060 Ti, 1280 × 720, Testfenster, ms je Bild, Bausteine → Mischform): Werkstatt 2,9 bis 3,5 → 3,8 bis 3,95;
 Besprechung 3,0 bis 3,2 → 3,7; Krankenstation 2,9 bis 3,0 → 3,6 bis 3,8; Maschinenraum 2,9 → 3,4 bis 3,5. Herunterzuladen sind für

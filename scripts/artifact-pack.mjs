@@ -10,6 +10,19 @@ const SRC = path.join(ROOT, 'dist'), OUT = path.join(ROOT, 'dist-artifact');
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.cpSync(SRC, OUT, { recursive: true, filter: p => !p.endsWith('.glb') });
 const man = JSON.parse(fs.readFileSync(path.join(SRC, 'assets', 'manifest.json'), 'utf8')), models = {};
+// Größengrenze: Eine Fassung auf claude.ai fasst höchstens 256 MiB (und 511 Dateien). Mit allen Lichträumen wären es 310 MB.
+// Diese Lichtraum-Sätze (Daten, Modell) bleiben deshalb hier heraus; fehlt ein Satz, baut das Spiel für seine Räume die Bausteine
+// (loadLicht in src/game/deck.ts). Auf dem eigenen Server (Render) sind alle Sätze da.
+const SKIP_SETS = [['lichtraum_bastion2', 'LichtraumBastion2']];
+let skipped = 0;
+for (const [dj, mo] of SKIP_SETS) {
+  const d = man.files['data/' + dj];
+  if (!d) continue;
+  const teile = JSON.parse(fs.readFileSync(path.join(SRC, d.url), 'utf8')).raeume.flatMap(R => Object.values(R.teile));
+  const drop = ['data/' + dj, 'base/' + mo, ...Object.keys(man.files).filter(k => teile.some(p => k.startsWith('tex/' + p + '_')))];
+  for (const k of drop) { const e = man.files[k]; if (!e) continue; fs.rmSync(path.join(OUT, e.url), { force: true }); delete man.files[k]; skipped++; }
+}
+if (skipped) console.log(`Artifact-Fassung: ${skipped} Dateien der Lichtraum-Sätze ${SKIP_SETS.map(q => q[0]).join(', ')} ausgelassen (Größengrenze)`);
 for (const [k, f] of Object.entries(man.files)) {
   if (!f.url.endsWith('.glb')) continue;
   // Sehr große Modelle (über etwa 8,5 MB) in Stücke teilen: Schlüssel „name#0“, „name#1“ …; der Lader setzt sie wieder zusammen.
