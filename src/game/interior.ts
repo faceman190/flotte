@@ -812,6 +812,7 @@ export function leaveInterior() {
   }
   for (const d of disposables) d.dispose();
   disposables.length = 0;
+  if (deck) deck.release();
   group = null; field = null; holo = null; standGroup = null; deck = null; hangarBody = null; hangarUpdate = null;
   for (const l of lamps) l.intensity = 0;
   setExposure(1);

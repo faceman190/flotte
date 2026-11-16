@@ -35,7 +35,7 @@ def classify(m):
         met = sock(b, 'Metallic').default_value; rough = sock(b, 'Roughness').default_value
         es = sock(b, 'Emission Strength'); tr = sock(b, 'Transmission Weight', 'Transmission')
         if nm in ('Bildschirm', 'Wandbild'): r = 'screen'      # Bildschirme: leuchten im Spiel schwächer als Lampen (große Flächen überstrahlen sonst im Bloom)
-        elif nm == 'Sternfeld': r = 'glow'
+        elif nm == 'Sternfeld': r = 'stars'      # Fenster ins All: im Spiel das Sternfeld des Baukastens (gebacken gingen die winzigen Sterne im Bild verloren)
         elif es is not None and (es.is_linked or es.default_value > 0): r = 'glow'
         elif tr is not None and tr.default_value > 0.5: r = 'glass'
         elif nm == 'Glas': r = 'gloss'
@@ -186,6 +186,17 @@ def run():
     # Der Rand zwischen den Inseln richtet sich nach dem gröbsten Bild (Licht): OPT['gap'] Bildpunkte dort
     for p in parts:
         cov = unwrap(p['J'], p['lm']); note('abgewickelt: %s belegt %.0f %% (%.0f s)' % (p['name'], cov * 100, time.time() - t0))
+    if OPT.get('export_only'):
+        # Nur das Modell neu ausgeben (z. B. nach einer geänderten Flächenart): Auflösen und Abwickeln laufen wie beim Backen und liefern
+        # dieselbe Abwicklung, die Bilder bleiben, wie sie sind. Die Daten (json) werden nicht neu geschrieben.
+        for p in parts: note('%s: Arten %s' % (p['name'], json.dumps(set_classes(p['J']))))
+        for o in bpy.context.view_layer.objects: o.select_set(False)
+        for p in parts: p['J'].select_set(True)
+        bpy.context.view_layer.objects.active = parts[0]['J']
+        bpy.ops.export_scene.gltf(filepath=os.path.join(ROOT, 'asset-src', 'glb', 'base', OPT['glb']), export_format='GLB', use_selection=True, export_apply=False, export_yup=True, export_normals=True, export_texcoords=True,
+                                  export_materials='EXPORT', export_vertex_color='NONE', export_attributes=False, export_extras=False, export_cameras=False, export_lights=False,
+                                  export_animations=False, export_skins=False, export_morph=False, export_image_format='NONE')
+        note('FERTIG nur Modell (%.0f s)' % (time.time() - t0)); return
     cp = bpy.context.preferences.addons['cycles'].preferences; cp.compute_device_type = 'OPTIX'; cp.get_devices()
     for d in cp.devices: d.use = d.type == 'OPTIX'
     SC.render.engine = 'CYCLES'; SC.cycles.device = 'GPU'

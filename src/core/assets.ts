@@ -110,7 +110,7 @@ export async function loadAssets() {
         for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         const [name, n] = k.split('#'); (chunks[name] = chunks[name] || [])[+(n || 0)] = u;
       }
-      for (const [k, list] of Object.entries(chunks)) if (m.files[k]) m.files[k].url = URL.createObjectURL(new Blob(list, { type: 'model/gltf-binary' }));
+      for (const [k, list] of Object.entries(chunks)) if (m.files[k]) m.files[k].url = URL.createObjectURL(new Blob(list, { type: k.startsWith('tex/') ? 'image/webp' : 'model/gltf-binary' }))      // gebündelt sind Modelle und die Bilder der Lichträume;
     } catch { console.warn('Gebündelte Modelle nicht geladen; das Spiel nutzt Ersatzmodelle.'); }
   }
   setGlobals(m);

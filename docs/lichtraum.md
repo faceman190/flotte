@@ -138,3 +138,37 @@ Begehbarkeit wie vorher, Story-Durchlauf sauber.
 
 **Offen:** Der Hangar (dritter Raum des Plans) hat eine eigene Lichtkarte anderer Art und ist nicht umgestellt. Die übrigen Räume der
 Bastion (Werkstatt, Besprechung, Krankenstation, Quartier, Maschinenraum, Spinde) sind weiter Bausteine mit Licht je Eckpunkt.
+
+## Bastion: alle Räume (Alpha 1.28)
+
+Die übrigen Räume von Deck 3 sind umgestellt: Werkstatt, Besprechung, Krankenstation, Maschinenraum, Spinde und beide Quartiere.
+Damit sind alle neun Räume der Bastion Lichträume; Gänge und Hangar bleiben, wie sie waren. Vergleich: `docs/bilder/lichtraum-128-bastion.jpg`.
+
+**Backen.** Zweiter Satz `lm_bastion2.json` → `LichtraumBastion2.glb`, `lichtraum_bastion2.json` (sieben Räume, 39 Minuten). Kleine Räume
+bekommen kleinere Bilder, damit die Dichte gleich bleibt: 12 und 6 Zellen 4096 (Farbe) und 2048, 4 Zellen 3072 und 1536, 2 Zellen 2048
+und 1024. Ein Deck kann mehrere Sätze haben (`LICHT` in deck.ts); fehlt einer, bleiben seine Räume Bausteine.
+
+**Sternenfenster.** Gebacken waren die Fenster der Besprechung schwarz: Die winzigen Sterne gehen im Leuchtenbild verloren. Das
+Material „Sternfeld“ ist deshalb eine eigene Art `stars` und zeigt im Spiel das Sternfeld des Baukastens (ohne Lichtkarte).
+`"export_only": true` in den Einstellungen gibt nur das Modell neu aus (Auflösen und Abwickeln wie beim Backen, die Bilder bleiben);
+so ließ sich die Art ändern, ohne neu zu backen.
+
+**Grafikspeicher.** Ein Raum belegt 45 bis 170 MB. Deshalb gibt das Deck die Bilder eines Raums frei, der 20 s nicht zu sehen war
+und über 24 m entfernt ist, und alle beim Verlassen des Innenraums (`deck.release()`). Beim nächsten Blick lädt three sie aus dem
+Arbeitsspeicher wieder hoch. Gemessen: 153 Bilder nach einem Gang durch alle Räume, 113 nach 21 s im Hangar.
+
+**Strahler.** Höchstens neun je Deck (`SPOTS_MAX`), davon sechs mit Schatten. In der Besprechung (zwölf Zellen) stehen sie auf den
+neun Zellen nächst dem Piloten.
+
+**Artifact-Fassung.** claude.ai fasst höchstens 511 Dateien je Fassung. `scripts/artifact-pack.mjs` bündelt die Bilder der Lichträume
+(`tex/lm_…`) jetzt wie die Modelle in JSON-Teile (`assets/lm-<n>.json`); der Lader (`src/core/assets.ts`) macht daraus wieder
+Bilder im Speicher. Sie laden dort beim Start mit.
+
+**Kosten** (RTX 3060 Ti, 1280 × 720, Testfenster, ms je Bild, Bausteine → Mischform): Werkstatt 2,9 bis 3,5 → 3,8 bis 3,95;
+Besprechung 3,0 bis 3,2 → 3,7; Krankenstation 2,9 bis 3,0 → 3,6 bis 3,8; Maschinenraum 2,9 → 3,4 bis 3,5. Herunterzuladen sind für
+die Bastion jetzt rund 48 MB Lichtraum-Daten (im Hintergrund nach dem Start).
+
+**Geprüft:** Lückensuche über alle 105 Zellen ohne Fund, Begehbarkeit wie vorher, Story-Durchlauf sauber.
+
+**Bekannte Schwäche:** Sind die Lichtraum-Daten beim Betreten des Decks noch nicht geladen (erster Start, langsame Leitung), baut das
+Deck für diesen Besuch die Bausteine. Erst beim nächsten Andocken erscheinen die Lichträume.
