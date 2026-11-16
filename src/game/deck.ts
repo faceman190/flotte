@@ -296,10 +296,10 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
   }
   return out;
 }
-let MESHOPT_WORKERS = false;
+// Kein MeshoptDecoder.useWorkers: Sein Hilfsfaden wird aus dem Quelltext zweier Funktionen gebaut und sucht sie unter ihrem
+// ursprünglichen Namen. Der Verkleinerer der gebauten Fassung benennt sie um, der Faden antwortet dann nie, und danach hängt jedes
+// weitere Laden eines Modells (Alpha 1.31: online ließ sich kein Spiel mehr starten; im Entwicklungsmodus fällt es nicht auf).
 async function loadLicht2Set(dj: string, mu: string): Promise<LmRoom[]> {
-  // Das Deckmodell ist groß (62 MB): in Hilfsfäden entpacken, sonst steht das Bild, während es ankommt
-  if (!MESHOPT_WORKERS) { MESHOPT_WORKERS = true; try { (MeshoptDecoder as any).useWorkers?.(2); } catch (e) { /* dann eben im Hauptfaden */ } }
   const [data, gltf] = await Promise.all([fetch(dj).then(r => r.json()) as Promise<L2Json>, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
   const TD = (window as any).TEXDATA || {}, ld = new THREE.TextureLoader(), rooms: LmRoom[] = [], by: Record<string, { set: Record<string, THREE.Material>; i: number }> = {};
   for (const R of data.raeume) {

@@ -147,7 +147,6 @@ langes Standbild, wenn ich im Hangar andocke.“ Die Bildrate war hoch (145 bis 
 - Die Shader-Fassungen für die Aufnahme der Raumspiegelung werden gleich nach dem Laden der Lichträume übersetzt (`lmPrecompile`).
 - Ein Filter für alle Raumspiegelungen (`LM_PM`). Lichtraum 2 behält Lichtkarten und Spiegelungen auch nach dem Verlassen (zusammen
   rund 200 MB Grafikspeicher): Das zweite Andocken braucht keine Vorarbeit mehr.
-- Das Deckmodell wird in Hilfsfäden entpackt (`MeshoptDecoder.useWorkers(2)`).
 
 **Gemessen** (Testfenster, RTX 3060 Ti; ein „Bild“ ist ein von Hand gerechnetes Bild mit `gl.finish()`):
 
@@ -177,3 +176,17 @@ mehr auf. Ob das im sichtbaren Fenster des Nutzers auch vorkommt, ist nicht geme
 - Im versteckten Testfenster läuft `requestAnimationFrame` nicht; das Vorwärmen hat dafür Zeitgeber als Ersatz. Die echte
   Bildschleife (Blende im laufenden Spiel) ist deshalb nur über von Hand gerechnete Bilder geprüft (`warm.strict`).
 - `rucktest.js` zählt mit `opt.profil` jede Art von Grafikaufruf mit; der Aufsatz erzeugt selbst Abfall für die Speicherbereinigung.
+
+## Alpha 1.32: Online ließ sich kein Spiel mehr starten
+
+Alpha 1.31 hatte das Deckmodell in Hilfsfäden entpacken lassen (`MeshoptDecoder.useWorkers(2)`). Der Entpacker baut seinen Hilfsfaden aus
+dem Quelltext zweier Funktionen und ruft sie darin unter ihrem ursprünglichen Namen auf (`self.onmessage = workerProcess`). Der
+Verkleinerer der gebauten Fassung benennt die Funktionen um: Der Faden bricht mit „workerProcess is not defined“ ab und antwortet nie.
+Da alle Modelle denselben Entpacker benutzen, hing danach jedes weitere Laden. Online lud nur noch das Menü.
+
+Nicht aufgefallen ist es, weil der Entwicklungsserver nichts verkleinert und die Artifact-Fassung das Deckmodell auslässt (der Aufruf
+kam dort nie dran). Der Aufruf ist wieder entfernt; einen messbaren Gewinn hatte er nicht gezeigt.
+
+**Lehre:** Vor dem Veröffentlichen die gebaute Fassung prüfen, wie sie online läuft (`dist`, Vorschau „lf-dist“ auf Port 5180):
+neues Spiel über das Menü starten, in den Innenraum laufen, Konsole lesen. Ein Test auf dem Entwicklungsserver und der Blick ins
+Menü der Artifact-Fassung reichen nicht.
