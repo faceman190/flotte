@@ -43,7 +43,8 @@ const GLOW = { value: 0.7 };      // Stärke der Leuchten
 const GLOW_MAX = 1.25;            // Obergrenze der Strahldichte von Leuchten
 const LIT_MAX = 1.0;              // Obergrenze der Strahldichte beleuchteter Flächen
 const FAR_SMALL = 85;             // Hangar: Wandfüllungen und Kleinteile weiter weg werden nicht gezeichnet (m)
-export const deckTune = { LIGHT, GLOW, mats: () => materials() };      // zum Einstellen im Testfenster
+const LM_MAX = 1.6;               // Lichtraum: Obergrenze der Strahldichte beleuchteter Flächen (Lichtkarten sind sauber, die Grenze darf höher liegen)
+export const deckTune = { LIGHT, GLOW, mats: () => materials(), lichtraum: true };      // zum Einstellen im Testfenster; lichtraum = false zeigt den Raum aus Bausteinen
 // Decks je Station: Daten (data/…) und Modell (base/…). Die Bastion lädt beim Start, die Eisenkrone beim Betreten ihres Sektors.
 const DECKS: Record<string, [string, string]> = { bastion: ['deck_bastion', 'BastionDeck'], eisenkrone: ['deck_eisenkrone', 'EisenkroneDeck'] };
 const LOADED: Record<string, { data: DeckJson; parts: Record<string, Part[]> }> = {}, LOADING: Record<string, Promise<boolean>> = {};
@@ -58,9 +59,73 @@ export function loadDeck(id = 'bastion'): Promise<boolean> {
     try {
       const [data, gltf] = await Promise.all([fetch(dj).then(r => { if (!r.ok) throw new Error('Deckdaten: ' + r.status); return r.json(); }), new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
       LOADED[id] = { data, parts: partsOf(gltf.scene) };
+      loadLicht(id).catch(() => false);      // Lichtraum (falls vorhanden) im Hintergrund dazu
       return true;
     } catch (e) { console.warn('Deck nicht geladen:', id, e); delete LOADING[id]; return false; }
   })());
+}
+
+// ---------- Lichtraum: ein Raum mit Lichtkarten statt Licht je Eckpunkt (Probe seit Alpha 1.23, asset-src/neu/bastion/lm_raum.py) ----------
+// Die Teile des Raums sind in Blender aufgelöst und eindeutig abgewickelt; Cycles hat fünf Bilder je Teil gebacken (tex/lm_<Teil>_…):
+//   col Farbe (sRGB) · lit Licht ohne Farbe (w = sqrt(x / (1 + x))) · emi Leuchten (ebenso) · orm Rauheit im Grünkanal · nrm Relief (Tangentenraum).
+// Im Spiel: Strahldichte = Farbe × Licht + Leuchten, dazu der Glanz aus der Raumumgebung mit Rauheit und Relief aus den Bildern.
+// Die Bausteine in den Zellen des Raums entfallen dann (ihre Standflächen bleiben). Daten: data/lichtraum_<Deck>, Modell: base/Lichtraum<Deck>.
+interface LmJson { raeume: { name: string; zellen: number[][]; teile: Record<string, string> }[] }
+const LICHT: Record<string, [string, string]> = { eisenkrone: ['lichtraum_eisenkrone', 'LichtraumEisenkrone'] };
+const LM: Record<string, { data: LmJson; meshes: { geo: THREE.BufferGeometry; mat: THREE.Material; mw: THREE.Matrix4; tris: number }[] }> = {}, LMLOADING: Record<string, Promise<boolean>> = {};
+function loadLicht(id: string): Promise<boolean> {
+  if (LM[id]) return Promise.resolve(true);
+  if (id in LMLOADING) return LMLOADING[id];
+  const W = window as any, names = LICHT[id], dj = names && W.DATAFILES?.[names[0]] as string | undefined, mu = names && W.BASEDATA?.[names[1]] as string | undefined;
+  if (!dj || !mu) return Promise.resolve(false);
+  return (LMLOADING[id] = (async () => {
+    try {
+      const [data, gltf] = await Promise.all([fetch(dj).then(r => r.json()) as Promise<LmJson>, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
+      const sets: Record<string, Record<string, THREE.Material>> = {};
+      for (const R of data.raeume) for (const [part, prefix] of Object.entries(R.teile)) sets[part] = await lmMaterials(prefix);
+      const meshes: (typeof LM)[string]['meshes'] = [];
+      gltf.scene.updateMatrixWorld(true);
+      gltf.scene.traverse((o: any) => {
+        if (!o.isMesh) return;
+        let a: THREE.Object3D | null = o; while (a && !sets[a.name]) a = a.parent;      // Teil (raum, halle) nach dem Namen des Objekts in Blender
+        const set = sets[a ? a.name : Object.keys(sets)[0]], cls = String(o.material?.name || '').replace(/^ext_lm_/, '');
+        const g = o.geometry as THREE.BufferGeometry; g.computeBoundingSphere();
+        meshes.push({ geo: g, mat: set[cls] || set.paint, mw: o.matrixWorld.clone(), tris: (g.index ? g.index.count : g.attributes.position.count) / 3 });
+      });
+      LM[id] = { data, meshes };
+      return true;
+    } catch (e) { console.warn('Lichtraum nicht geladen:', id, e); delete LMLOADING[id]; return false; }
+  })());
+}
+async function lmMaterials(prefix: string) {
+  const TD = (window as any).TEXDATA || {}, ld = new THREE.TextureLoader();
+  const T = async (k: string, srgb = false) => {
+    const u = TD[prefix + '_' + k] as string | undefined; if (!u) throw new Error('Bild fehlt: ' + prefix + '_' + k);
+    const t = await ld.loadAsync(u); t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 8; t.needsUpdate = true; return t;
+  };
+  const [col, lit, emi, orm, nrm] = await Promise.all([T('col', true), T('lit'), T('emi'), T('orm'), T('nrm')]);
+  const env = interiorEnv(), M = materials(), dec = (v: string) => `${v} *= ${v}; ${v} = ${v} / max(vec3(0.02), 1.0 - ${v});`;
+  // eg, cap: Stärke und Obergrenze der Leuchten. Bildschirme bleiben unter der Schwelle des Bloom (0,82): Große helle Flächen überstrahlen sonst den halben Raum
+  // diff = false: Leuchten und Bildschirme zeigen nur ihr Leuchten. Ihr Streulicht stammt oft von einer Lampe direkt davor (Bildschirmlicht) und wäre riesig
+  const mk = (key: string, f0: number, envK: number, eg = 1, cap = GLOW_MAX, diff = true) => {
+    const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(f0, f0, f0), metalness: 1, roughness: 1, roughnessMap: orm, normalMap: nrm, envMap: env, envMapIntensity: envK, emissive: 0xffffff, emissiveMap: lit });
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.bkLight = LIGHT; sh.uniforms.bkGlow = GLOW; sh.uniforms.lmCol = { value: col }; sh.uniforms.lmEmi = { value: emi };
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float bkLight; uniform float bkGlow; uniform sampler2D lmCol; uniform sampler2D lmEmi;')
+        .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directSpecular = vec3(0.0); reflectedLight.directDiffuse = vec3(0.0);')
+        .replace('#include <emissivemap_fragment>', [
+          'vec3 lmI = texture2D(emissiveMap, vEmissiveMapUv).rgb; ' + dec('lmI'),
+          'vec3 lmR = texture2D(lmCol, vEmissiveMapUv).rgb * lmI * bkLight;',
+          'lmR *= min(1.0, ' + LM_MAX.toFixed(2) + ' / max(0.001, max(lmR.r, max(lmR.g, lmR.b))));',
+          'vec3 lmE = texture2D(lmEmi, vEmissiveMapUv).rgb; ' + dec('lmE') + ' lmE *= bkGlow * ' + eg.toFixed(2) + ';',
+          'lmE *= min(1.0, ' + cap.toFixed(2) + ' / max(0.001, max(lmE.r, max(lmE.g, lmE.b))));',
+          diff ? 'totalEmissiveRadiance = lmR + lmE;' : 'totalEmissiveRadiance = lmE;'].join('\n'));
+    };
+    m.customProgramCacheKey = () => 'lm-' + key;
+    return m;
+  };
+  return { metal: mk('metal', 0.09, 0.3), paint: mk('paint', 0.04, 0.22), soft: mk('soft', 0.02, 0.1), gloss: mk('gloss', 0.3, 0.6), glow: mk('glow', 0.02, 0.05, 1, GLOW_MAX, false), screen: mk('screen', 0.04, 0.15, 0.4, 0.7, false), glass: M.glass } as Record<string, THREE.Material>;
 }
 
 // Netze eines geladenen Modells je Baustein (Objekt m<Nr>) und Art (Materialname ext_bk_<Art>), in Bausteinlage
@@ -160,7 +225,7 @@ function assemble(D: Pick<DeckJson, 'mod' | 'inst'>, PARTS: Record<string, Part[
   for (const [mi, x, y, a, over, h] of D.inst) {
     const md = D.mod[mi], parts = PARTS[md.o]; if (!parts) continue;
     const zn = zone(x, y, over, md.n);
-    for (const p of parts) {
+    if (zn) for (const p of parts) {
       const k = zn + '|' + p.cls; let z = zones.get(k); if (!z) zones.set(k, (z = { n: 0, ni: 0, list: [] }));
       z.n += p.pos.length / 3; z.ni += p.idx.length; z.list.push([p, x, y, a, h || 0]);
     }
@@ -267,7 +332,20 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   }
 
   // Bausteine setzen: je Bereich und Art ein Netz
-  const { group, meshes, tris } = assemble(D, PARTS, (x, y, a) => [gx(y), gz(x), a + Math.PI / 2], (x, y) => zoneOf(Math.round(-y / C), Math.round(x / C)), rect, blocks);
+  // Lichtraum: Seine Zellen bekommen keine Bausteine, an ihre Stelle tritt das gebackene Modell (im selben Bereich, also mit derselben Sichtprüfung)
+  const lm = deckTune.lichtraum ? LM[id] : undefined, lmZone = new Set<string>();
+  if (lm) for (const R of lm.data.raeume) for (const [r, c] of R.zellen) lmZone.add(zoneOf(r, c));
+  const placed = assemble(D, PARTS, (x, y, a) => [gx(y), gz(x), a + Math.PI / 2], (x, y) => { const z = zoneOf(Math.round(-y / C), Math.round(x / C)); return lmZone.has(z) ? '' : z; }, rect, blocks);
+  const { group, meshes } = placed; let tris = placed.tris;
+  if (lm) {
+    // Modell in Planlage (glTF: x, oben, −y) → Innenraum, wie ein Baustein bei (0, 0) ohne Drehung
+    const T = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0)), zn = [...lmZone][0];
+    for (const q of lm.meshes) {
+      const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(T, q.mw); m.userData.shared = true;      // Netz und Bilder gehören dem geladenen Modell
+      if (q.mat === materials().glass) m.renderOrder = 3;
+      group.add(m); meshes.push({ m, c: q.geo.boundingSphere!.center.clone().applyMatrix4(m.matrix), r: q.geo.boundingSphere!.radius, zn }); tris += q.tris;
+    }
+  }
   // Personal, Wege, Gruppen
   const yaw = (deg: number) => { const f = deg * Math.PI / 180; return Math.atan2(-Math.sin(f), -Math.cos(f)); };
   const spots: DeckSpot[] = D.personal.map(s => ({ tab: s.tab, x: gx(s.y), z: gz(s.x), face: yaw(s.face), tx: gx(s.ty), tz: gz(s.tx), titel: s.titel, satz: s.satz }));
