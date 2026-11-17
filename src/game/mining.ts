@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { scene, glowMat } from '../core/engine';
+import { scene, glowMat, compileFor } from '../core/engine';
 import { rand, d3 } from '../core/util';
 import { snd, laserSound, sfx, boom } from '../core/audio';
 import { ITEMS, type ItemId } from '../data/items';
 import { P, G, stats, cargoUsed } from './state';
 import { world, pickOre, removeAst, makeAst, dropPick, astHooks, type Asteroid } from './world';
 import { SHARED } from './shared';
-import { burst, puff } from './fx';
+import { burst, puff, floatText } from './fx';
 import { SHIP, hurtPlayer } from './player';
 import { hitEnemy } from './combat';
 import { buildDrone } from '../models/playerShips';
@@ -28,6 +28,7 @@ function extractOne(a: Asteroid, to: THREE.Vector3, from: THREE.Vector3) {
   a.yld--;
   if (SHARED.client) astHooks.yld(a);
   snd(1000 + Math.random() * 200, 0.05, 'sine', 0.02, 300);
+  floatText(from.x, from.y, from.z, 1, ITEMS[k].short, ITEMS[k].c, 'ore:' + k);
   const dir = new THREE.Vector3().subVectors(to, from), len = dir.length();
   dir.normalize().multiplyScalar(len / 0.45);
   for (let i = 0; i < 6; i++) puff(from.x, from.y, from.z, dir.x + rand(-8, 8), dir.y + rand(-8, 8), dir.z + rand(-8, 8), ITEMS[k].c, 0.45);
@@ -46,6 +47,90 @@ export function crumble(a: Asteroid, remote = false) {
   sfx('rock' + Math.floor(Math.random() * 3), 0.6, 0.85 + Math.random() * 0.3, () => snd(120, 0.4, 'triangle', 0.05, -60));
   removeAst(i);
   if (MINE.target === a) MINE.target = null;
+}
+
+// =============== Risse im Brocken (seit Alpha 1.40) ===============
+// Der beschossene Asteroid bekommt eine eigene Kopie seines Gesteinsmaterials mit einem Rissmuster (Zellrauschen im Objektraum).
+// Die Risse wachsen vom Einschlagpunkt aus, je weiter der Brocken abgebaut ist; nahe am Laser glühen sie, solange er brennt.
+const CRK_VS_HEAD = 'varying vec3 vCrk;\n';
+const CRK_FS_HEAD = `uniform float uDmg; uniform float uHeat; uniform vec3 uHit; uniform float uR; varying vec3 vCrk;
+vec3 crkH(vec3 p) { p = vec3(dot(p, vec3(127.1, 311.7, 74.7)), dot(p, vec3(269.5, 183.3, 246.1)), dot(p, vec3(113.5, 271.9, 124.6))); return fract(sin(p) * 43758.5453); }
+float crkE(vec3 p) {
+  vec3 i = floor(p), f = fract(p); float d1 = 8.0, d2 = 8.0;
+  for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++) {
+    vec3 g = vec3(float(x), float(y), float(z)), r = g + crkH(i + g) - f; float d = dot(r, r);
+    if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
+  }
+  return sqrt(d2) - sqrt(d1);
+}
+`;
+const CRK_MAP = `#include <map_fragment>
+vec3 crkQ = vCrk / uR, crkHq = uHit / uR;
+crkQ += 0.22 * vec3(sin(crkQ.y * 4.3 + 1.7), sin(crkQ.z * 3.7 + 0.4), sin(crkQ.x * 4.9 + 2.9));   // verzogen, damit kein gleichmäßiges Netz entsteht
+float crkD = distance(vCrk / uR, crkHq);
+float crkR = 0.12 + uDmg * 1.35;                                   // Reichweite der Risse um den Einschlag, wächst mit dem Abbau
+float crkF = clamp(1.0 - crkD / crkR, 0.0, 1.0);                  // 1 am Einschlag, 0 am Rand des Rissfelds
+float crkW = (0.012 + uDmg * 0.05) * crkF;                         // nach außen haarfein
+float crk = 1.0 - smoothstep(0.0, crkW, crkE(crkQ * 2.6));
+crk += (1.0 - smoothstep(0.0, crkW * 0.55, crkE(crkQ * 6.5 + 3.1))) * smoothstep(0.35, 0.8, crkF) * 0.8;   // feine Nebenrisse nur nahe am Einschlag
+crk = clamp(crk, 0.0, 1.0) * step(0.005, uDmg) * step(0.001, crkF);
+diffuseColor.rgb *= 1.0 - crk * 0.8;
+float crkGlow = crk * uHeat * smoothstep(0.55, 0.0, crkD);`;
+const CRK_EMI = '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.36, 0.07) * crkGlow * 1.6;';
+interface Crack { set?: boolean; a: Asteroid; u: { uDmg: { value: number }; uHeat: { value: number }; uHit: { value: THREE.Vector3 }; uR: { value: number } }; mat: THREE.Material; base: THREE.Material }
+const cracks: Crack[] = [];
+function crackMat(base: THREE.MeshStandardMaterial, u: Crack['u']) {
+  const m = base.clone(), bc = base.onBeforeCompile, key = base.customProgramCacheKey();
+  m.onBeforeCompile = (sh, r) => {
+    bc.call(base, sh, r);
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = CRK_VS_HEAD + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvCrk = position;');
+    sh.fragmentShader = CRK_FS_HEAD + sh.fragmentShader.replace('#include <map_fragment>', CRK_MAP).replace('#include <emissivemap_fragment>', CRK_EMI);
+  };
+  m.customProgramCacheKey = () => key + '|crk';
+  return m;
+}
+const newU = (r: number): Crack['u'] => ({ uDmg: { value: 0 }, uHeat: { value: 0 }, uHit: { value: new THREE.Vector3() }, uR: { value: r } });
+function crackOf(a: Asteroid) {
+  let c = cracks.find(k => k.a === a);
+  if (c) return c;
+  const base = a.mesh.material as THREE.MeshStandardMaterial;
+  if (!base || !base.isMeshStandardMaterial) return null;
+  const u = newU(a.r0), mat = crackMat(base, u);
+  a.mesh.material = mat;
+  cracks.push(c = { a, u, mat, base });
+  return c;
+}
+// Shader vorab übersetzen: je Gesteinsmaterial des Sektors eine Kopie, die bleibt (sonst gäbe der Treiber den Shader wieder frei)
+const crkWarm = new Map<THREE.Material, THREE.Material>();
+let crkSector = '';
+function warmCracks() {
+  const id = world.def?.id || '';
+  if (id === crkSector || !world.asteroids.length) return;
+  crkSector = id;
+  const g = new THREE.Group();
+  for (const a of world.asteroids) {
+    const b = a.mesh.material as THREE.MeshStandardMaterial;
+    if (!b || !b.isMeshStandardMaterial || crkWarm.has(b) || cracks.some(c => c.mat === b)) continue;
+    const m = crackMat(b, newU(a.r0)); crkWarm.set(b, m);
+    g.add(new THREE.Mesh(a.mesh.geometry, m));
+  }
+  if (g.children.length) compileFor(g, scene);
+}
+const _hl = new THREE.Vector3();
+function updateCracks(dt: number, a: Asteroid | null, hit: THREE.Vector3 | null) {
+  for (let i = cracks.length - 1; i >= 0; i--) {
+    const c = cracks[i];
+    if (!world.asteroids.includes(c.a)) { c.mat.dispose(); cracks.splice(i, 1); continue; }
+    c.u.uDmg.value = Math.min(1, (1 - c.a.yld / Math.max(1, c.a.max)) * 1.15 + 0.08);
+    if (c.a === a && hit) {
+      c.u.uHeat.value = Math.min(1, c.u.uHeat.value + dt * 4);
+      c.a.mesh.updateMatrixWorld();
+      // Mitte des Rissfelds wandert nur langsam mit dem Laserpunkt (sonst springen die Risse beim Schwenken)
+      c.a.mesh.worldToLocal(_hl.copy(hit));
+      if (!c.set) { c.u.uHit.value.copy(_hl); c.set = true; } else c.u.uHit.value.lerp(_hl, Math.min(1, dt * 0.6));
+    } else c.u.uHeat.value = Math.max(0, c.u.uHeat.value - dt * 1.2);
+  }
 }
 
 // =============== Bergbaulaser (ein oder zwei Strahlen) ===============
@@ -95,7 +180,9 @@ export function updateMining(dt: number, wantFire: boolean) {
   MINE.dist = aim.t;
   const fire = P.tool === 'laser' && st.laser && wantFire && !G.overheat && !G.dead;
   MINE.firing = fire;
+  warmCracks();
   if (!fire) {
+    updateCracks(dt, null, null);
     G.heat = Math.max(0, G.heat - st.laserCool * dt * (G.overheat ? 0.8 : 1));
     if (G.overheat && G.heat <= 35) { G.overheat = false; snd(700, 0.15, 'sine', 0.03, 200); }
     hideBeams();
@@ -120,6 +207,8 @@ export function updateMining(dt: number, wantFire: boolean) {
     if (MINE.hum <= 0) { MINE.hum = 0.12; snd(aim.a ? 90 + Math.random() * 20 : 70, 0.14, 'sawtooth', 0.012, 10); }
   }
   const a = aim.a;
+  updateCracks(dt, a, a ? to : null);
+  if (a) crackOf(a);
   if (!a) return;
   for (let i = 0; i < 2 * st.beams; i++) puff(to.x, to.y, to.z, rand(-40, 40), rand(-40, 40), rand(-40, 40), Math.random() < 0.5 ? '#ffd27a' : '#ff8a30', 0.35);
   MINE.acc += st.laserRate * st.beams * dt;

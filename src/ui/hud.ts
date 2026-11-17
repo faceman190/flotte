@@ -13,6 +13,7 @@ import { landInfo } from '../game/surface';
 import { NET, remoteMarkers } from '../game/net';
 import { trackedMission, missionLines, missionMarkers } from '../game/missions';
 import { storyObjective, storyMarkers } from '../game/story';
+import { floats } from '../game/fx';
 
 const TAU = Math.PI * 2;
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
@@ -159,6 +160,21 @@ export function drawHUD() {
     ux.fillText(`${ITEMS[m.k].short} ${Math.round(m.p * 100)}%${a.comp[1] ? ' +' + a.comp.slice(1).map(o => ITEMS[o.k].short).join('/') : ''} · ${a.yld}E`, p.x + 8, p.y + 3);
   }
   ux.globalAlpha = 1; ux.textAlign = 'center';
+  // Schwebende Zahlen (+1 FE, +15 Cr): steigen auf und verblassen
+  if (floats.length) {
+    ux.font = '700 13px "Share Tech Mono",Consolas,monospace';
+    for (const f of floats) {
+      const p = proj(f.x, f.y, f.z);
+      if (p.behind) continue;
+      const a = clamp(f.t < 0.15 ? f.t / 0.15 : 1 - (f.t - 0.8) / 0.5, 0, 1);
+      ux.globalAlpha = a; ux.fillStyle = 'rgba(0,0,0,.55)';
+      // Erz links vom Laserpunkt (rechts stehen die Angaben zum Asteroiden), Kopfgeld mittig über dem Wrack
+      const txt = '+' + fmtN(f.n) + ' ' + f.unit, ore = f.key.startsWith('ore'), y = p.y - (ore ? 6 : 18) - f.t * 26, x = ore ? p.x - 34 : p.x;
+      ux.textAlign = ore ? 'right' : 'center';
+      ux.fillText(txt, x + 1, y + 1); ux.fillStyle = f.col; ux.fillText(txt, x, y);
+    }
+    ux.globalAlpha = 1; ux.textAlign = 'center';
+  }
   // Fadenkreuz
   if (!G.dead && G.mode === 'play') {
     const f = fwd(), a = proj(P.x + f.x * 500, P.y + f.y * 500, P.z + f.z * 500);
@@ -170,6 +186,14 @@ export function drawHUD() {
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ux.beginPath(); ux.moveTo(a.x + dx * 18, a.y + dy * 18); ux.lineTo(a.x + dx * 26, a.y + dy * 26); ux.stroke(); }
       }
       if (G.hitMark > 0) { ux.lineWidth = 2; for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { ux.beginPath(); ux.moveTo(a.x + dx * 6, a.y + dy * 6); ux.lineTo(a.x + dx * 12, a.y + dy * 12); ux.stroke(); } }
+      // Tempo am Fadenkreuz (seit Alpha 1.40): Zahl links, darunter ein dünner Balken bis zur Höchstgeschwindigkeit der Flugstufe
+      const sp = Math.hypot(P.vx, P.vy, P.vz), vm = Math.max(1, flightMax()), sx = a.x - 40, sy = a.y + 4;
+      ux.textAlign = 'right'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = G.cruise ? '#7cc4ff' : 'rgba(228,238,245,.85)';
+      ux.fillText(String(Math.round(sp)), sx, sy);
+      ux.font = '9px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = 'rgba(228,238,245,.5)'; ux.fillText(G.cruise ? 'm/s · REISE' : 'm/s', sx, sy + 11);
+      ux.fillStyle = 'rgba(255,255,255,.12)'; ux.fillRect(sx - 34, sy + 15, 34, 2);
+      ux.fillStyle = G.cruise ? '#7cc4ff' : 'rgba(255,210,122,.9)'; ux.fillRect(sx - 34, sy + 15, 34 * clamp(sp / vm, 0, 1), 2);
+      ux.textAlign = 'center';
     }
     ux.strokeStyle = 'rgba(255,255,255,.12)'; ux.lineWidth = 1;
     ux.beginPath(); ux.arc(W / 2, H / 2, W / 2 * 0.05, 0, TAU); ux.stroke();

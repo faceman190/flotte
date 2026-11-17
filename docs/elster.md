@@ -7,7 +7,7 @@ Gebaut am 17.11.2026. Wunsch: „Dieses Schiff entwerfen“ mit Bildern eines Be
 - je Seite zwei liegende Erzkanister im Gitterrahmen statt kastenförmiger Erzsäcke;
 - zwei tief liegende Triebwerksgondeln und Kühlrippen auf dem Rücken.
 
-Der Name passt zur Prospektor-Klasse `elster` im Spiel, die bisher das gekaufte Modell „Zenith“ nutzt. Seit dem 17.11.2026 das Modell der Klasse `elster` im Spiel (Abschnitt „Im Spiel“).
+Der Name passt zur Prospektor-Klasse `elster` im Spiel, die bisher das gekaufte Modell „Zenith“ nutzt. Seit Alpha 1.39 (17.11.2026) das Modell der Klasse `elster` im Spiel (Abschnitt „Im Spiel“).
 
 ![Bauplan](bilder/elster-bauplan.jpg)
 ![Übersicht](bilder/elster-blatt.jpg)
@@ -54,7 +54,7 @@ Text und Linien rendert eine eigene Szene schwarz auf Weiß, danach werden sie p
 - Felsbrocken: einzelne eingefärbte Dreiecke sahen nach Spielzeug aus. Besser sind eine feine Unterteilung, dreifache Verformung und Erzadern im Shader.
 - Cockpitbilder ohne Kanzelglas rendern, sonst sieht man nur Spiegelungen.
 
-## Im Spiel
+## Im Spiel (Alpha 1.39)
 
 ![Im Spiel](bilder/elster-spiel.jpg)
 

@@ -9,7 +9,7 @@ import type { Paint } from '../models/gltfShips';
 import { ITEMS, ITEM_IDS } from '../data/items';
 import { flightMax, P, G, stats, cargoUsed, settings } from './state';
 import { world, SECTOR_RADIUS, decoNear, shatterDeco } from './world';
-import { burst, puff } from './fx';
+import { burst, puff, sparks, flash, shieldRipple, followRipples } from './fx';
 import { fireBullet, launchRocket } from './combat';
 import { radio } from '../ui/radio';
 import { updateMining, throwCharge } from './mining';
@@ -52,7 +52,7 @@ export function hurtPlayer(d: number) {
   G.sinceHit = 0;
   if (G.cruise) { G.cruise = false; radio('SYSTEM', 'Treffer: Reiseflug abgebrochen.'); }
   G.shake = Math.min(1.6, G.shake + d * 0.05);
-  (SHIP.shield.material as THREE.MeshBasicMaterial).opacity = P.shield > 0 ? 0.45 : 0;
+  (SHIP.shield.material as THREE.MeshBasicMaterial).opacity = P.shield > 0 ? 0.07 : 0;   // die ganze Blase nur schwach, die Welle am Einschlag trägt (impactFx)
   const hadShield = P.shield > 0, hullBefore = P.hull, crit = stats().maxHull * 0.3;
   if (P.shield > 0) { const a = Math.min(P.shield, d); P.shield -= a; d -= a; }
   P.hull -= d;
@@ -61,6 +61,35 @@ export function hurtPlayer(d: number) {
   // Treffer: Schild knistert, blanke Hülle scheppert
   sfx(P.shield > 0 ? 'shield_hit' : 'hull_hit' + Math.floor(Math.random() * 3), P.shield > 0 ? 0.45 : 0.6, 0.9 + Math.random() * 0.2, () => snd(140, 0.12, 'sawtooth', 0.05, -60));
   if (P.hull <= 0) die();
+}
+// Einschlag eines Feindschusses am eigenen Schiff (seit Alpha 1.40). Mit Schild: Welle über die Blase vom Einschlagpunkt aus, heller Kern und
+// der abgelenkte Schuss als Funken in der Abprallrichtung. Ohne Schild: Funken und Glut direkt aus der Hülle.
+const _bs = new THREE.Vector3();
+export function shieldRadius() {
+  const g = SHIP.shield.geometry;
+  if (!g.boundingSphere) g.computeBoundingSphere();
+  SHIP.shield.getWorldScale(_bs);
+  return (g.boundingSphere ? g.boundingSphere.radius : stats().radius) * Math.max(_bs.x, _bs.y, _bs.z);
+}
+export function impactFx(b: { px: number; py: number; pz: number; vx: number; vy: number; vz: number; torp?: boolean }, shield: boolean) {
+  let nx = b.px - P.x, ny = b.py - P.y, nz = b.pz - P.z;
+  const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+  const big = b.torp ? 2 : 1;
+  if (shield) {
+    const R = Math.max(stats().radius * 0.8, shieldRadius()), x = P.x + nx * R, y = P.y + ny * R, z = P.z + nz * R;
+    shieldRipple(P.x, P.y, P.z, nx, ny, nz, R * big);
+    flash(x, y, z, '#bfe4ff', 9 * big, 0.12);
+    // abgelenkt: Geschwindigkeit an der Blase gespiegelt
+    const vl = Math.hypot(b.vx, b.vy, b.vz) || 1, vx = b.vx / vl, vy = b.vy / vl, vz = b.vz / vl, dn = vx * nx + vy * ny + vz * nz;
+    const rx = vx - 2 * dn * nx, ry = vy - 2 * dn * ny, rz = vz - 2 * dn * nz;
+    sparks(x, y, z, rx, ry, rz, '#d8a8ff', 6 * big, 260, 0.35, 0.3, 0.05);
+    sparks(x, y, z, nx, ny, nz, '#9fd4ff', 5 * big, 120, 0.3, 0.9);
+  } else {
+    const R = stats().radius * 0.55, x = P.x + nx * R, y = P.y + ny * R, z = P.z + nz * R;
+    flash(x, y, z, '#ffc080', 8 * big, 0.12);
+    sparks(x, y, z, nx, ny, nz, '#ffa040', 10 * big, 170, 0.45, 0.9);
+    burst(x, y, z, '#ffb347', 6, 25, 0.4);
+  }
 }
 function die() {
   G.dead = 4;
@@ -110,15 +139,17 @@ export function updatePlayer(dt: number) {
   G.roll += ((yawRate * 0.42 + (keys.KeyA ? 0.35 : 0) - (keys.KeyD ? 0.35 : 0)) + G.rollOff - G.roll) * Math.min(1, dt * 5);
   const f = fwd(), r = right();
   let th = 0;
-  // Flugstufen: Manöverflug fährt gemächlich an (Jäger: gut 2 s bis 140 m/s), Reiseflug baut langsam bis 300 m/s auf
-  const vmax = flightMax(), acc = st.acc * (G.cruise ? 0.135 : 0.115);
+  // Flugstufen: Manöverflug fährt zügig an (Jäger: knapp 2 s bis 140 m/s, seit Alpha 1.40; vorher 4,5 s), Reiseflug baut langsam bis 300 m/s auf
+  const vmax = flightMax(), acc = st.acc * (G.cruise ? 0.135 : 0.19);
   if (keys.KeyW) { P.vx += f.x * acc * dt; P.vy += f.y * acc * dt; P.vz += f.z * acc * dt; th = 1; }
-  if (keys.KeyS) { P.vx -= f.x * acc * 2 * dt; P.vy -= f.y * acc * 2 * dt; P.vz -= f.z * acc * 2 * dt; }
+  const brk = st.acc * (G.cruise ? 0.135 : 0.115) * 2;   // Bremsen/Rückwärts wie bisher (sonst flöge man rückwärts so schnell wie vorwärts)
+  if (keys.KeyS) { P.vx -= f.x * brk * dt; P.vy -= f.y * brk * dt; P.vz -= f.z * brk * dt; }
   const sx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   if (sx) { P.vx += r.x * sx * acc * 1.2 * dt; P.vz += r.z * sx * acc * 1.2 * dt; }
   const sv = (keys.Space ? 1 : 0) - (keys.ControlLeft || keys.ControlRight || keys.KeyX ? 1 : 0);
   if (sv) { _up.set(0, 1, 0).applyEuler(_ue.set(P.pitch, P.yaw, G.roll, 'YXZ')); P.vx += _up.x * sv * acc * 1.2 * dt; P.vy += _up.y * sv * acc * 1.2 * dt; P.vz += _up.z * sv * acc * 1.2 * dt; }
-  const drag = Math.pow(th || sx || sv ? (G.cruise ? 0.9 : 0.75) : keys.KeyS ? 0.25 : 0.5, dt);
+  // ohne Schub rollt das Schiff aus (verliert gut 20 % je Sekunde; vorher halbierte sich das Tempo jede Sekunde), S bremst kräftig
+  const drag = Math.pow(th || sx || sv ? (G.cruise ? 0.9 : 0.75) : keys.KeyS ? 0.25 : 0.78, dt);
   P.vx *= drag; P.vy *= drag; P.vz *= drag;
   const sp = Math.hypot(P.vx, P.vy, P.vz);
   // über der Grenze (z. B. nach dem Zurückschalten aus dem Reiseflug) weich abbremsen statt hart kappen
@@ -289,6 +320,7 @@ export function syncShip() {
   // Größe des blauen Strahls: Leerlauf 0,8, voller Schub 1,7, Reiseflug etwas mehr (vom Nutzer so bestätigt)
   const gs = (0.8 + G.thrust * 0.9 + (G.cruise ? 0.35 : 0)) * (1 + P.up.engine * 0.05) * (1 + Math.random() * 0.1);
   SHIP.glows.forEach(g => { g.scale.setScalar(gs * (g.userData.base || 1)); (g.material as THREE.SpriteMaterial).opacity = 0.32 + G.thrust * 0.28; });
+  followRipples(P.x, P.y, P.z);
   const sm = SHIP.shield.material as THREE.MeshBasicMaterial;
   sm.opacity = Math.max(0, sm.opacity - 0.016 * 1.5);
 }
