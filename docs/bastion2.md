@@ -1,7 +1,7 @@
 # Bastion 2: das Trägerschiff neu gebaut (Schaumodell)
 
 Gebaut am 17.11.2026. Wunsch: „Die Bastion auch in Blender überarbeiten mit dem, was du gelernt hast, mehr Details, noch besser als alles bisher.“
-Die alte Bastion (`asset-src/neu/bastion/Bastion.blend`, 514 m gebaut, im Spiel ×1,9) bleibt unberührt. Die neue liegt in `asset-src/neu/bastion2/` und ist seit dem 17.11.2026 im Spiel (Abschnitt „Im Spiel“).
+Die alte Bastion (`asset-src/neu/bastion/Bastion.blend`, 514 m gebaut, im Spiel ×1,9) bleibt unberührt. Die neue liegt in `asset-src/neu/bastion2/` und ist seit Alpha 1.38 (17.11.2026) im Spiel (Abschnitt „Im Spiel“).
 
 ![Übersicht](bilder/bastion2-blatt.jpg)
 
@@ -52,7 +52,7 @@ Ansichten: gesamt, heck, seite, unten, hangar, turm, deck, triebwerke, bug (alle
 - Getönte Platten auf langen Schrägen ergaben Streifen: Schrägen bekommen einen Ton.
 - Schrift auf der Bordwand nur, wo die Seite wirklich senkrecht und gleich breit ist, sonst steckt sie im Rumpf.
 
-## Im Spiel
+## Im Spiel (Alpha 1.38)
 
 - Weg: `sh asset-src/neu/bastion2/bas_spiel.sh` (baut Bastion2.blend neu, `bas_export.py` → Bastion2_roh.glb, simplify-hard 0,5 / Fehler 0,0002 → `asset-src/glb/station/Carrier.glb`), danach `npm run assets`.
 - Export ohne Fasen (die Fasen machten den Großteil der 1,2 Mio. Dreiecke aus): 283.000 Dreiecke roh, vereinfacht 201.000, gepackt 2,8 MB. Leuchtende Materialien heißen `bastion_windows`, `bastion_lamps`, `bastion_engine_glow`, `bastion_hangar_field`. Rumpffarben im Export ×1,9 (Panzer, Metall, Düsen ×1,5), sonst wirkte der Rumpf im Spiel fast schwarz.
