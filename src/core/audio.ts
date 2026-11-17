@@ -264,7 +264,7 @@ export function boosterSound(on: boolean, thrust = 0, speedFrac = 0, jump = 0) {
 }
 // Einzelschuss der Bordkanone: nur der kurze Anfang der Aufnahme, leicht variiert
 let lastShot = 0;
-export function gunSound(vol = 1) {
+export function gunSound(vol = 1, pitch = 1) {   // pitch: schwere Kanonen klingen tiefer (bolts.ts)
   const b = BUF.gun;
   if (!b || !AC) return false;
   const ac = AC, t = ac.currentTime;
@@ -272,7 +272,7 @@ export function gunSound(vol = 1) {
   lastShot = t;
   const s = ac.createBufferSource(), g = ac.createGain(), start = TRIM.gun[0], len = 0.36;
   s.buffer = b;
-  s.playbackRate.value = 0.94 + Math.random() * 0.14;
+  s.playbackRate.value = (0.94 + Math.random() * 0.14) * pitch;
   g.gain.setValueAtTime(0.32 * vol * audio.volume, t);
   g.gain.setTargetAtTime(0, t + len * 0.55, 0.06);
   s.connect(g).connect(ac.destination);
@@ -289,7 +289,7 @@ export const outside = { muted: false };
 export const sndOut: typeof snd = (f, d, type, v, slide) => { if (!outside.muted) snd(f, d, type, v, slide); };
 export const sfxOut: typeof sfx = (key, vol, rate, fallback) => (outside.muted ? false : sfx(key, vol, rate, fallback));
 export const boomOut: typeof boom = (vol, rate, fallback) => (outside.muted ? false : boom(vol, rate, fallback));
-export const gunSoundOut: typeof gunSound = vol => (outside.muted ? true : gunSound(vol));
+export const gunSoundOut: typeof gunSound = (vol, pitch) => (outside.muted ? true : gunSound(vol, pitch));
 export const audioDebug = () => ({ musicEl: music, musicMode, musicSrc: music?.src || '', musicPlaying: !!music && !music.paused, musicTime: music?.currentTime || 0, musicDur: music?.duration || 0, loaded: Object.keys(BUF), trim: TRIM, ctx: AC?.state });
 
 // ---------------- Freischalten nach der ersten Eingabe ----------------

@@ -1,4 +1,4 @@
-# Spielgefühl (Alpha 1.40)
+# Spielgefühl (Alpha 1.40, 1.41)
 
 Nutzerwunsch 2026-11-17: Optik und Modelle passen, jetzt soll sich das Spiel besser anfühlen. Aus der Schwächenliste gewählt:
 
@@ -35,3 +35,17 @@ Nutzerwunsch 2026-11-17: Optik und Modelle passen, jetzt soll sich das Spiel bes
 ## Offen
 - Kühlfenster am Laser (Loslassen kurz vor Rot = schnelle Abkühlung) nur vorgeschlagen, Nutzer fragt nach.
 - Belohnungstempo, Laufen (Rennen nur 13 % schneller), Sichtbarkeit der Ferrox auf Entfernung.
+
+## Laserbolzen der Bordkanonen (Alpha 1.41)
+
+`src/game/bolts.ts`: Alle Schüsse (eigene, Patrouillen, Ferrox) zeichnet ein einziges InstancedMesh als zur Kamera gedrehte Fläche:
+weißheißer Kern, farbiger Saum, runde Spitze, dünn auslaufender Schweif, dazu ein rundes Kopfleuchten mit Mindestgröße am Bildschirm
+(sonst sieht man die eigenen Schüsse aus der Verfolgerkamera kaum, weil sie direkt wegfliegen). Vorher: ein gelbes Kästchen je Schuss.
+
+Stufen in `BOLTS` (Farbe, Breite, Länge, Saum, Mündungsblitz, Einschlagstärke, Tonhöhe des Schusses):
+- `p1` Leichter Laser (bernstein), `p2` Laser (orange), `p3` Schwerer Laser (rotorange), `p4` Plasmalaser (blauweiß)
+- `w` Patrouillen/Mitspieler (blassgelb), `e` Ferrox (violett)
+
+`playerBolt(dmg, cls)` wählt die eigene Stufe nach Schaden je Schuss (unter 9 → p1, ab 9 → p2, ab 15 → p3, ab 26 → p4); eine Schiffsklasse kann
+mit `bolt` eine feste Stufe vorgeben. Für spätere Waffen-Ausrüstung: neue Stufe in `BOLTS` eintragen und beim Feuern `{ bolt }` mitgeben.
+Einschlag am Ferrox (Blitz, Funken) und Mündungsblitz skalieren mit der Stufe; schwere Kanonen klingen tiefer (`gunSound(vol, pitch)`).

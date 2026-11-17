@@ -50,7 +50,7 @@ export function sparks(x: number, y: number, z: number, nx: number, ny: number, 
 }
 
 // ---------- Trefferblitze: kurzes, weiches Aufleuchten am Einschlag ----------
-const flashes = Array.from({ length: 28 }, () => {
+const flashes = Array.from({ length: 48 }, () => {
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
   sp.visible = false; scene.add(sp);
   return { sp, life: 0, max: 1, size: 1 };

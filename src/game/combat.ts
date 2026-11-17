@@ -6,6 +6,7 @@ import { ferroxDrone, BOMBER_T, buildMother } from '../models/ferrox';
 import { MK } from '../models/ships';
 import { world, dropPick, breakAst, SECTOR_RADIUS } from './world';
 import { burst, puff, sparks, flash, floatText } from './fx';
+import { NO_MESH, boltStyle } from './bolts';
 import { P, G, stats } from './state';
 import { hurtPlayer, playerTargetable, playerVisible, impactFx } from './player';
 import { damageTraffic, damageAlly } from './npc';
@@ -17,8 +18,6 @@ import { rollKillLoot } from './inventory';
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
 
 // ---------------- Geschosse ----------------
-const TRACER_GEO = new THREE.BoxGeometry(0.3, 0.3, 7);
-const BUL_M: Record<string, THREE.Material> = { p: basicAdd(0xffd27a), w: basicAdd(0xfff0b0), e: basicAdd(0xc070ff) };
 // Triebwerksspur der Ferrox: Kegel nach hinten (−Z), 28 m lang
 const TRAIL_GEO = (() => { const c = new THREE.ConeGeometry(1.3, 28, 8, 1, true); c.rotateX(-Math.PI / 2); c.translate(0, 0, -14); return c; })();
 let lastScreech = -99;   // Spielzeit des letzten Angriffslauts
@@ -26,11 +25,9 @@ const TORP_GEO = new THREE.SphereGeometry(1.6, 10, 8), TORP_M = new THREE.MeshBa
 export const ROCKET_GEO = new THREE.CylinderGeometry(0.2, 0.2, 1.8, 6);
 
 export function fireBullet(list: any[], x: number, y: number, z: number, dx: number, dy: number, dz: number, speed: number, life: number, dmg: number, kind: string, extra?: any) {
-  const m = new THREE.Mesh(TRACER_GEO, BUL_M[kind]);
-  m.position.set(x, y, z);
-  m.lookAt(x + dx, y + dy, z + dz);
-  scene.add(m);
-  const b = { x, y, z, px: x, py: y, pz: z, vx: dx * speed, vy: dy * speed, vz: dz * speed, life, dmg, kind, mesh: m };
+  // Aussehen: Laserbolzen aus bolts.ts (ein gemeinsames Netz für alle Schüsse); extra.bolt wählt die Stufe
+  const m = NO_MESH;
+  const b = { x, y, z, px: x, py: y, pz: z, vx: dx * speed, vy: dy * speed, vz: dz * speed, life, dmg, kind, mesh: m, age: 0, bolt: kind === 'e' ? 'e' : kind === 'w' ? 'w' : 'p1' };
   if (extra) Object.assign(b, extra);
   // Gastgeber: Feindschüsse und Schüsse der Patrouillen für die Mitspieler mitschreiben
   if (list === world.ebullets && SHARED.online && !SHARED.client && !(extra && extra.remote)) SHARED.shots.push([Math.round(x), Math.round(y), Math.round(z), Math.round(b.vx), Math.round(b.vy), Math.round(b.vz), life, (b as any).dmgP || 0, 0]);
@@ -425,8 +422,11 @@ function hitFx(e: any, b: any, r: number) {
   let nx = b.px - e.x, ny = b.py - e.y, nz = b.pz - e.z;
   const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
   const k = e.type === 'mother' ? 0.85 : 0.6, x = e.x + nx * r * k, y = e.y + ny * r * k, z = e.z + nz * r * k;
-  flash(x, y, z, '#ffe0b0', e.type === 'mother' ? 16 : 7, 0.09);
-  sparks(x, y, z, nx, ny, nz, '#ffb060', 7, 150, 0.32, 0.85);
+  // Stärke und Farbe nach der Waffe (Stufe des Laserbolzens): schwere Laser schlagen größer ein
+  const st = boltStyle(b.bolt), im = st.impact, hc = '#' + st.halo.toString(16).padStart(6, '0');
+  flash(x, y, z, '#ffe8c8', (e.type === 'mother' ? 16 : 7) * (0.7 + 0.3 * im), 0.08 + 0.02 * im);
+  if (im > 1.5) flash(x, y, z, hc, 6 * im, 0.16);
+  sparks(x, y, z, nx, ny, nz, im > 2 ? '#bfe0ff' : '#ffb060', Math.round(6 * im), 120 + 30 * im, 0.3 + 0.04 * im, 0.85);
   sparks(x, y, z, nx, ny, nz, '#d8b0ff', 3, 90, 0.25, 1);
   burst(x, y, z, '#c070ff', 3, 20, 0.3);
   e.hitT = 1;
@@ -440,8 +440,7 @@ export function updateProjectiles(dt: number) {
     const b = bullets[i];
     b.px = b.x; b.py = b.y; b.pz = b.z;
     b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
-    b.life -= dt;
-    b.mesh.position.set(b.x, b.y, b.z);
+    b.life -= dt; b.age = (b.age || 0) + dt;
     let hit = false;
     for (let j = enemies.length - 1; j >= 0; j--) {
       const e = enemies[j], r = e.type === 'mother' ? 80 : e.type === 'bomber' ? 18 : 13;   // Trefferkugel passend zur neuen Größe
@@ -498,8 +497,8 @@ export function updateProjectiles(dt: number) {
     }
     b.px = b.x; b.py = b.y; b.pz = b.z;
     b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
-    b.life -= dt;
-    b.mesh.position.set(b.x, b.y, b.z);
+    b.life -= dt; b.age = (b.age || 0) + dt;
+    if (b.torp) b.mesh.position.set(b.x, b.y, b.z);
     if (b.life > 0 && playerTargetable() && segHit(b, P.x, P.y, P.z, stats().radius + (b.torp ? 3 : 1))) {
       impactFx(b, P.shield > 0);
       hurtPlayer(b.dmgP);

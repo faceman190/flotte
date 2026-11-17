@@ -21,6 +21,7 @@ import { updateChapter1 } from './game/chapter1';
 import { preloadMeshRooms } from './game/meshRoom';
 import { SHIP, placePlayer, updatePlayer, updatePickups, syncShip, nearDock, gateHit, hooks, fwd, setShipModel } from './game/player';
 import { updateParticles, syncParticles, puff } from './game/fx';
+import { syncBolts } from './game/bolts';
 import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
 import { drawHUD, updatePanels, showBanner, nextHop } from './ui/hud';
 import { radio, clearRadio } from './ui/radio';
@@ -657,6 +658,7 @@ function loop(now: number, manual = false) {
     updateSky(camera.position);
     updateAmbience(dt);
     syncParticles();
+    syncBolts([world.bullets, world.ebullets]);
     render();
   }
   if (G.mode !== 'play' && G.mode !== 'rover') laserSound(false);
