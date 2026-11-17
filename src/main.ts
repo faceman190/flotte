@@ -40,7 +40,7 @@ import { openChat } from './ui/mp';
 const openMap = () => openBand('karte'), closeMap = closeBand;
 import { menuHooks, showMainMenu, hideMainMenu, showPause, hidePause, applySettings, pauseSubOpen, closePauseSub } from './ui/menus';
 import { SECTOR, FACTION } from './data/galaxy';
-import { loadShipModels, setGear, type Paint } from './models/gltfShips';
+import { loadShipModels, setGear, setDoors, type Paint } from './models/gltfShips';
 import { hasInterior } from './data/ships';
 import { loadRockModel } from './game/world';
 import { loadStationModels } from './models/stationModels';
@@ -637,11 +637,13 @@ function loop(now: number, manual = false) {
   }
   if (world.def && G.mode !== 'map') {
     animateStructures(dt);
-    if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); }
-    else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); }
+    // Rampe und Leiter (setDoors): im Hangar und am Boden offen, im Flug und beim Landeanflug zu
+    if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); setDoors(SHIP.g, hangarGearDown(), dt); }
+    else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); setDoors(SHIP.g, true, dt); }
     else {
       SHIP.g.visible = (G.mode === 'play' || G.mode === 'jump' || G.mode === 'pause' || G.mode === 'entry') && !G.dead;
       setGear(SHIP.g, G.mode === 'entry');   // im Flug eingezogen, beim Landeanflug ausgefahren
+      setDoors(SHIP.g, false, dt);
       if (SHIP.g.visible) syncShip();
     }
     setDustVisible(!IN.active);

@@ -140,10 +140,23 @@ Kanzelverkleidung), Handläufe im Gang mit Lücken an den Türen, Waschraumtür 
 
 Schiffskoordinaten (Laufkarte, Auslöser): x = −y(Blender), y = z(Blender) − 3,98, z = −(x(Blender) + 0,02).
 
+## Rampe und Leiter im Spiel (Alpha 1.36)
+
+- Export (`kor_export.py`): Rampe, Verlängerung, Lukendeckel und Leiter behalten eigene Materialien mit der Endung ` |rampe`, ` |rampe2`,
+  ` |luke`, ` |leiter` (Rauheit minimal verschoben, sonst legt simplify-hard sie mit gleichen Materialien zusammen). Verlängerung eingefahren
+  (Bild 1), Leiter ausgefahren (Bild 60). Per Schlüsselbild versteckte Teile werden vor dem Export eingeblendet und neu ausgewertet (sonst
+  übernimmt Blender ihre alte Lage). Die Gelenkpunkte stehen in `kor-export.txt`.
+- Spiel (`src/models/gltfShips.ts`, `DOORS` und `setDoors`): Die Teile werden weltlagetreu an Gelenke gehängt (`attach`, die komprimierten
+  Meshes haben eigene Quantisierungsknoten). Rampe: Drehung um die Querachse durch das Scharnier, −111,8°; Verlängerung: 3 m entlang der
+  Rampe; Lukendeckel: −100°; Leiter: gleitet 1,95 m aus dem Schacht und ist eingezogen unsichtbar. Abläufe wie in Blender: Rampe 4,2 s
+  (Schwenk 12–72 %, Verlängerung 66–96 %), Leiter 2,5 s (Deckel 0–30 %, Leiter 27–93 %).
+- Auslöser (`src/main.ts`): im Hangar offen, solange das Fahrwerk unten ist (`hangarGearDown`), auf Planeten offen, im Flug und beim
+  Landeanflug zu. Gerechnet mit der Spielzeit des Bildes (`dt`).
+
 ## Offen
 
-- Rampe und Leiter sind im Spiel noch nicht beweglich (das Spiel kennt nur das Fahrwerk als ein- und ausfahrbares Teil); die Animationen
-  liegen im Blender-Modell bereit.
+- Die Zylinder der Rampe fehlen im Spiel (in Blender vorhanden).
+- Über die offene Rampe kann man im Spiel nicht laufen (die Laufkarte ist für das geschlossene Schiff gerechnet; Einstieg wie bisher am Schiff).
 - Cockpit: Die Anzeigen sind geometrische Platzhalter (keine Bildschirminhalte als Textur).
 - Bug: viele kleine Dreiecke, wo Querfugen die spitzen Facetten schneiden.
 - Fürs Spiel: Dreiecke reduzieren, Materialien auf das Spielformat bringen, Kollision, Andocken.
