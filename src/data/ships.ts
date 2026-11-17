@@ -57,6 +57,12 @@ export const SHIPS = {
     hull: 330, shield: 130, speed: 250, acc: 400, turn: 0.75, cargo: 150, ammo: 450, rockets: 6, dmg: 1.35,
     laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1700, charges: 0, drones: 0, radius: 15, camUp: 24, camBack: 78, upMul: 1.7, col: 0x4a86d8, model: 'Kormoran', len: 46,
   },
+  // Eigenes Modell (asset-src/neu/wuerger, Blender-Skripte, docs/wuerger.md): 24,8 × 26,2 × 5 m, einsitzig, kein Innenraum
+  wuerger: {
+    n: 'Würger', role: 'Schwerer Jäger', price: 16000, desc: 'Einsitziger schwerer Jäger der Bastion: Schienenkanone unter dem Rumpf, zwei Flügelkanonen, vier Flugkörper, dicke Panzerung. Kaum Fracht, kein Bergbau.',
+    hull: 260, shield: 110, speed: 275, acc: 510, turn: 0.9, cargo: 18, ammo: 600, rockets: 4, dmg: 1.85,
+    laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1500, charges: 0, drones: 0, radius: 10, camUp: 11, camBack: 40, upMul: 1.5, col: 0xc8282a, model: 'Wuerger', len: 24.8,
+  },
 } satisfies Record<string, ShipClass>;
 export type ShipId = keyof typeof SHIPS;
 // Kleine Flieger (unter 30 m) haben keinen begehbaren Innenraum: man steigt ein und fliegt los

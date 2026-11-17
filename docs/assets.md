@@ -86,6 +86,13 @@ Volles Modell mit Innenraum, gebaut von Skripten in `asset-src/neu/kormoran/` (d
 Laufkarte mit Auslösern aus `asset-src/glb/ship/Kormoran.look.json`), danach `npm run assets`. Schiffsklasse `kormoran` in
 src/data/ships.ts, Triebwerks- und Kanonenpunkte in src/models/playerShips.ts.
 
+## Würger (eigener Jäger aus Blender)
+Einsitziger schwerer Jäger, gebaut von Skripten in `asset-src/neu/wuerger/` (docs/wuerger.md). Unter 30 m: kein Innenraum, keine Laufkarte.
+Weg ins Spiel: `sh asset-src/neu/wuerger/wue_spiel.sh` (Blender-Bau, Export `wue_export.py` mit schlichten Materialien, Fahrwerk und Leiter
+als `gear`, simplify-hard 0.6), danach `npm run assets`. Schiffsklasse `wuerger` in src/data/ships.ts, Triebwerks- und Kanonenpunkte in
+src/models/playerShips.ts, Silhouette `SIL.wuerger` in src/ui/hud.ts. Achtung: simplify-hard legt gleiche Materialien zusammen; „gear“
+muss sich von allen anderen unterscheiden (sonst bleibt das Fahrwerk im Flug sichtbar).
+
 ## Venom (Startschiff)
 Kaufmodell „Venom X Spaceship“ (asset-src/neu/venom-x-spaceship, ohne Texturen, ein graues Material). Weg ins Spiel:
 1. `node scripts/obj-to-glb.mjs asset-src/neu/venom-x-spaceship/Venom_obj.obj asset-src/neu/_test/venom_raw.glb` (OBJ → GLB mit benannten Teilen)
