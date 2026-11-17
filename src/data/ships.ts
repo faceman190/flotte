@@ -51,6 +51,12 @@ export const SHIPS = {
     hull: 400, shield: 160, speed: 240, acc: 360, turn: 0.7, cargo: 220, ammo: 450, rockets: 6, dmg: 1.2,
     laser: 1.2, beams: 1, laserRange: 300, heat: 0.9, scan: 2000, charges: 4, drones: 1, radius: 22, camUp: 46, camBack: 150, upMul: 2, col: 0xff8a2a, model: 'Pfeil', len: 93,
   },
+  // Eigenes Modell (asset-src/neu/kormoran, Blender-Skripte, docs/kormoran.md): 46 × 34 × 8 m, innen begehbar
+  kormoran: {
+    n: 'Kormoran', role: 'Korvette', price: 26000, desc: 'Schwere Korvette mit Laderaum und Heckrampe, drei Kabinen, Sanität, Messe und Technik. Zwei Kanonen, Rückenturm, sechs Flugkörper. Innen begehbar.',
+    hull: 330, shield: 130, speed: 250, acc: 400, turn: 0.75, cargo: 150, ammo: 450, rockets: 6, dmg: 1.35,
+    laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1700, charges: 0, drones: 0, radius: 15, camUp: 24, camBack: 78, upMul: 1.7, col: 0x4a86d8, model: 'Kormoran', len: 46,
+  },
 } satisfies Record<string, ShipClass>;
 export type ShipId = keyof typeof SHIPS;
 // Kleine Flieger (unter 30 m) haben keinen begehbaren Innenraum: man steigt ein und fliegt los

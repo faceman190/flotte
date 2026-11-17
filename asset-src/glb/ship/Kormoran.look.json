@@ -1,0 +1,10 @@
+{
+ "hinweis": "Kormoran (eigenes Modell aus asset-src/neu/kormoran, Export kor_export.py): Materialien kommen fertig aus Blender, hier stehen nur die Auslöser im Innenraum (Schiffskoordinaten: x, y, z; Nase nach −Z, Mitte des Modells im Ursprung). seat: linker Pilotensitz, log: Schreibtisch der Kapitänskabine, bed: Koje der Kapitänskabine, locker: Spinde im Laderaum, scanner: Konsole in der Technik.",
+ "spots": {
+  "seat": [-0.85, 1.02, -13.02],
+  "log": [-3.25, -0.68, 6.34],
+  "bed": [-4.7, -0.9, 8.85],
+  "locker": [-2.95, -0.4, 11.3],
+  "scanner": [1.6, -0.5, -4.67]
+ }
+}

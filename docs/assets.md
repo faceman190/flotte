@@ -80,6 +80,12 @@ weil deren Flächen nach innen zeigen.)
 4. `npm run assets`. Nicht ausführen, während jemand im Entwicklungsfenster spielt (Dateinamen ändern sich).
 Im Spiel (src/game/meshRoom.ts) bleibt das Schiffsmodell beim Betreten stehen; der Raum bringt Licht, Spiegelungen und die Laufkarte mit.
 
+## Kormoran (eigenes Modell aus Blender)
+Volles Modell mit Innenraum, gebaut von Skripten in `asset-src/neu/kormoran/` (docs/kormoran.md). Weg ins Spiel:
+`sh asset-src/neu/kormoran/kor_spiel.sh` (Blender-Bau, Export mit schlichten Materialien und Fahrwerk als `gear`, simplify-hard,
+Laufkarte mit Auslösern aus `asset-src/glb/ship/Kormoran.look.json`), danach `npm run assets`. Schiffsklasse `kormoran` in
+src/data/ships.ts, Triebwerks- und Kanonenpunkte in src/models/playerShips.ts.
+
 ## Venom (Startschiff)
 Kaufmodell „Venom X Spaceship“ (asset-src/neu/venom-x-spaceship, ohne Texturen, ein graues Material). Weg ins Spiel:
 1. `node scripts/obj-to-glb.mjs asset-src/neu/venom-x-spaceship/Venom_obj.obj asset-src/neu/_test/venom_raw.glb` (OBJ → GLB mit benannten Teilen)

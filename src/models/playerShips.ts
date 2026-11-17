@@ -157,11 +157,12 @@ function gltfShip(cls: ShipId, paint: Paint): ShipModel {
   const { w, h, l } = m, rear = l * 0.5, front = -l * 0.5;
   const ex = cls === 'maulwurf' || cls === 'kaerrner' || cls === 'venom' ? w * 0.2 : w * 0.1;
   // Pfeil: vier Triebwerke nebeneinander am Heck
-  const enginePts = cls === 'pfeil' ? [-0.164, -0.055, 0.055, 0.164].map(f => [l * f, -h * 0.02, rear * 0.97])   /* an der Länge bemessen: die Seitenflügel machen das Modell breiter als das Heck */ : [[-ex, 0, rear * 0.96], [ex, 0, rear * 0.96]];
+  // Kormoran: zwei Haupt- und zwei Hilfstriebwerke am Heck (Maße aus dem Blender-Modell, Schiffskoordinaten in Metern)
+  const enginePts = cls === 'kormoran' ? [[-4.8, 0.17, 22.4], [4.8, 0.17, 22.4], [-7.9, -0.43, 22.1], [7.9, -0.43, 22.1]] : cls === 'pfeil' ? [-0.164, -0.055, 0.055, 0.164].map(f => [l * f, -h * 0.02, rear * 0.97])   /* an der Länge bemessen: die Seitenflügel machen das Modell breiter als das Heck */ : [[-ex, 0, rear * 0.96], [ex, 0, rear * 0.96]];
   for (const e of enginePts) {
     const sp = new THREE.Sprite(glowMat(0xbfe2ff, 0.8));
     sp.position.set(e[0], e[1], e[2] + 0.5);
-    const gk = cls === 'pfeil' ? l / 36 : l / 15;   // Pfeil: vier kleinere Leuchten statt zwei großer
+    const gk = cls === 'pfeil' ? l / 36 : cls === 'kormoran' ? (Math.abs(e[0]) > 6 ? l / 60 : l / 34) : l / 15;   // Pfeil: vier kleinere Leuchten statt zwei großer
     sp.userData.base = gk;
     sp.scale.setScalar(3 * gk);
     addJet(sp);
@@ -175,7 +176,7 @@ function gltfShip(cls: ShipId, paint: Paint): ShipModel {
   const laserPts = c.beams > 1 ? [[-w * 0.22, -h * 0.15, front], [w * 0.22, -h * 0.15, front]] : c.laser ? [[0, -h * 0.15, front]] : [];
   return {
     g, glows, navs, shield, extraGuns: new THREE.Group(),
-    gunPts: [[w * 0.16, -h * 0.05, front * 0.8]], extraGunPts: cls === 'falke' || cls === 'habicht' ? [[w * 0.36, 0, front * 0.4]] : [],
+    gunPts: cls === 'kormoran' ? [[7.0, -2.54, -8.8]] : [[w * 0.16, -h * 0.05, front * 0.8]], extraGunPts: cls === 'falke' || cls === 'habicht' ? [[w * 0.36, 0, front * 0.4]] : [],
     laserPts, enginePts, drones,
   };
 }
