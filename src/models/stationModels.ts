@@ -97,10 +97,11 @@ export function buildModelStation(name: string, size: number, opt: { ground?: nu
   };
 }
 
-// ---------- Trägerschiff Bastion (eigenes Modell aus Blender: asset-src/neu/bastion/Bastion.blend → asset-src/glb/station/Carrier.glb) ----------
-// Das Modell ist 514 m lang gebaut (Blender: +Y = Bug, +Z = oben) und wird hier auf die doppelte Länge der alten Bastion gebracht.
+// ---------- Trägerschiff Bastion (eigenes Modell aus Blender: asset-src/neu/bastion2/bas_kit.py → bas_spiel.sh → asset-src/glb/station/Carrier.glb) ----------
+// Bastion 2 (docs/bastion2.md): in echten Metern gebaut, 975 m lang (Blender: +Y = Bug, +X = Steuerbord, +Z = oben), deshalb Maßstab 1.
 // Punkte unten sind in Blender-Koordinaten des Modells notiert und werden mit B() ins Spiel umgerechnet (x, z, -y) * K.
-export const CARRIER_K = 1.9;
+// Hangaröffnungen je Seite: y −15 bis 75, z −26 (Boden = Plattform) bis 8; der begehbare Hangar (Tor 62 × 32 m) setzt am Startpunkt an.
+export const CARRIER_K = 1;
 const B = (x: number, y: number, z: number): [number, number, number] => [x * CARRIER_K, z * CARRIER_K, -y * CARRIER_K];
 export function buildCarrierModel(): (StructureModel & { glows: THREE.Sprite[]; turrets: THREE.Group[] }) | null {
   const t = TPL.Carrier;
@@ -119,26 +120,35 @@ export function buildCarrierModel(): (StructureModel & { glows: THREE.Sprite[]; 
     else { m.metalness = Math.min(m.metalness, 0.35); m.envMapIntensity = 1.1; }   // weniger Spiegelglanz: Ohne helle Umgebung wirkt Metall sonst fast schwarz
   });
   g.add(body);
-  // Kollision: zwei Reihen Kugeln längs durch den Rumpf, dazu Turm, Flügeldeck und die beiden Landeplattformen
-  const sph: number[][] = [];
-  // im Bereich des Hangartunnels sitzen die Kugeln höher und sind kleiner: Die Öffnungen bleiben frei für Start und Anflug
-  for (let y = -240; y <= 250; y += 30) for (const s of [-1, 1]) { const tun = y > -32 && y < 62, [x, yy, z] = B(s * 18, y, tun ? 11 : -2); sph.push([x, yy, z, (tun ? 26 : y > 140 ? 34 : 32) * CARRIER_K]); }
-  sph.push([...B(0, -128, 42), 40], [...B(0, -132, 62), 24]);
-  for (const s of [-1, 1]) {
-    for (const [x, y, r] of [[58, -110, 15], [86, -160, 15], [112, -200, 16], [140, -214, 15], [66, -215, 16], [95, -238, 14]]) sph.push([...B(s * x, y, -4), r * CARRIER_K]);
-    for (const x of [52, 74]) for (const y of [-12, 15, 42]) sph.push([...B(s * x, y, -27), 8 * CARRIER_K]);
+  // Kollision: Kugelpaare längs durch den Rumpf (an den Hangars höher und kleiner, damit Öffnung und Startweg frei bleiben),
+  // Decks und Turm, Flügel, Triebwerke, die beiden Landeplattformen (Kugeln unter der Deckfläche: über ihr bleibt der Startweg frei)
+  const sph: number[][] = [], S = (x: number, y: number, z: number, r: number) => { sph.push([...B(x, y, z), r * CARRIER_K]); };
+  for (let y = -455; y <= 470; y += 25) for (const s of [-1, 1]) {
+    if (y > -40 && y < 100) { S(s * 18, y, 22, 30); S(s * 16, y, -40, 16); }
+    else if (y > 330) S(s * 14, y, -4, y > 440 ? 18 : 30);
+    else S(s * 22, y, -2, 45);
   }
-  // Lauflichter an den Außenkanten der Plattformen, Glühen an den sechs Triebwerken
+  for (let y = -415; y <= 225; y += 25) for (const s of [-1, 1]) S(s * 18, y, 50, y > 150 ? 16 : 22);
+  S(0, -243, 92, 26); S(0, -243, 120, 14); S(0, -243, 142, 8);
+  S(0, -485, -6, 18);
+  for (const s of [-1, 1]) {
+    for (const [x, y] of [[85, -250], [85, -310], [85, -370], [85, -430], [135, -330], [135, -390], [135, -450], [185, -380], [185, -440], [235, -420], [250, -450]]) S(s * x, y, -8, 22);
+    for (const [x, y] of [[137, -470], [188, -479], [240, -488]]) { S(s * x, y + 10, -26, 18); S(s * x, y - 30, -26, 18); S(s * x, y - 55, -26, 15); }
+    S(s * 34, -485, -6, 13);
+    for (let x = 66; x <= 150; x += 14) for (let y = -30; y <= 90; y += 15) S(s * x, y, -40, 12);
+  }
+  // Randlichter der Plattformen, Glühen an den sechs Flügeltriebwerken und den drei Hauptdüsen im Heck
   const lights: THREE.Sprite[] = [], glows: THREE.Sprite[] = [];
   for (const s of [-1, 1]) {
-    for (let i = 0; i < 8; i++) { const sp = new THREE.Sprite(glowMat(0xffa030, 1)); sp.position.set(...B(s * 86, -22 + i * 10.6, -17.6)); sp.scale.setScalar(9); g.add(sp); lights.push(sp); }
-    for (let i = 0; i < 3; i++) { const sp = new THREE.Sprite(glowMat(0xffa860, 0.5)); sp.position.set(...B(s * (72 + i * 27), -246 - i * 9, -13.5)); sp.scale.setScalar(64); g.add(sp); glows.push(sp); }
+    for (let i = 0; i < 8; i++) { const sp = new THREE.Sprite(glowMat(0xffa030, 1)); sp.position.set(...B(s * 159.2, -27 + i * 16.3, -25.2)); sp.scale.setScalar(9); g.add(sp); lights.push(sp); }
+    for (const [x, y] of [[137, -536], [188, -545], [240, -554]]) { const sp = new THREE.Sprite(glowMat(0xffa860, 0.5)); sp.position.set(...B(s * x, y, -26)); sp.scale.setScalar(40); g.add(sp); glows.push(sp); }
   }
-  const [dx, dy, dz] = B(64, 15, -9), [lx, ly, lz] = B(40.5, 15, -11);
+  for (const [x, sc] of [[0, 44], [34, 34], [-34, 34]]) { const sp = new THREE.Sprite(glowMat(0xffa860, 0.5)); sp.position.set(...B(x, -492, -6)); sp.scale.setScalar(sc); g.add(sp); glows.push(sp); }
+  const [dx, dy, dz] = B(110, 30, -10), [lx, ly, lz] = B(57.5, 30, -10);
   return {
-    g, lights, navs: [], glows, turrets: [], sph, R: 520,
+    g, lights, navs: [], glows, turrets: [], sph, R: 560,
     dock: { x: dx, y: dy, z: dz },                       // über der Landeplattform an Steuerbord
-    launch: { x: lx, y: ly, z: lz, yaw: -Math.PI / 2 },  // Mitte der Hangaröffnung, Blick nach außen (der Hangar-Innenraum schließt hier an)
+    launch: { x: lx, y: ly, z: lz, yaw: -Math.PI / 2 },  // Mitte der Hangaröffnung (Torhöhe: Boden + 16 m), Blick nach außen
   };
 }
 

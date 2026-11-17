@@ -135,6 +135,7 @@ Die heruntergeladenen Pakete liegen in asset-src/sound-packs/ (nicht im Reposito
 - Finger hat unser Skelett (24 Knochen) nicht; Fingerbewegungen entfallen.
 
 ## Bastion (Alpha 0.58)
+Seit dem 17.11.2026 ersetzt durch **Bastion 2** (`asset-src/neu/bastion2`, docs/bastion2.md: echte Meter, `CARRIER_K` = 1, Pipeline `bas_spiel.sh`). Der folgende Abschnitt beschreibt die alte Fassung, deren Quelle unverändert in `asset-src/neu/bastion/Bastion.blend` liegt.
 - Quelle: `asset-src/neu/bastion/Bastion.blend` (in Blender per Skript gebaut; die Hilfsfunktionen liegen als Text `bastion_lib` in der Datei).
   Export fürs Spiel: alle Netze der Sammlung „Bastion“ zu einem Netz verbunden → `asset-src/glb/station/Carrier.glb`, dann `npm run assets`.
 - Im Spiel: `buildCarrierModel()` in `src/models/stationModels.ts`. Maßstab `CARRIER_K` 1,9 (Rumpf rund 975 m, doppelt so lang wie die alte Bastion).
