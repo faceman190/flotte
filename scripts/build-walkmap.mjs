@@ -7,6 +7,9 @@
 //  5. Der größte zusammenhängende Bereich unter einer Decke ist der Innenraum.
 //  6. Punkte: Pilotensitz (ganz vorn), Einstieg (hinten unten), Koje (beim Holz), Logbuch, Spind, Lichter, Bereiche.
 // Aufruf: node --max-old-space-size=12000 scripts/build-walkmap.mjs <innen.glb> <außen.glb> <aus.json> [--cell=0.2]
+// --offen=x0,x1,z0,z1 (Schiffskoordinaten): dort zählen auch Flächen ohne Decke darüber als Boden (offene Heckrampe des Wisent).
+// --spawn=x,y,z: Einstieg fest an dieser Stelle (nächste begehbare Zelle) statt automatisch. Weitere Auslöser-Arten aus --spots
+// (z. B. „ramp“ für den Rampenschalter) kommen zusätzlich in die Liste.
 import fs from 'fs';
 import * as THREE from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
@@ -15,7 +18,7 @@ import { io } from './glb-lib.mjs';
 
 const args = process.argv.slice(2), opt = Object.fromEntries(args.filter(a => a.startsWith('--')).map(a => a.slice(2).split('=')));
 const [inInner, inOuter, out] = args.filter(a => !a.startsWith('--'));
-const CELL = +(opt.cell || 0.2), HEAD = 1.95, STEP = 0.45;
+const CELL = +(opt.cell || 0.2), HEAD = 1.95, STEP = 0.45, OFFEN = opt.offen ? opt.offen.split(',').map(Number) : null;
 const t0 = Date.now();
 const outer = await io.read(inOuter), ob = getBounds(outer.getRoot().listScenes()[0]);
 const cx = (ob.min[0] + ob.max[0]) / 2, cy = (ob.min[1] + ob.max[1]) / 2, cz = (ob.min[2] + ob.max[2]) / 2;
@@ -25,7 +28,8 @@ if (opt.debug) console.log(`Mitte (Modellkoordinaten) ${cx.toFixed(2)} / ${cy.to
 // Innen- und Außenmodell einlesen (Dreiecke in Schiffskoordinaten), Holz-Bereich merken (für die Koje).
 // Beide zusammen: Teile der Decks sind von außen sichtbar und stecken deshalb im Außenmodell; im Spiel stehen beide ineinander.
 const doc = await io.read(inInner);
-const allNodes = inInner === inOuter ? doc.getRoot().listNodes() : [...doc.getRoot().listNodes(), ...outer.getRoot().listNodes()];   // volles Modell: nur einmal
+// --nurinnen=1: vom Außenmodell nur Maß und Mitte nehmen, nicht seine Teile (Wisent: das Außenmodell hat die Heckklappe zu, das Innenmodell offen)
+const allNodes = inInner === inOuter || opt.nurinnen ? doc.getRoot().listNodes() : [...doc.getRoot().listNodes(), ...outer.getRoot().listNodes()];   // volles Modell: nur einmal
 let nv = 0, nt = 0;
 for (const n of allNodes) { const m = n.getMesh(); if (!m) continue; for (const p of m.listPrimitives()) { nv += p.getAttribute('POSITION').getCount(); const i = p.getIndices(); nt += i ? i.getCount() / 3 : p.getAttribute('POSITION').getCount() / 3; } }
 const pos = new Float32Array(nv * 3), idx = new Uint32Array(nt * 3);
@@ -59,6 +63,7 @@ for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) {
     const h = hits[k]; if (faceNy(h.faceIndex) < 0.7) continue;
     const above = k > 0 ? hits[k - 1].point.y - h.point.y : Infinity;
     if (above >= HEAD && above < 60) list.push({ y: h.point.y, ceil: above });   // ohne Decke darüber = Außenhaut, kein Deck
+    else if (OFFEN && above === Infinity && x >= OFFEN[0] && x <= OFFEN[1] && z >= OFFEN[2] && z <= OFFEN[3]) list.push({ y: h.point.y, ceil: 6 });
   }
   if (list.length) floors[ix * NZ + iz] = list.slice(0, 4);
 }
@@ -88,6 +93,11 @@ for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) {
 }
 // optional: alles unterhalb einer Höhe weglassen (Zwischenräume unter dem Deck, Tanks)
 if (opt.minY) for (let i = 0; i < floors.length; i++) if (floors[i]) { floors[i] = floors[i].filter(f => f.y >= +opt.minY); if (!floors[i].length) floors[i] = undefined; }
+// --minYaussen=y: zusätzlich alles unter y weglassen, außer im Bereich --offen (Rampe bis zum Boden; Hohlräume unter dem Laderaum zählen nicht)
+if (opt.minYaussen) for (let i = 0; i < floors.length; i++) if (floors[i]) {
+  const ix = Math.floor(i / NZ), iz = i % NZ, x = x0 + (ix + 0.5) * CELL, z = z0 + (iz + 0.5) * CELL, inO = OFFEN && x >= OFFEN[0] && x <= OFFEN[1] && z >= OFFEN[2] && z <= OFFEN[3];
+  if (!inO) { floors[i] = floors[i].filter(f => f.y >= +opt.minYaussen); if (!floors[i].length) floors[i] = undefined; }
+}
 // 2./3. Verbindungen zwischen Nachbarn (Wände per waagerechter Strahlen)
 const node = (ix, iz, li) => floors[ix * NZ + iz]?.[li];
 const blocked = (ax, az, bx, bz, y) => {
@@ -223,8 +233,9 @@ const seat = bow.filter(p => p.y > bowTop - 0.5).reduce((b, p) => { const s = p.
 const main = comps[0].comp.map(info), mz0 = Math.min(...main.map(p => p.z)), mz1 = Math.max(...main.map(p => p.z));
 const mainSet = new Set(comps[0].comp.map(c => Math.floor(c / 4)));
 const roomy = p => { let n = 0; for (let a = -4; a <= 4; a++) for (let b = -4; b <= 4; b++) if (mainSet.has((p.ix + a) * NZ + p.iz + b)) n++; return n; };
-const spawn = main.filter(p => p.z > mz1 - (mz1 - mz0) * 0.3 && floors[p.ix * NZ + p.iz].some(f => Math.abs(f.y - p.y) < 0.01 && f.ceil > 2.3))
+const spawnAuto = () => main.filter(p => p.z > mz1 - (mz1 - mz0) * 0.3 && floors[p.ix * NZ + p.iz].some(f => Math.abs(f.y - p.y) < 0.01 && f.ceil > 2.3))
   .reduce((b, p) => { const s = roomy(p) - Math.abs(p.x - xMid) * 2; return !b || s > b.s ? { ...p, s } : b; }, null) || main[0];
+const spawn = opt.spawn ? (() => { const [a, b, c] = opt.spawn.split(',').map(Number); return main.reduce((best, p) => { const d = Math.hypot(p.x - a, (p.y - b) * 2, p.z - c); return !best || d < best.d ? { ...p, d } : best; }, null); })() : spawnAuto();
 const woodC = wood.isEmpty() ? null : wood.getCenter(new THREE.Vector3());
 const bed = woodC ? near(woodC.x, woodC.y - 1, woodC.z) : near(xMid, spawn.y, (zMin + zMax) / 2);
 const log = near(seat.x + 1.6, seat.y, seat.z + 1.5, p => Math.hypot(p.x - seat.x, p.z - seat.z) > 1.2);
@@ -265,7 +276,8 @@ const res = {
   cell: CELL, x0: r2(x0), z0: r2(z0), nx: NX, nz: NZ, step: STEP,
   cells: Buffer.from(cells.buffer).toString('base64'), ys: Buffer.from(ys.buffer).toString('base64'), hs: Buffer.from(hs.buffer).toString('base64'),
   spawn: { x: r2(spawn.x), y: r2(spawn.y), z: r2(spawn.z), yaw: 0 },
-  spots: [place('seat', seat, 1.6), place('log', log), spot('hatch', spawn, 1.8), place('bed', bed, 1.8), place('locker', locker), place('scanner', scanner, 1.6)],
+  spots: [place('seat', seat, 1.6), place('log', log), spot('hatch', spawn, 1.8), place('bed', bed, 1.8), place('locker', locker), place('scanner', scanner, 1.6),
+    ...Object.keys(fixed).filter(k => !['seat', 'log', 'hatch', 'bed', 'locker', 'scanner'].includes(k)).map(k => place(k, spawn, 1.5))],
   lamps: lamps.map(l => l.map(r2)),
   areas: [{ name: 'Cockpit', z1: r2(zMin + third) }, { name: 'Wohndeck', z1: r2(zMin + 2 * third) }, { name: 'Frachtraum', z1: 9999 }],
 };

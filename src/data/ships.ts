@@ -65,6 +65,13 @@ export const SHIPS = {
     hull: 260, shield: 110, speed: 275, acc: 510, turn: 0.9, cargo: 18, ammo: 600, rockets: 4, dmg: 1.85,
     laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1500, charges: 0, drones: 0, radius: 10, camUp: 11, camBack: 40, upMul: 1.5, col: 0xc8282a, model: 'Wuerger', len: 24.8,
   },
+  // Eigenes Modell (asset-src/neu/wisent, Blender-Skripte, docs/wisent.md): 83 × 66 × 20 m, Brücke, Mannschaftsgang und Laderaum begehbar,
+  // Heckrampe öffnet sich im Hangar; über die offene Rampe geht man ohne Taste an Bord und von Bord (game/interior.ts)
+  wisent: {
+    n: 'Wisent', role: 'Schwerer Frachter', price: 68000, desc: 'Großer Frachter mit viel Feuerkraft: sechs Doppeltürme, Kinnkanone, 20 Raketenzellen, 45 m Laderaum mit Heckrampe. Brücke, Gang und Laderaum begehbar.',
+    hull: 560, shield: 240, speed: 210, acc: 290, turn: 0.5, cargo: 340, ammo: 900, rockets: 20, dmg: 1.8,
+    laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1900, charges: 0, drones: 0, radius: 34, camUp: 38, camBack: 140, upMul: 2.1, col: 0xc0302a, model: 'Wisent', len: 83.3,
+  },
 } satisfies Record<string, ShipClass>;
 export type ShipId = keyof typeof SHIPS;
 // Kleine Flieger (unter 30 m) haben keinen begehbaren Innenraum: man steigt ein und fliegt los

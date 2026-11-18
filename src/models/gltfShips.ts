@@ -130,6 +130,17 @@ export function setGear(root: THREE.Object3D, down: boolean) {
 // Fortschritt der Gruppe von 0 (zu) bis 1 (offen): t0–t1 ist der Abschnitt, in dem sich das Teil bewegt.
 interface DoorPart { tag: string; grp: string; t0: number; t1: number; hinge?: number[]; angle?: number; slide?: number[]; under?: string; retract?: boolean }
 const DOORS: Record<string, { dur: Record<string, number>; parts: DoorPart[] }> = {
+  // Wisent (asset-src/neu/wisent/wis_rampe.py): Tor oben klappt 97° hoch, Rampe schwenkt von senkrecht bis zum Boden, drei Auszüge fahren nacheinander aus
+  Wisent: {
+    dur: { rampe: 6.0 },
+    parts: [
+      { tag: 'tor', grp: 'rampe', t0: 0.0, t1: 0.35, hinge: [0, 12.18, -40.06], angle: 1.69297 },
+      { tag: 'rampe', grp: 'rampe', t0: 0.25, t1: 0.65, hinge: [0, 6.4, -40.06], angle: -2.23416 },
+      { tag: 'rampe2', grp: 'rampe', t0: 0.6, t1: 0.75, slide: [0, 2.6, 0], under: 'rampe' },
+      { tag: 'rampe3', grp: 'rampe', t0: 0.72, t1: 0.87, slide: [0, 2.6, 0], under: 'rampe2' },
+      { tag: 'rampe4', grp: 'rampe', t0: 0.84, t1: 1.0, slide: [0, 2.6, 0], under: 'rampe3' },
+    ],
+  },
   Kormoran: {
     dur: { rampe: 4.2, leiter: 2.5 },
     parts: [
@@ -161,6 +172,12 @@ function rigDoors(root: THREE.Object3D): DoorRig | null {
   }
   return rig;
 }
+// Stand einer Gruppe (0 zu … 1 offen), z. B. ob die Rampe ganz offen ist
+export function doorProgress(root: THREE.Object3D, grp: string) { const rig = root.userData.doors as DoorRig | null | undefined; return rig ? rig.p[grp] ?? 0 : 0; }
+// Heckrampe zum Betreten ohne Taste (Schiffskoordinaten wie die Laufkarte: Nase −Z): Türebene, Fuß der offenen Rampe, halbe Breite.
+// RAMP.want schaltet der Rampenschalter (innen am Laderaum, außen am Rampenfuß); im Hangar öffnet die Rampe, solange want gilt.
+export const RAMP_ENTRY: Record<string, { door: number; foot: number; hw: number }> = { Wisent: { door: 41.39, foot: 49.9, hw: 3.7 } };
+export const RAMP = { want: true };
 // Öffnen oder schließen (jedes Bild aufrufen, dt = Spielzeit des Bildes): beim ersten Aufruf sofort im Zielzustand, danach mit der Dauer aus DOORS
 export function setDoors(root: THREE.Object3D, open: boolean, dt = 0) {
   let rig = root.userData.doors as DoorRig | null | undefined;

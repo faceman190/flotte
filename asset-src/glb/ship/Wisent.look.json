@@ -1,0 +1,11 @@
+{
+ "hinweis": "Wisent (eigenes Modell aus asset-src/neu/wisent, Export wis_export.py): Materialien kommen fertig aus Blender, hier stehen nur die Auslöser im Innenraum (Schiffskoordinaten: x, y, z; Nase nach −Z, Mitte des Modells im Ursprung; aus Blender x = −y, y = z − 10,17, z = −(x − 1,33)). seat: linker Pilotensitz, log: Kommandantenplatz, bed: Koje im Mannschaftsgang, locker: Spinde an der Rückwand der Brücke, scanner: Backbord-Seitenstation, ramp: Rampenschalter an der Backbordwand neben der Heckklappe.",
+ "spots": {
+  "seat": [-1.25, 1.03, -31.37],
+  "log": [-0.62, 1.15, -27.05],
+  "bed": [-2.4, 1.43, -16.67],
+  "locker": [-1.9, 1.03, -23.57],
+  "scanner": [-4.18, 1.03, -28.27],
+  "ramp": [-5.67, -3.77, 38.43]
+ }
+}
