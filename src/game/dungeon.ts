@@ -897,7 +897,7 @@ export function leaveDungeon(died = false) {
   camera.near = saved.near; camera.far = saved.far; camera.updateProjectionMatrix();
   const le = DUN.e, toSpace = le?.kind === 'wrack' || le?.kind === 'schiff';
   DUN.active = false; DUN.goal = null; G.mode = toSpace ? 'play' : 'rover'; releaseAll(); clearParticles(); particleSize();
-  if (document.pointerLockElement === gl) document.exitPointerLock();
+  if (document.pointerLockElement === gl && !(toSpace && settings.steer !== 'zeiger')) document.exitPointerLock();   // ins All mit direkter Lenkung: eingefangen lassen
   document.getElementById('hud')?.classList.remove('hidden');
   if (died) DUN.left = 6;
   saveGame();
@@ -968,7 +968,7 @@ export function updateDungeon(dt: number) {
     if (DUN.dead <= 0) leaveDungeon(true);
     return;
   }
-  if (!DUN.locked) {
+  if (!DUN.locked && settings.steer === 'zeiger') {      // direkte Lenkung: ohne Zeiger kein Drehen
     const mx = clamp((mouse.x - view.W / 2) / (view.W / 2), -1, 1), my = clamp((mouse.y - view.H / 2) / (view.H / 2), -1, 1), dz = 0.14, sh = (v: number) => Math.sign(v) * Math.max(0, Math.abs(v) - dz) / (1 - dz);
     DUN.yaw -= sh(mx) * 2.4 * settings.sens * dt; DUN.pitch += (-sh(my) * 1.0 * (settings.invertY ? -1 : 1) - DUN.pitch) * Math.min(1, dt * 5);
   }

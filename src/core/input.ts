@@ -5,6 +5,8 @@ export const mouse = { x: innerWidth / 2, y: innerHeight / 2, down: false };
 export const actions = { rocket: false };
 // Freie Kamera im Flug: free = Maus dreht die Kamera statt das Schiff (dx/dy sammeln die Bewegung), mid = mittlere Maustaste, wheel = Mausrad-Schritte
 export const look = { free: false, dx: 0, dy: 0, mid: false, wheel: 0 };
+// Direkte Lenkung im Flug (seit 2026-11-18): Zeiger eingefangen, die Mausbewegung sammelt sich hier und dreht das Schiff (player.ts)
+export const steer = { dx: 0, dy: 0 };
 const handlers: ((code: string) => void)[] = [];
 
 export function onKey(h: (code: string) => void) { handlers.push(h); }
@@ -25,6 +27,7 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 gl.addEventListener('mousemove', e => {
   // freie Kamera: der Zeiger fürs Lenken bleibt stehen, die Bewegung dreht nur die Kamera
   if (look.free) { look.dx += e.movementX || 0; look.dy += e.movementY || 0; return; }
+  if (document.pointerLockElement === gl) { steer.dx += e.movementX || 0; steer.dy += e.movementY || 0; return; }
   mouse.x = e.clientX; mouse.y = e.clientY;
 });
 gl.addEventListener('wheel', e => { look.wheel += Math.sign(e.deltaY); e.preventDefault(); }, { passive: false });

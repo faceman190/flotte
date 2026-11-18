@@ -173,7 +173,7 @@ export function loadBase(name: string): Promise<boolean> {
     } catch (e) { console.warn('Basis nicht geladen:', name, e); delete BASEP[name]; return false; }
   })());
 }
-export function preloadBases() { for (const n of Object.keys((window as any).BASEDATA || {})) loadBase(n); }
+export function preloadBases() { return Promise.all(Object.keys((window as any).BASEDATA || {}).map(n => loadBase(n).catch(() => false))); }
 // Aufbau ohne Landefeld (z. B. Bohrturm): Modell mit Baukasten-Materialien und seinen Leuchtpunkten, Ursprung wie in Blender
 export function buildDeco(name: string): THREE.Group | null {
   const t = BASES[name]; if (!t) return null;

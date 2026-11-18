@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { scene, view } from '../core/engine';
-import { keys, mouse, actions, look } from '../core/input';
+import { keys, mouse, actions, look, steer } from '../core/input';
 import { rand, clamp, d3 } from '../core/util';
 import { snd, gunSound, sfx, boom } from '../core/audio';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
@@ -121,6 +121,7 @@ function collideBig(o: { x: number; y: number; z: number; sph: number[][]; R: nu
 
 const _up = new THREE.Vector3(), _ue = new THREE.Euler();
 let boundWarn = 0, fullWarn = 0, chargeHeld = false;
+const turnWish = { y: 0, p: 0 };   // direkte Lenkung: noch ausstehende Drehung (rad)
 export function updatePlayer(dt: number) {
   const st = stats();
   if (G.dead) { updateMining(dt, false); G.dead -= dt; if (G.dead <= 0) { G.dead = 0; hooks.respawn(); } return; }
@@ -131,9 +132,23 @@ export function updatePlayer(dt: number) {
   mx = sh(clamp(mx, -1, 1)); my = sh(clamp(my, -1, 1));
   if (look.free) { mx = 0; my = 0; }   // freie Kamera: Maus dreht die Kamera, das Schiff hält Kurs (Pfeiltasten lenken weiter)
   if (keys.ArrowLeft) mx = -1; if (keys.ArrowRight) mx = 1; if (keys.ArrowUp) my = -1; if (keys.ArrowDown) my = 1;
+  const direct = settings.steer !== 'zeiger';
+  if (direct && !keys.ArrowLeft && !keys.ArrowRight && !keys.ArrowUp && !keys.ArrowDown) { mx = 0; my = 0; }   // direkt: kein Zeiger-Ausschlag
   if (settings.invertY) my = -my;
   const sens = settings.sens * (G.cruise ? 0.45 : 1);   // im Reiseflug lenkt das Schiff träge
-  const yawRate = -(mx * 0.5 + mx * Math.abs(mx) * 0.5) * 2.1 * sens * st.turn, pitchRate = -(my * 0.5 + my * Math.abs(my) * 0.5) * 1.6 * sens * st.turn;
+  const maxYaw = 2.1 * sens * st.turn, maxPitch = 1.6 * sens * st.turn;
+  let yawRate = -(mx * 0.5 + mx * Math.abs(mx) * 0.5) * maxYaw, pitchRate = -(my * 0.5 + my * Math.abs(my) * 0.5) * maxPitch;
+  if (direct && !look.free) {
+    // Direkte Lenkung: Die Mausbewegung wird zu einem Drehwunsch, dem das Schiff mit seiner Wendigkeit folgt (schwere Schiffe holen langsamer auf).
+    // Der Wunsch ist begrenzt, damit sich bei einem schnellen Wisch keine ganze Kehrtwende anstaut.
+    const k = 0.0021 * settings.sens;
+    turnWish.y = clamp(turnWish.y - steer.dx * k, -0.9, 0.9);
+    turnWish.p = clamp(turnWish.p - steer.dy * k * (settings.invertY ? -1 : 1), -0.7, 0.7);
+    const cy = clamp(turnWish.y * Math.min(1, dt * 14), -maxYaw * dt, maxYaw * dt), cp = clamp(turnWish.p * Math.min(1, dt * 14), -maxPitch * dt, maxPitch * dt);
+    turnWish.y -= cy; turnWish.p -= cp;
+    yawRate += cy / Math.max(dt, 1e-4); pitchRate += cp / Math.max(dt, 1e-4);
+  } else { turnWish.y = turnWish.p = 0; }
+  steer.dx = steer.dy = 0;
   P.yaw += yawRate * dt;
   P.pitch = clamp(P.pitch + pitchRate * dt, -1.15, 1.15);
   G.rollOff = (G.rollOff || 0) + ((keys.KeyQ ? 1 : 0) - (keys.KeyE && !G.eBusy ? 1 : 0)) * 1.7 * dt;

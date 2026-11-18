@@ -49,3 +49,32 @@ Stufen in `BOLTS` (Farbe, Breite, Länge, Saum, Mündungsblitz, Einschlagstärke
 `playerBolt(dmg, cls)` wählt die eigene Stufe nach Schaden je Schuss (unter 9 → p1, ab 9 → p2, ab 15 → p3, ab 26 → p4); eine Schiffsklasse kann
 mit `bolt` eine feste Stufe vorgeben. Für spätere Waffen-Ausrüstung: neue Stufe in `BOLTS` eintragen und beim Feuern `{ bolt }` mitgeben.
 Einschlag am Ferrox (Blitz, Funken) und Mündungsblitz skalieren mit der Stufe; schwere Kanonen klingen tiefer (`gunSound(vol, pitch)`).
+
+## Nachbesserungen nach Spielerrückmeldung (2026-11-18)
+
+**Hauptmenü ruckelte die ersten 5 bis 10 s.** Gemessen: Das erste Bild des Menüs dauerte 3,4 s (alle Shader auf einmal), danach blockierten
+13 Pausen von 50 bis 470 ms das Bild (Auspacken von Städten, Planetenbasen, Schiffsinnenräumen und dem gebackenen Hangar im Hintergrund).
+Jetzt bleibt der Ladebildschirm stehen (`hideBoot` in `assets.ts`, aufgerufen aus `main.ts`), bis die Menüszene vorbereitet ist:
+Felsmodell geladen, Shader übersetzt (`compileFor`), Hintergrund-Pakete ausgepackt (höchstens 6 s; beim ersten Besuch kommt der Rest danach).
+Ergebnis: nach dem Ladebildschirm kein langes Bild mehr (16 s gemessen). Der Ladebildschirm steht dafür etwas länger.
+
+**Alte Brocken im Menü:** Die Menüszene entstand, bevor das Felsmodell geladen war (`loadRockModel` wird jetzt abgewartet).
+
+**Lotse „Klammern greifen“:** Man landet im Hangar, daher sagen Stationen jetzt dieselbe Zeile wie Planetenbasen (`k_an2`, `barks.ts`).
+
+**Kran im Hangar:** Die drei Laufkatzen mit Seil und Haken sind aus `bk_halle.py` entfernt (Hangar neu gebacken, 27 min, danach `npm run assets`) und werden im alten
+Hangar-Modell beim Aufbau weggelassen (`deck.ts`, `loadHangar`). Die Kranschienen an Wand und Decke bleiben.
+
+**Weniger Systemmeldungen:** weg sind „Reiseflug: … träge“ / „Manöverflug“, „Kamera wieder hinter dem Schiff“, „Du bist jetzt Gastgeber
+dieses Sektors“ (kam nach jedem Sprung) und „Du bist der erste Pilot online“.
+
+**Maussteuerung im Flug: direkt statt Zeiger-Ausschlag.** Vorher lief der Zeiger frei, sein Abstand zur Bildmitte war die Drehrate
+(Linie, Raute, Kreis im HUD), und eingefangen war der Zeiger nur zu Fuß. Beim Wechsel stand er irgendwo, und Schiff oder Blick drehten
+sofort los. Jetzt (`settings.steer = 'direkt'`, Standard):
+- Der Zeiger ist auch im Flug eingefangen; die Mausbewegung sammelt sich in `steer` (`input.ts`) und wird in `player.ts` zu einem Drehwunsch,
+  dem das Schiff mit seiner Wendigkeit folgt (begrenzt auf 0,9 rad Gier und 0,7 rad Nicken, damit ein Wisch keine Kehrtwende anstaut).
+- Beim Abdocken, Einsteigen auf Planeten und Verlassen eines Wracks bleibt der Zeiger eingefangen (`interior.ts`, `onfoot.ts`, `dungeon.ts`).
+  Fehlt er (nach Menü, Karte, Chat), holt ihn das Spiel zurück, sobald der Browser es erlaubt, sonst reicht ein Klick (der dann nicht schießt).
+  Esc im Flug gibt den Zeiger frei und öffnet die Pause.
+- Ohne eingefangenen Zeiger dreht zu Fuß nichts mehr nach der Zeigerposition.
+- Die alte Steuerung bleibt wählbar: Einstellungen → „Alte Maussteuerung (Zeiger aus der Mitte ziehen)“.

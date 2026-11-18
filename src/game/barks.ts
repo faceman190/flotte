@@ -23,6 +23,7 @@ export function droneBark(kind: 'alarm' | 'tot', dist: number) {
 
 // Andockkontrolle über Funk: angedockt (Station), gelandet (Planetenbasis), abgelegt
 export function dockBark(kind: 'an' | 'land' | 'ab', delay = 900) {
-  const id = kind === 'an' ? 'k_an1' : kind === 'land' ? 'k_an2' : Math.random() < 0.5 ? 'k_ab1' : 'k_ab2';
+  // k_an1 („Klammern greifen“) passt nicht mehr, seit man im Hangar landet: Station und Planetenbasis sagen beide k_an2
+  const id = kind === 'ab' ? (Math.random() < 0.5 ? 'k_ab1' : 'k_ab2') : 'k_an2';
   setTimeout(() => { bark(id, 'funk'); }, delay);
 }

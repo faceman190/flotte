@@ -89,7 +89,7 @@ function onMsg(m: any) {
     SHARED.online = true;
     // angemeldet bleiben: mit gespeichertem Token automatisch anmelden
     const tok = getToken(); if (tok) sendMsg({ t: 'login', token: tok });
-    radio('SYSTEM', `Mit dem Mehrspieler-Server verbunden. ${m.online > 1 ? `${m.online - 1} weitere Piloten online.` : 'Du bist der erste Pilot online.'}`);
+    if (m.online > 1) radio('SYSTEM', `${m.online - 1 === 1 ? 'Ein weiterer Pilot' : `${m.online - 1} weitere Piloten`} online.`);   // allein: keine Meldung
     netHooks.changed();
   } else if (m.t === 'roster') {
     const before = new Set(NET.roster.map(r => r.id));
@@ -237,7 +237,7 @@ function updateRole() {
     for (const a of world.asteroids) nextAstId = Math.max(nextAstId, (a.id || 0) + 1);
     for (const e of world.enemies) nextFoeId = Math.max(nextFoeId, (e.nid || 0) + 1);
     npcBecameHost();
-    radio('SYSTEM', 'Du bist jetzt Gastgeber dieses Sektors: Asteroiden und Nachwuchs laufen über dein Spiel.');
+    // keine Funkmeldung mehr: kam nach jedem Sprung, wenn man allein im Sektor ist
   }
   if (!was && SHARED.client) { synced = false; foesSynced = false; npcResync(); }
 }

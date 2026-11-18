@@ -188,8 +188,9 @@ def assemble():
         text('STELLPLATZ %d' % (n + 1), 1.1, (px + 5.6, 27.3, 0.006), (-1, 0, 0), (0, -1, 0), M['paint_w']); text('TRIEBWERKE AUS  ·  FREIGABE DECKMEISTER', 0.36, (px + 5.6, 27.9, 0.006), (-1, 0, 0), (0, -1, 0), M['paint_y'])
         thick(text(str(n + 1), 9.0, (px + 2.6, 16.0, 0.006), (-1, 0, 0), (0, -1, 0), M['paint_w']), 0.0); thick(text(str(n + 1), 9.0, (px - 2.6, -72.0, 0.006), (1, 0, 0), (0, 1, 0), M['paint_w']), 0.0)
     for (x, a) in ((-88.0, PI / 2), (-32.0, -PI / 2), (32.0, PI / 2), (88.0, -PI / 2)): put('Versorgung', x, 21.0, a, p_versorgung)
-    kz = [module('H Laufkatze %d' % d, p_laufkatze, d) for d in (9, 16, 5)]
-    for (x, y, k) in ((-60, -48, 0), (0, -28, 1), (60, -8, 2)): inst(kz[k], (x, y, 36.5), 0.0, C_ROOF)
+    # Laufkatzen mit Seil und Haken an der Decke: seit 2026-11-18 entfernt (Wunsch des Spielers, sie stören über großen Schiffen)
+    # kz = [module('H Laufkatze %d' % d, p_laufkatze, d) for d in (9, 16, 5)]
+    # for (x, y, k) in ((-60, -48, 0), (0, -28, 1), (60, -8, 2)): inst(kz[k], (x, y, 36.5), 0.0, C_ROOF)
     furnish()
 def furnish():
     CT = {k: (lambda p, c: (lambda: p_container(p, c)))(p, c) for k, (p, c) in {'t': ('teal', 'LCU 204 771'), 'o': ('ochre', 'LCU 118 302'), 'w': ('white', 'LCU 377 045'), 'r': ('red', 'LCU 090 216'), 'g': ('wall2', 'LCU 552 190')}.items()}

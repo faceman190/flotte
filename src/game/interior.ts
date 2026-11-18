@@ -700,7 +700,8 @@ function beginSeq(dir: number, dur: number, done: null | (() => void)) {
   SEQ.t = 0; SEQ.dur = dur; SEQ.dir = dir; SEQ.done = done; SEQ.gear = dir > 0;   // Start: Fahrwerk noch draußen, Landung: noch eingezogen
   IN.panel = null; IN.target = null;
   G.mode = 'launch';
-  if (document.pointerLockElement === gl) { IN.locked = false; document.exitPointerLock(); }
+  // direkte Lenkung: Zeiger eingefangen lassen, gleich danach wird geflogen (sonst stünde er irgendwo und müsste neu geholt werden)
+  IN.locked = false; if (settings.steer === 'zeiger' && document.pointerLockElement === gl) document.exitPointerLock();
   for (const g2 of SHIP.glows) g2.visible = true;
   sfx('launch', dir > 0 ? 0.7 : 0.45, dir > 0 ? 1 : 0.85, () => snd(300, 0.6, 'sawtooth', 0.05, dir > 0 ? 500 : -300));
 }
@@ -806,11 +807,13 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
   // Shader des Innenraums im Hintergrund übersetzen, so lange steht das Spiel hinter einer kurzen Blende (statt eines Standbilds mitten in der Landung)
   warmScene(onFoot || fromCity ? 'Eintreten' : 'Andocken', () => { deck?.prime(); hangarBuild?.prime(); });
 }
+// direkte Lenkung: beim Wechsel ins Fliegen den Zeiger nicht freigeben
+const keepLockForFlight = () => settings.steer !== 'zeiger' && (G.mode === 'play' || G.mode === 'launch');
 export function leaveInterior() {
   if (room) leaveShip();
   if (!IN.active) return;
   if ((hasProm || kitHangar) && zoneT >= 0) rim.color.copy(rimOut);
-  if (document.pointerLockElement === gl) document.exitPointerLock();
+  if (document.pointerLockElement === gl && !keepLockForFlight()) document.exitPointerLock();
   disposeParked();
   clearOthers();
   stationGroup = null;
@@ -920,7 +923,7 @@ export function leaveShip(exitWorld?: THREE.Vector3) {
     setExposure(1);
     camera.near = 0.5; camera.updateProjectionMatrix();
     IN.active = false; G.inside = false; IN.say.t = 0; meHolder.visible = false;
-    if (document.pointerLockElement === gl) document.exitPointerLock();
+    if (document.pointerLockElement === gl && !keepLockForFlight()) document.exitPointerLock();
   }
 }
 // Tafel (Logbuch, Scanner): Zeilen sind Text mit Farbe, Wertepaare { k, v } oder Abschnittstitel { h }
@@ -1094,7 +1097,8 @@ export function updateWalk(dt: number) {
   IN.locked = document.pointerLockElement === gl;
   // zu Fuß gehört die Maus dem Blick: sobald der Browser es erlaubt (kurz nach einem Tastendruck oder Klick), wird sie eingefangen
   if (!IN.locked && G.mode === 'walk' && (grabT -= dt) <= 0) { grabT = 0.3; grabMouse(); }
-  if (!IN.locked) {
+  // ohne eingefangenen Zeiger nur bei der alten Zeigersteuerung drehen (sonst drehte ein stehengebliebener Zeiger den Blick weg)
+  if (!IN.locked && settings.steer === 'zeiger') {
     const mx = clamp((mouse.x - view.W / 2) / (view.W / 2), -1, 1), my = clamp((mouse.y - view.H / 2) / (view.H / 2), -1, 1);
     const dz = 0.14, sh = (v: number) => Math.sign(v) * Math.max(0, Math.abs(v) - dz) / (1 - dz);
     IN.yaw -= sh(mx) * 2.4 * settings.sens * dt;

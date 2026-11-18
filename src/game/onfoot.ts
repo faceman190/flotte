@@ -87,7 +87,7 @@ export function leaveBaseOnFoot() {
   else place(ROVER.ship.x + 8, ROVER.ship.z, 0);
 }
 export function enterRover() { hideFieldViewModel(); FOOT.active = false; FOOT.act = ''; resetRoverCamera(); if (me) me.s.g.visible = false; sfx('door_close', 0.4, 1.2, () => snd(200, 0.2, 'triangle', 0.03, 60)); }
-export function footOff() { hideFieldViewModel(); FOOT.active = false; FOOT.act = ''; if (me) me.s.g.visible = false; if (document.pointerLockElement === gl) document.exitPointerLock(); }
+export function footOff() { hideFieldViewModel(); FOOT.active = false; FOOT.act = ''; if (me) me.s.g.visible = false; if (document.pointerLockElement === gl && settings.steer === 'zeiger') document.exitPointerLock(); }   // direkte Lenkung: eingefangen lassen
 export function footJump() { if (!FOOT.active || FOOT.jy > 0 || FOOT.jv !== 0) return; FOOT.jv = 4.6; snd(95, 0.05, 'triangle', 0.02, 40); }
 
 // Platz für den Körper? (Gelände zu steil, Wasser/Lava, Kartenrand, Lagerstätten, Station, Schiff, Rover)
@@ -120,7 +120,7 @@ export function updateFoot(dt: number) {
   FOOT.warn -= dt;
   FOOT.locked = document.pointerLockElement === gl;
   if (!FOOT.locked && (grabT -= dt) <= 0) { grabT = 0.4; const ua = (navigator as any).userActivation; if (!ua || ua.isActive) { try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* bleibt bei Zeigersteuerung */ } } }
-  if (!FOOT.locked) {
+  if (!FOOT.locked && settings.steer === 'zeiger') {      // direkte Lenkung: ohne Zeiger kein Drehen
     const mx = clamp((mouse.x - view.W / 2) / (view.W / 2), -1, 1), my = clamp((mouse.y - view.H / 2) / (view.H / 2), -1, 1), dz = 0.14, sh = (v: number) => Math.sign(v) * Math.max(0, Math.abs(v) - dz) / (1 - dz);
     FOOT.yaw -= sh(mx) * 2.4 * settings.sens * dt; FOOT.pitch += (-sh(my) * 1.0 * (settings.invertY ? -1 : 1) - FOOT.pitch) * Math.min(1, dt * 5);
   }

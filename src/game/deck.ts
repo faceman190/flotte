@@ -540,6 +540,9 @@ export function loadHangar(): Promise<boolean> {
   return (hloading = (async () => {
     try {
       const [data, gltf] = await Promise.all([fetch(dj).then(r => { if (!r.ok) throw new Error('Hangardaten: ' + r.status); return r.json(); }), new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu)]);
+      // Laufkatzen mit Seil und Haken an der Decke weglassen (seit 2026-11-18, Wunsch des Spielers: stören über großen Schiffen;
+      // im Lichtraum-2-Hangar sind sie in bk_halle.py ausgebaut)
+      data.inst = data.inst.filter(([mi]: [number]) => !/^H Laufkatze/.test(data.mod[mi]?.n || ''));
       HPARTS = partsOf(gltf.scene); HDATA = data;
       // Hangar in der neuen Art (Lichtraum 2) im Hintergrund dazu, bis dahin steht der alte. Erst nach dem Deck: Beide großen Modelle
       // zugleich entpackt trieben den Arbeitsspeicher beim Laden auf über 3 GB (Grenze des Browsers gut 4 GB).
@@ -561,7 +564,13 @@ export function loadHangar2(): Promise<boolean> {
   if (!dj || !mu) return Promise.resolve(false);      // Artifact-Fassung: Der Satz passt nicht hinein, es bleibt beim alten Hangar
   return (h2loading = loadLicht2Set(dj, mu).then(r => { H2 = r; return true; }, e => { console.warn('Hangar (Lichtraum 2) nicht geladen:', e); h2loading = null; return false; }));
 }
-export const hangar2Ready = () => !!H2;      // Hangar der neuen Art geladen (Tests)
+export const hangar2Ready = () => !!H2;
+// Für den Start (main.ts): wartet, bis die Lichträume des Decks und danach der Hangar der neuen Art ausgepackt sind (dieselbe Reihenfolge wie
+// in loadHangar, damit nie beide großen Modelle zugleich entpackt werden)
+export function hangarBgLoad(): Promise<boolean> {
+  const deckLicht = LMLOADING.bastion ?? (LM.bastion ? Promise.resolve(true) : loadDeck('bastion').then(() => LMLOADING.bastion ?? false));
+  return Promise.resolve(deckLicht).catch(() => false).then(() => loadHangar2());
+}      // Hangar der neuen Art geladen (Tests)
 export interface HangarBuild { group: THREE.Group; blocks: Rect[]; tris: number; update: (x: number, z: number) => void; stale: () => boolean; prime: () => void }
 export function buildHangar(): HangarBuild | null {
   if (!HDATA || !HPARTS) return null;

@@ -119,7 +119,8 @@ export async function loadAssets() {
   if (failed) console.warn(`${failed} Spieldateien konnten nicht geladen werden; das Spiel nutzt dafür Ersatzmodelle.`);
   // Ladebildschirm ausblenden (kurz stehen lassen, wenn es schnell ging, damit er nicht nur aufblitzt)
   const wait = Math.max(0, 350 - (performance.now() - t0));
-  setTimeout(() => { $('boot').classList.add('done'); setTimeout(() => $('boot').remove(), 700); }, wait);
+  bootWait = wait;
+  $('bootTxt').textContent = 'Welt wird vorbereitet …';
   // danach: Rest im Hintergrund, alte Dateien aufräumen, dauerhaften Speicher erbitten
   setTimeout(() => prefetchWorld(m, have), 4000);
   if (ASSET_STATE.sw) cleanup(m);
@@ -151,4 +152,11 @@ export async function storageInfo() {
 export async function clearStoredAssets() {
   try { await caches.delete(CACHE); } catch { /* egal */ }
   ASSET_STATE.stored = 0;
+}
+
+// Ladebildschirm ausblenden: erst wenn das Menü fertig vorbereitet ist (main.ts), damit die Menüfahrt nicht anfangs hängt und ruckelt
+let bootWait = 0;
+export function hideBoot() {
+  const el = document.getElementById('boot'); if (!el || el.classList.contains('done')) return;
+  setTimeout(() => { el.classList.add('done'); setTimeout(() => el.remove(), 700); }, bootWait);
 }

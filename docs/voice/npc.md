@@ -44,5 +44,5 @@ Die Texte entsprechen `GREET` in `src/game/interior.ts`. Welche Stimme spricht, 
 - **Personal:** `talk()` in `interior.ts` → `staffBark(name, theke)`. Frauennamen (Mira, Leta, Ilka, Sefa, Runa, Yara, Edda, Tilda, Nele, Kaja) sprechen mit Corinna, alle anderen mit Maks.
 - **Drohnen:** Beim ersten Entdecken (Sicht oder Treffer) ein Alarmruf, beim Zerstören in 60 % der Fälle ein Ausfallruf. Lautstärke nach Entfernung
   (ab etwa 35 m stumm), danach 7 s (Alarm) bzw. 3 s (Ausfall) Pause, damit ein Schwarm nicht durcheinander ruft. In Minen und auf dem Planeten.
-- **Andockkontrolle:** angedockt an einer Station → k_an1, gelandet an einer Planetenbasis → k_an2, abgelegt (nach dem Startablauf) → k_ab1 oder k_ab2.
+- **Andockkontrolle:** angedockt an einer Station oder gelandet an einer Planetenbasis → k_an2 (k_an1 „Klammern greifen“ wird seit 2026-11-18 nicht mehr benutzt, man landet im Hangar), abgelegt (nach dem Startablauf) → k_ab1 oder k_ab2.
 - Ein Ruf entfällt, solange eine Geschichtsstimme spricht; beginnt eine, wird der Ruf ausgeblendet. Es läuft immer nur ein Ruf.

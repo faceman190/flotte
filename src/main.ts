@@ -1,12 +1,13 @@
 import './core/boot';   // zuerst: Spieldaten laden (Ladebalken), alles Weitere wartet darauf
 import { dockBark } from './game/barks';
 import * as THREE from 'three';
-import { warm, camera, render, scene, aimShadows, markShadows, gl } from './core/engine';
+import { warm, camera, render, scene, aimShadows, markShadows, gl, compileFor } from './core/engine';
+import { hideBoot } from './core/assets';
 import { updateSky, sunDir, sky } from './core/sky';
 import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience';
 import { ux } from './core/engine';
 import { perfFrameStart, perfFrameEnd, perfHooks } from './core/perf';
-import { onKey, centerMouse, releaseAll, keys, look } from './core/input';
+import { onKey, centerMouse, releaseAll, keys, look, steer } from './core/input';
 import { ambience, preloadSfx, outside, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode, sfx, sfxHeld, loopVol } from './core/audio';
 import { rand, clamp, $ } from './core/util';
 import { P, G, settings, loadSettings, saveSettings, newPlayer, setPlayer, loadGame, saveGame, stats, type Player, type Tool } from './game/state';
@@ -52,7 +53,7 @@ import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot,
 import { CITY, updateCity, insideCityGate, preloadCities, cityDoorOut, hangarPadPose, cityHooks, cityWorld } from './game/city';
 import { updateBaseFx } from './game/basefx';
 import { preloadBases } from './models/stationModels';
-import { loadDeck, loadHangar } from './game/deck';
+import { loadDeck, loadHangar, hangarBgLoad } from './game/deck';
 import { loadEisenkrone } from './models/eisenkrone';
 import { updateChapter2 } from './game/chapter2';
 import { updateChapter3 } from './game/chapter3';
@@ -301,14 +302,14 @@ onKey(code => {
   }
   if (code === 'KeyR' && G.mode === 'play') { scan(); noteScan(); return; }
   if (code === 'KeyJ' && G.mode === 'play') { toggleJumpDrive(); return; }
-  if ((code === 'ShiftLeft' || code === 'ShiftRight') && G.mode === 'play') { G.cruise = !G.cruise; radio('SYSTEM', G.cruise ? 'Reiseflug: schneller, aber träge in der Lenkung.' : 'Manöverflug.'); return; }
+  if ((code === 'ShiftLeft' || code === 'ShiftRight') && G.mode === 'play') { G.cruise = !G.cruise; return; }   // ohne Funkmeldung (Wunsch des Spielers): Ton und blaue Tempoanzeige reichen
   // Ich-Sicht / Außensicht: überall zu Fuß (Station, Hangar, Schiff, Mine, Planetenboden)
   if (code === 'KeyV' && (G.mode === 'walk' || G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { toggleView(); return; }
   if (G.mode === 'rover' && FOOT.active && code === 'Space') { footJump(); return; }
   if (code === 'KeyC' && (G.mode === 'walk' || G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { toggleCrouch(); return; }
   // F: aus dem Rover aussteigen / wieder einsteigen
   if (code === 'KeyF' && G.mode === 'rover' && !G.dead) { if (FOOT.active) { if (footNearRover()) enterRover(); } else leaveRover(); return; }
-  if (code === 'KeyV' && G.mode === 'play') { CAM.lock = !CAM.lock; radio('SYSTEM', CAM.lock ? 'Freie Kamera: Maus schaut um das Schiff, Pfeiltasten lenken. V beendet sie.' : 'Kamera wieder hinter dem Schiff.'); return; }
+  if (code === 'KeyV' && G.mode === 'play') { CAM.lock = !CAM.lock; if (CAM.lock) radio('SYSTEM', 'Freie Kamera: Maus schaut um das Schiff, Pfeiltasten lenken. V beendet sie.'); return; }
   if (G.mode === 'walk' && code === 'Space') { jump(); return; }
   if (code === 'KeyE') {
     if (G.mode === 'walk') interact();
@@ -452,16 +453,27 @@ function setFov(f: number) { if (Math.abs(camera.fov - f) > 0.05) { camera.fov =
 // Freie Kamera im Flug: C oder mittlere Maustaste halten (V = fest), die Maus dreht die Kamera um das Schiff; Mausrad = Abstand.
 // Beim Loslassen schwenkt sie zurück hinter das Schiff. Der Zeiger wird solange eingefangen, damit er danach wieder dort steht, wo er war.
 const CAM = { yaw: 0, pitch: 0, w: 0, zoom: 1, lock: false };
+let flyGrabT = 0, flyLocked = false;
+const typingNow = () => { const t = document.activeElement?.tagName; return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT'; };
 function freeCamera(dt: number) {
   const flying = G.mode === 'play' && !G.dead;
   if (!flying) CAM.lock = false;
   const want = flying && (!!keys.KeyC || look.mid || CAM.lock);
+  const direct = settings.steer !== 'zeiger';
   if (want !== look.free) {
     look.free = want; look.dx = look.dy = 0;
-    try {
+    if (!direct) try {      // alte Zeigersteuerung: nur für die freie Kamera einfangen
       if (want) { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); }
       else if (document.pointerLockElement === gl && !IN.active) document.exitPointerLock();
     } catch (e) { /* ohne Einfangen geht es auch */ }
+  }
+  // Direkte Lenkung: Im Flug bleibt der Zeiger eingefangen (wie zu Fuß). Fehlt er (nach Menü, Karte, Chat), holt ihn das Spiel zurück,
+  // sobald der Browser es erlaubt (kurz nach einem Tastendruck oder Klick); sonst reicht ein Klick ins Bild.
+  flyLocked = flying && document.pointerLockElement === gl;
+  if (!flying) { steer.dx = steer.dy = 0; flyGrabT = 0; }
+  else if (direct && document.pointerLockElement !== gl && !typingNow() && (flyGrabT -= dt) <= 0) {
+    flyGrabT = 0.4; const ua = (navigator as any).userActivation;
+    if (!ua || ua.isActive) try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* Klick nötig */ }
   }
   if (look.free) {
     const k = 0.0032 * settings.sens;
@@ -478,7 +490,18 @@ function freeCamera(dt: number) {
   CAM.zoom += ((settings.camZoom || 1) - CAM.zoom) * Math.min(1, dt * 9);
 }
 // Esc gibt den Zeiger frei: dann auch die feste freie Kamera beenden
-document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== gl && CAM.lock) CAM.lock = false; });
+document.addEventListener('pointerlockchange', () => {
+  const now = document.pointerLockElement === gl;
+  if (!now && CAM.lock) CAM.lock = false;
+  // Direkte Lenkung: Esc im Flug gibt den Zeiger frei → Pause (wie zu Fuß). Absichtliches Freigeben (Menüs, Chat) wechselt vorher den Modus.
+  if (flyLocked && !now && settings.steer !== 'zeiger') setTimeout(() => { if (document.pointerLockElement !== gl && G.mode === 'play' && !G.dead && !typingNow()) pause(); }, 80);
+});
+// Klick ins Bild im Flug ohne eingefangenen Zeiger: nur einfangen, nicht schießen
+gl.addEventListener('mousedown', e => {
+  if (settings.steer === 'zeiger' || G.mode !== 'play' || document.pointerLockElement === gl) return;
+  try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (err) { /* nicht erlaubt */ }
+  e.stopImmediatePropagation();
+}, true);
 function updateCamera(dt: number) {
   freeCamera(dt);
   if (G.mode === 'intro') { camera.position.copy(INTRO.pos); camera.lookAt(INTRO.look); setFov(50); return; }
@@ -693,18 +716,26 @@ if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterSh
 
 // =============== Start ===============
 // Schiffsmodelle laden (kurz), dann Menü zeigen. Ohne Modelle laufen die eingebauten Ersatzmodelle.
-Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false), loadDeck('bastion').catch(() => false), loadHangar().catch(() => false), loadEisenkrone().catch(() => false)]).then(() => {
-  loadDeck('eisenkrone').catch(() => false);      // Hüttendeck der Eisenkrone: im Hintergrund, es wird erst beim Betreten gebraucht
-  setTimeout(preloadMeshRooms, 3000);
-  setTimeout(preloadBases, 4000);    // Planetenbasen mit eigenem Modell (Schmelzwerk, Bohrturm)
-  setTimeout(preloadCities, 2500);   // Städte (Hintergrund-Paket): vor dem ersten Landen auf Heimstatt II geladen
-  loadRockModel();   // Felsmodell für Asteroiden (kleine Datei, ist vor dem ersten Flug geladen)
-  setTimeout(preloadSfx, 1500);   // Schritte, Klicks, Türen   // begehbare Innenräume aus Modellen im Hintergrund vorladen
+// Seit 2026-11-18: Der Ladebildschirm bleibt stehen, bis das Menü fertig vorbereitet ist. Vorher fror das erste Bild des Menüs 3,4 s ein
+// (alle Shader auf einmal), und das Auspacken der Hintergrund-Pakete (Städte, Basen, Innenräume) ließ die Menüfahrt bis 10 s lang ruckeln.
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false), loadDeck('bastion').catch(() => false), loadHangar().catch(() => false), loadEisenkrone().catch(() => false),
+  loadRockModel().catch(() => false)]).then(async () => {     // Felsmodell vor dem Aufbau der Menüszene (sonst stehen dort die alten berechneten Brocken)
+  // Hintergrund-Pakete gleich auspacken, solange der Ladebildschirm steht. Was beim ersten Besuch noch aus dem Netz kommt, wartet nicht länger als 6 s.
+  const bg = Promise.all([hangarBgLoad().catch(() => false), loadDeck('eisenkrone').catch(() => false), preloadMeshRooms(), preloadBases(), preloadCities()]).catch(() => false);
+  setTimeout(preloadSfx, 1500);   // Schritte, Klicks, Türen (Klänge entpackt der Browser nebenher)
   setShipModel('falke', 'Orange', true);
   showMainMenu();
   setupMenuScene();
+  // Shader der Menüszene übersetzen (der Browser macht das nebenher), dann ein paar Bilder hinter dem Ladebildschirm zeichnen
+  await Promise.race([compileFor(scene, scene), sleep(8000)]);
   requestAnimationFrame(loop);
-});
+  await Promise.race([bg, sleep(6000)]);
+  await Promise.race([compileFor(scene, scene), sleep(3000)]);    // was inzwischen dazukam (Verkehr, Ersatzmodelle)
+  await sleep(250);
+  hideBoot();
+}).catch(e => { console.error('Start:', e); hideBoot(); });
+setTimeout(hideBoot, 40000);   // Notbremse: nie dauerhaft hinter dem Ladebildschirm hängen
 try {
   addEventListener('beforeunload', () => { if (G.mode !== 'menu') saveGame(); });
 } catch (e) {

@@ -61,7 +61,7 @@ export function loadCity(name: string): Promise<boolean> {
   })());
 }
 // nach dem Start still im Hintergrund holen (das erste Landen auf Heimstatt II soll die Stadt schon haben)
-export function preloadCities() { for (const n of Object.keys((window as any).CITYDATA || {})) loadCity(n); }
+export function preloadCities() { return Promise.all(Object.keys((window as any).CITYDATA || {}).map(n => loadCity(n).catch(() => false))); }
 
 // ---------- Modell ----------
 // Rückgabe wie die übrigen Stationsmodelle (world.ts): Gruppe, Kollisionskugeln, Andock- und Startpunkt in lokalen Koordinaten

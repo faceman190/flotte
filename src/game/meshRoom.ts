@@ -48,7 +48,7 @@ export function loadMeshRoom(cls: string, preload = false): Promise<Loaded | nul
 }
 // sofort verfügbar? (für den synchronen Einstieg)
 export function meshRoomReady(cls: string) { const m = modelOf(cls); return ready[m] || null; }
-export function preloadMeshRooms() { for (const cls of Object.keys(SHIPS)) if (hasMeshRoom(cls)) loadMeshRoom(cls, true); }
+export function preloadMeshRooms() { return Promise.all(Object.keys(SHIPS).filter(hasMeshRoom).map(cls => loadMeshRoom(cls, true).catch(() => null))); }
 
 // Spiegelungen im Innenraum: kühles Blau von oben, warmes Orange von unten, helle Leuchtbänder (statt des dunklen Weltraums)
 let env: THREE.Texture | null = null;

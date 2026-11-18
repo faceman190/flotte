@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { camera, ux, view } from '../core/engine';
+import { camera, ux, view, gl } from '../core/engine';
 import { mouse, keys, look } from '../core/input';
 import { clamp, d3, fmtD, fmtN, $ } from '../core/util';
 import { flightMax, P, G, stats, cargoUsed, settings } from '../game/state';
@@ -195,9 +195,16 @@ export function drawHUD() {
       ux.fillStyle = G.cruise ? '#7cc4ff' : 'rgba(255,210,122,.9)'; ux.fillRect(sx - 34, sy + 15, 34 * clamp(sp / vm, 0, 1), 2);
       ux.textAlign = 'center';
     }
+    if (settings.steer !== 'zeiger') {      // direkte Lenkung (seit 2026-11-18): kein Kreis, kein Lenkzeiger
+      if (document.pointerLockElement !== gl && !look.free) {
+        ux.textAlign = 'center'; ux.font = '600 13px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = 'rgba(228,238,245,.75)';
+        ux.fillText('Klick ins Bild, um zu steuern', W / 2, H / 2 + 64);
+      }
+    } else {
     ux.strokeStyle = 'rgba(255,255,255,.12)'; ux.lineWidth = 1;
     ux.beginPath(); ux.arc(W / 2, H / 2, W / 2 * 0.05, 0, TAU); ux.stroke();
-    if (!look.free) {   // freie Kamera: kein Lenkzeiger
+    }
+    if (!look.free && settings.steer === 'zeiger') {   // freie Kamera: kein Lenkzeiger
       ux.beginPath(); ux.moveTo(W / 2, H / 2); ux.lineTo(mouse.x, mouse.y); ux.stroke();
       ux.fillStyle = 'rgba(255,255,255,.85)'; ux.save(); ux.translate(mouse.x, mouse.y); ux.rotate(Math.PI / 4); ux.fillRect(-3.5, -3.5, 7, 7); ux.restore();
     }
