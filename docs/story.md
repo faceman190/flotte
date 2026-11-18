@@ -172,6 +172,8 @@ Jedes Kapitel verbindet Hauptmissionen mit dem, was das Spiel schon kann: Bergba
 
 **Vertonung:** 61 Zeilen, 7.639 Credits, noch nicht aufgenommen (`docs/voice/kapitel5.md`). Neue Stimmen: Sander, Brandes, die Kennung aus Halden.
 
+**Offener Widerspruch (18.11.2026):** Sander sagt über den Ankunftspunkt in Heimstatt „Dort, wo vor achtunddreißig Jahren die Bastion herausfiel“. Laut Intro und Riss kam die Bastion aber im Sonnenfeld durch das Halden-Tor und ging erst danach in Heimstatt vor Anker. Vorschlag vor der Vertonung: „Dort, wo die Bastion damals vor Anker ging.“ Die geplante Gedenkboje für den Riss steht deshalb im Sonnenfeld an den Trümmern des Tors (siehe `docs/heimstatt.md`).
+
 **Figuren:** Sander und Varga haben seit Alpha 1.18 eigene Figuren (`sander.glb`, `varga.glb` in `asset-src/glb/char/`). Fehlt eine Datei, steht ersatzweise ein Mechaniker oder Lagerarbeiter mit Farbton dort (`NPC_FALLBACK` in `src/game/interior.ts`). Bildvorgaben: `docs/figuren-kapitel5.md`.
 
 **Nicht geprüft:** Die Flugwege zwischen den Schritten und die Kämpfe wurden im Testfenster mit gesetzten Positionen durchlaufen, nicht von Hand geflogen. Die Zeit für den Weg durch die Anna (rund 100 m Laufweg) ist gerechnet, nicht gespielt.

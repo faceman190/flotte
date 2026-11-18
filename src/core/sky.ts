@@ -124,10 +124,12 @@ function applySky(t: THREE.Texture, tint: number, rot: [number, number, number],
 }
 export const planetInfo = { dir: new THREE.Vector3(), angR: 0, on: false };
 // Großer Sektor (Heimstatt): Der Planet hat eine gedachte Lage im Raum und wird beim Anflug größer. Von der Sektormitte aus sieht er genau so aus wie
-// bisher (gleicher Winkel, also auch im Hauptmenü). Er steht dafür weiter weg (PLANET_FAR) und schreibt keine Tiefe: Stationen und ihre Fernansicht
-// (bis 7 km, farview.ts) liegen immer davor. Größter Winkelradius 42° (dann liegt die Vorderseite noch gut 8 km entfernt).
-const PLANET_FAR = 24000, PLANET_MAXSIN = Math.sin(42 * Math.PI / 180);
-let planetNear: null | { c: THREE.Vector3; R: number; size: number } = null;
+// bisher (gleicher Winkel, also auch im Hauptmenü). Kugel und Lufthülle schreiben keine Tiefe und kommen vor allem anderen dran (renderOrder −0,5/−0,4,
+// die Hülle in der undurchsichtigen Liste): Stationen und ihre Fernansicht (farview.ts) liegen so immer davor, egal wie nah die Kugel rechnerisch ist.
+// Abstand je nach Größe so, dass auch die Rückseite der Lufthülle vor der Sichtweite der Kamera (30 km) bleibt. Alpha 1.50 stand fest bei 24 km:
+// Die Hülle ragte bis 31 km hinaus, ihre Rückseite wurde abgeschnitten und zeigte ein dunkles Vieleck auf dem Planeten (auch im Hauptmenü).
+const PLANET_FAR = (sn: number) => 28500 / (1 + 1.08 * sn), PLANET_MAXSIN = Math.sin(42 * Math.PI / 180);
+let planetNear: null | { c: THREE.Vector3; R: number; size: number; s0: number; halo: THREE.ShaderMaterial | null; k0: number } = null;
 const _pv = new THREE.Vector3();
 
 export interface SkyDef {
@@ -172,12 +174,14 @@ export function setSky(d: SkyDef) {
       // Gedachte Lage: so weit draußen, dass der Planet von der Anflugzone aus gut 40° Winkelradius hat (von der Mitte aus wie bisher)
       const s0 = p.size / 11000, dir = new THREE.Vector3(...p.dir).normalize(), cosT = Math.hypot(dir.x, dir.z), want = 0.643;
       const Dp = want * d.near * cosT / (want - s0);
-      planetNear = { c: dir.multiplyScalar(Dp), R: s0 * Dp, size: p.size };
+      planetNear = { c: dir.multiplyScalar(Dp), R: s0 * Dp, size: p.size, s0, halo: null, k0: 0 };
       const s = planet.getObjectByName('surf') as THREE.Mesh | undefined;
       if (s) {
         (s.material as THREE.Material).depthWrite = false; s.renderOrder = -0.5;   // nach dem Himmel (-1), vor allem anderen
         s.geometry.dispose(); s.geometry = new THREE.SphereGeometry(p.size, 288, 180);   // bis 42° groß: feiner, sonst sieht man Kanten am Rand
       }
+      // Lufthülle (additiv) gleich danach in der undurchsichtigen Liste: sonst käme sie nach allen Stationen und läge als Schein über ihnen
+      planet.traverse((o: any) => { if (o.isMesh && o !== s && o.material.blending === THREE.AdditiveBlending) { o.material.transparent = false; o.renderOrder = -0.4; if (o.material.uniforms?.k && planetNear) { planetNear.halo = o.material; planetNear.k0 = o.material.uniforms.k.value; } } });
     }
   } else if (d.planet && TEXT.planet) {
     const p = d.planet;
@@ -350,9 +354,12 @@ export function updateSky(camPos: THREE.Vector3) {
   if (planet && planet.visible && planetNear) {
     _pv.copy(planetNear.c).sub(camPos);
     const dist = Math.max(1, _pv.length()), sn = Math.min(PLANET_MAXSIN, planetNear.R / dist);
-    planet.position.copy(_pv).multiplyScalar(PLANET_FAR / dist);
-    planet.scale.setScalar(PLANET_FAR * sn / planetNear.size);
+    const D = PLANET_FAR(sn);
+    planet.position.copy(_pv).multiplyScalar(D / dist);
+    planet.scale.setScalar(D * sn / planetNear.size);
     planetInfo.dir.copy(_pv).normalize(); planetInfo.angR = Math.asin(sn);
+    // Lufthülle beim Anflug dimmen: groß im Bild würde sie über den Glanzeffekt alles überstrahlen (von der Mitte aus unverändert)
+    if (planetNear.halo) planetNear.halo.uniforms.k.value = planetNear.k0 * Math.max(0.3, Math.pow(planetNear.s0 / Math.max(sn, planetNear.s0), 1.3));
   }
   if (planet && planet.visible) updatePlanet(planet as THREE.Group, t);
   if (pending && ready(pending.t)) { applySky(pending.t, pending.tint, pending.rot, pending.gain); pending = null; if (atmDome.visible) skySphere.visible = false; }

@@ -54,7 +54,10 @@ kbd{display:inline-block;min-width:22px;text-align:center;background:rgba(95,208
 .panel .row{position:relative;display:flex;justify-content:space-between;gap:14px;margin:1px 0;color:var(--mut);font-weight:500}
 .panel .row b,.panel .row span:last-child{font-family:var(--mono);font-weight:400;color:var(--txt)}
 .panel .row b.amb{color:var(--amb)}
-#locP{top:12px;left:12px;transform-origin:top left}
+#crPop{position:fixed;top:14px;left:16px;pointer-events:none;font:600 19px var(--ui);letter-spacing:.5px;color:var(--amb);opacity:0;transition:opacity .6s;transform-origin:top left;text-shadow:0 0 8px #000}
+#crPop.on{opacity:1}
+#netP{position:fixed;top:14px;left:16px;pointer-events:none;font:500 13px var(--ui);color:var(--mut);text-shadow:0 0 6px #000;transform-origin:top left}
+#crPop.on~#netP{top:42px}
 #banner{position:fixed;top:22%;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity 1.2s}
 #banner .t{font-size:46px;letter-spacing:14px;color:var(--acc);font-weight:700;text-shadow:0 0 24px rgba(0,0,0,.9),0 0 40px rgba(60,170,255,.3);animation:bannerIn 1.6s ease-out}
 #banner .s{font-size:15px;letter-spacing:6px;color:var(--txt);margin-top:4px;text-shadow:0 0 10px #000;text-transform:uppercase;font-weight:600}
@@ -96,7 +99,7 @@ kbd{display:inline-block;min-width:22px;text-align:center;background:rgba(95,208
 #warm span{font:500 14px/1 'Saira Condensed',var(--mono),sans-serif;letter-spacing:.34em;text-transform:uppercase;color:#8fa3b3;opacity:0}
 #warm.on span{animation:warmWord 1.5s ease-in-out .55s infinite alternate both}
 @keyframes warmWord{from{opacity:.2}to{opacity:.85}}
-.crFloat{position:absolute;right:0;top:-2px;font-family:var(--mono);font-size:14px;pointer-events:none;animation:crUp 1.6s ease-out forwards;text-shadow:0 0 8px #000}
+.crFloat{position:absolute;left:100%;margin-left:10px;top:2px;white-space:nowrap;font-family:var(--mono);font-size:14px;pointer-events:none;animation:crUp 1.6s ease-out forwards;text-shadow:0 0 8px #000}
 @keyframes crUp{from{transform:translateY(0);opacity:1}to{transform:translateY(-26px);opacity:0}}
 
 /* ---------- Hauptmenü ---------- */

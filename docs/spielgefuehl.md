@@ -161,3 +161,29 @@ Stocken (0,17 s im Testfenster) für das Vorwärmen „an Bord“ (hinter der Bl
   (sonst zählen Lampen doppelt), in einem Zug. Gemessen kein Bild über 45 ms mehr, Einsteigen ohne neuen Shader. Auf viele Bilder verteilt
   war es schlechter (1,3 s: normale neue Shader warteten hinter der Warteschlange).
 - Verworfen: alle Schiffsmodelle beim Start vorwärmen (Start 3,7 s länger, half wegen der verschiedenen Spiegelungsgrößen nicht).
+
+## Schiffsanzeige unten rechts (18.11.2026, nach Alpha 1.50)
+
+Wunsch des Spielers: „schlichter, nicht so altmodisch nervig“. Von drei Entwürfen gewählt: B, die Ringanzeige (`drawShipPanel` in `src/ui/hud.ts`).
+- Ring: außen Schild (blau), innen Hülle (grün, gelb, rot), in der Mitte der Umriss des Schiffs, weiß beim Treffer.
+- Links daneben drei Werte in Rajdhani statt Mono-Großbuchstaben: Werkzeug (Munition, Hitze oder Ladungen), Raketen als kleine Striche
+  (bzw. Drohnen), Fracht mit dünnem Farbstreifen der Ladung. Nur knappe Werte färben sich.
+- Entfallen: Rahmen, Kopfzeile mit Ausbau, Ausbaustufen, Schaden je Sekunde, Patrouillennamen. Die Werkzeugliste blendet nach einem Wechsel
+  gut zwei Sekunden ein.
+
+## Links oben aufgeräumt, Planet in Heimstatt korrigiert (18.11.2026)
+
+- Das Feld links oben (Sektor, Zone, Gefahr, Credits, Heimathafen, Aufträge, Netz) ist weg. Credits blenden nur nach einer Änderung gut vier
+  Sekunden ein (mit „+554“), der Netzstand nur im Mehrspieler. Der Sektorname steht klein über dem Kompass (auf Planeten der Planet).
+- Fehler aus Alpha 1.50: Der mitwachsende Planet stand 24 km weit, die Rückseite seiner Lufthülle reichte über die Sichtweite (30 km) hinaus und
+  wurde abgeschnitten. Auf dem Planeten lag ein dunkles Vieleck, auch im Hauptmenü. Jetzt hängt der Abstand von der Größe ab, die Hülle zeichnet
+  vor allem anderen, und sie wird beim Anflug gedimmt (sonst überstrahlt sie über den Glanzeffekt den Heimstatt-Ring).
+
+## Steuerungsleiste links unten gekürzt (18.11.2026)
+
+Wunsch des Spielers: nur was im Moment wichtig ist, keine Grundtasten. `rowsFor` in `src/ui/controls.ts`:
+- Weg sind W/S, Maus, A/D, Leer/Strg, Q/E, V, Mausrad, Laufen, Springen, Ducken, Esc (alles unter Esc → Steuerung).
+- Es bleiben Aktionen, die jetzt gehen (Andocken, Landen, Rakete, Abbauen, Handel, Kurzsprung → Ziel), und Tasten für die Lage: im Feld
+  „2 Bergbaulaser“ bzw. „R Scannen“, bei Ferrox mit dem Laser „1 Kanonen“, mit Route „J Sprung → Sektor“, in großen Sektoren mehr als 5 km
+  von jeder Station „N Ziel wählen“ und „H Schnellflug“, „V Freie Kamera beenden“ nur während sie läuft.
+- In den ersten zehn Spielminuten kommen Umschalt (Reiseflug), B und M dazu. Ohne Zeilen verschwindet die Leiste.

@@ -33,15 +33,9 @@
 
 <!-- HUD -->
 <div id="hud" class="hidden">
-  <div id="locP" class="panel">
-    <div class="h" id="locName">—</div>
-    <div class="row"><span>Zone</span><b id="locZone"></b></div>
-    <div class="row"><span>Gefahr</span><span id="locDanger"></span></div>
-    <div class="row"><span>Credits</span><b id="locCr" class="amb"></b></div>
-    <div class="row"><span>Heimathafen</span><span id="locHome"></span></div>
-    <div class="row"><span>Aufträge</span><span id="locJobs"></span></div>
-    <div class="row"><span>Netz</span><span id="locNet"></span></div>
-  </div>
+  <!-- links oben (seit Alpha 1.51): nur Credits beim Ändern und der Netzstand im Mehrspieler -->
+  <div id="crPop"><span id="crVal"></span></div>
+  <div id="netP" class="hidden"></div>
   <div id="banner"><div class="t" id="bannerT"></div><div class="s" id="bannerS"></div></div>
   <!-- rechts oben: Aufgaben und Funk -->
   <div id="objP">
@@ -76,7 +70,7 @@
     </div>
     <div class="hint" id="mAcc" style="margin-top:14px"></div>
     <div class="gpuHint hidden" id="mGpu"></div>
-    <div class="ver">Alpha 1.50 · Großes Heimstatt mit Schnellflug, neue Ferrox</div>
+    <div class="ver">Alpha 1.51 · Ruhigeres HUD mit Ringanzeige</div>
   </div>
 </div>
 
@@ -165,7 +159,7 @@
     <kbd>V</kbd><span>Freie Kamera fest ein/aus (Pfeiltasten lenken weiter)</span>
     <kbd>Mausrad</kbd><span>Kamera näher / weiter</span>
     <kbd>R</kbd><span>Scanner: zeigt Erze in Asteroiden</span>
-    <kbd>F / Rechtsklick</kbd><span>Rakete auf erfasstes Ziel</span>
+    <kbd>Rechtsklick</kbd><span>Rakete auf erfasstes Ziel</span>
     <kbd>E</kbd><span>An Station andocken / in der Station: benutzen, ansprechen. Jeder Dienst (Markt, Werft, Lager …) hat seinen eigenen Tresen: hinlaufen und E drücken</span>
     <kbd>WASD / Umschalt</kbd><span>In der Station laufen / rennen, auf Planeten Rover fahren</span>
     <kbd>Leertaste (zu Fuß)</kbd><span>Springen</span>

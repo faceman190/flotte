@@ -1,6 +1,6 @@
 # Heimstatt als großer Sektor
 
-Stand 2026-11-18. Phase 1 ist gebaut (noch nicht veröffentlicht). Entscheidungen des Spielers: Phase 1 zuerst, freier Schnellflug über lange Strecken
+Stand 2026-11-18. Phase 1 ist gebaut und mit Alpha 1.50 veröffentlicht. Entscheidungen des Spielers: Phase 1 zuerst, freier Schnellflug über lange Strecken
 zusätzlich zum Kurzsprung, der Heimstatt-Ring zieht zum Planeten, Heimstatt bleibt komplett sicher (keine Schrottdiebe).
 
 ## Maßstab
@@ -52,8 +52,19 @@ Norden ist −z (Richtung Planet etwa Nordnordwest).
   freier Schnellflug bis 8 km/s mit Halt am Sektorrand, Halt vor der Bastion, gebaute Fassung (Schnellflug, Karte, Neues Spiel).
 - Nicht geprüft: Bildrate auf echter Grafikkarte (das Testfenster rendert ohne Beschleunigung), Mehrspieler mit zwei Piloten.
 
-## Weiter (Konzept)
+Phase 1 ist seit Alpha 1.50 (18.11.2026) im Spiel.
 
-- **Phase 2**, aus vorhandenen Teilen: Gedenkboje „Ankunft“ (5 km NW), Akademie-Übungsgelände (12 km NO: Zieldrohnen, Ringparcours),
-  Alte Werft (40 km WSW, Wrackfriedhof mit Bergung, ohne Gegner), Leitbojen entlang der Verkehrswege, sichtbare Sprünge der Frachter.
+## Weiter (Konzept, abgestimmt am 18.11.2026)
+
+- **Phase 2**, aus vorhandenen Teilen: Akademie-Übungsgelände (12 km NO: Zieldrohnen, Ringparcours, Leitstand), Alte Werft (40 km WSW,
+  Wrackfriedhof mit Bergung, ohne Gegner), Leitbojen entlang der Verkehrswege, sichtbare Sprünge der Frachter.
 - **Phase 3**, neue Modelle: Pumpwerk am Reifschleier, Torwachen, Horchposten „Fernohr“ (55 km O).
+- **Gedenkboje: nicht in Heimstatt, sondern im Sonnenfeld** an den Trümmern des Halden-Tors (Wunsch des Spielers). Dort kam die Bastion durch,
+  dort brach das Tor zusammen. Sie trägt die Namen der elf Schiffe, die nicht ankamen: Weitsicht, Anna, Kranich, Sirius, Ida, Bussard, Wega, Emma,
+  Reiher, Atair, Klara. Nach Kapitel 5 werden die geretteten markiert. Dazu ein Archiv mit Funksprüchen aus Jahr 0 und Sätzen aus dem Eid.
+  Ein Ort ohne Kampf und ohne Auftrag.
+- **Ankunftspunkt in Heimstatt** (5 km NW der Bastion, `AP` in chapter5.ts) bleibt der Ort, an dem in Kapitel 5 die acht Schiffe aus dem
+  zerbrochenen Sprung fallen (der Sprung spuckt sie an verschiedenen Orten aus: Anna im Lichtwall, Kranich in der Narbe). Offen: Sanders Satz
+  „Dort, wo vor achtunddreißig Jahren die Bastion herausfiel“ widerspricht Intro und Story (die Bastion kam im Sonnenfeld durch). Vorschlag:
+  „Dort, wo die Bastion damals vor Anker ging.“ Kostet nichts, solange Kapitel 5 noch nicht vertont ist.
+- Bildprompts für die neuen Modelle (GPT Image): `docs/heimstatt-bildprompts.md`.
