@@ -11,6 +11,17 @@ __DOMAIN__ {
 	@bilder path *.jpg *.png *.webp *.svg *.woff2
 	header @bilder Cache-Control "public, max-age=86400"
 	file_server
+	# Unbekannte Adressen: eigene Fehlerseite der Website (website/src/pages/404.astro), Status bleibt 404
+	handle_errors {
+		@fehlt expression {err.status_code} == 404
+		handle @fehlt {
+			rewrite * /404.html
+			file_server
+		}
+		handle {
+			respond "{err.status_code} {err.status_text}"
+		}
+	}
 	header -Server
 }
 
