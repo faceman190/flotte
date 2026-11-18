@@ -18,7 +18,9 @@ import { WebSocketServer } from 'ws';
 import { openStore, storeInfo } from './store.mjs';
 
 const PORT = +(process.env.PORT || 2567);
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
+// LF_DIST: anderer Ordner mit dem gebauten Spiel (auf dem eigenen Server liefert Caddy die Dateien aus, siehe deploy/)
+const ROOT = process.env.LF_DIST ? path.resolve(process.env.LF_DIST) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
+const HOST = process.env.HOST || undefined;   // hinter Caddy nur 127.0.0.1, auf Render alle Adressen
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.json': 'application/json', '.ico': 'image/x-icon', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.glb': 'model/gltf-binary', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml' };
 // Komprimieren lohnt sich für Text, Code und Modelle (Meshopt-Daten packen sich gut weiter), nicht für Bilder und Klänge
 const PACK = new Set(['.html', '.js', '.css', '.json', '.glb', '.webmanifest', '.svg']);
@@ -329,4 +331,10 @@ async function account(ws, c, m) {
   roster();
 }
 
-server.listen(PORT, () => console.log(`Letzte Crew läuft auf http://localhost:${PORT}  (WebSocket /ws, Spiel aus ${ROOT})`));
+server.listen(PORT, HOST, () => console.log(`Letzte Crew läuft auf http://${HOST || 'localhost'}:${PORT}  (WebSocket /ws, Spiel aus ${ROOT})`));
+
+// Beim Beenden (Neustart nach einem Update, systemd/Render schicken SIGTERM): Spielstände noch wegschreiben
+for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, async () => {
+  try { await store.close(); } catch (e) { console.error('Speichern beim Beenden fehlgeschlagen:', e.message); }
+  process.exit(0);
+});

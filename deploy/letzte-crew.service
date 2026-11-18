@@ -1,0 +1,24 @@
+# Letzte Crew – Mehrspieler-Server (Node). Caddy davor liefert die Dateien aus und reicht /ws und /status hierher.
+[Unit]
+Description=Letzte Crew Mehrspieler-Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=crew
+Group=crew
+WorkingDirectory=/opt/letzte-crew/repo
+EnvironmentFile=/etc/letzte-crew.env
+ExecStart=/usr/bin/node server/server.mjs
+Restart=always
+RestartSec=2
+# Absichern: nur der Datenordner (Spielstände ohne Datenbank) ist beschreibbar
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/letzte-crew/repo/data
+MemoryMax=1500M
+
+[Install]
+WantedBy=multi-user.target

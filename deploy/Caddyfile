@@ -1,0 +1,57 @@
+# Letzte Crew – Caddy auf dem eigenen Server (Vorlage; setup.sh ersetzt __DOMAIN__ und legt sie als /etc/caddy/Caddyfile ab)
+# Caddy holt die HTTPS-Zertifikate selbst.
+#   __DOMAIN__           Website (Ordner site/ im Repository, später gebaut)
+#   www.__DOMAIN__       leitet auf die Website um
+#   spielen.__DOMAIN__   das Spiel: Dateien direkt von der Platte (vorkomprimiert, Range für Musik),
+#                        Mehrspieler (/ws) und Statusseite (/status) gehen an den Node-Server
+
+__DOMAIN__ {
+	root * /srv/letzte-crew/site
+	encode zstd gzip
+	@bilder path *.jpg *.png *.webp *.svg *.woff2
+	header @bilder Cache-Control "public, max-age=86400"
+	file_server
+	header -Server
+}
+
+www.__DOMAIN__ {
+	redir https://__DOMAIN__{uri} permanent
+}
+
+spielen.__DOMAIN__ {
+	handle /ws {
+		reverse_proxy 127.0.0.1:2567
+	}
+	handle /status {
+		# die Website zeigt daraus, wie viele Piloten online sind
+		header Access-Control-Allow-Origin "https://__DOMAIN__"
+		reverse_proxy 127.0.0.1:2567
+	}
+	handle {
+		root * /srv/letzte-crew/dist
+
+		# Spieldaten mit Prüfsumme im Namen (assets/ship/Striker.3f2a9c01de.glb) ändern sich nie: ein Jahr behalten.
+		# Alles andere (Seite, sw.js, assets/manifest.json) jedes Mal nachfragen.
+		@immutable path_regexp ^/assets/.+\.[0-9a-f]{10}\.[a-z0-9]+$
+		@mutable not path_regexp ^/assets/.+\.[0-9a-f]{10}\.[a-z0-9]+$
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		header @mutable Cache-Control "no-cache"
+
+		@glb path *.glb
+		header @glb Content-Type model/gltf-binary
+		@manifest path *.webmanifest
+		header @manifest Content-Type application/manifest+json
+
+		# .br/.gz legt deploy.sh beim Ausrollen an (deploy/precompress.mjs)
+		file_server {
+			precompressed br gzip
+		}
+	}
+	header -Server
+	log {
+		output file /var/log/caddy/letzte-crew.log {
+			roll_size 20MiB
+			roll_keep 5
+		}
+	}
+}

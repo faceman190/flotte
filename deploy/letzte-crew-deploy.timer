@@ -1,0 +1,11 @@
+# Jede Minute auf GitHub nachsehen: Push auf main ist nach spätestens ein bis zwei Minuten (plus Bauzeit) online.
+[Unit]
+Description=Letzte Crew jede Minute auf neue Version prüfen
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

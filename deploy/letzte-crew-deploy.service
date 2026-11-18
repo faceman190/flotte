@@ -1,0 +1,15 @@
+# Letzte Crew – prüft GitHub auf eine neue Version und rollt sie aus (deploy.sh). Gestartet von letzte-crew-deploy.timer.
+[Unit]
+Description=Letzte Crew neue Version ausrollen
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=crew
+Group=crew
+WorkingDirectory=/opt/letzte-crew/repo
+Environment=HOME=/home/crew
+ExecStart=/bin/bash /opt/letzte-crew/repo/deploy/deploy.sh
+TimeoutStartSec=30min
+Nice=10
