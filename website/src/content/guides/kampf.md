@@ -4,7 +4,7 @@ kurz: Kanonen, Raketen, Schilde und die Angriffe des Schwarms – und mit welche
 reihe: 4
 stufe: Fortgeschritten
 bild: ../../assets/bilder/wuerger-spiel.jpg
-stand: Alpha 1.48
+stand: Alpha 1.51
 ---
 
 Die **Ferrox** sind ein Schwarm aus Metall. Sie fressen Erz, Wracks und Schiffe. Der Erstkontakt war im Jahr 12 bei Rotfels, seit dem
@@ -16,7 +16,7 @@ Osten wird es ernst.
 | Taste | Waffe |
 |---|---|
 | <kbd>1</kbd>, dann Klick | Kanonen. Munition ist begrenzt, Nachschub an jeder Station. |
-| <kbd>F</kbd> | Rakete auf das erfasste Ziel |
+| Rechtsklick | Rakete auf das erfasste Ziel |
 
 **Zielerfassung:** Halte einen Ferrox nah an der Bildmitte, bis zu 1.400 m entfernt. Ein Ton meldet das erfasste Ziel, links unten
 leuchtet dann **Rakete abfeuern** auf. Raketen sind knapp: Die Venom trägt vier, der schwere Frachter Wisent zwanzig.
@@ -26,10 +26,14 @@ geben weitere Prozente. Waffenmodule wie Gauss-Beschleuniger, Zwillingslafette o
 
 ## Wie die Ferrox angreifen
 
-- **Jäger** fliegen Anflüge auf ihr Ziel. Höchstens drei greifen zugleich an, die anderen kreisen in Abstand und warten auf ihre Lücke.
+- **Jäger** sind verwilderte Schürfdrohnen mit zwei ungleichen Greifarmen. Sie schießen mit einer Schneidlanze und fliegen Anflüge auf ihr Ziel. Höchstens drei greifen zugleich an, die anderen kreisen in Abstand und warten auf ihre Lücke.
   Wer nach einem Anflug sofort wendet, erwischt sie im Abdrehen.
 - **Bomber** jagen Frachter mit Torpedos.
-- **Bienenstöcke** sind Mutterschiffe in den tiefen Sektoren. Sie zu zerstören ist eine eigene Mission.
+- **Bienenstöcke** sind die Mutterschiffe in den tiefen Sektoren: rund 400 m lange Schmelzhütten mit glühendem Maul, an Trossen
+  hängen halb gefressene Frachter. Aus den Startschächten an der Flanke setzen sie Jäger aus, aus dem Maul feuern sie auf alles in
+  der Nähe. Treffer zählen am ganzen Rumpf. Einen Bienenstock zu zerstören ist eine eigene Mission.
+
+![Ein Bienenstock der Ferrox im Kristallbruch, davor eine Venom](../../assets/bilder/ferrox-150-bienenstock.jpg)
 
 Treffer lassen die Panzerung der Ferrox kurz aufglühen, so siehst du, ob du triffst. Ferrox in der Ferne bekommen einen Rahmen mit
 Entfernung, Angreifer sind rötlich markiert, und ein Pfeil am Bildrand zeigt Ferrox bis 2,5 km Abstand.

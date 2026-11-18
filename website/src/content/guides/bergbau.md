@@ -4,7 +4,7 @@ kurz: Scannen, Laser, Hitze, Sprengladungen und Raffinerie – wie aus Gestein C
 reihe: 2
 stufe: Einsteiger
 bild: ../../assets/bilder/elster-spiel-hangar.jpg
-stand: Alpha 1.48
+stand: Alpha 1.51
 ---
 
 Bergbau ist das Rückgrat der Crew. Jede Werft, jede Panzerplatte und jede Treibstoffzelle beginnt als Brocken in einem Asteroidenfeld.
@@ -23,7 +23,9 @@ Werte und Modelle aller Schiffe stehen im [Schiffs-Explorer](/schiffe/).
 
 ## Ablauf
 
-1. **Feld anfliegen.** Jeder Sektor hat eigene Asteroidenfelder: Metall, Eis, gemischt oder Kristall. Heimstatt hat ein großes Metallfeld und ein Eisfeld.
+1. **Feld anfliegen.** Jeder Sektor hat eigene Asteroidenfelder: Metall, Eis, gemischt oder Kristall. Heimstatt hat den **Eisengürtel** (Metall) 20 km
+   südlich der Bastion direkt neben der Eisenkrone und den **Reifschleier** (Eis) weit im Osten. Mit <kbd>N</kbd> als Ziel wählen und
+   mit <kbd>H</kbd> im Kurzsprung hinfliegen.
 2. **Scannen** mit <kbd>R</kbd>. Ein Puls läuft vom Schiff aus und markiert alle Asteroiden in Scannerreichweite für über eine Minute.
    So siehst du, was in welchem Brocken steckt.
 3. **Laser wählen** mit <kbd>2</kbd>, auf einen Asteroiden zielen und die Maustaste **halten**. Der Brocken bekommt Risse, schrumpft und

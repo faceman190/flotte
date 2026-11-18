@@ -4,7 +4,7 @@ kurz: Wie die Märkte rechnen, wo sich Routen lohnen, Lieferaufträge, Lager, Ru
 reihe: 3
 stufe: Fortgeschritten
 bild: ../../assets/bilder/terminals-125-markt.jpg
-stand: Alpha 1.48
+stand: Alpha 1.51
 ---
 
 Jede Station hat ihren eigenen **Markt**. Wer weiß, was wo knapp ist, verdient mit einem vollen Frachtraum mehr als mit jedem Erzfeld.
@@ -47,6 +47,10 @@ Einstieg in den Frachtflug.
 
 In der Besprechung (Bastion) oder im Kontor (Eisenkrone) bietet jede Station drei **Lieferaufträge** an: eine Ware an einen anderen Hafen
 bringen. Nimmst du einen an, rückt ein neues Angebot nach. Abbrechen kostet Ruf bei der Fraktion, die den Auftrag vergeben hat.
+
+> **Tipp:** In Heimstatt liegen die Häfen weit auseinander (Eisenkrone 20 km, Heimstatt-Ring 30 km von der Bastion). Wähl den Zielhafen
+> mit <kbd>N</kbd> oder auf der Sektorkarte (<kbd>M</kbd>) und flieg mit <kbd>H</kbd> im Kurzsprung hin. Das Zeichen des Auftrags lässt
+> sich genauso als Ziel wählen.
 
 ## Lager
 

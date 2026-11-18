@@ -4,7 +4,7 @@ kurz: Vom ersten Start bis zum ersten verdienten Credit – Steuerung, Bastion, 
 reihe: 1
 stufe: Einsteiger
 bild: ../../assets/bilder/bastion2-spiel.jpg
-stand: Alpha 1.42
+stand: Alpha 1.51
 ---
 
 Letzte Crew läuft direkt im Browser. Öffne [spielen.letztecrew.de](https://spielen.letztecrew.de/) in Chrome, Edge oder Firefox. Beim ersten
@@ -18,25 +18,49 @@ Start lädt das Spiel seine Daten einmal herunter, danach geht es deutlich schne
 Vor 38 Jahren kam das Werftschiff **Bastion** durch das Halden-Tor, kurz bevor es zusammenbrach. Seitdem baut ihre Crew hinter dem Riss
 einen neuen Menschenraum auf. Du bist ein frisch vereidigter Pilot und startest im Sektor **Heimstatt** an Bord der Bastion.
 
+Heimstatt ist groß: 60 km vom Mittelpunkt bis zum Rand. Die Bastion liegt in der Mitte, der **Heimstatt-Ring** 30 km Richtung
+Planet, die Gildehütte **Eisenkrone** mit dem Eisengürtel 20 km im Süden, die Sprungtore 50 km draußen.
+
 ## Steuerung im Flug
 
-Links unten zeigt das Spiel immer die Tasten, die gerade Sinn ergeben. Hervorgehoben ist, was jetzt möglich ist, zum Beispiel Andocken.
+Links unten zeigt das Spiel nur, was gerade wichtig ist, etwa **Andocken**, **Rakete abfeuern** oder **Kurzsprung**. Hervorgehoben ist,
+was jetzt sofort geht. Gibt es nichts zu tun, verschwindet die Leiste. Alle Tasten stehen im Spiel unter <kbd>Esc</kbd> → **Steuerung**.
 
 | Taste | Wirkung |
 |---|---|
 | <kbd>W</kbd> / <kbd>S</kbd> | Schub / Bremsen |
-| Maus | Lenken |
+| Maus | Lenken (ein Klick ins Bild fängt den Zeiger ein) |
 | <kbd>A</kbd> / <kbd>D</kbd> | seitlich ausweichen |
 | <kbd>Leer</kbd> / <kbd>Strg</kbd> | hoch / runter |
 | <kbd>Q</kbd> / <kbd>E</kbd> | rollen |
-| <kbd>Umschalt</kbd> | Reiseflug für lange Strecken |
+| <kbd>Umschalt</kbd> | Reiseflug: schneller, dafür träge |
+| <kbd>H</kbd> | Schnellflug bis 8 km/s, mit Ziel als Kurzsprung |
+| <kbd>N</kbd> | Navigationsziel: Ort im Fadenkreuz wählen |
 | <kbd>J</kbd> | Sprungantrieb (zum nächsten Sektor) |
 | Klick | Kanonen, Bergbaulaser oder Sprengladung, je nach Werkzeug |
 | <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> | Werkzeug: Kanonen, Laser, Sprengladungen |
-| <kbd>V</kbd> | freie Kamera halten |
-| <kbd>M</kbd> | Galaxiekarte |
+| Rechtsklick | Rakete auf das erfasste Ziel |
+| <kbd>C</kbd> halten / <kbd>V</kbd> | freie Kamera: um das Schiff schauen |
+| <kbd>M</kbd> | Karte: Sektorkarte und Galaxie |
 | <kbd>B</kbd> | Flottenband: Aufträge, Ruf, Handel |
 | <kbd>E</kbd> | Andocken oder Landen, wenn es angeboten wird |
+
+Unten rechts sitzt die Schiffsanzeige als Ring: außen der Schild, innen die Hülle, in der Mitte der Umriss deines Schiffs. Daneben
+stehen Werkzeug, Raketen und Fracht. Die Credits blenden oben links nur kurz ein, wenn sich etwas ändert.
+
+## Weite Wege: Schnellflug und Kurzsprung
+
+Mit Schub und Reiseflug kommst du von Station zu Station in der Nähe. Für die langen Strecken in Heimstatt gibt es den **Schnellflug**:
+
+1. **Ziel wählen.** Richte das Fadenkreuz auf einen Ort, etwa die Eisenkrone, und drück <kbd>N</kbd>. Oder öffne die Karte mit
+   <kbd>M</kbd> und klick den Ort auf der **Sektorkarte** an. Ziele sind Stationen, Tore, Asteroidenfelder und Markierungen aus
+   Aufträgen und Geschichte.
+2. **<kbd>H</kbd> drücken.** Der Antrieb lädt 3,5 Sekunden, dann fliegt der Autopilot mit bis zu 8 km/s hin und hält gut einen Kilometer
+   vor dem Ziel. Von der Bastion zur Eisenkrone (20 km) dauert das gut neun Sekunden.
+3. **Ohne Ziel** lenkst du im Schnellflug selbst. <kbd>S</kbd> oder <kbd>H</kbd> beendet ihn, ein Treffer auch.
+
+Im Gefecht, in einem Asteroidenfeld und direkt an einer Station lädt der Schnellflug nicht. In einen anderen Sektor kommst du durch
+die Sprungtore oder mit dem Sprungantrieb (<kbd>J</kbd>, nur im Reiseflug).
 
 ## Andocken und zu Fuß
 
@@ -61,7 +85,7 @@ Zum Ablegen gehst du zurück zu deinem Schiff und steigst ein.
 Du fliegst die **Venom**, einen schnellen Abfangjäger mit kleinem Frachtraum und einem einfachen Bergbaulaser. Für den Anfang gibt es drei
 gute Wege zum Geld:
 
-1. **Erz abbauen** im Metallfeld von Heimstatt und an der Gildehütte **Eisenkrone** verkaufen oder schmelzen. Siehe [Bergbau](/guides/bergbau/).
+1. **Erz abbauen** im Eisengürtel von Heimstatt und gleich nebenan an der Gildehütte **Eisenkrone** verkaufen oder schmelzen. Siehe [Bergbau](/guides/bergbau/).
 2. **Lieferaufträge** aus der Besprechung: Ware von A nach B bringen. Siehe [Handel](/guides/handel/).
 3. **Die Geschichte** spielen. Die ersten Kapitel führen Schritt für Schritt durch die Grundlagen.
 
