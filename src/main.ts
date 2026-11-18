@@ -53,7 +53,7 @@ import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot,
 import { CITY, updateCity, insideCityGate, preloadCities, cityDoorOut, hangarPadPose, cityHooks, cityWorld } from './game/city';
 import { updateBaseFx } from './game/basefx';
 import { preloadBases } from './models/stationModels';
-import { loadDeck, loadHangar, hangarBgLoad } from './game/deck';
+import { loadDeck, loadHangar, hangarBgLoad, primeStationEarly } from './game/deck';
 import { loadEisenkrone } from './models/eisenkrone';
 import { updateChapter2 } from './game/chapter2';
 import { updateChapter3 } from './game/chapter3';
@@ -731,6 +731,7 @@ Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() =
   await Promise.race([compileFor(scene, scene), sleep(8000)]);
   requestAnimationFrame(loop);
   await Promise.race([bg, sleep(6000)]);
+  try { primeStationEarly('bastion'); } catch (e) { console.warn('Bastion vorab:', e); }   // erstes Andocken an der Bastion so schnell wie jedes weitere
   await Promise.race([compileFor(scene, scene), sleep(3000)]);    // was inzwischen dazukam (Verkehr, Ersatzmodelle)
   await sleep(250);
   hideBoot();

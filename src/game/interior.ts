@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { scene, camera, view, ux, gl, setExposure, ambient, rim, sun, warmScene } from '../core/engine';
+import { scene, camera, view, ux, gl, setExposure, ambient, rim, sun, warmScene, compileFor, warm } from '../core/engine';
 import { texMat, std, boxUV, lightmapTex, WHITE_TEX } from '../core/textures';
 import { keys, mouse } from '../core/input';
 import { rng, hashStr, clamp, fmtN } from '../core/util';
@@ -807,9 +807,55 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
   // Shader des Innenraums im Hintergrund übersetzen, so lange steht das Spiel hinter einer kurzen Blende (statt eines Standbilds mitten in der Landung)
   warmScene(onFoot || fromCity ? 'Eintreten' : 'Andocken', () => { deck?.prime(); hangarBuild?.prime(); });
 }
+// ---------- Schiffsinnenraum vorwärmen (seit 2026-11-18) ----------
+// Beim Einsteigen kommen die Lampen des Innenraums als neue Lichter in die Szene, dazu eine andere Umgebungsspiegelung. Danach brauchten alle
+// Materialien (Hangar, Deck, Schiffe, Figuren) eine neue Shader-Fassung: Beim ersten Einsteigen stand das Bild 1 bis 3 s. Jetzt wird der
+// Innenraum gleich nach dem Andocken (sobald die Blende offen ist, oder nach einem Schiffswechsel) für einen Augenblick dazugesetzt, alles
+// Sichtbare für diesen Zustand übersetzt (der Browser macht das nebenher) und gleich wieder herausgenommen. Gezeichnet wird dazwischen nichts.
+// Nur Sichtbares: three.js übersetzt sonst jedes Objekt der Szene, auch versteckte (andere Schiffsmodelle, Ersatzmodelle) – das waren 40
+// statt gut 13 Shader und dauerte 7 s.
+let shipWarmKey = '';
+// Leuchtflächen im Schiffsinnenraum: Von außen sollen Fenster und Lichter leuchten, drinnen blendeten Deckenlichter und Lichtbänder
+// (Leuchtstärke 2,7 bis 3, dazu der Lichtschein). Solange man an Bord ist, leuchten sie schwächer (gleiches Material, nur ein Wert: kein neuer Shader).
+// Kormoran: Deckenlicht, Lichtband, Blitzlicht; Wisent: Leuchte (Deckenleisten), Bodenlicht (Felder im Boden), Portallicht. Zusätze wie „ |tor“ zählen mit.
+const ROOM_GLOW: Record<string, number> = { 'Deckenlicht (Spiel)': 0.2, 'Lichtband (Spiel)': 0.22, 'Blitzlicht (Spiel)': 0.25, 'Leuchte (Spiel)': 0.15, 'Bodenlicht (Spiel)': 0.32, 'Portallicht (Spiel)': 0.4, 'Licht Rot (Spiel)': 0.6, 'Licht bernstein (Spiel)': 0.5, 'Licht petrol (Spiel)': 0.6, 'Ambientlicht (Spiel)': 0.7, 'Energiekern (Spiel)': 0.6 };
+let glowDim: [THREE.MeshStandardMaterial, number, number][] = [];
+// Leuchtenabdeckungen: an Bord nur Eigenleuchten, keine Grundfarbe (sonst strahlen die Lampen darunter sie zusätzlich an)
+const ROOM_GLOW_FLAT = new Set(['Deckenlicht (Spiel)', 'Lichtband (Spiel)', 'Blitzlicht (Spiel)', 'Leuchte (Spiel)', 'Bodenlicht (Spiel)']);
+function dimRoomGlow(root: THREE.Object3D) {
+  undimRoomGlow();
+  const seen = new Set<THREE.Material>();
+  root.traverse((o: any) => { if (!o.isMesh) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material]) as THREE.MeshStandardMaterial[]) {
+    const nm = m ? m.name.split(' |')[0] : '', k = ROOM_GLOW[nm]; if (!k || seen.has(m)) continue; seen.add(m); glowDim.push([m, m.emissiveIntensity, m.color.getHex()]); m.emissiveIntensity *= k; if (ROOM_GLOW_FLAT.has(nm)) m.color.setHex(0x000000); } });
+}
+function undimRoomGlow() {
+  for (const [m, v, c] of glowDim) { m.emissiveIntensity = v; m.color.setHex(c); } glowDim = [];
+}
+function prewarmShipRoom() {
+  const cls = P.cls;
+  if (room || !IN.active || !hasMeshRoom(cls) || !meshRoomReady(cls)) return;
+  const key = (IN.station?.id || '') + ':' + cls;
+  if (shipWarmKey === key) return;
+  const mr = buildMeshRoom(cls); if (!mr) return;
+  shipWarmKey = key;
+  SHIP.g.getWorldPosition(mr.g.position); mr.g.rotation.y = SHIP.g.rotation.y; mr.g.updateMatrixWorld(true);
+  const env0 = scene.environment;
+  scene.add(mr.g); scene.environment = interiorEnv();
+  // Versteckte Zweige für die Dauer des Aufrufs aus den Kinderlisten nehmen (ohne Ereignisse, Reihenfolge bleibt erhalten)
+  const cut: [THREE.Object3D, number][] = [];
+  const visit = (o: THREE.Object3D) => { for (let i = 0; i < o.children.length; i++) { const c = o.children[i]; if (!c.visible) cut.push([c, i]); else visit(c); } };
+  visit(scene);
+  for (let i = cut.length - 1; i >= 0; i--) cut[i][0].parent!.children.splice(cut[i][1], 1);
+  try { compileFor(scene, scene).catch?.(() => {}); } catch (e) { console.warn('Schiffsinnenraum vorwärmen:', e); }
+  finally {
+    for (const [c, i] of cut) c.parent!.children.splice(i, 0, c);
+    scene.remove(mr.g); scene.environment = env0;
+  }
+}
 // direkte Lenkung: beim Wechsel ins Fliegen den Zeiger nicht freigeben
 const keepLockForFlight = () => settings.steer !== 'zeiger' && (G.mode === 'play' || G.mode === 'launch');
 export function leaveInterior() {
+  shipWarmKey = '';
   if (room) leaveShip();
   if (!IN.active) return;
   if ((hasProm || kitHangar) && zoneT >= 0) rim.color.copy(rimOut);
@@ -878,6 +924,7 @@ export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: num
   room.g.updateMatrixWorld(true);
   scene.add(room.g);
   roomModel = m.g; m.g.visible = !!mesh;   // Modell-Räume: das Schiffsmodell bleibt stehen, es enthält den Innenraum
+  if (mesh) dimRoomGlow(m.g);
   if (mesh) { outsideEnv = scene.environment; scene.environment = interiorEnv(); }   // Spiegelungen wie in einem beleuchteten Raum
   group = room.g;
   rects = room.rects; obstacles = room.obstacles; shipObs = []; shipLabels = []; labels = []; shipInters = [];
@@ -892,6 +939,9 @@ export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: num
   }
   lamps.forEach((l, i) => { const q = room!.lamps[i]; room!.g.localToWorld(l.position.set(q[0], q[1], q[2])); l.distance = 22; l.intensity = mesh ? 0 : q[3] * Math.PI; });   // Modell-Räume bringen eigene Lampen mit
   setExposure(planet ? 0.5 : 0.2);
+  // Modell-Räume: Grund- und Sonnenlicht von draußen gelten auch an Bord und machten weiße Flächen (Leuchtenabdeckungen, Wände) von allein
+  // überhell. An Bord tragen die Lampen des Innenraums; das Grundlicht bleibt als Aufhellung der Schatten (leaveShip setzt es zurück).
+  if (mesh) { ambient.intensity *= 0.3; sun.intensity *= 0.3; rim.intensity *= 0.3; }
   G.mode = 'walk';
   if (!at) sfx('door_open', 0.6, 1, () => snd(220, 0.5, 'sawtooth', 0.03, -120));
   say('SYSTEM', `An Bord der ${info.name}.`);
@@ -904,6 +954,7 @@ export function leaveShip(exitWorld?: THREE.Vector3) {
   room.g.traverse((c: any) => { if (c.geometry && !c.userData.shared) c.geometry.dispose(); });   // Modell-Räume teilen die Geometrie mit der Vorlage
   mesh = null; IN.fy = 0; IN.jy = IN.jv = 0;
   for (const d of room.disposables) d.dispose();
+  undimRoomGlow();
   if (roomModel) roomModel.visible = true;
   if (outsideEnv) { scene.environment = outsideEnv; outsideEnv = null; }
   room = null; roomModel = null; IN.ship = null; IN.panel = null; IN.target = null;
@@ -1095,6 +1146,7 @@ export function updateWalk(dt: number) {
   IN.say.t = Math.max(0, IN.say.t - dt);
   // Blick: Maus eingefangen → direkte Steuerung; sonst dreht die Zeigerposition wie beim Fliegen
   IN.locked = document.pointerLockElement === gl;
+  if (!room && !warm.hold && G.mode === 'walk' && shipWarmKey !== (IN.station?.id || '') + ':' + P.cls) prewarmShipRoom();   // z. B. nach einem Schiffswechsel im Hangar
   // zu Fuß gehört die Maus dem Blick: sobald der Browser es erlaubt (kurz nach einem Tastendruck oder Klick), wird sie eingefangen
   if (!IN.locked && G.mode === 'walk' && (grabT -= dt) <= 0) { grabT = 0.3; grabMouse(); }
   // ohne eingefangenen Zeiger nur bei der alten Zeigersteuerung drehen (sonst drehte ein stehengebliebener Zeiger den Blick weg)

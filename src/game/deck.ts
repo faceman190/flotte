@@ -863,3 +863,37 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     way: (off: number) => [[off, hz0 + 4], [off * 0.5, hz0 - 1.2], [off * 0.5, hz0 - C * 1.5 + 0.4 - off * 0.4], [north || !south ? -(north * C - 0.6) : south * C - 0.6, hz0 - C * 1.5 + 0.2 - off * 0.4]],
   };
 }
+
+// ---------- Erstes Andocken vorziehen (seit 2026-11-18) ----------
+// Beim ersten Andocken an der Bastion stand die Blende 2,5 bis 2,7 s: Raumspiegelungen aller 17 Deckräume und des Hangars aufnehmen
+// (rund 1,5 s) und alle Netze und Bilder hochladen (0,3 bis 0,9 s). Beides bleibt danach für die ganze Sitzung (keep), darum ging das
+// zweite Andocken in 0,25 s. Jetzt geschieht es schon hinter dem Ladebildschirm beim Start (main.ts): Deck und Hangar werden einmal ohne
+// Szene aufgebaut, ihre Spiegelungen aufgenommen und Netze und Bilder in ein winziges Bild gezeichnet (Ersatzmaterial, nur zum Hochladen).
+let UPLOAD_RT: THREE.WebGLRenderTarget | null = null;
+export function primeStationEarly(id = 'bastion', hz0 = -50) {
+  if (!deckTune.hybrid) return;
+  const d = hasDeck(id) ? buildDeck(id, hz0) : null, h = id === 'bastion' ? buildHangar() : null;
+  if (!d && !h) return;
+  try { d?.prime(); h?.prime(); } catch (e) { console.warn('Spiegelungen vorab:', e); }
+  const sc = new THREE.Scene(), texs = new Set<THREE.Texture>();
+  if (d) sc.add(d.group); if (h) sc.add(h.group);
+  sc.traverse((o: any) => {
+    if (o.isLight) { o.visible = false; return; }      // keine Schattenbilder beim Hochladen (die Lichter gehören nur zu diesem Aufbau)
+    if (!o.isMesh) return; o.frustumCulled = false;
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material]) as any[]) {
+      if (!m) continue;
+      for (const v of Object.values(m)) if ((v as any)?.isTexture) texs.add(v as THREE.Texture);
+      if (m.uniforms) for (const u of Object.values(m.uniforms) as any[]) if (u?.value?.isTexture) texs.add(u.value);
+    }
+  });
+  try {
+    for (const t of texs) if (!(t as any).isRenderTargetTexture) renderer.initTexture(t);
+    UPLOAD_RT = UPLOAD_RT || new THREE.WebGLRenderTarget(4, 4);
+    sc.overrideMaterial = new THREE.MeshBasicMaterial();
+    const cam = new THREE.PerspectiveCamera(), rt0 = renderer.getRenderTarget();
+    renderer.setRenderTarget(UPLOAD_RT); renderer.render(sc, cam); renderer.setRenderTarget(rt0);
+    sc.overrideMaterial.dispose();
+  } catch (e) { console.warn('Hochladen vorab:', e); }
+  // Die Gruppen nur aus der Hilfsszene nehmen; Netze und Bilder gehören den Vorlagen und bleiben (beim Andocken werden sie wiederverwendet)
+  sc.clear();
+}

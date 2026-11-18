@@ -75,7 +75,9 @@ export function buildMeshRoom(cls: string) {
   g.add(new THREE.HemisphereLight(0xa8c8f0, 0x4a3018, 0.5));
   const W = L.walk;
   // Deckenlampen mit natürlichem Abfall, über die begehbare Fläche verteilt (aus der Laufkarte); jede dritte warm-orange
-  W.lamps.forEach((l, i) => { const p = new THREE.PointLight(i % 3 === 2 ? 0xffa050 : 0xe6f0ff, 24 * l[3], 18 * k, 2); p.position.set(l[0] * k, l[1] * k, l[2] * k); g.add(p); });
+  // Seit 2026-11-18 (Spieler: „sehr hell, blendet“): Stärke 8 statt 24 und einen halben Meter unter der Leuchte. Direkt an der Decke strahlte das
+  // Punktlicht die eigene Leuchtenabdeckung und die Träger daneben gleißend an (die Helligkeit wächst zur Lampe hin ohne Grenze).
+  W.lamps.forEach((l, i) => { const p = new THREE.PointLight(i % 3 === 2 ? 0xffa050 : 0xe6f0ff, 8 * l[3], 18 * k, 2); p.position.set(l[0] * k, l[1] * k - 0.5, l[2] * k); g.add(p); });
   // Boden an (x, z) in Schrittweite zur aktuellen Höhe y (Schiffskoordinaten); null = nicht begehbar.
   // air (im Sprung): der höchste Boden unter den Füßen, höchstens 1,3 m tiefer (kein Sturz auf ein anderes Deck).
   let lastHead = 2.4;   // Kopfhöhe über dem zuletzt gefundenen Boden

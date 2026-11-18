@@ -78,3 +78,20 @@ sofort los. Jetzt (`settings.steer = 'direkt'`, Standard):
   Esc im Flug gibt den Zeiger frei und öffnet die Pause.
 - Ohne eingefangenen Zeiger dreht zu Fuß nichts mehr nach der Zeigerposition.
 - Die alte Steuerung bleibt wählbar: Einstellungen → „Alte Maussteuerung (Zeiger aus der Mitte ziehen)“.
+
+## Ladezeiten Andocken und Einsteigen, Innenlicht der Schiffe (2026-11-18, nach Alpha 1.44)
+
+**Schiff betreten (erstes Mal):** Beim Einsteigen kamen die Lampen des Innenraums als neue Lichter dazu (dazu eine andere Umgebungsspiegelung);
+alle sichtbaren Materialien brauchten neue Shader: 0,9 s Standbild (gemessen, Kormoran im Bastion-Hangar). Jetzt wärmt `prewarmShipRoom`
+(`interior.ts`) gleich nach dem Andocken vor: Innenraum für einen Augenblick dazusetzen, Sichtbares übersetzen, wieder herausnehmen.
+Wichtig: three.js `compile` nimmt jedes Objekt der Szene, auch versteckte; ein erster Versuch übersetzte so 40 statt 13 Shader und dauerte 7 s.
+Darum werden versteckte Zweige für den Aufruf aus den Kinderlisten genommen. Ergebnis: Einsteigen ohne langes Bild, Vorwärmen kostet 62 ms.
+
+**Erstes Andocken an der Bastion:** 2,7 s Blende (Raumspiegelungen aller 17 Deckräume und des Hangars 1,5 s, Hochladen 0,3 bis 0,9 s); das
+zweite Andocken nur 0,25 s, weil beides erhalten bleibt. Jetzt erledigt `primeStationEarly` (`deck.ts`) beides hinter dem Ladebildschirm.
+Ergebnis: erstes Andocken 0,48 s, Neues Spiel kommt ohne Blende in den Hangar. Der Ladebildschirm steht dafür rund 1,7 s länger.
+
+**Innenlicht Kormoran und Wisent („sehr hell, blendet“):** Punktlichter des Innenraums Stärke 8 statt 24 und 0,5 m unter der Leuchte
+(direkt an der Decke strahlten sie die eigene Abdeckung gleißend an). An Bord: Grund- und Sonnenlicht von draußen auf 30 %, Leuchtflächen
+gedimmt und ohne Grundfarbe (`ROOM_GLOW` in `interior.ts`: Deckenlicht, Lichtband, Blitzlicht, Leuchte, Bodenlicht, Portallicht).
+Die Materialien teilen sich alle Schiffe; beim Aussteigen wird alles zurückgestellt (von außen leuchten die Lichter wie vorher).
