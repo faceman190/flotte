@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { scene, camera, view, ux, gl, setExposure, ambient, rim, sun, warmScene, compileFor, warm } from '../core/engine';
+import { scene, camera, view, ux, gl, setExposure, ambient, rim, sun, warmScene, compileFor, warm, uploadAll } from '../core/engine';
 import { texMat, std, boxUV, lightmapTex, WHITE_TEX } from '../core/textures';
 import { keys, mouse } from '../core/input';
 import { rng, hashStr, clamp, fmtN } from '../core/util';
@@ -805,7 +805,9 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
     inters.push({ x: 0, z: PZ0 + 1.2, r: 2.4, label: () => `Hinaus in die Stadt ${st.name}`, act: () => interiorHooks.toCity() });
   }
   // Shader des Innenraums im Hintergrund übersetzen, so lange steht das Spiel hinter einer kurzen Blende (statt eines Standbilds mitten in der Landung)
-  warmScene(onFoot || fromCity ? 'Eintreten' : 'Andocken', () => { deck?.prime(); hangarBuild?.prime(); });
+  // Hinter der Blende: Spiegelungen und alle Bilder und Formen des Innenraums (auch gerade unsichtbare). Den Zustand „an Bord“ wärmt
+  // prewarmShipRoom erst nach der Landung vor (updateWalk): Hinter der Blende passt die Szene noch nicht dazu (gemessen: 14 Shader beim Einsteigen).
+  warmScene(onFoot || fromCity ? 'Eintreten' : 'Andocken', () => { deck?.prime(); hangarBuild?.prime(); if (group) uploadAll(group); });
 }
 // ---------- Schiffsinnenraum vorwärmen (seit 2026-11-18) ----------
 // Beim Einsteigen kommen die Lampen des Innenraums als neue Lichter in die Szene, dazu eine andere Umgebungsspiegelung. Danach brauchten alle

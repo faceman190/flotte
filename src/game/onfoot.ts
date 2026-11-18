@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { CITY, cityTargets, cityDoorNear, cityDoorPos } from './city';
-import { scene, camera, view, ux, gl } from '../core/engine';
+import { scene, camera, view, ux, gl, compileFor, renderer } from '../core/engine';
 import { keys, mouse } from '../core/input';
 import { clamp } from '../core/util';
 import { sfx, snd } from '../core/audio';
 import { P, G, settings, stats } from './state';
 import { world } from './world';
-import { ROVER, SURF, terrainAt, liquidAt, resetRoverCamera } from './surface';
+import { ROVER, SURF, terrainAt, liquidAt, resetRoverCamera, buildRover } from './surface';
 import { updateFlora, treeNear } from './flora';
 import { gearFactor } from './inventory';
 import { radio } from '../ui/radio';
@@ -39,6 +39,19 @@ export const nearFootTarget = () => footTargets.find(t => Math.hypot(t.x - FOOT.
   || cityTargets.find(t => Math.hypot(t.x - FOOT.x, t.z - FOOT.z) < t.r)
   || null;
 export function footAt(x: number, z: number, yaw: number) { place(x, z, yaw); }
+// Beim Betreten einer Planetenoberfläche (seit 2026-11-18): Rover und Spielfigur gleich bauen und ihre Shader und Bilder vorab übersetzen bzw.
+// hochladen. Vorher entstanden beide erst beim Landen bzw. beim ersten Schritt – mitten im Spiel, mit einem möglichen Standbild.
+export function prewarmFoot() {
+  try {
+    if (!ROVER.model) ROVER.model = buildRover();
+    if (VIEW.tp && !me) { me = syncAvatar(scene, me, P.gear || {}); if (me) me.s.g.visible = false; }
+    const roots = [ROVER.model.g, me?.s.g].filter(Boolean) as THREE.Object3D[];
+    for (const r of roots) {
+      r.traverse((o: any) => { for (const m of (Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) as any[]) for (const v of Object.values(m)) if ((v as any)?.isTexture) renderer.initTexture(v as THREE.Texture); });
+      compileFor(r, scene).catch?.(() => {});
+    }
+  } catch (e) { console.warn('Vorwärmen zu Fuß:', e); }
+}
 let me: Avatar | null = null, stepT = 0, grabT = 0;
 
 const shipR = () => stats().radius * 0.75 + 0.8;

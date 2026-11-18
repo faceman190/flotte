@@ -137,6 +137,30 @@ export const prePass: { fn: null | (() => void) } = { fn: null };
 // Übersetzt wird in der Fassung, die das Bild wirklich braucht: Das Spiel zeichnet in ein Zwischenbild (Bloom), und three wählt danach
 // Filmkurve und Farbraum des Shaders. Ohne gebundenes Zwischenbild entstünde eine Fassung, die nie benutzt wird.
 const WARM_RT = new THREE.WebGLRenderTarget(4, 4);
+// Alle Bilder und Formen unter root auf die Grafikkarte laden, auch von gerade unsichtbaren Teilen (seit 2026-11-18). primeFrame lädt nur, was
+// sichtbar geschaltet ist; Kleinteile, die erst aus der Nähe eingeblendet werden, kamen sonst später mitten im Spiel dazu (gemessen beim
+// Andocken: 44 Bilder in einem Bild direkt nach der Blende). Die Formen laufen über Stellvertreter mit einem schlichten Material in ein
+// winziges Bild; die echten Objekte bleiben unberührt.
+let UP_RT: THREE.WebGLRenderTarget | null = null, UP_MAT: THREE.MeshBasicMaterial | null = null;
+export function uploadAll(root: THREE.Object3D) {
+  const texs = new Set<THREE.Texture>(), geos = new Set<THREE.BufferGeometry>();
+  root.traverse((o: any) => {
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh) return;
+    if (o.geometry && !o.geometry.userData?.freed) geos.add(o.geometry);
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material]) as any[]) {
+      if (!m) continue;
+      for (const v of Object.values(m)) if ((v as any)?.isTexture && !(v as any).isRenderTargetTexture) texs.add(v as THREE.Texture);
+      if (m.uniforms) for (const u of Object.values(m.uniforms) as any[]) if (u?.value?.isTexture && !u.value.isRenderTargetTexture) texs.add(u.value);
+    }
+  });
+  try { for (const t of texs) renderer.initTexture(t); } catch (e) { console.warn('Bilder vorab hochladen:', e); }
+  if (!geos.size) return;
+  UP_RT = UP_RT || new THREE.WebGLRenderTarget(4, 4); UP_MAT = UP_MAT || new THREE.MeshBasicMaterial();
+  const sc = new THREE.Scene();
+  for (const g of geos) { const m = new THREE.Mesh(g, UP_MAT); m.frustumCulled = false; m.matrixAutoUpdate = false; sc.add(m); }
+  const rt0 = renderer.getRenderTarget();
+  try { renderer.setRenderTarget(UP_RT); renderer.render(sc, camera); } catch (e) { console.warn('Formen vorab hochladen:', e); } finally { renderer.setRenderTarget(rt0); }
+}
 export function compileFor(root: THREE.Object3D, target: THREE.Scene | null = null, toTarget = view.hiQ && !!composer): Promise<void> {
   const rt0 = renderer.getRenderTarget();
   let mats = new Set<THREE.Material>();

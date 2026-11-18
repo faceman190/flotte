@@ -520,7 +520,9 @@ export function buildRover() {
   // Lichter
   for (const s of [-1, 1]) { const l = new THREE.Sprite(glowMat(0xfff0d0, 0.9)); l.position.set(s * 1.1, 1.5, -2.65); l.scale.setScalar(1.6); body.add(l); }
   const beacon = new THREE.Sprite(glowMat(0xffa030, 1)); beacon.position.set(0, 3.1, -0.6); beacon.scale.setScalar(1.2); body.add(beacon);
-  const head = new THREE.SpotLight(0xfff0d0, 0, 120, 0.55, 0.5, 1.2); head.position.set(0, 1.6, -2.6); head.target.position.set(0, 0, -30); body.add(head, head.target);
+  // Kein echtes Scheinwerferlicht mehr (seit 2026-11-18): Es stand immer auf 0, zählte aber als Licht – beim Landen brauchten dadurch alle
+  // Materialien neue Shader (Standbild). Die Leuchtpunkte oben bleiben.
+  const head = { intensity: 0 };
   boxUV(g, 1 / 3);
   return { g, body, wheels, drill, beacon, head };
 }

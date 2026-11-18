@@ -8,7 +8,7 @@ import { fwd, nearDock } from '../game/player';
 import { SECTOR, FACTION, findRoute } from '../data/galaxy';
 import { ITEMS, ITEM_IDS } from '../data/items';
 import { UPG, MAXLV, upgFor } from '../data/upgrades';
-import { MINE, droneInfo } from '../game/mining';
+import { MINE, COOL_WIN, droneInfo } from '../game/mining';
 import { landInfo } from '../game/surface';
 import { NET, remoteMarkers } from '../game/net';
 import { trackedMission, missionLines, missionMarkers } from '../game/missions';
@@ -108,19 +108,23 @@ export function drawHUD() {
     } else if (s.alertT > 8) edgeArrow(p, '#ff6b5b', `${s.name} ⚠ · ${fmtD(d)}`);
   }
   // Ferrox
+  // Auf Entfernung besser zu erkennen (seit 2026-11-18): Mindestgröße 12 Bildpunkte, ab 700 m die Entfernung darunter; wer gerade auf dich
+  // anfliegt, bekommt einen rötlichen Rahmen und einen Randpfeil bis 2,5 km (sonst 1,3 km).
   for (const e of world.enemies) {
     const p = proj(e.x, e.y, e.z), d = d3(e.x, e.y, e.z, P.x, P.y, P.z);
+    const onMe = !!(e as any).target?.player, inbound = onMe && (e as any).run === 'in';
     if (onScreen(p)) {
-      const base = e.type === 'mother' ? 9000 : e.type === 'bomber' ? 2600 : 1700, r = clamp(base / Math.max(d, 1), 9, e.type === 'mother' ? 160 : 50);
+      const base = e.type === 'mother' ? 9000 : e.type === 'bomber' ? 2600 : 1700, r = clamp(base / Math.max(d, 1), 12, e.type === 'mother' ? 160 : 50);
       const locked = e === G.lockT;
-      brackets(p, r, locked ? '#ffd27a' : '#c070ff', locked ? 2 : 1.5);
+      brackets(p, r, locked ? '#ffd27a' : inbound ? '#ff6f8f' : '#c070ff', locked ? 2 : 1.5);
+      if (d > 700 && e.type === 'drone' && !locked) { ux.fillStyle = inbound ? 'rgba(255,111,143,.8)' : 'rgba(208,160,255,.65)'; ux.font = '10px "Share Tech Mono",Consolas,monospace'; ux.fillText(fmtD(d), p.x, p.y + r + 12); }
       if (e.hp < e.maxhp || e.type !== 'drone') { ux.fillStyle = '#0e1e28'; ux.fillRect(p.x - r, p.y - r - 9, r * 2, 4); ux.fillStyle = '#c070ff'; ux.fillRect(p.x - r, p.y - r - 9, r * 2 * e.hp / e.maxhp, 4); }
       if (e.type !== 'drone') { ux.fillStyle = '#d0a0ff'; ux.font = '10px "Share Tech Mono",Consolas,monospace'; ux.fillText(e.type === 'mother' ? 'FERROX-BIENENSTOCK' : 'BOMBER', p.x, p.y + r + 12); }
       if (locked) {
         ux.save(); ux.translate(p.x, p.y); ux.rotate(G.time * 2); ux.strokeStyle = '#ffd27a'; ux.lineWidth = 1; ux.strokeRect(-r - 6, -r - 6, (r + 6) * 2, (r + 6) * 2); ux.restore();
         ux.fillStyle = '#ffd27a'; ux.font = '10px "Share Tech Mono",Consolas,monospace'; ux.fillText(P.rockets > 0 ? 'ERFASST · [F] RAKETE' : 'ERFASST', p.x, p.y - r - 14);
       }
-    } else if (d < 1300 || e.type === 'mother') edgeArrow(p, '#c070ff', e.type === 'mother' ? `BIENENSTOCK · ${fmtD(d)}` : '');
+    } else if (d < 1300 || e.type === 'mother' || (onMe && d < 2500)) edgeArrow(p, inbound ? '#ff6f8f' : '#c070ff', e.type === 'mother' ? `BIENENSTOCK · ${fmtD(d)}` : onMe && d >= 1300 ? fmtD(d) : '');
   }
   for (const b of world.ebullets) if (b.torp && b.life > 0) {
     const p = proj(b.x, b.y, b.z);
@@ -282,11 +286,15 @@ function drawLaserReticle(x: number, y: number) {
   ux.setLineDash([4, 4]); ux.beginPath(); ux.arc(x, y, 16, 0, TAU); ux.stroke(); ux.setLineDash([]);
   ux.beginPath(); ux.arc(x, y, 2, 0, TAU); ux.fillStyle = ux.strokeStyle; ux.fill();
   if (!ch) { ux.strokeStyle = 'rgba(255,255,255,.12)'; ux.lineWidth = 3; ux.beginPath(); ux.arc(x, y, 24, Math.PI * 0.75, Math.PI * 2.25); ux.stroke(); }
-  if (G.heat > 0 && !ch) { ux.strokeStyle = hc; ux.beginPath(); ux.arc(x, y, 24, Math.PI * 0.75, Math.PI * 0.75 + Math.PI * 1.5 * G.heat / 100); ux.stroke(); }
+  // Kühlfenster: dünner Abschnitt außen am Bogen; im Fenster wird der Bogen hellblau (jetzt loslassen = Schnellkühlung)
+  const inWin = !G.overheat && G.heat >= COOL_WIN[0] && G.heat <= COOL_WIN[1];
+  if (!ch) { ux.strokeStyle = inWin ? 'rgba(159,232,255,.9)' : 'rgba(159,232,255,.35)'; ux.lineWidth = 1.5; ux.beginPath(); ux.arc(x, y, 28, Math.PI * 0.75 + Math.PI * 1.5 * COOL_WIN[0] / 100, Math.PI * 0.75 + Math.PI * 1.5 * COOL_WIN[1] / 100); ux.stroke(); ux.lineWidth = 3; }
+  if (G.heat > 0 && !ch) { ux.strokeStyle = inWin && MINE.firing ? '#9fe8ff' : MINE.vent > 0 ? '#9fe8ff' : hc; ux.beginPath(); ux.arc(x, y, 24, Math.PI * 0.75, Math.PI * 0.75 + Math.PI * 1.5 * G.heat / 100); ux.stroke(); }
   ux.lineWidth = 1; ux.textAlign = 'left'; ux.font = '11px "Share Tech Mono",Consolas,monospace';
   if (G.overheat && !ch) { ux.fillStyle = '#ff6b5b'; ux.fillText('ÜBERHITZT', x + 32, y - 6); }
+  else if (MINE.vent > 0 && !ch) { ux.fillStyle = 'rgba(159,232,255,' + Math.min(1, MINE.vent * 2) + ')'; ux.fillText('SCHNELLKÜHLUNG', x + 32, y - 6); }
   if (t) {
-    let ly = y + (G.overheat && !ch ? 8 : -6);
+    let ly = y + ((G.overheat || MINE.vent > 0) && !ch ? 8 : -6);
     ux.fillStyle = '#e4eef5'; ux.font = '700 11px "Share Tech Mono",Consolas,monospace'; ux.fillText(`ASTEROID · ${Math.round(MINE.dist)} m`, x + 32, ly); ly += 14;
     ux.font = '11px "Share Tech Mono",Consolas,monospace';
     for (const o of t.comp) { ux.fillStyle = ITEMS[o.k].c; ux.fillText(`${ITEMS[o.k].n} ${Math.round(o.p * 100)} %`, x + 32, ly); ly += 13; }

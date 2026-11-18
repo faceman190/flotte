@@ -48,7 +48,9 @@ export function sphSeg(b: any, o: { x: number; y: number; z: number; sph: number
 }
 
 // ---------------- Ferrox ----------------
-const BOUNTY = { drone: 15, bomber: 45, mother: 600 };
+// Seit 2026-11-18 verdoppelt für Jäger und Bomber: Gemessen brachte Bergbau am Anfang rund 370 Cr/min, Kampf mit 15 Cr je Jäger (plus 70 %
+// Schrott) nur gut 200 Cr/min, trotz Risiko, Reparatur und Munition. Jetzt liegen beide etwa gleich (docs/spielgefuehl.md).
+const BOUNTY = { drone: 30, bomber: 90, mother: 600 };
 const KILL_REP = { drone: 2, bomber: 5, mother: 40 };
 // Kopfgeld (Grenzwacht-Rang erhöht es) und Ruf für einen eigenen Abschuss
 function bountyFor(type: string) {

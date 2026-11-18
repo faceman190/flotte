@@ -113,3 +113,35 @@ Laden und Inventar zeigen „Geschoss: …“ in der Werteliste (`statLine`). Ne
 
 Nebenbei: Beim Aussteigen aus einem Schiff stellt das Spiel jetzt genau das Licht von vor dem Einsteigen wieder her (vorher pauschal
 `setExposure(0.2)`; gemessen ohne sichtbaren Unterschied, aber unabhängig von späteren Änderungen am Licht).
+
+## Kühlfenster, Ferrox auf Entfernung, Belohnungstempo (2026-11-18, nach Alpha 1.46)
+
+**Kühlfenster am Bergbaulaser** (`mining.ts`, `COOL_WIN` = 72 bis 94 %): Wer im Fenster loslässt, löst eine Schnellkühlung aus (0,7 s dreifach
+schnell, Zischen, Dampf an den Emittern, „SCHNELLKÜHLUNG“ am Fadenkreuz). Am Hitzebogen markiert ein dünner Abschnitt das Fenster, im Fenster
+wird der Bogen hellblau. Gemessen (Venom): im Fenster losgelassen rund 1,7 s bis kalt, bei 66 % 2,6 s, überhitzt 4,5 s Zwangspause.
+
+**Ferrox auf Entfernung** (`hud.ts`): Rahmen mindestens 12 statt 9 Bildpunkte, ab 700 m die Entfernung darunter; wer gerade einen Angriff
+auf dich fliegt, hat einen rötlichen Rahmen und einen Randpfeil bis 2,5 km (sonst 1,3 km). Kein Leuchten, kein Vorhaltepunkt.
+
+**Belohnungstempo** (Testpilot, Venom, Heimstatt, mit Kühlfenster): eine Ladung (32) in 30 s Abbau plus 6 s zwischen den Brocken, Wert
+554 Cr; mit Rückflug (1,9 km), Landung, Verkauf und Start grob 90 s, also rund 370 Cr/min am Anfang (Elster nach etwa 9 min, Kormoran nach
+etwa einer Stunde). Kampf brachte nur gut 200 Cr/min (Jäger 15 Cr plus 70 % Schrott zu 38 Cr) trotz Risiko und Kosten. Darum Kopfgeld
+verdoppelt: Jäger 30, Bomber 90 Cr (Bienenstock bleibt 600). Bergbau unverändert.
+
+## Standbilder bei Übergängen (2026-11-18)
+
+**Ruckler-Protokoll** (`perf.ts`, läuft immer mit): jedes Bild über 70 ms mit Ort und Ursache (neue Shader, hochgeladene Bilder und Formen,
+Speicherbereinigung). F3 zeigt die letzten vier, F4 kopiert alle in den Bericht. Bilder hinter einer Blende zählen nicht.
+
+**Gemessen und behoben** (Testfenster ohne echte Grafikbeschleunigung, Zeiten deshalb übertrieben):
+| Übergang | vorher | Ursache | jetzt |
+|---|---|---|---|
+| Planetenoberfläche betreten | 3,7 und 4,9 s Standbild | 44 neue Shader, Bilder | hinter einer Blende „Landeanflug“ (1,1 s), danach 0,09 s |
+| Landen (Rover) | 0,25 s | Rover-Scheinwerfer (immer 0, zählte aber als Licht) | entfernt, 0 Shader |
+| Zu Fuß aussteigen | 5,5 bis 7,9 s | Tür der Basis mit Lampe entstand erst beim ersten Schritt (+1 Licht → alle Shader neu) | Landefeld beim Betreten berechnet; Rover und Figur hinter der Blende gebaut; 0,1 bis 0,17 s |
+| Andocken, nach der Blende | 0,22 bis 0,36 s | Kleinteile, die erst aus der Nähe eingeblendet werden | `uploadAll` lädt hinter der Blende alles hoch |
+
+Außerdem: Das Punktlicht fürs Mündungsfeuer zu Fuß ist weg (blieb nach dem ersten Schritt für immer in der Szene und zwang später im All
+und im Hangar erneut alle Shader neu). Regel: Jedes Licht, das unterwegs dazukommt oder verschwindet, kostet ein Standbild; Lichter mit
+dem Gebiet zusammen anlegen. Hangar: Ein- und Aussteigen und der Gang Deck ↔ Hangar ohne langes Bild; nach der Landung bleibt ein kurzes
+Stocken (0,17 s im Testfenster) für das Vorwärmen „an Bord“ (hinter der Blende passt die Szene noch nicht, gemessen 14 Shader beim Einsteigen).

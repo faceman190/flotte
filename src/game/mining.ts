@@ -145,7 +145,8 @@ const hitGlow = new THREE.Sprite(glowMat(0xffa040, 1));
 hitGlow.visible = false;
 scene.add(hitGlow);
 
-export const MINE = { target: null as Asteroid | null, dist: 0, firing: false, acc: 0, hum: 0 };
+export const MINE = { target: null as Asteroid | null, dist: 0, firing: false, acc: 0, hum: 0, vent: 0 };
+export const COOL_WIN = [72, 94];   // Kühlfenster in % Hitze (siehe updateMining)
 
 function aimTarget(range: number) {
   _e.set(P.pitch, P.yaw, 0);
@@ -179,11 +180,20 @@ export function updateMining(dt: number, wantFire: boolean) {
   MINE.target = aim.a;
   MINE.dist = aim.t;
   const fire = P.tool === 'laser' && st.laser && wantFire && !G.overheat && !G.dead;
+  // Kühlfenster (seit 2026-11-18): Wer den Laser kurz vor dem Überhitzen loslässt (72 bis 94 % Hitze), löst eine Schnellkühlung aus –
+  // 0,7 s lang kühlt er dreimal so schnell (rund 1,7 statt 3 s bis kalt). Aus dem Dauerfeuer wird so ein Rhythmus: feuern, im Fenster loslassen, weiter.
+  if (MINE.firing && !fire && !wantFire && !G.overheat && G.heat >= COOL_WIN[0] && G.heat <= COOL_WIN[1]) {
+    MINE.vent = 0.7;
+    sfx('cruise_off', 0.35, 1.5, () => snd(1800, 0.35, 'sawtooth', 0.015, -1400));
+    const o = shipPos(); _e.set(P.pitch, P.yaw, G.roll);
+    for (const lp of SHIP.laserPts) { const p = new THREE.Vector3(lp[0], lp[1], lp[2]).applyEuler(_e).add(o); for (let k = 0; k < 5; k++) puff(p.x, p.y, p.z, P.vx + rand(-6, 6), P.vy + rand(2, 8), P.vz + rand(-6, 6), '#b8d4e8', 0.6); }
+  }
   MINE.firing = fire;
   warmCracks();
   if (!fire) {
     updateCracks(dt, null, null);
-    G.heat = Math.max(0, G.heat - st.laserCool * dt * (G.overheat ? 0.8 : 1));
+    G.heat = Math.max(0, G.heat - st.laserCool * dt * (G.overheat ? 0.8 : MINE.vent > 0 ? 3 : 1));
+    MINE.vent = Math.max(0, MINE.vent - dt);
     if (G.overheat && G.heat <= 35) { G.overheat = false; snd(700, 0.15, 'sine', 0.03, 200); }
     hideBeams();
     laserSound(false);

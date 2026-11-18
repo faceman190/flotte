@@ -16,6 +16,16 @@ const gaps: [number, number][] = [];        // [Zeitpunkt, Abstand zum vorigen B
 let cpuSum = 0, cpuN = 0, callsMax = 0, trisMax = 0, shown = 0, lightsAt = 0;
 let lights = { n: 0, point: 0, spot: 0, dir: 0, shadow: 0 }, meshes = 0;
 let progs = 0, progLog: [number, number][] = [];   // Zahl der Shader, [Zeitpunkt, neu dazugekommen]
+// Ruckler-Protokoll (seit 2026-11-18, läuft immer mit): jedes Bild über 70 ms mit Ort und dem, was sich in diesem Bild geändert hat –
+// neue Shader, neu hochgeladene Bilder (Texturen) und Formen, und ob der Skriptspeicher eingebrochen ist (Speicherbereinigung des Browsers).
+// So zeigt ein Bericht vom Rechner des Spielers, woher ein Standbild kommt (F3 zeigt die letzten, F4 kopiert alle).
+interface Hitch { t: number; ms: number; where: string; progs: number; tex: number; geo: number; gcMB: number }
+const hitches: Hitch[] = [];
+let hPrev = { progs: 0, tex: 0, geo: 0, heap: 0 };
+function hitchSnapshot() {
+  const mem = (performance as any).memory;
+  return { progs: renderer.info.programs ? renderer.info.programs.length : 0, tex: renderer.info.memory.textures, geo: renderer.info.memory.geometries, heap: mem ? mem.usedJSHeapSize / 1048576 : 0 };
+}
 interface Sample { t: number; fps: number; low: number; worst: number; cpu: number; calls: number; tris: number; lights: number; shadow: number; where: string }
 const log: Sample[] = [];                   // ein Eintrag pro Sekunde, die letzten 3 Minuten
 let gpuName = '';
@@ -57,6 +67,15 @@ function countLights(now: number) {
 export function perfFrameStart() {
   const now = performance.now();
   if (prev) { gaps.push([now, now - prev]); while (gaps.length && now - gaps[0][0] > 30000) gaps.shift(); }
+  // Ruckler: Was hat sich seit dem vorigen Bild geändert? (Werte vom Ende des vorigen Bildes, also genau das lange Bild)
+  const snap = hitchSnapshot();
+  // Bilder hinter der Blende (Vorwärmen beim Andocken, Landeanflug) sieht man nicht: nicht als Ruckler zählen
+  const behind = !!document.getElementById('warm')?.classList.contains('on') || !!document.querySelector('#boot:not(.done)');
+  if (prev && now - prev > 70 && document.visibilityState === 'visible' && !behind) {
+    hitches.push({ t: now, ms: now - prev, where: perfHooks.where(), progs: snap.progs - hPrev.progs, tex: snap.tex - hPrev.tex, geo: snap.geo - hPrev.geo, gcMB: Math.max(0, hPrev.heap - snap.heap) });
+    if (hitches.length > 40) hitches.shift();
+  }
+  hPrev = snap;
   prev = t0 = now;
   if (on) renderer.info.reset();           // von Hand, damit alle Durchgänge eines Bildes zusammengezählt werden (Schatten, Bloom, Waffe)
 }
@@ -92,12 +111,22 @@ export function perfFrameEnd() {
     ['Speicher', `Formen ${nf(renderer.info.memory.geometries)} · Texturen ${nf(renderer.info.memory.textures)} · Shader ${progs}${newProgs ? ` (+${newProgs} neu in 10 s)` : ''}${mem ? ` · Skript ${nf(mem.usedJSHeapSize / 1048576)} MB` : ''}`],
     ['Auflösung', `${canvas.width}×${canvas.height} · Fenster ${innerWidth}×${innerHeight} · Skalierung ${Math.round(dpr * 100)} % · Qualität ${view.hiQ ? 'hoch' : 'niedrig'}`],
     ['Grafikkarte', `${name}${kind ? `<br><i>${kind}</i>` : ''}`],
+    ['Ruckler', hitches.length ? hitches.slice(-4).reverse().map(h => `${Math.round((now - h.t) / 1000)} s her: ${Math.round(h.ms)} ms · ${hitchCause(h)}`).join('<br>') : 'keine über 70 ms'],
     ['Ort', where || '–'],
   ];
   if (box) box.innerHTML = `<div class="pfT">LEISTUNG · F3 aus · F4 Bericht kopieren</div>` + rows.map(r => `<div class="pfR"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('');
   cpuSum = cpuN = callsMax = trisMax = 0;
 }
 
+// Mögliche Ursache eines Rucklers in Worten
+function hitchCause(h: Hitch) {
+  const c: string[] = [];
+  if (h.progs > 0) c.push(`${h.progs} Shader neu`);
+  if (h.tex > 0) c.push(`${h.tex} Bilder hochgeladen`);
+  if (h.geo > 0) c.push(`${h.geo} Formen neu`);
+  if (h.gcMB > 15) c.push(`Speicherbereinigung (${Math.round(h.gcMB)} MB frei)`);
+  return c.length ? c.join(', ') : 'Ursache unklar (Grafikkarte oder Browser)';
+}
 // Bericht als Text (für die Zwischenablage): Gerät, Einstellungen und ein Eintrag pro Sekunde der letzten Minuten
 export function perfReport() {
   const dpr = devicePixelRatio || 1, name = gpu();
@@ -111,7 +140,8 @@ export function perfReport() {
   ];
   const t1 = log.length ? log[log.length - 1].t : 0;
   const rows = log.map(s => [Math.round((s.t - t1) / 1000), s.fps, s.low.toFixed(0), s.worst.toFixed(0), s.cpu.toFixed(1), s.calls, s.tris, `${s.lights} (${s.shadow})`, s.where].join(' | '));
-  return head.concat(rows).join('\n');
+  const hl = hitches.map(h => `${Math.round((h.t - (t1 || h.t)) / 1000)} s | ${Math.round(h.ms)} ms | ${hitchCause(h)} | ${h.where}`);
+  return head.concat(rows, ['', 'Ruckler über 70 ms (Sekunde | Dauer | mögliche Ursache | Ort):'], hl.length ? hl : ['keine']).join('\n');
 }
 
 function setOn(v: boolean) {

@@ -1,7 +1,7 @@
 import './core/boot';   // zuerst: Spieldaten laden (Ladebalken), alles Weitere wartet darauf
 import { dockBark } from './game/barks';
 import * as THREE from 'three';
-import { warm, camera, render, scene, aimShadows, markShadows, gl, compileFor } from './core/engine';
+import { warm, camera, render, scene, aimShadows, markShadows, gl, compileFor, warmScene } from './core/engine';
 import { hideBoot } from './core/assets';
 import { updateSky, sunDir, sky } from './core/sky';
 import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience';
@@ -49,7 +49,7 @@ import { loadStationModels } from './models/stationModels';
 import { loadCharModels } from './models/charModels';
 import type { Gate, Station } from './game/world';
 import { DUN, enterDungeon, updateDungeon, dungeonCamera, drawDungeonHUD, dungeonKey, nearEntrance, dunHooks } from './game/dungeon';
-import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover, landAtBase, leaveBaseOnFoot, nearFootTarget, drawGroundMarkers, footAt } from './game/onfoot';
+import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover, landAtBase, leaveBaseOnFoot, nearFootTarget, drawGroundMarkers, footAt, prewarmFoot } from './game/onfoot';
 import { CITY, updateCity, insideCityGate, preloadCities, cityDoorOut, hangarPadPose, cityHooks, cityWorld } from './game/city';
 import { updateBaseFx } from './game/basefx';
 import { preloadBases } from './models/stationModels';
@@ -125,6 +125,12 @@ function enterSurface(sector: string, at?: { x: number; y: number; z: number; ya
   showBanner(pl.name.toUpperCase(), T.n, '#7cc4ff');
   setTimeout(() => radio('SYSTEM', pl.base ? `Willkommen auf ${pl.name}. Die Bodenstation ${pl.base} liegt in der Mitte des Gebiets. Lagerstätten findest du mit dem Scanner [R].` : `${pl.name}: keine Bodenstation. Lande in der Nähe einer Lagerstätte und setze den Rover aus.`), 1500);
   if (pl.danger >= 3) setTimeout(() => radio('SYSTEM', 'Warnung: Ferrox-Aktivität auf der Oberfläche.'), 4000);
+  // Die neue Oberfläche bringt viele neue Materialien (Boden, Pflanzen, Basis): übersetzen hinter einer kurzen Blende statt mit Standbildern
+  // (gemessen: zwei Bilder von 3,7 und 4,9 s im Testfenster). Danach Rover und Spielfigur vorab (onfoot.ts), nicht erst beim Landen.
+  // Landefeld der Basis gleich berechnen: Es baut die Eingangstür mit ihrer Lampe – entstand sie erst beim ersten Schritt zu Fuß, kam ein Licht
+  // dazu und alle Materialien brauchten neue Shader (gemessen 23 Shader, langes Standbild beim Aussteigen)
+  if (world.stations[0]) basePad(world.stations[0]);
+  warmScene('Landeanflug', () => prewarmFoot());      // Rover und Figur bauen und hochladen hinter der Blende (sonst ein kurzes Stocken danach)
 }
 
 // =============== Spiel starten / beenden ===============

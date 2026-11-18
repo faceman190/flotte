@@ -187,14 +187,15 @@ function kill(f: Foe, by = coopNet.id) {
 export function updateFieldFight(dt: number, me: { x: number; y: number; z: number; yaw: number; pitch: number; eye: number; active: boolean; tp: boolean; muzzle: THREE.Vector3 | null }) {
   if (!world.surface || sector !== P.sector) return;
   if (!tracer) { tracer = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.9 })); tracer.frustumCulled = false; tracer.visible = false; scene.add(tracer); }
-  if (!mflash) { mflash = new THREE.PointLight(0xffb060, 0, 9, 1.6); scene.add(mflash); }
+  // Kein Punktlicht fürs Mündungsfeuer mehr (seit 2026-11-18): Es kam beim ersten Schritt zu Fuß dazu und blieb danach für immer in der Szene –
+  // jedes zusätzliche Licht zwingt alle Materialien zu neuen Shadern (Standbild zu Fuß, später erneut im All und im Hangar).
   FIGHT.cool -= dt; FIGHT.kick = Math.max(0, FIGHT.kick - dt * 7); FIGHT.flash -= dt; FIGHT.hurt = Math.max(0, FIGHT.hurt - dt * 1.6);
   for (const m of FIGHT.msg) m.life -= dt; FIGHT.msg = FIGHT.msg.filter(m => m.life > 0);
   if (tracer.visible && (tracerT -= dt) <= 0) tracer.visible = false;
   const px = me.x, pz = me.z, py = me.y + me.eye;
   // Schießen
   if (me.active && FIGHT.down <= 0 && mouse.down && FIGHT.cool <= 0) { shoot(px, py, pz, me.yaw, me.pitch, me.muzzle); if (!weapon().auto) mouse.down = false; }
-  mflash.position.set(px, py, pz); mflash.intensity = FIGHT.flash > 0 ? 30 : 0;
+  if (mflash) { mflash.position.set(px, py, pz); mflash.intensity = FIGHT.flash > 0 ? 30 : 0; }
   // Erholung außerhalb des Kampfes
   const fighting = FIGHT.foes.some(f => !f.dead && f.alert);
   if (!fighting && FIGHT.down <= 0) FIGHT.hp = Math.min(FIGHT.max, FIGHT.hp + dt * 4);
