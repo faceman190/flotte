@@ -47,6 +47,11 @@ spielen.__DOMAIN__ {
 			precompressed br gzip
 		}
 	}
+	# Fehler (z. B. 404 für eine noch nicht ausgerollte Datei) nie zwischenspeichern, auch nicht unter /assets/
+	handle_errors {
+		header Cache-Control "no-store"
+		respond "{err.status_code} {err.status_text}"
+	}
 	header -Server
 	log {
 		output file /var/log/caddy/letzte-crew.log {

@@ -1,6 +1,6 @@
 # Eigener Server (VPS) statt Render
 
-Stand 2026-11-18: VPS bei Hostinger (179.198.219.43, Ubuntu 24.04, 1 Kern, 4 GB), Domain letztecrew.de (DNS bei Hostinger: A/AAAA für @ und spielen, www als CNAME).
+Stand 2026-11-18: in Betrieb. VPS bei Hostinger (179.198.219.43, Ubuntu 24.04, 1 Kern, 4 GB), Domain letztecrew.de (DNS bei Hostinger: A/AAAA für @ und spielen, www als CNAME).
 Website unter https://letztecrew.de (Ordner site/, vorerst eine Startseite), Spiel unter https://spielen.letztecrew.de. Render läuft weiter, bis der eigene Server sicher läuft.
 
 ## Warum

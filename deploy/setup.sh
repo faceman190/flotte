@@ -145,6 +145,9 @@ D=$APP/repo/deploy
 cp "$D/letzte-crew.service" "$D/letzte-crew-deploy.service" "$D/letzte-crew-deploy.timer" /etc/systemd/system/
 sed "s/__DOMAIN__/$DOMAIN/g" "$D/Caddyfile" > /etc/caddy/Caddyfile
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+# validate legt die Logdatei als root an; Caddy selbst läuft als Benutzer caddy
+install -d -o caddy -g caddy -m 755 /var/log/caddy
+chown -R caddy:caddy /var/log/caddy
 systemctl daemon-reload
 systemctl enable letzte-crew >/dev/null 2>&1
 

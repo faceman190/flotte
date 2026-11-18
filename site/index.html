@@ -17,7 +17,7 @@
   :root { --bg: #05070b; --fg: #e6edf5; --dim: #8a98a8; --acc: #ff9a2e; --line: rgba(255, 255, 255, .12); }
   * { box-sizing: border-box; margin: 0; }
   html, body { height: 100%; background: var(--bg); color: var(--fg); font: 400 17px/1.55 "IBM Plex Sans", system-ui, sans-serif; }
-  .hero { position: relative; min-height: 100%; display: flex; flex-direction: column; justify-content: flex-end; padding: 48px clamp(16px, 6vw, 96px) 40px; overflow: hidden; }
+  .hero { position: relative; min-height: 100%; display: flex; flex-direction: column; justify-content: flex-end; padding: 48px clamp(16px, 6vw, 96px) 40px; overflow: hidden; isolation: isolate; }
   .hero::before { content: ""; position: absolute; inset: 0; background: url(eisenkrone.jpg) center 40% / cover no-repeat; z-index: -2; }
   .hero::after { content: ""; position: absolute; inset: 0; z-index: -1;
     background: linear-gradient(180deg, rgba(5,7,11,.15) 0%, rgba(5,7,11,.35) 45%, rgba(5,7,11,.92) 82%, var(--bg) 100%),
