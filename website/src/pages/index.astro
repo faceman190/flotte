@@ -25,8 +25,21 @@ const taten = [
   { t: 'Zu Fuß', b: bDeck, x: 'Aussteigen, über das Deck der Bastion laufen, an Terminals arbeiten, mit der Crew reden.' },
   { t: 'Landen', b: bPlanet, x: 'Elf Planeten und Monde mit Bergbau-Rover, Wracks, Minen und der Großraffinerie Schmelzwerk Zwölf.' },
 ];
+
+// Strukturdaten für Suchmaschinen (schema.org): Website und Browserspiel
+const beschreibung = 'Letzte Crew ist ein Weltraumspiel im Browser: Die Crew der Bastion ist hinter dem Riss gestrandet. Fliege, baue Erz ab, handle und halte die Ferrox auf – allein oder mit anderen Piloten.';
+const strukturdaten = [
+  { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Letzte Crew', url: 'https://letztecrew.de/', inLanguage: 'de' },
+  {
+    '@context': 'https://schema.org', '@type': 'VideoGame', name: 'Letzte Crew', description: beschreibung,
+    url: 'https://letztecrew.de/', sameAs: [SPIEL_URL], image: 'https://letztecrew.de/og.jpg', inLanguage: 'de',
+    genre: ['Weltraumspiel', 'Simulation', 'Mehrspieler'], gamePlatform: 'Webbrowser', applicationCategory: 'Game', operatingSystem: 'Webbrowser',
+    playMode: ['SinglePlayer', 'MultiPlayer'], offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR', url: SPIEL_URL },
+  },
+];
 ---
-<Base aktiv="" description="Letzte Crew ist ein Weltraumspiel im Browser: Die Crew der Bastion ist hinter dem Riss gestrandet. Fliege, baue Erz ab, handle und halte die Ferrox auf – allein oder mit anderen Piloten.">
+<Base aktiv="" description={beschreibung}>
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(strukturdaten)} />
   <section class="hero">
     <Image src={hero} alt="Die Bastion vor Heimstatt II, im Hintergrund der Nebel der Heimstatt" class="hero-bild" loading="eager" fetchpriority="high" widths={[960, 1440, 1920]} sizes="100vw" quality={78} />
     <div class="wrap hero-in">

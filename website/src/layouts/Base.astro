@@ -3,8 +3,8 @@
 import '../styles/global.css';
 import { SPIEL_URL } from '../lib/spiel';
 
-interface Props { title?: string; description?: string; bild?: string; aktiv?: string }
-const { title, description = 'Letzte Crew: Weltraumspiel im Browser. Fliegen, Erz abbauen, handeln, gegen die Ferrox kämpfen – allein oder mit anderen Piloten.', bild = '/og.jpg', aktiv = '' } = Astro.props;
+interface Props { title?: string; description?: string; bild?: string; aktiv?: string; noindex?: boolean }
+const { title, description = 'Letzte Crew: Weltraumspiel im Browser. Fliegen, Erz abbauen, handeln, gegen die Ferrox kämpfen – allein oder mit anderen Piloten.', bild = '/og.jpg', aktiv = '', noindex = false } = Astro.props;
 const voll = title ? `${title} – Letzte Crew` : 'Letzte Crew – Weltraumspiel im Browser';
 const nav = [
   { href: '/schiffe/', t: 'Schiffe', k: 'schiffe' },
@@ -28,7 +28,7 @@ const og = new URL(bild, Astro.site).href;
   <meta property="og:description" content={description}>
   <meta property="og:image" content={og}>
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site).href}>
+  {noindex ? <meta name="robots" content="noindex"> : <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site).href}>}
   <link rel="icon" href="/icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
