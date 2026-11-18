@@ -35,6 +35,14 @@ trap 'echo "$NEW" > "$FAILED"; echo "FEHLGESCHLAGEN: ${NEW:0:7} – die bisherig
 echo "Neue Version: ${OLD:0:7} → ${NEW:0:7}  $(git log -1 --format=%s "$NEW")"
 git reset --quiet --hard "$NEW"
 
+# Hat sich deploy.sh selbst geändert, die neue Fassung ausführen: bash liest ein laufendes Skript weiter aus der alten Datei,
+# sonst liefe dieses eine Mal noch der alte Ablauf (so geschehen beim ersten Ausrollen der Website, 2ddd45c).
+if [[ -z "${LC_NEUSTART:-}" && -n "$OLD" ]] && ! git diff --quiet "$OLD" "$NEW" -- deploy/deploy.sh 2>/dev/null; then
+  echo "deploy.sh hat sich geändert – starte die neue Fassung"
+  trap - ERR
+  LC_NEUSTART=1 exec bash "$REPO/deploy/deploy.sh" "$@"
+fi
+
 # Was hat sich geändert? Ohne bekannten alten Stand (erstes Ausrollen) gilt alles als geändert.
 FULL=0
 if [[ "$FORCE" == "--force" || -z "$OLD" ]] || ! git cat-file -e "$OLD^{commit}" 2>/dev/null; then
