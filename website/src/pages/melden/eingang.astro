@@ -1,0 +1,114 @@
+---
+// Eingang der Meldungen für die Werft (nicht verlinkt, nicht in der Sitemap, noindex). Daten nur mit Schlüssel (MELDUNGEN_SCHLUESSEL auf dem Server).
+import Base from '../../layouts/Base.astro';
+import { ARTEN, BEREICHE, STATUS } from '../../lib/meldung';
+const namen = { arten: Object.fromEntries(ARTEN.map((a) => [a.k, a.t])), bereiche: Object.fromEntries(BEREICHE.map((b) => [b.k, b.t])), status: Object.fromEntries(STATUS.map((s) => [s.k, s.t])) };
+---
+<Base title="Eingang Meldungen" noindex>
+  <section class="wrap e-wrap">
+    <div class="e-kopf">
+      <div>
+        <div class="tag">Werft · intern</div>
+        <h1>Eingang</h1>
+      </div>
+      <div class="e-aktion" id="e-aktion" hidden>
+        <button class="btn ghost" type="button" id="neu-laden">Neu laden</button>
+        <button class="btn ghost" type="button" id="abmelden">Abmelden</button>
+      </div>
+    </div>
+
+    <form class="tafel e-login" id="login">
+      <label for="schluessel" class="tag data">Schlüssel</label>
+      <div class="e-login-zeile">
+        <input id="schluessel" type="password" autocomplete="current-password" placeholder="Schlüssel aus /etc/letzte-crew.env" />
+        <button class="btn" type="submit">Öffnen</button>
+      </div>
+      <p class="e-fehler" id="login-fehler" role="alert"></p>
+    </form>
+
+    <div id="inhalt" hidden>
+      <div class="zahlen" id="zahlen"></div>
+      <div class="filter">
+        <select id="f-art"><option value="">Alle Arten</option>{ARTEN.map((a) => <option value={a.k}>{a.t}</option>)}</select>
+        <select id="f-status"><option value="offen">Offen</option><option value="">Alle Status</option>{STATUS.map((s) => <option value={s.k}>{s.t}</option>)}</select>
+        <select id="f-bereich"><option value="">Alle Bereiche</option>{BEREICHE.map((b) => <option value={b.k}>{b.t}</option>)}</select>
+        <input id="f-suche" type="search" placeholder="Suchen …" />
+      </div>
+      <ul class="liste" id="liste"></ul>
+      <p class="leer muted" id="leer" hidden>Keine Meldungen für diese Auswahl.</p>
+    </div>
+  </section>
+  <script type="application/json" id="namen" set:html={JSON.stringify(namen)} />
+</Base>
+
+<script>
+  import { starteEingang } from '../../scripts/eingang';
+  starteEingang();
+</script>
+
+<style>
+  .e-wrap { padding-top: clamp(40px, 6vw, 72px); padding-bottom: 96px; }
+  .e-kopf { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+  h1 { font-size: clamp(40px, 6vw, 68px); text-transform: uppercase; margin-top: 8px; }
+  .e-aktion { display: flex; gap: 10px; }
+  .e-aktion .btn { min-height: 40px; padding: 8px 18px; font-size: 15px; }
+  .e-login { max-width: 560px; padding: 24px; }
+  .e-login-zeile { display: flex; gap: 10px; margin-top: 10px; }
+  .e-login input { flex: 1; min-width: 0; }
+  .e-fehler { color: var(--bad); margin: 10px 0 0; font-size: 15px; }
+  .e-fehler:empty { display: none; }
+  input, select, textarea { background: var(--bg2); color: var(--txt); border: 1px solid var(--line2); border-radius: 0; padding: 10px 12px; font: 400 15px var(--body); }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--data); }
+
+  .zahlen { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--line); margin-bottom: 16px; }
+  :global(.zahl) { flex: 1 1 120px; padding: 14px 18px; border-right: 1px solid var(--line); }
+  :global(.zahl:last-child) { border-right: 0; }
+  :global(.zahl b) { display: block; font: 600 34px/1 var(--head); }
+  :global(.zahl span) { font: 400 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mut); }
+  .filter { display: grid; grid-template-columns: repeat(3, minmax(0, 180px)) minmax(0, 1fr); gap: 10px; margin-bottom: 20px; }
+  .liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+
+  :global(.mel) { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line2); }
+  :global(.mel.art-fehler) { border-left-color: var(--bad); }
+  :global(.mel.art-vorschlag) { border-left-color: var(--data); }
+  :global(.mel.art-sonstiges) { border-left-color: var(--vio); }
+  :global(.mel summary) { list-style: none; cursor: pointer; padding: 14px 18px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 16px; align-items: baseline; }
+  :global(.mel summary::-webkit-details-marker) { display: none; }
+  :global(.mel summary:hover) { background: var(--panel2); }
+  :global(.mel-nr) { font: 400 14px var(--mono); color: var(--acc); }
+  :global(.mel-titel) { font: 600 21px/1.2 var(--head); letter-spacing: .04em; overflow-wrap: anywhere; }
+  :global(.mel-meta) { grid-column: 2; font: 400 12.5px var(--mono); color: var(--mut); letter-spacing: .05em; }
+  :global(.pill) { grid-row: 1 / 3; grid-column: 3; align-self: center; font: 400 12px var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 5px 9px 4px; border: 1px solid var(--line2); color: var(--mut); white-space: nowrap; }
+  :global(.pill.st-neu) { color: #140b02; background: var(--acc); border-color: var(--acc); }
+  :global(.pill.st-in-arbeit) { color: var(--data); border-color: var(--data); }
+  :global(.pill.st-erledigt) { color: var(--grn); border-color: rgba(127, 224, 160, .5); }
+  :global(.pill.st-abgelehnt) { color: var(--dim); }
+  :global(.mel-body) { padding: 4px 18px 20px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px 28px; }
+  :global(.mel-body h4) { font: 400 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mut); margin: 16px 0 6px; }
+  :global(.mel-body .txt) { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; color: #d3dee7; }
+  :global(.mel-body img) { margin-top: 16px; border: 1px solid var(--line); cursor: zoom-in; }
+  :global(.mel-seite) { display: flex; flex-direction: column; gap: 4px; }
+  :global(.mel-seite dl) { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 16px 0 0; font: 400 13px var(--mono); }
+  :global(.mel-seite dt) { color: var(--dim); }
+  :global(.mel-seite dd) { margin: 0; color: var(--data); overflow-wrap: anywhere; }
+  :global(.st-knoepfe) { display: flex; flex-wrap: wrap; gap: 6px; }
+  :global(.st-knoepfe button) { background: none; border: 1px solid var(--line2); color: var(--mut); font: 500 13px var(--head); letter-spacing: .1em; text-transform: uppercase; padding: 7px 10px; cursor: pointer; }
+  :global(.st-knoepfe button:hover) { color: var(--txt); }
+  :global(.st-knoepfe button.an) { color: #140b02; background: var(--acc); border-color: var(--acc); }
+  :global(.mel-seite textarea) { width: 100%; min-height: 80px; resize: vertical; background: var(--bg2); color: var(--txt); border: 1px solid var(--line2); border-radius: 0; padding: 10px 12px; font: 400 15px var(--body); }
+  :global(.mel-seite textarea:focus) { outline: none; border-color: var(--data); }
+  :global(.mel-seite .speichern) { align-self: flex-start; margin-top: 6px; background: none; border: 1px solid var(--line2); color: var(--txt); font: 500 13px var(--head); letter-spacing: .1em; text-transform: uppercase; padding: 7px 12px; cursor: pointer; }
+  :global(.mel-seite .ok) { color: var(--grn); font-size: 13px; }
+
+  @media (max-width: 860px) {
+    .filter { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    :global(.mel-body) { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 520px) {
+    :global(.mel summary) { grid-template-columns: minmax(0, 1fr) auto; }
+    :global(.mel-nr) { grid-column: 1; }
+    :global(.mel-titel) { grid-column: 1 / -1; grid-row: 2; }
+    :global(.mel-meta) { grid-column: 1 / -1; }
+    :global(.pill) { grid-row: 1; grid-column: 2; }
+  }
+</style>

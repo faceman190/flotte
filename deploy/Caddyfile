@@ -1,6 +1,7 @@
 # Letzte Crew – Caddy auf dem eigenen Server (Vorlage; setup.sh ersetzt __DOMAIN__ und legt sie als /etc/caddy/Caddyfile ab)
 # Caddy holt die HTTPS-Zertifikate selbst.
-#   __DOMAIN__           Website (Ordner website/ im Repository, Astro; deploy.sh baut sie nach /srv/letzte-crew/site)
+#   __DOMAIN__           Website (Ordner website/ im Repository, Astro; deploy.sh baut sie nach /srv/letzte-crew/site),
+#                        /api/* (Meldeformular) geht an den Node-Server
 #   www.__DOMAIN__       leitet auf die Website um
 #   spielen.__DOMAIN__   das Spiel: Dateien direkt von der Platte (vorkomprimiert, Range für Musik),
 #                        Mehrspieler (/ws) und Statusseite (/status) gehen an den Node-Server
@@ -10,6 +11,8 @@ __DOMAIN__ {
 	encode zstd gzip
 	@bilder path *.jpg *.png *.webp *.svg *.woff2
 	header @bilder Cache-Control "public, max-age=86400"
+	# Meldeformular (website/src/pages/melden): /api/meldung… geht an den Node-Server (server/meldungen.mjs), gleiche Adresse, kein CORS nötig
+	reverse_proxy /api/* 127.0.0.1:2567
 	file_server
 	# Unbekannte Adressen: eigene Fehlerseite der Website (website/src/pages/404.astro), Status bleibt 404
 	handle_errors {

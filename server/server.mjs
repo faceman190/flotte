@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import zlib from 'zlib';
 import { WebSocketServer } from 'ws';
 import { openStore, storeInfo } from './store.mjs';
+import { meldungen } from './meldungen.mjs';
 
 const PORT = +(process.env.PORT || 2567);
 // LF_DIST: anderer Ordner mit dem gebauten Spiel (auf dem eigenen Server liefert Caddy die Dateien aus, siehe deploy/)
@@ -31,6 +32,8 @@ const IMMUTABLE = /\/assets\/.+\.[0-9a-f]{10}\.[a-z0-9]+$/;
 // ---------- Spiel ausliefern ----------
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent((req.url || '/').split('?')[0]);
+  // Meldungen von der Website (Fehler, Vorschläge), siehe meldungen.mjs
+  if (meldungen(req, res, p)) return;
   // Statusseite: Speicherart und ggf. Datenbankfehler (ohne Zugangsdaten), Anzahl Piloten online
   if (p === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });

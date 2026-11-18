@@ -11,6 +11,7 @@ const nav = [
   { href: '/guides/', t: 'Guides', k: 'guides' },
   { href: '/neuigkeiten/', t: 'Neuigkeiten', k: 'neuigkeiten' },
   { href: '/community/', t: 'Community', k: 'community' },
+  { href: '/melden/', t: 'Melden', k: 'melden' },
 ];
 const og = new URL(bild, Astro.site).href;
 ---
@@ -95,7 +96,7 @@ const og = new URL(bild, Astro.site).href;
   .nav-auf .menue span:first-child { transform: translateY(4px) rotate(45deg); }
   .nav-auf .menue span:last-child { transform: translateY(-4px) rotate(-45deg); }
 
-  @media (max-width: 860px) {
+  @media (max-width: 920px) {
     .kopf-in { gap: 10px; height: 58px; }
     .marke { font-size: 18px; }
     .marke span { display: none; }
@@ -108,7 +109,7 @@ const og = new URL(bild, Astro.site).href;
     .nav a.an::after { display: none; }
     .nav a.an { color: var(--acc); }
   }
-  @media (min-width: 420px) and (max-width: 860px) { .marke span { display: inline; } }
+  @media (min-width: 420px) and (max-width: 920px) { .marke span { display: inline; } }
 
   .fuss { border-top: 1px solid var(--line); background: var(--bg2); padding: 40px 0 34px; margin-top: 0; }
   .fuss-in { display: grid; grid-template-columns: 1fr auto; gap: 20px 40px; align-items: start; }

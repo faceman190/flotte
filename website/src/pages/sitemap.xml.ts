@@ -16,6 +16,7 @@ export const GET: APIRoute = async ({ site }) => {
     { loc: url('/neuigkeiten/'), lastmod: neu && tag(neu) },
     ...news.map((n) => ({ loc: url(`/neuigkeiten/${n.id}/`), lastmod: tag(n.data.datum) })),
     { loc: url('/community/') },
+    { loc: url('/melden/') },
   ];
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

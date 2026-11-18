@@ -6,6 +6,8 @@ export default defineConfig({
   trailingSlash: 'ignore',
   build: { format: 'directory' },
   vite: {
-    server: { fs: { allow: ['..'] } },   // Dev-Server darf ../src/data lesen
+    // Dev-Server darf ../src/data lesen; /api (Meldeformular) geht lokal an den Spielserver (npm run server im Hauptordner, Port 2567)
+    server: { fs: { allow: ['..'] }, proxy: { '/api': 'http://127.0.0.1:2567' } },
+    preview: { proxy: { '/api': 'http://127.0.0.1:2567' } },
   },
 });

@@ -63,6 +63,9 @@ systemctl restart letzte-crew
 ```
 Prüfen: `https://DOMAIN/status` zeigt `"store":"Postgres"` und `"datenbankFehler":null`.
 
+Meldeformular der Website (letztecrew.de/melden/): In dieselbe Datei gehört `MELDUNGEN_SCHLUESSEL="…"` (mindestens 12 Zeichen), damit
+der Eingang unter letztecrew.de/melden/eingang/ aufgeht. Meldungen liegen in `data/meldungen.json`. Details in `website/README.md`.
+
 **Danach:** ein paar Tage parallel laufen lassen, dann bei Render den Dienst pausieren oder löschen. `render.yaml` kann dann raus.
 
 ## Später

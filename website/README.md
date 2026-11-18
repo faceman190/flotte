@@ -34,6 +34,21 @@ Ein Push auf `main` reicht. `deploy/deploy.sh` baut auf dem VPS erst das Spiel, 
 | Neuigkeiten | `src/content/neuigkeiten/*.md` |
 | Community, Discord-Link | `src/pages/community.astro`, `DISCORD_URL` in `src/lib/spiel.ts` |
 | Bilder | `src/assets/bilder/` (Astro rechnet sie beim Build in WebP-Größen um) |
+| Meldeformular, Eingang | `src/pages/melden/`, `src/scripts/melden.ts`, `src/scripts/eingang.ts`, `src/lib/meldung.ts`; Server: `../server/meldungen.mjs` |
+
+## Meldungen (Fehler und Vorschläge)
+
+Spieler melden unter **/melden/** Fehler, Vorschläge oder Sonstiges, auf Wunsch mit Bildschirmfoto (wird im Browser auf höchstens
+1600 px verkleinert). Das Formular schickt an `/api/meldung`. Caddy reicht `/api/*` von letztecrew.de an den Node-Server weiter
+(`server/meldungen.mjs`), der die Meldungen in `data/meldungen.json` und die Bilder in `data/meldungen/` ablegt. Schutz: Lockfeld
+gegen Bots, höchstens 6 Meldungen je Adresse und Stunde, keine IP-Adresse wird gespeichert.
+
+Lesen und abhaken: **/melden/eingang/** (nicht verlinkt, noindex). Der Schlüssel steht auf dem VPS in `/etc/letzte-crew.env` als
+`MELDUNGEN_SCHLUESSEL=…` (mindestens 12 Zeichen; nach einer Änderung `systemctl restart letzte-crew`). Ohne Schlüssel bleibt der
+Eingang zu, Meldungen werden trotzdem angenommen.
+
+Lokal: Spielserver mit Schlüssel starten (`MELDUNGEN_SCHLUESSEL=… npm run server` im Hauptordner) und `npm run dev` hier; der
+Dev-Server leitet `/api` an Port 2567 weiter (`astro.config.mjs`). `npm run preview` kann das nicht.
 
 ## Spieldaten
 
