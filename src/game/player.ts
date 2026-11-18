@@ -17,8 +17,8 @@ import { radio } from '../ui/radio';
 import { updateMining, throwCharge } from './mining';
 
 // Das Modell des aktiven Schiffs (wird beim Umsteigen ausgetauscht)
-export let SHIP: ShipModel = buildShipModel('falke');
-let shipKey = 'falke:Orange:proc';
+export let SHIP: ShipModel = buildShipModel('venom');
+let shipKey = 'venom:Orange:proc';
 SHIP.g.visible = false;
 scene.add(SHIP.g);
 export function setShipModel(cls: ShipId, paint: Paint = 'Orange', force = false) {

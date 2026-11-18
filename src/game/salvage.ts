@@ -43,7 +43,7 @@ export function legendRumor(sector: string) {
   setTimeout(() => { if (P.sector === sector) radio('SYSTEM', `Bergungsfunk: Auf dem Planeten liegt das ${L.ship}. Der Tresor an Bord wurde nie geöffnet.`); }, 8000);
 }
 const TIERC = ['#aab4c0', '#5fd0ff', '#c070ff', '#ffb347'];
-const WRECKS: { cls: ShipId; n: string }[] = [{ cls: 'falke', n: 'Wrack eines Falken' }, { cls: 'elster', n: 'Wrack einer Elster' }, { cls: 'kaerrner', n: 'Wrack eines Kärrners' }, { cls: 'habicht', n: 'Wrack eines Habichts' }, { cls: 'maulwurf', n: 'Wrack eines Maulwurfs' }];
+const WRECKS: { cls: ShipId; n: string }[] = [{ cls: 'venom', n: 'Wrack einer Venom' }, { cls: 'elster', n: 'Wrack einer Elster' }, { cls: 'wuerger', n: 'Wrack eines Würgers' }, { cls: 'kormoran', n: 'Wrack eines Kormorans' }];
 
 function state() {
   P.salvage = P.salvage || {};

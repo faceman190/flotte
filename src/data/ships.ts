@@ -20,32 +20,12 @@ export const SHIPS = {
     hull: 110, shield: 45, speed: 285, acc: 520, turn: 1, cargo: 32, ammo: 300, rockets: 4, dmg: 1,
     laser: 1, beams: 1, laserRange: 220, heat: 1, scan: 1300, charges: 0, drones: 0, radius: 7, camUp: 8, camBack: 28, upMul: 1, col: 0x6fbf3a, model: 'Venom', len: 18,
   },
-  falke: {
-    n: 'Falke', role: 'Jäger', price: 0, desc: 'Wendiger Jäger. Stark im Kampf, kleiner Frachtraum, einfacher Bergbaulaser.',
-    hull: 100, shield: 40, speed: 280, acc: 520, turn: 1, cargo: 30, ammo: 300, rockets: 4, dmg: 1,
-    laser: 1, beams: 1, laserRange: 220, heat: 1, scan: 1300, charges: 0, drones: 0, radius: 6, camUp: 7, camBack: 24, upMul: 1, col: 0xd9822b, model: 'Striker', len: 15,
-  },
   // Eigenes Modell (asset-src/neu/elster, Blender-Skripte, docs/elster.md), Fassung 2: 23,1 × 8,5 × 6,6 m, runder Rumpf mit Glaskuppel, Kugel-
   // Bergbaulaser unter dem Kinn, vier Erzkanister in Rundklammern, Manteltriebwerke; Fernmodell ElsterFern
   elster: {
     n: 'Elster', role: 'Prospektor', price: 3200, desc: 'Kleines Bergbauschiff mit starkem Laser unter dem Kinn, vier Erzkanistern, weitreichendem Scanner und Sprengladungen. Schwach bewaffnet.',
     hull: 140, shield: 35, speed: 235, acc: 430, turn: 0.85, cargo: 70, ammo: 200, rockets: 2, dmg: 0.7,
     laser: 1.7, beams: 1, laserRange: 270, heat: 0.85, scan: 1900, charges: 4, drones: 0, radius: 8, camUp: 12, camBack: 38, upMul: 1.15, col: 0x3fb7a0, model: 'Elster', len: 23.1,
-  },
-  maulwurf: {
-    n: 'Maulwurf', role: 'Schwerer Bergbau', price: 14000, desc: 'Industrieschiff mit Doppellaser, zwei Bergbaudrohnen und großem Erzbunker. Langsam und träge.',
-    hull: 280, shield: 60, speed: 170, acc: 300, turn: 0.6, cargo: 160, ammo: 200, rockets: 0, dmg: 0.6,
-    laser: 1.5, beams: 2, laserRange: 300, heat: 0.8, scan: 2100, charges: 8, drones: 2, radius: 15, camUp: 30, camBack: 80, upMul: 1.7, col: 0xe0b030, model: 'Imperial', len: 62,
-  },
-  kaerrner: {
-    n: 'Kärrner', role: 'Frachter', price: 8000, desc: 'Transportschiff mit riesigem Frachtraum. Kein Bergbaulaser, aber ideal für Handelsrouten und Lagertransporte.',
-    hull: 230, shield: 75, speed: 210, acc: 330, turn: 0.65, cargo: 280, ammo: 250, rockets: 2, dmg: 0.6,
-    laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1300, charges: 0, drones: 0, radius: 14, camUp: 26, camBack: 84, upMul: 1.35, col: 0x6a9ad8, model: 'Insurgent', len: 56,
-  },
-  habicht: {
-    n: 'Habicht', role: 'Schwerer Jäger', price: 9500, desc: 'Kampfschiff für das Ferrox-Gebiet: starke Kanonen, 8 Raketen, dicke Panzerung. Kein Bergbau, kaum Fracht.',
-    hull: 230, shield: 90, speed: 265, acc: 490, turn: 0.85, cargo: 20, ammo: 500, rockets: 8, dmg: 1.6,
-    laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1300, charges: 0, drones: 0, radius: 8, camUp: 10, camBack: 34, upMul: 1.4, col: 0xc04040, model: 'Executioner', len: 22,
   },
   // Modell: „Arrow Carbine Spaceship“ (CGTrader, Royalty-Free), maßstabsgetreu 93 m, mit begehbaren Innenräumen
   pfeil: {
@@ -74,6 +54,10 @@ export const SHIPS = {
   },
 } satisfies Record<string, ShipClass>;
 export type ShipId = keyof typeof SHIPS;
+// Seit 2026-11-18 entfernt (Fremdmodelle aus dem alten Gratis-Paket): Spielstände mit diesen Klassen bekommen eine Venom und den Kaufpreis zurück (state.ts loadGame)
+export const RETIRED: Record<string, { n: string; price: number }> = {
+  falke: { n: 'Falke', price: 0 }, habicht: { n: 'Habicht', price: 9500 }, maulwurf: { n: 'Maulwurf', price: 14000 }, kaerrner: { n: 'Kärrner', price: 8000 },
+};
 // Kleine Flieger (unter 30 m) haben keinen begehbaren Innenraum: man steigt ein und fliegt los
 export const hasInterior = (cls: string) => ((SHIPS as any)[cls]?.len || 0) >= 30;
 export const SHIP_IDS = Object.keys(SHIPS) as ShipId[];
@@ -84,7 +68,7 @@ export type Up = Record<'guns' | 'rate' | 'hull' | 'shield' | 'mag' | 'engine' |
 // Zuschläge der eingebauten Module als Anteil (0,1 = +10 %), siehe game/inventory.ts shipMods
 export interface ShipMods { dmg?: number; rate?: number; hull?: number; shield?: number; speed?: number; turn?: number; cargo?: number; laser?: number; scan?: number }
 export function computeStats(cls: ShipId, u: Up, m: ShipMods = {}) {
-  const c: ShipClass = SHIPS[cls] || SHIPS.falke;
+  const c: ShipClass = SHIPS[cls] || SHIPS.venom;
   const f = (k: keyof ShipMods) => 1 + (m[k] || 0);
   return {
     cls: c,

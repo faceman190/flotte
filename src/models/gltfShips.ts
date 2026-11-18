@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
-// Schiffsmodelle als komprimierte GLB-Dateien aus public/assets/ship (scripts/build-ships.mjs → build-assets.mjs).
+// Schiffsmodelle als komprimierte GLB-Dateien aus public/assets/ship (asset-src/glb/ship → build-assets.mjs).
+// Lackierungen (paint/<Modell>_<Farbe>) kamen aus dem alten Gratis-Paket, das 2026-11-18 entfernt wurde; die Mechanik bleibt für spätere Modelle.
 // Alle Modelle werden beim Start einmal geladen, auf Länge 1 normiert und mit der Nase nach −Z gedreht.
 export const PAINTS = ['Orange', 'Blue', 'Green', 'Purple', 'Red'] as const;
 export type Paint = typeof PAINTS[number];

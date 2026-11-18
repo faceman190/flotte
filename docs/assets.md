@@ -2,7 +2,7 @@
 
 ## Wie die Spieldaten zum Spieler kommen
 
-- Alle Spieldaten liegen als einzelne Dateien unter `public/assets/`, jede mit einer Prüfsumme im Namen, z. B. `ship/Striker.3f2a9c01de.glb`.
+- Alle Spieldaten liegen als einzelne Dateien unter `public/assets/`, jede mit einer Prüfsumme im Namen, z. B. `ship/Wisent.5903a7644e.glb`.
 - `public/assets/manifest.json` ist die Paketliste: jede Datei mit Größe und Paket.
   - **core**: wird vor dem Hauptmenü geladen (Ladebalken). Enthält Schiffe, Stationen, Figuren, Oberflächen, Klänge und den Nebel von Heimstatt.
   - **world**: weitere Nebel, Planetenkarten und Bodentexturen. Wird nach dem Start still im Hintergrund geholt. Braucht das Spiel eine Datei früher, lädt es sie sofort selbst.
@@ -38,7 +38,8 @@ Der Pfeil: `split-visible` (3 Mio. → 2,3 Mio. sichtbare Dreiecke) und `simplif
 ## Ältere Wege: Rohdaten und Erzeugungsskripte
 
 1. Rohdaten ablegen wie bisher:
-   - Schiffe: `models/<Name>/glTF/…` → `node scripts/build-ships.mjs`
+   - Schiffe: nur noch als GLB (siehe oben). Das alte Gratis-Paket (Quaternius „Ultimate Spaceships“, `models/`,
+     `scripts/build-ships.mjs`, `asset-src/legacy/ships.js`) wurde 2026-11-18 entfernt, siehe „Entfernte Schiffe“ unten.
    - Stationen: `assets/stations/*.glb` → `node scripts/build-stations.mjs`
    - Figuren: `assets/chars/*.glb` → `node scripts/build-stations.mjs chars`
    - Oberflächen, Nebel, Planeten: `assets/tex`, `assets/nebula`, `assets/planet`, `assets/ground` → `node scripts/build-textures.mjs`
@@ -430,3 +431,17 @@ Neuhafen IV: `bilder/boden-116-neuhafen-ohne.jpg` und `boden-116-neuhafen-mit.jp
 Eigener Entwurf aus dem Baukasten als Probe für Schiffe: `station/Testschiff` (4.708 Dreiecke, 471 KB, keine eigene Textur), Zusatzangaben `data/kit_Testschiff.json`. Liegt als Schaustück vor der Lichtwall-Werft (`src/game/testship.ts`, Materialien `shipMaterials()` in `src/models/kit.ts`). Bauweise und Lehren: `docs/baukasten.md`, Abschnitt „Schiffe mit dem Baukasten“.
 
 ![Sperber von hinten](bilder/testschiff-114-heck.jpg)
+
+## Entfernte Schiffe (2026-11-18)
+
+Auf Wunsch fliegen nur noch eigene Entwürfe (Elster, Kormoran, Würger, Wisent) sowie vorerst Venom (Startschiff, Kaufmodell)
+und Pfeil (Kaufmodell). Entfernt wurden die Klassen Falke (Modell Striker), Habicht (Executioner), Maulwurf (Imperial) und
+Kärrner (Insurgent) samt dem ganzen Quaternius-Paket. Die Patrouillenjäger der Bastion (vorher Bob, Challenger, Spitfire,
+Dispatcher) fliegen jetzt den Würger (`buildAllyModel` in src/models/playerShips.ts).
+
+- Spielstände: `RETIRED` in src/data/ships.ts listet die alten Klassen mit Kaufpreis. `retireShips()` in src/game/state.ts macht
+  beim Laden aus jedem solchen Schiff (aktiv oder geparkt) eine Venom, schreibt den Kaufpreis gut, lässt Ausbaustufen und Module
+  und legt Ladung, die nicht mehr passt, ins Stationslager (aktives Schiff: Heimatstation). Der Funk meldet das nach dem Laden.
+- Ersatz an Stellen, die die alten Klassen nutzten: Wracks in Kapitel 3 (Kormoran, Würger), Bergungswracks auf Planeten
+  (Venom, Elster, Würger, Kormoran), Flugverkehr an Städten (Venom, Elster, Würger, Kormoran, Pfeil).
+- Lackierungen gab es nur für das alte Paket; die Auswahl im Hangar erscheint erst wieder, wenn ein Modell Farbvarianten hat.

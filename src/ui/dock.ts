@@ -400,7 +400,8 @@ function vHangar(): View {
       <span class="r"><button class="pri" data-a="board" data-n="${r.uid}">Umsteigen</button> <button data-a="sellship" data-n="${r.uid}">Verkaufen · ${fmtN(sellPrice(r))} Cr</button></span></div>`;
   }
   if (!here.length) h += `<p class="hint">Keine weiteren Schiffe an dieser Station.${hasYard() ? ' In der Werft kannst du neue kaufen.' : ' Neue Schiffe gibt es in den Werften großer Stationen.'}</p>`;
-  if (hasModel(SHIPS[P.cls].model)) {
+  // Lackierungen gibt es nur für Modelle mit Farbvarianten (seit dem Entfernen des alten Gratis-Pakets keines): bei nur einer Farbe keine Auswahl
+  if (hasModel(SHIPS[P.cls].model) && PAINTS.filter(p => hasPaint(SHIPS[P.cls].model, p)).length > 1) {
     const cur = (P.paint || 'Orange') as Paint;
     h += `<h3>Lackierung der ${esc(P.shipName)}</h3><div class="paints">` +
       PAINTS.filter(p => hasPaint(SHIPS[P.cls].model, p)).map(p => `<button data-a="paint" data-k="${p}" class="${p === cur ? 'on' : ''}" ${p === cur || P.credits < PAINT_COST ? 'disabled' : ''}><i style="background:${PAINT_C[p]}"></i>${PAINT_N[p]}</button>`).join('') +

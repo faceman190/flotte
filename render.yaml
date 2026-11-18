@@ -8,6 +8,8 @@ services:
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /
+    # Seit 2026-11-18 (Alpha 1.48) wird Render nicht mehr beliefert: das Spiel läuft auf spielen.letztecrew.de (deploy/, docs/vps.md)
+    autoDeploy: false
     envVars:
       - key: NODE_VERSION
         value: 20

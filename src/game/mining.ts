@@ -321,7 +321,7 @@ function updateCharges(dt: number) {
 }
 export const chargeCount = () => charges.length;
 
-// =============== Bergbaudrohnen (Maulwurf) ===============
+// =============== Bergbaudrohnen (Pfeil) ===============
 interface Drone { i: number; mesh: THREE.Group | null; line: THREE.Line; state: 'dock' | 'fly' | 'mine' | 'back'; target: Asteroid | null; x: number; y: number; z: number; acc: number }
 const LINE_M = new THREE.LineBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
 const drones: Drone[] = [];

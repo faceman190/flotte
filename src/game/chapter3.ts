@@ -34,8 +34,8 @@ const SEC = 'narbe', CITYSEC = 'neuhafen', WERKSEC = 'kupferbucht', BARS = 4;
 const T = 'Kapitel 3 · Die Wahrheit über die Narbe';
 const FIELD = [-600, 200, -2400];                                    // Mitte des Wrackfelds (Lage der Eidwacht)
 const WRECKS: { off: number[]; cls: ShipId; k: number; name: string }[] = [
-  { off: [-760, 90, 380], cls: 'kaerrner', k: 2.2, name: 'WRACK · KENNUNG UNBEKANNT' },
-  { off: [620, -110, 560], cls: 'habicht', k: 2.6, name: 'WRACK · KENNUNG UNBEKANNT' },
+  { off: [-760, 90, 380], cls: 'kormoran', k: 2.7, name: 'WRACK · KENNUNG UNBEKANNT' },
+  { off: [620, -110, 560], cls: 'wuerger', k: 2.3, name: 'WRACK · KENNUNG UNBEKANNT' },
 ];
 const BREACH = [150, 30, 40];                                        // Bresche an der Flanke, relativ zur Feldmitte (Näherung; buildField misst sie am Rumpf)
 const WRECK_ID = 'narbe:eidwacht';

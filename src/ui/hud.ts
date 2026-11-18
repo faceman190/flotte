@@ -374,17 +374,12 @@ function drawRadar() {
 // ---------- Schiffsanzeige (unten rechts) ----------
 // Draufsicht-Silhouetten je Schiffsklasse (Bug oben). body = Hauptformen, eng = Triebwerke, s = Maßstab
 export const SIL: Record<string, { s: number; body: number[][][]; lite?: number[][][]; eng: number[][]; guns: number[][] }> = {
-  falke: {
+  // Venom (Startschiff) und Ersatz für Klassen ohne eigene Silhouette
+  venom: {
     s: 2.8,
     body: [[[0, -19], [2.2, -13], [4.2, -4], [5, 10], [4, 15], [-4, 15], [-5, 10], [-4.2, -4], [-2.2, -13]],
       [[-4, -3], [-19, 8], [-20, 12], [-16, 13], [-5, 11]], [[4, -3], [19, 8], [20, 12], [16, 13], [5, 11]]],
     eng: [[-2.4, 15], [2.4, 15]], guns: [[-1.4, -17], [1.4, -17]],
-  },
-  habicht: {
-    s: 2.3,
-    body: [[[0, -20], [3, -12], [5, -2], [6, 12], [4, 17], [-4, 17], [-6, 12], [-5, -2], [-3, -12]],
-      [[-5, -4], [-22, 6], [-22, 12], [-6, 12]], [[5, -4], [22, 6], [22, 12], [6, 12]]],
-    eng: [[-2.6, 17], [2.6, 17]], guns: [[-3, -14], [3, -14], [-20, 4], [20, 4]],
   },
   // Elster (eigenes Modell, Fassung 2, rund): Maße in Metern, Rumpf, Gondeln, Erzkanister
   elster: {
@@ -393,18 +388,6 @@ export const SIL: Record<string, { s: number; body: number[][][]; lite?: number[
       [[2.09, 3.8], [4.21, 3.8], [4.21, 11.25], [2.09, 11.25]], [[-4.21, 3.8], [-2.09, 3.8], [-2.09, 11.25], [-4.21, 11.25]]],
     lite: [[[1.42, -1.9], [3.04, -1.9], [3.04, 2.7], [1.42, 2.7]], [[-3.04, -1.9], [-1.42, -1.9], [-1.42, 2.7], [-3.04, 2.7]]],
     eng: [[-3.15, 11.25], [3.15, 11.25]], guns: [[-1.32, -10.49], [1.32, -10.49]],
-  },
-  maulwurf: {
-    s: 1.65,
-    body: [[[-6, -15], [6, -15], [6, 19], [-6, 19]], [[-5.3, -13], [-8.3, -13], [-8, -30], [-5, -30]], [[5.3, -13], [8.3, -13], [8, -30], [5, -30]], [[-8, 16], [8, 16], [8, 24], [-8, 24]]],
-    lite: [[[-7, 1], [7, 1], [7, 17], [-7, 17]]],
-    eng: [[-4, 25], [4, 25]], guns: [[-4, -14], [4, -14]],
-  },
-  kaerrner: {
-    s: 1.55,
-    body: [[[-4.5, -28], [4.5, -28], [4.5, -18], [-4.5, -18]], [[-2.5, -33], [2.5, -33], [4.4, -28], [-4.4, -28]], [[-1.7, -18], [1.7, -18], [1.7, 18], [-1.7, 18]], [[-6, 18], [6, 18], [6, 26], [-6, 26]]],
-    lite: [[[-7, -17], [7, -17], [7, 17], [-7, 17]]],
-    eng: [[-3.4, 28], [3.4, 28]], guns: [[-1.2, -24], [1.2, -24]],
   },
   pfeil: {
     s: 1.0,
@@ -445,7 +428,7 @@ function drawShipPanel() {
   ux.textAlign = 'right'; ux.font = '10px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = '#8aa0b0'; ux.fillText(`AUSBAU ${lvSum}/${ups.length * MAXLV}`, w - 12, 19);
   // Silhouette
   const hf = clamp(P.hull / st.maxHull, 0, 1), sf = clamp(P.shield / st.maxShield, 0, 1), cx = 74, cy = 92;
-  const sil = SIL[P.cls] || SIL.falke, s = sil.s;
+  const sil = SIL[P.cls] || SIL.venom, s = sil.s;
   ux.save(); ux.translate(cx, cy);
   if (sf > 0) {
     ux.strokeStyle = `rgba(124,196,255,${0.25 + 0.6 * sf})`; ux.lineWidth = 2; ux.setLineDash(sf < 0.35 ? [4, 4] : []);
@@ -465,9 +448,8 @@ function drawShipPanel() {
   const trig = mouse.down && !G.dead;
   const gc = P.tool === 'guns' ? (P.ammo <= 0 ? '#ff6b5b' : trig ? '#fff2c0' : '#ffd27a') : '#6a6050';
   ux.fillStyle = gc; for (const [gx, gy] of sil.guns) ux.fillRect(gx * s - 1, gy * s - 4, 2, 8);
-  if (P.cls === 'falke' && P.up.guns >= 2) for (const m of [-17.5, 17.5]) ux.fillRect(m * s - 1, 4 * s, 2, 10);
   if (P.tool === 'laser' && trig && !G.overheat) { ux.fillStyle = '#ff9a40'; const top = Math.min(...sil.body.flat().map(p => p[1])) * s; ux.fillRect(-1.5, top - 14, 3, 12); }
-  if (P.cls === 'falke') {
+  if (P.cls === 'venom') {
     const per = Math.ceil(st.maxRockets / 2);
     let n = 0;
     for (let i = 0; i < per; i++) for (const m of [-1, 1]) {

@@ -5,8 +5,8 @@ import type { ShipId } from '../data/ships';
 
 // =====================================================================================
 // Innenräume der eigenen Schiffe (lokal: Bug zeigt nach −Z wie beim Schiffsmodell, Boden bei y = 0).
-// Je Klasse ein eigener Grundriss: Falke/Habicht nur Cockpit, Elster mit Frachtraum und Scanner,
-// Maulwurf mit Erzbunker, Drohnenbucht und Werkbank, Kärrner mit langem Frachtraum und Quartier.
+// Ersatz, solange ein Schiff keinen begehbaren Innenraum aus dem Modell hat (game/meshRoom.ts) oder dessen Laufkarte nicht lädt:
+// Elster mit Frachtraum und Scanner, Pfeil mit langem Frachtraum und Quartier, sonst ein enges Cockpit.
 // Gebaut wird hier nur Geometrie und Grundriss; was die Stationen tun, legt interior.ts fest.
 // =====================================================================================
 export type Rect = [number, number, number, number];
@@ -37,22 +37,7 @@ function layout(cls: ShipId): Layout {
         ],
       };
     }
-    case 'maulwurf': {
-      const br: Zone = { name: 'Brücke', x0: -4, x1: 4, z0: -12, z1: -7, h: 3 };
-      const gang: Zone = { name: 'Gang', x0: -1.1, x1: 1.1, z0: -7, z1: -4, h: 2.6 };
-      const hold: Zone = { name: 'Erzbunker', x0: -6, x1: 6, z0: -4, z1: 10, h: 5 };
-      const bay: Zone = { name: 'Drohnenbucht', x0: 6, x1: 10, z0: 1, z1: 7, h: 3.2 };
-      return {
-        zones: [br, gang, hold, bay], hold, spawn: { x: 0, z: 8.5, yaw: 0 },
-        spots: [
-          { kind: 'seat', x: 0, z: -10.2, r: 1.6, label: '' }, { kind: 'log', x: -3, z: -8, r: 1.4, label: '' },
-          { kind: 'drones', x: 8.8, z: 4, r: 2, label: '' }, { kind: 'bench', x: -5.3, z: 6.5, r: 1.8, label: '' },
-          { kind: 'locker', x: -5.4, z: -2.6, r: 1.4, label: '' }, { kind: 'hatch', x: 0, z: 9.8, r: 1.8, label: '' },
-        ],
-      };
-    }
-    case 'pfeil':   // vorläufig wie der Kärrner, bis der echte Innenraum aus dem Modell kommt
-    case 'kaerrner': {
+    case 'pfeil': {   // Ersatz, falls die Laufkarte der Pfeil nicht lädt
       const br: Zone = { name: 'Brücke', x0: -3.5, x1: 3.5, z0: -17, z1: -12, h: 2.8 };
       const gang: Zone = { name: 'Gang', x0: -1, x1: 1, z0: -12, z1: -9, h: 2.5 };
       const hold: Zone = { name: 'Frachtraum', x0: -4, x1: 4, z0: -9, z1: 15, h: 4.2 };
@@ -67,7 +52,7 @@ function layout(cls: ShipId): Layout {
       };
     }
     default: {
-      // Falke, Habicht: enges Cockpit mit Luke hinten
+      // enges Cockpit mit Luke hinten
       const cp: Zone = { name: 'Cockpit', x0: -1.4, x1: 1.4, z0: -2.6, z1: 1.6, h: 2.3 };
       return {
         zones: [cp], spawn: { x: 0, z: 0.9, yaw: 0 },

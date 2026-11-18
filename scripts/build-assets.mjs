@@ -115,6 +115,7 @@ if (fs.existsSync(path.join(PH, 'ground.json'))) {
   }
 }
 // ---- Modelle ----
+// ships.js (Quaternius-Gratis-Paket) ist seit 2026-11-18 entfernt; fehlt die Datei, bleibt die Liste leer
 const { SHIPDATA = { models: {}, paints: {} } } = bundle('ships.js'), { STATIONDATA = {} } = bundle('stations.js'), { CHARDATA = {} } = bundle('chars.js');
 for (const [k, v] of Object.entries(SHIPDATA.models)) await model('ship/' + k, v, 'core');
 for (const [k, v] of Object.entries(SHIPDATA.paints)) await image('paint/' + k, v, 'core', 88);

@@ -10,7 +10,7 @@ import { perfFrameStart, perfFrameEnd, perfHooks } from './core/perf';
 import { onKey, centerMouse, releaseAll, keys, look, steer } from './core/input';
 import { ambience, preloadSfx, outside, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode, sfx, sfxHeld, loopVol } from './core/audio';
 import { rand, clamp, $ } from './core/util';
-import { P, G, settings, loadSettings, saveSettings, newPlayer, setPlayer, loadGame, saveGame, stats, type Player, type Tool } from './game/state';
+import { P, G, settings, loadSettings, saveSettings, newPlayer, setPlayer, loadGame, saveGame, stats, retireNote, type Player, type Tool } from './game/state';
 import { world, buildSector, stationById, gateTo, updateAsteroids } from './game/world';
 import { initFerrox, updateSpawning, updateEnemies, updateProjectiles, updateStationDefense } from './game/combat';
 import { initTraffic, updateTraffic, initAllies, updateAllies } from './game/npc';
@@ -169,6 +169,7 @@ function startGame(p: Player, fresh: boolean) {
     else if (P.surface && PLANETS[P.sector]) enterSurface(P.sector, { x: P.x, y: P.y + 30, z: P.z, yaw: P.yaw });
     else enterSector(P.sector, {});
     setTimeout(() => radio('SYSTEM', `Willkommen zurück, ${P.name}.`), 1000);
+    if (retireNote) setTimeout(() => radio('SYSTEM', retireNote), 3500);
     resumePrologue();
   }
   $('hud').classList.remove('hidden');
@@ -444,7 +445,7 @@ hooks.respawn = () => {
 // =============== Hauptmenü-Kulisse ===============
 function setupMenuScene() {
   hideMiningFx();
-  setShipModel('falke');
+  setShipModel('venom');
   buildSector('heimstatt');
   initTraffic();
   initAllies();
@@ -730,7 +731,7 @@ Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() =
   // Hintergrund-Pakete gleich auspacken, solange der Ladebildschirm steht. Was beim ersten Besuch noch aus dem Netz kommt, wartet nicht länger als 6 s.
   const bg = Promise.all([hangarBgLoad().catch(() => false), loadDeck('eisenkrone').catch(() => false), preloadMeshRooms(), preloadBases(), preloadCities()]).catch(() => false);
   setTimeout(preloadSfx, 1500);   // Schritte, Klicks, Türen (Klänge entpackt der Browser nebenher)
-  setShipModel('falke', 'Orange', true);
+  setShipModel('venom', 'Orange', true);
   showMainMenu();
   setupMenuScene();
   // Shader der Menüszene übersetzen (der Browser macht das nebenher), dann ein paar Bilder hinter dem Ladebildschirm zeichnen

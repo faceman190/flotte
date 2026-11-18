@@ -269,7 +269,7 @@ function drawBlueprint() {
   if (!e) return;
   bpT += 0.016;
   g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, W, H);
-  const sil = SIL[e.cls] || SIL.falke;
+  const sil = SIL[e.cls] || SIL.venom;
   let mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
   for (const poly of sil.body) for (const [x, y] of poly) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mny = Math.min(mny, y); mxy = Math.max(mxy, y); }
   const k = Math.min((W - 80) / (mxx - mnx), (H - 60) / (mxy - mny)), cx = W / 2, cy = H / 2 - (mny + mxy) / 2 * k;

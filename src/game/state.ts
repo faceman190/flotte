@@ -1,6 +1,6 @@
 import { ITEM_IDS, type ItemId } from '../data/items';
 import { UPG_IDS, type UpgId } from '../data/upgrades';
-import { SHIPS, computeStats, type ShipId, type Up } from '../data/ships';
+import { SHIPS, RETIRED, computeStats, type ShipId, type Up } from '../data/ships';
 import type { GearSlot, ShipSlot } from '../data/gear';
 import { sanitizeInv, shipMods, type InvItem } from './inventory';
 
@@ -114,12 +114,51 @@ export function loadGame(): Player | null {
     if (!d || d.v !== 2) return null;
     const base = newPlayer(d.name || 'Falke');
     const p: Player = { ...base, ...d, cargo: { ...base.cargo, ...d.cargo }, up: { ...base.up, ...d.up } };
-    if (!SHIPS[p.cls]) p.cls = 'falke';
     if (!Array.isArray(p.missions)) p.missions = [];
     sanitizeInv(p);
     p.fleet = (p.fleet || []).map(r => ({ ...r, cargo: { ...emptyCargo(), ...r.cargo }, up: { ...emptyUp(), ...r.up } }));
+    retireShips(p);
     return p;
   } catch (e) { return null; }
+}
+
+// Entfernte Schiffsklassen (data/ships.ts RETIRED): Das Schiff wird zur Venom, der Kaufpreis kommt aufs Konto. Ausbaustufen und Module bleiben,
+// Ladung über dem neuen Frachtraum geht ins Lager der Station (aktives Schiff: Heimatstation). Hinweis für den Funk in retireNote.
+export let retireNote = '';
+function retireShips(p: Player) {
+  const out: string[] = [];
+  let refund = 0, moved = false;
+  const swap = (cls: string, name: string, cargo: Record<ItemId, number>, up: Record<UpgId, number>, gear: any, station: string) => {
+    const old = RETIRED[cls] || { n: cls, price: 0 };
+    refund += old.price;
+    out.push(name && name !== old.n ? `${old.n} „${name}“` : old.n);
+    const cap = computeStats('venom', up as Up, shipMods(gear)).cargo;
+    let used = ITEM_IDS.reduce((a, k) => a + cargo[k], 0);
+    for (const k of ITEM_IDS) {
+      if (used <= cap) break;
+      const m = Math.min(cargo[k], used - cap); if (m <= 0) continue;
+      cargo[k] -= m; used -= m; moved = true;
+      (p.storage[station] = p.storage[station] || {})[k] = (p.storage[station][k] || 0) + m;
+    }
+    return name && name !== old.n ? name : SHIPS.venom.n;
+  };
+  if (!SHIPS[p.cls]) {
+    p.shipName = swap(p.cls, p.shipName, p.cargo, p.up, p.shipGear, p.home.station);
+    p.cls = 'venom'; p.paint = 'Orange';
+    const st = computeStats('venom', p.up as Up, shipMods(p.shipGear));
+    p.hull = Math.min(p.hull, st.maxHull); p.shield = Math.min(p.shield, st.maxShield); p.ammo = Math.min(p.ammo, st.maxAmmo); p.rockets = Math.min(p.rockets, st.maxRockets); p.charges = 0;
+    if (p.tool !== 'guns') p.tool = 'laser';
+  }
+  for (const r of p.fleet) {
+    if (SHIPS[r.cls]) continue;
+    r.name = swap(r.cls, r.name, r.cargo, r.up, r.gear, r.loc.station);
+    r.cls = 'venom'; r.paint = 'Orange';
+    const st = computeStats('venom', r.up as Up, shipMods(r.gear));
+    r.hull = Math.min(r.hull, st.maxHull); r.ammo = Math.min(r.ammo, st.maxAmmo); r.rockets = Math.min(r.rockets, st.maxRockets); r.charges = 0;
+  }
+  p.credits += refund;
+  retireNote = out.length ? [`Werft der Bastion: ${out.join(', ')} ${out.length > 1 ? 'wurden' : 'wurde'} außer Dienst gestellt und durch eine Venom ersetzt.`,
+    refund ? `Erstattet: ${refund.toLocaleString('de-DE')} Cr.` : '', moved ? 'Ladung, die nicht mehr passte, liegt im Stationslager.' : ''].filter(Boolean).join(' ') : '';
 }
 
 // ---------------- Laufzeitzustand (nicht gespeichert) ----------------

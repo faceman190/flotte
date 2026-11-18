@@ -103,7 +103,7 @@ function onMsg(m: any) {
     r.name = m.name; r.s = m.s || 0; r.m = m.m; r.w = Array.isArray(m.w) ? m.w : null; r.d = m.d || ''; r.g = Array.isArray(m.g) ? m.g.map(String) : null;
     if (m.p?.length === 3) r.tp.set(m.p[0], m.p[1], m.p[2]);
     if (m.q?.length === 4) r.tq.set(m.q[0], m.q[1], m.q[2], m.q[3]).normalize();
-    const cls = SHIPS[m.cls as ShipId] ? m.cls : 'falke';
+    const cls = SHIPS[m.cls as ShipId] ? m.cls : 'venom';
     if (!r.ship || r.cls !== cls || r.paint !== m.paint) {
       if (r.ship) disposeObj(r.ship.g);
       r.cls = cls; r.paint = m.paint;
