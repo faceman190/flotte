@@ -41,6 +41,7 @@ export interface Deck {
   seen: (x: number, z: number) => boolean; hangarSeen: () => boolean;
   release: () => void;      // beim Verlassen des Innenraums: Grafikspeicher der Lichtraum-Bilder freigeben
   prime: () => void;        // beim Betreten, hinter der Blende: alle Raumspiegelungen aufnehmen
+  primeStep: () => boolean; // beim Anflug: eine Raumspiegelung aufnehmen (false = alle fertig)
   stale: () => boolean;     // ohne Lichträume gebaut, die inzwischen geladen sind: Der Innenraum baut das Deck dann neu      // ist dieser Ort bzw. der Hangar vom Standort aus zu sehen?
 }
 
@@ -857,6 +858,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
       if (!lm || !deckTune.hybrid) return;
       for (const q of lmRooms) { if (!q.R.env) lmCapture(q); if (q.R.env) for (const m of q.R.mats) if (m.envMap !== q.R.env) { m.envMap = q.R.env; m.needsUpdate = true; } }
     },
+    primeStep: () => { if (!lm || !deckTune.hybrid) return false; const q = lmRooms.find(r => !r.R.env); if (!q) return false; lmCapture(q); return true; },
     stale: () => !lm && deckTune.lichtraum && !!LM[id],
     // Weg der Story-Figuren vom Hangar hinaus (und umgekehrt herein): durch das Tor, an der Kreuzung dahinter nach links außer Sicht
     // (so weit der Gang dort nach Norden reicht: auf der Bastion zwei Zellen, auf der Eisenkrone eine)

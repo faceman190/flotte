@@ -149,7 +149,15 @@ export function envFor(name: string, tex?: THREE.Texture | null) {
   if (ENV[name]) return ENV[name];
   const t = tex || TEXT[name];
   if (!t || !t.image) return null;
-  const e = new THREE.Texture(t.image);
+  // Immer aus einer Fassung mit 512 × 256 Bildpunkten (seit 2026-11-18): Die Größe der Spiegelung ergibt sich aus der Bildbreite und steht in
+  // jedem Shader. Die Nebelbilder sind verschieden groß (2048 bis 8192 breit) – jeder Sektor brauchte deshalb eigene Shader für alle Schiffe
+  // und Stationen (Standbilder nach jedem Sprung). 512 breit ist dieselbe Größe wie die Standard- und die Innenraum-Spiegelung.
+  let img: any = t.image;
+  try {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+    c.getContext('2d')!.drawImage(img, 0, 0, 512, 256); img = c;
+  } catch (err) { /* Bild noch nicht dekodiert o. Ä.: Original nehmen */ }
+  const e = new THREE.Texture(img);
   e.colorSpace = THREE.SRGBColorSpace;
   e.mapping = THREE.EquirectangularReflectionMapping;
   e.needsUpdate = true;

@@ -70,7 +70,7 @@ export function perfFrameStart() {
   // Ruckler: Was hat sich seit dem vorigen Bild geändert? (Werte vom Ende des vorigen Bildes, also genau das lange Bild)
   const snap = hitchSnapshot();
   // Bilder hinter der Blende (Vorwärmen beim Andocken, Landeanflug) sieht man nicht: nicht als Ruckler zählen
-  const behind = !!document.getElementById('warm')?.classList.contains('on') || !!document.querySelector('#boot:not(.done)');
+  const fl = document.getElementById('flash'), behind = !!document.getElementById('warm')?.classList.contains('on') || !!document.querySelector('#boot:not(.done)') || (!!fl && parseFloat(fl.style.opacity || '0') > 0.9);
   if (prev && now - prev > 70 && document.visibilityState === 'visible' && !behind) {
     hitches.push({ t: now, ms: now - prev, where: perfHooks.where(), progs: snap.progs - hPrev.progs, tex: snap.tex - hPrev.tex, geo: snap.geo - hPrev.geo, gcMB: Math.max(0, hPrev.heap - snap.heap) });
     if (hitches.length > 40) hitches.shift();

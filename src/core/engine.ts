@@ -194,10 +194,11 @@ function primeFrame() {
   scene.traverseVisible((o: any) => { if (o.frustumCulled && (o.isMesh || o.isPoints || o.isLine || o.isSprite)) { o.frustumCulled = false; off.push(o); } });
   try { render(); } finally { for (const o of off) o.frustumCulled = true; }
 }
-export function warmScene(label: string, prime: null | (() => void) = null, maxMs = 9000): Promise<void> {
+// quiet: ohne eigene schwarze Blende, wenn schon etwas anderes das Bild deckt (Sprung- oder Eintrittsblitz, seit 2026-11-18)
+export function warmScene(label: string, prime: null | (() => void) = null, maxMs = 9000, quiet = false): Promise<void> {
   const n = ++warmN, t0 = performance.now();
   if (!warmEl) { warmEl = document.createElement('div'); warmEl.id = 'warm'; warmEl.appendChild(document.createElement('span')); document.body.appendChild(warmEl); }
-  warmEl.firstElementChild!.textContent = label; warmEl.classList.add('on');
+  warmEl.firstElementChild!.textContent = label; if (!quiet) warmEl.classList.add('on');
   warm.hold = true;
   return new Promise<void>(res => {
     let begun = false, fin = false, tb = t0, t1 = t0;

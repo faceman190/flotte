@@ -833,6 +833,10 @@ function dimRoomGlow(root: THREE.Object3D) {
 function undimRoomGlow() {
   for (const [m, v, c] of glowDim) { m.emissiveIntensity = v; m.color.setHex(c); } glowDim = [];
 }
+// Läuft im ersten Bild zu Fuß nach der Landung (stepShipWarm in updateWalk), in einem Zug: Auf viele Bilder verteilt war es schlechter
+// (gemessen: ein Bild mit 1,3 s – die normalen neuen Shader mussten hinter der Warteschlange warten). Teile mit Lichtern werden zerlegt,
+// damit keine Lampe doppelt zählt.
+let shipWarm: { g: THREE.Group; queue: THREE.Object3D[] } | null = null;
 function prewarmShipRoom() {
   const cls = P.cls;
   if (room || !IN.active || !hasMeshRoom(cls) || !meshRoomReady(cls)) return;
@@ -841,23 +845,35 @@ function prewarmShipRoom() {
   const mr = buildMeshRoom(cls); if (!mr) return;
   shipWarmKey = key;
   SHIP.g.getWorldPosition(mr.g.position); mr.g.rotation.y = SHIP.g.rotation.y; mr.g.updateMatrixWorld(true);
-  const env0 = scene.environment;
-  scene.add(mr.g); scene.environment = interiorEnv();
-  // Versteckte Zweige für die Dauer des Aufrufs aus den Kinderlisten nehmen (ohne Ereignisse, Reihenfolge bleibt erhalten)
-  const cut: [THREE.Object3D, number][] = [];
-  const visit = (o: THREE.Object3D) => { for (let i = 0; i < o.children.length; i++) { const c = o.children[i]; if (!c.visible) cut.push([c, i]); else visit(c); } };
-  visit(scene);
-  for (let i = cut.length - 1; i >= 0; i--) cut[i][0].parent!.children.splice(cut[i][1], 1);
-  try { compileFor(scene, scene).catch?.(() => {}); } catch (e) { console.warn('Schiffsinnenraum vorwärmen:', e); }
-  finally {
-    for (const [c, i] of cut) c.parent!.children.splice(i, 0, c);
-    scene.remove(mr.g); scene.environment = env0;
-  }
+  shipWarm = { g: mr.g, queue: [...mr.g.children, ...scene.children.filter(c => c.visible)] };
+}
+const hasLight = (o: THREE.Object3D) => { let l = false; o.traverseVisible((c: any) => { if (c.isLight) l = true; }); return l; };
+function stepShipWarm() {
+  if (!shipWarm) return;
+  if (room) { shipWarm = null; return; }
+  if (G.mode !== 'walk' || warm.hold) return;
+  const W = shipWarm, env0 = scene.environment;
+  scene.add(W.g); scene.environment = interiorEnv();
+  try {
+    while (W.queue.length) {
+      const r = W.queue.shift()!;
+      if ((r as any).isLight || !r.visible || r === W.g) continue;
+      if (hasLight(r)) { W.queue.unshift(...r.children); continue; }      // Lichter nicht doppelt zählen: in Teile ohne Lichter zerlegen
+      // versteckte Zweige für den Aufruf aus den Kinderlisten nehmen (ohne Ereignisse, Reihenfolge bleibt erhalten)
+      const cut: [THREE.Object3D, number][] = [];
+      const visit = (o: THREE.Object3D) => { for (let i = 0; i < o.children.length; i++) { const c = o.children[i]; if (!c.visible) cut.push([c, i]); else visit(c); } };
+      visit(r);
+      for (let i = cut.length - 1; i >= 0; i--) cut[i][0].parent!.children.splice(cut[i][1], 1);
+      try { compileFor(r, scene).catch?.(() => {}); } finally { for (const [c, i] of cut) c.parent!.children.splice(i, 0, c); }
+    }
+  } catch (e) { console.warn('Schiffsinnenraum vorwärmen:', e); W.queue.length = 0; }
+  finally { scene.remove(W.g); scene.environment = env0; }
+  if (!W.queue.length) shipWarm = null;
 }
 // direkte Lenkung: beim Wechsel ins Fliegen den Zeiger nicht freigeben
 const keepLockForFlight = () => settings.steer !== 'zeiger' && (G.mode === 'play' || G.mode === 'launch');
 export function leaveInterior() {
-  shipWarmKey = '';
+  shipWarmKey = ''; shipWarm = null;
   if (room) leaveShip();
   if (!IN.active) return;
   if ((hasProm || kitHangar) && zoneT >= 0) rim.color.copy(rimOut);
@@ -1151,6 +1167,7 @@ export function updateWalk(dt: number) {
   // Blick: Maus eingefangen → direkte Steuerung; sonst dreht die Zeigerposition wie beim Fliegen
   IN.locked = document.pointerLockElement === gl;
   if (!room && !warm.hold && G.mode === 'walk' && shipWarmKey !== (IN.station?.id || '') + ':' + P.cls) prewarmShipRoom();   // z. B. nach einem Schiffswechsel im Hangar
+  stepShipWarm();
   // zu Fuß gehört die Maus dem Blick: sobald der Browser es erlaubt (kurz nach einem Tastendruck oder Klick), wird sie eingefangen
   if (!IN.locked && G.mode === 'walk' && (grabT -= dt) <= 0) { grabT = 0.3; grabMouse(); }
   // ohne eingefangenen Zeiger nur bei der alten Zeigersteuerung drehen (sonst drehte ein stehengebliebener Zeiger den Blick weg)

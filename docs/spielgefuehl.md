@@ -145,3 +145,19 @@ Außerdem: Das Punktlicht fürs Mündungsfeuer zu Fuß ist weg (blieb nach dem e
 und im Hangar erneut alle Shader neu). Regel: Jedes Licht, das unterwegs dazukommt oder verschwindet, kostet ein Standbild; Lichter mit
 dem Gebiet zusammen anlegen. Hangar: Ein- und Aussteigen und der Gang Deck ↔ Hangar ohne langes Bild; nach der Landung bleibt ein kurzes
 Stocken (0,17 s im Testfenster) für das Vorwärmen „an Bord“ (hinter der Blende passt die Szene noch nicht, gemessen 14 Shader beim Einsteigen).
+
+## Vorbereiten beim Anflug, Sprung und Eintritt ohne Standbild (2026-11-18, nach Alpha 1.48)
+
+- **Erstes Andocken an Stationen mit Deck (Eisenkrone)** wird beim Anflug vorbereitet (`approachPrime.ts`, unter 7 km): Deck aufbauen,
+  Raumspiegelungen (je Schritt eine, `deck.primeStep`), Bilder und Formen in Portionen hochladen, Shader Teil für Teil gegen eine Licht-Kopie
+  der Szene mit den Deck-Strahlern übersetzen. Höchstens 4 ms je Bild. Gemessen: Blende 6,9 → 1,2 s (Shader 5,1 → 0,2 s), Stocker danach
+  2,8 → 0,12 s. Gewöhnliche Stationen (Sonnenwacht) brauchten das nicht (Blende 1,1 s, danach nichts). Die Bastion erledigt der Start.
+- **Sprung und Atmosphäreneintritt:** Der weiße bzw. orange Blitz bleibt stehen, bis der neue Sektor bzw. die Oberfläche übersetzt ist
+  (`warmScene(…, quiet)`), statt sofort auszublenden. Weiterspielen bekommt eine kurze Blende „Spiel wird geladen“.
+- **Gleiche Spiegelungsgröße überall** (`textures.ts`, `envFor`): Die Umgebungsspiegelung aus dem Nebelbild wird immer aus 512 × 256
+  berechnet. Vorher ergab sich die Größe aus dem Nebelbild (2048 bis 8192 breit) und stand in jedem Shader – jeder Sektor brauchte eigene
+  Shader für alle Schiffe und Stationen. Nach einem Sprung jetzt kein Shader-Stocker mehr (vorher 1,45 s mit 12 Shadern).
+- **Nach der Landung im Hangar** (`prewarmShipRoom`/`stepShipWarm`): Vorwärmen „an Bord“ Teil für Teil der Szene, Teile mit Lichtern zerlegt
+  (sonst zählen Lampen doppelt), in einem Zug. Gemessen kein Bild über 45 ms mehr, Einsteigen ohne neuen Shader. Auf viele Bilder verteilt
+  war es schlechter (1,3 s: normale neue Shader warteten hinter der Warteschlange).
+- Verworfen: alle Schiffsmodelle beim Start vorwärmen (Start 3,7 s länger, half wegen der verschiedenen Spiegelungsgrößen nicht).

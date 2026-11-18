@@ -54,6 +54,7 @@ import { CITY, updateCity, insideCityGate, preloadCities, cityDoorOut, hangarPad
 import { updateBaseFx } from './game/basefx';
 import { preloadBases } from './models/stationModels';
 import { loadDeck, loadHangar, hangarBgLoad, primeStationEarly } from './game/deck';
+import { updateApproachPrime, markPrimed } from './game/approachPrime';
 import { loadEisenkrone } from './models/eisenkrone';
 import { updateChapter2 } from './game/chapter2';
 import { updateChapter3 } from './game/chapter3';
@@ -106,7 +107,7 @@ function enterSector(id: string, arrive: { gateFrom?: string; station?: string; 
 }
 
 // =============== Planetenoberfläche betreten ===============
-function enterSurface(sector: string, at?: { x: number; y: number; z: number; yaw: number }) {
+function enterSurface(sector: string, at?: { x: number; y: number; z: number; yaw: number }): Promise<void> {
   if (IN.active) leaveInterior();
   hideRover();
   hideMiningFx();
@@ -130,7 +131,9 @@ function enterSurface(sector: string, at?: { x: number; y: number; z: number; ya
   // Landefeld der Basis gleich berechnen: Es baut die Eingangstür mit ihrer Lampe – entstand sie erst beim ersten Schritt zu Fuß, kam ein Licht
   // dazu und alle Materialien brauchten neue Shader (gemessen 23 Shader, langes Standbild beim Aussteigen)
   if (world.stations[0]) basePad(world.stations[0]);
-  warmScene('Landeanflug', () => prewarmFoot());      // Rover und Figur bauen und hochladen hinter der Blende (sonst ein kurzes Stocken danach)
+  // Deckt der Eintrittsblitz das Bild, bleibt er stehen, bis alles fertig ist (leise, ohne schwarze Blende); sonst die Blende „Landeanflug“
+  const underFlash = parseFloat($('flash').style.opacity || '0') > 0.5;
+  return warmScene('Landeanflug', () => prewarmFoot(), 9000, underFlash);      // Rover und Figur bauen und hochladen hinter der Blende
 }
 
 // =============== Spiel starten / beenden ===============
@@ -167,7 +170,7 @@ function startGame(p: Player, fresh: boolean) {
     const ok = isFinite(P.x) && isFinite(P.y) && isFinite(P.z) && SECTOR[P.sector];
     if (!ok) { P.sector = P.home.sector; enterSector(P.sector, { station: P.home.station }); }
     else if (P.surface && PLANETS[P.sector]) enterSurface(P.sector, { x: P.x, y: P.y + 30, z: P.z, yaw: P.yaw });
-    else enterSector(P.sector, {});
+    else { enterSector(P.sector, {}); warmScene('Spiel wird geladen'); }      // erster Blick in den Sektor hinter einer kurzen Blende
     setTimeout(() => radio('SYSTEM', `Willkommen zurück, ${P.name}.`), 1000);
     if (retireNote) setTimeout(() => radio('SYSTEM', retireNote), 3500);
     resumePrologue();
@@ -389,8 +392,9 @@ function updateJump(dt: number) {
   if (G.jumpT <= 0) {
     const fl = $('flash');
     fl.style.transition = 'none'; fl.style.opacity = '1';
-    requestAnimationFrame(() => { fl.style.transition = 'opacity 1.1s'; fl.style.opacity = '0'; });
     enterSector(G.jumpTo!, { gateFrom: G.jumpFrom! });
+    // Der Sprungblitz bleibt stehen, bis der neue Sektor übersetzt ist (vorher zwei Standbilder von bis zu 2 s nach dem Sprung)
+    warmScene('', null, 9000, true).then(() => requestAnimationFrame(() => { fl.style.transition = 'opacity 1.1s'; fl.style.opacity = '0'; }));
     G.mode = 'play';
     centerMouse();
     sfx('jump_in', 0.75, 1, () => snd(90, 1.2, 'sine', 0.06, -30));
@@ -420,12 +424,12 @@ function updateEntry(dt: number) {
   if (G.transTo === 'surface') G.shake = Math.min(1.4, k * 1.6);
   if (G.transT <= 0) {
     const to = G.transTo;
-    if (to === 'surface') enterSurface(P.sector);
-    else enterSector(P.sector, { orbit: true });
+    // Seit 2026-11-18: Der Blitz bleibt stehen, bis die Shader der neuen Umgebung übersetzt sind (vorher Standbilder beim Ausblenden)
+    const ready = to === 'surface' ? enterSurface(P.sector) : (enterSector(P.sector, { orbit: true }), warmScene('', null, 9000, true));
     G.mode = 'play';
     G.shake = 0;
     centerMouse();
-    requestAnimationFrame(() => { fl.style.transition = 'opacity 1.3s'; fl.style.opacity = '0'; setTimeout(() => (fl.style.background = '#fff'), 1400); });
+    ready.then(() => requestAnimationFrame(() => { fl.style.transition = 'opacity 1.3s'; fl.style.opacity = '0'; setTimeout(() => (fl.style.background = '#fff'), 1400); }));
     saveGame();
   }
 }
@@ -591,6 +595,7 @@ function simulate(dt: number) {
   if (live) updateMissions(dt);
   updateAsteroids(dt);
   if (m !== 'menu') { updateSpawning(dt); updateEnemies(dt); updateProjectiles(dt); updateStationDefense(dt); }
+  if (m === 'play') updateApproachPrime();   // erstes Andocken an Stationen mit Deck beim Anflug vorbereiten (approachPrime.ts)
   updateTraffic(dt);
   updateAllies(dt);
   updateParticles(dt);
@@ -738,7 +743,7 @@ Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() =
   await Promise.race([compileFor(scene, scene), sleep(8000)]);
   requestAnimationFrame(loop);
   await Promise.race([bg, sleep(6000)]);
-  try { primeStationEarly('bastion'); } catch (e) { console.warn('Bastion vorab:', e); }   // erstes Andocken an der Bastion so schnell wie jedes weitere
+  try { primeStationEarly('bastion'); markPrimed('bastion'); } catch (e) { console.warn('Bastion vorab:', e); }   // erstes Andocken an der Bastion so schnell wie jedes weitere
   await Promise.race([compileFor(scene, scene), sleep(3000)]);    // was inzwischen dazukam (Verkehr, Ersatzmodelle)
   await sleep(250);
   hideBoot();
