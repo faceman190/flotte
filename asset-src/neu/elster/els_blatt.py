@@ -4,7 +4,7 @@ import numpy as np
 B = os.path.dirname(os.path.abspath(__file__))
 import sys
 ARGS = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
-ORDER = ['schraeg', 'hangar', 'abbau', 'seite', 'draufsicht', 'front', 'heck', 'cockpit', 'detail']
+ORDER = ['schraeg', 'hangar', 'abbau', 'fahrwerk', 'laser', 'fahrwerk2', 'ruecken', 'cockpit', 'detail']
 NAME = 'els-blatt.jpg'
 W, H, C = 800, 450, 3
 sheet = np.full((H * 3, W * C, 4), 0.06, dtype=np.float32); sheet[..., 3] = 1

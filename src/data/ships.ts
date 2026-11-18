@@ -25,11 +25,12 @@ export const SHIPS = {
     hull: 100, shield: 40, speed: 280, acc: 520, turn: 1, cargo: 30, ammo: 300, rockets: 4, dmg: 1,
     laser: 1, beams: 1, laserRange: 220, heat: 1, scan: 1300, charges: 0, drones: 0, radius: 6, camUp: 7, camBack: 24, upMul: 1, col: 0xd9822b, model: 'Striker', len: 15,
   },
-  // Eigenes Modell (asset-src/neu/elster, Blender-Skripte, docs/elster.md): 22,8 × 7 × 6,3 m, Laserturm unter dem Kinn, vier Erzkanister
+  // Eigenes Modell (asset-src/neu/elster, Blender-Skripte, docs/elster.md), Fassung 2: 23,1 × 8,5 × 6,6 m, runder Rumpf mit Glaskuppel, Kugel-
+  // Bergbaulaser unter dem Kinn, vier Erzkanister in Rundklammern, Manteltriebwerke; Fernmodell ElsterFern
   elster: {
     n: 'Elster', role: 'Prospektor', price: 3200, desc: 'Kleines Bergbauschiff mit starkem Laser unter dem Kinn, vier Erzkanistern, weitreichendem Scanner und Sprengladungen. Schwach bewaffnet.',
     hull: 140, shield: 35, speed: 235, acc: 430, turn: 0.85, cargo: 70, ammo: 200, rockets: 2, dmg: 0.7,
-    laser: 1.7, beams: 1, laserRange: 270, heat: 0.85, scan: 1900, charges: 4, drones: 0, radius: 8, camUp: 12, camBack: 38, upMul: 1.15, col: 0x3fb7a0, model: 'Elster', len: 22.8,
+    laser: 1.7, beams: 1, laserRange: 270, heat: 0.85, scan: 1900, charges: 4, drones: 0, radius: 8, camUp: 12, camBack: 38, upMul: 1.15, col: 0x3fb7a0, model: 'Elster', len: 23.1,
   },
   maulwurf: {
     n: 'Maulwurf', role: 'Schwerer Bergbau', price: 14000, desc: 'Industrieschiff mit Doppellaser, zwei Bergbaudrohnen und großem Erzbunker. Langsam und träge.',

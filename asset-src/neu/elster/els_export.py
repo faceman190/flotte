@@ -8,7 +8,10 @@ import bpy, json, os
 B = os.path.dirname(bpy.data.filepath); SC = bpy.context.scene
 SKIP_COLL = {'Studio grau', 'Hangar', 'Kameras', 'Lichter'}
 SKIP_MAT = {'Laufspur', 'Rostspur', 'Staubspur', 'Fleck', 'Abrieb'}
-GLASS = {'Kanzelglas', 'Schauglas'}
+GLASS = {'Kanzelglas', 'Schauglas', 'Kuppelglas'}
+# Rumpfmaterialien mit Plattenfugen: Das Spiel rechnet Fugen, Nieten und Schmutz im Shader aus den Texturkoordinaten „Platten“
+# (u = x, v = Winkel × 1,7 m, wie in Blender), src/models/gltfShips.ts panelShader. Der Vorsatz ext_ hält die Koordinaten beim Packen ungerundet.
+PAN = {'Rumpf Altweiss': 'ext_pan_weiss', 'Rumpf Gussgrau': 'ext_pan_gun', 'Rumpf Petrol': 'ext_pan_petrol', 'Rumpf Dunkel': 'ext_pan_dunkel'}
 CACHE = {}
 def exp_mat(m):
     if m is None: return None
@@ -19,13 +22,13 @@ def exp_mat(m):
     metal, rough = float(bk.get('metal', 0.3)), float(bk.get('rough', 0.5))
     emit, es = bk.get('emit'), float(bk.get('es', 0.0))
     if bk.get('stripes') and es: emit = col
-    e = bpy.data.materials.new(m.name + ' (Spiel)'); e.use_nodes = True
+    e = bpy.data.materials.new(PAN.get(m.name, m.name + ' (Spiel)')); e.use_nodes = True
     b = next(n for n in e.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
     b.inputs['Base Color'].default_value = (*col[:3], 1); b.inputs['Metallic'].default_value = metal; b.inputs['Roughness'].default_value = rough
     if emit and es:
         b.inputs['Emission Color'].default_value = (*emit[:3], 1); b.inputs['Emission Strength'].default_value = min(3.0, es * 0.3)
     if m.name in GLASS:
-        b.inputs['Base Color'].default_value = (0.03, 0.03, 0.035, 1); b.inputs['Alpha'].default_value = 0.35; b.inputs['Roughness'].default_value = 0.06
+        b.inputs['Base Color'].default_value = (0.22, 0.27, 0.3, 1); b.inputs['Alpha'].default_value = 0.22; b.inputs['Roughness'].default_value = 0.04; b.inputs['Metallic'].default_value = 0.0
         for k, v in (('surface_render_method', 'BLENDED'), ('blend_method', 'BLEND')):
             try: setattr(e, k, v)
             except Exception: pass

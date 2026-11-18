@@ -18,12 +18,15 @@ const t0 = Date.now();
 const doc = await io.read(inp);
 if (opt.mat) { const r = applyFbxMaterials(doc, opt.mat, opt.look); dropSpecGloss(doc); for (const m of doc.getRoot().listMaterials()) if (!m.listParents().some(p => p.propertyType === 'Primitive')) m.dispose(); console.log(`Materialien: ${r.hit} Teile zugeordnet, ${r.miss} ohne Angabe, ${r.dropped} entfernt`); }
 const before = triCount(doc);
+// ext_*-Materialien (Muster im Shader aus den Texturkoordinaten): prune() darf die Koordinaten nicht entfernen, obwohl kein Bild darauf verweist
+const keepUv = doc.getRoot().listMaterials().some(m => /^ext_/.test(m.getName()));
 // Texturlose Primitive: nur Positionen behalten
 for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) {
   if (p.getMaterial()?.getBaseColorTexture()) continue;
+  if (/^ext_/.test(p.getMaterial()?.getName() || '')) continue;      // ext_*: Texturkoordinaten werden im Spiel gebraucht (Muster im Shader)
   for (const sem of p.listSemantics()) if (sem !== 'POSITION') p.setAttribute(sem, null);
 }
-await doc.transform(dedup(), flatten(), join({ keepNamed: false }), weld({ tolerance: 0.0001 }), simplify({ simplifier: MeshoptSimplifier, ratio, error }), prune());
+await doc.transform(dedup(), flatten(), join({ keepNamed: false }), weld({ tolerance: 0.0001 }), simplify({ simplifier: MeshoptSimplifier, ratio, error }), prune({ keepAttributes: keepUv }));
 const mid = triCount(doc);
 // Transformationen einrechnen (und drehen), alle Knoten danach ohne eigene Lage
 const rot = new THREE.Matrix4().makeRotationY(((+opt.rotY || 0) * Math.PI) / 180);
@@ -47,6 +50,6 @@ for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) 
   p.setAttribute('NORMAL', doc.createAccessor().setType('VEC3').setArray(new Float32Array(nor)).setBuffer(doc.getRoot().listBuffers()[0]));
   p.setIndices(doc.createAccessor().setType('SCALAR').setArray(pos.length / 3 > 65535 ? new Uint32Array(idx) : new Uint16Array(idx)).setBuffer(doc.getRoot().listBuffers()[0]));
 }
-await doc.transform(prune());
+await doc.transform(prune({ keepAttributes: keepUv }));
 await io.write(out, doc);
 console.log(`Dreiecke ${before.toLocaleString('de-DE')} → ${mid.toLocaleString('de-DE')} · Meshes ${doc.getRoot().listMeshes().length} · ${((Date.now() - t0) / 1000).toFixed(0)} s → ${out}`);

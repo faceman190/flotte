@@ -28,6 +28,7 @@ export async function loadShipModels() {
         // Texturierte Modelle (Lackierungen) bekommen einheitliche Werte; Modelle mit eigenen Materialien behalten ihre
         if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = 4; m.map.needsUpdate = true; m.metalness = 0.35; m.roughness = 0.55; }
         m.envMapIntensity = 0.8;
+        if (m.name.startsWith('ext_pan')) panelShader(m);
       });
       inner.rotation.y = Math.PI;                 // Nase von +Z nach −Z
       inner.userData.glbRoot = true;              // Koordinaten der GLB-Datei (Gelenke beweglicher Teile, setDoors)
@@ -50,6 +51,53 @@ export async function loadShipModels() {
   return loaded;
 }
 export const hasModel = (name: string) => loaded && !!TPL[name];
+
+// Plattenfugen, Nieten und Schmutz im Shader (Materialien ext_pan_*, eigene Modelle aus Blender, z. B. die Elster): Die Texturkoordinaten
+// sind Meter auf dem Rumpf (u = Länge, v = Umfang), genau wie im Blender-Shader. Zwei versetzte Ziegelmuster ergeben die Fugen
+// (vertieft), daneben Nieten (erhaben), dazu Flecken und Laufspuren. Fugen und Nieten blenden aus, sobald sie kleiner als ein Pixel werden.
+const PANEL_PARS = /* glsl */ `
+varying vec2 vPan;
+float pHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float pNoise(vec2 p) { vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(pHash(i), pHash(i + vec2(1.0, 0.0)), u.x), mix(pHash(i + vec2(0.0, 1.0)), pHash(i + vec2(1.0, 1.0)), u.x), u.y); }
+float pBrick(vec2 p, float w, float h, float off, out vec2 id) {
+  float row = floor(p.y / h); float x = p.x + (mod(row, 2.0) > 0.5 ? off * w : 0.0); float col = floor(x / w); id = vec2(col, row);
+  float fx = x - col * w, fy = p.y - row * h; return min(min(fx, w - fx), min(fy, h - fy)); }
+`;
+const PANEL_COLOR = /* glsl */ `
+#include <color_fragment>
+float pAa = max(max(fwidth(vPan.x), fwidth(vPan.y)), 1e-5);
+vec2 pId1, pId2; float pD1 = pBrick(vPan, 1.6, 0.9, 0.5, pId1), pD2 = pBrick(vPan, 0.8, 0.45, 0.25, pId2);
+float pM1 = (1.0 - smoothstep(0.009 - pAa, 0.009 + pAa, pD1)) * clamp(1.6 - pAa / 0.03, 0.0, 1.0);
+float pM2 = (1.0 - smoothstep(0.005 - pAa, 0.005 + pAa, pD2)) * 0.45 * clamp(1.6 - pAa / 0.018, 0.0, 1.0);
+float pMask = max(pM1, pM2);
+float pBand = (1.0 - step(0.075, pD1)) * (1.0 - pM1);
+float pRd = length(fract(vPan * 13.0) - 0.5) / 13.0;
+float pRiv = pBand * (1.0 - smoothstep(0.0045, 0.007 + pAa, pRd)) * clamp(1.6 - pAa / 0.006, 0.0, 1.0);
+float pVar = mix(0.9, 1.0, pHash(pId1));
+float pGrime = mix(0.88, 1.06, pNoise(vPan * 0.7)) * mix(0.95, 1.03, pNoise(vPan * 5.0 + 17.0));
+float pStreak = mix(1.0, 0.88, smoothstep(0.52, 0.78, pNoise(vec2(vPan.x * 4.0, vPan.y * 0.35) + 3.0)));
+diffuseColor.rgb *= pVar * pGrime * pStreak * (1.0 - 0.48 * pMask) * (1.0 - 0.25 * pRiv);
+float pHeight = (-pMask + 0.6 * pRiv) * 0.0035;
+`;
+const PANEL_ROUGH = /* glsl */ `
+#include <roughnessmap_fragment>
+roughnessFactor = clamp(roughnessFactor + pMask * 0.3 + (pNoise(vPan * 3.0) - 0.5) * 0.12, 0.04, 1.0);
+`;
+const PANEL_NORMAL = /* glsl */ `
+#include <normal_fragment_maps>
+{ vec2 pdH = vec2(dFdx(pHeight), dFdy(pHeight)); vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
+  vec3 r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1) * faceDirection;
+  vec3 grad = sign(det) * (pdH.x * r1 + pdH.y * r2); normal = normalize(abs(det) * normal - grad); }
+`;
+function panelShader(m: THREE.MeshStandardMaterial) {
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = 'varying vec2 vPan;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\nvPan = uv;');
+    sh.fragmentShader = PANEL_PARS + sh.fragmentShader.replace('#include <color_fragment>', PANEL_COLOR)
+      .replace('#include <roughnessmap_fragment>', PANEL_ROUGH).replace('#include <normal_fragment_maps>', PANEL_NORMAL);
+  };
+  m.customProgramCacheKey = () => 'platten';
+}
 export const hasPaint = (name: string, p: Paint) => p === 'Orange' || !!PAINT_TEX[`${name}_${p}`];
 
 // Kopie eines Modells in gewünschter Länge (Meter) und Lackierung
@@ -61,7 +109,11 @@ export function modelInstance(name: string, length: number, paint: Paint = 'Oran
   const holder = new THREE.Group();
   holder.userData.model = name;      // für setDoors: welche beweglichen Teile das Modell hat
   obj.scale.multiplyScalar(length);
-  holder.add(obj);
+  const far = TPL[name + 'Fern'];
+  if (far) {      // Fernmodell (z. B. ElsterFern.glb): ab sechs Schiffslängen die stark vereinfachte Fassung zeigen
+    const lod = new THREE.LOD(), fo = far.group.clone(true); fo.scale.multiplyScalar(length);
+    lod.addLevel(obj, 0); lod.addLevel(fo, length * 6); holder.add(lod);
+  } else holder.add(obj);
   return { obj: holder, w: t.w * length, h: t.h * length, l: length };
 }
 
