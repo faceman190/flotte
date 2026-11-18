@@ -1,0 +1,64 @@
+---
+import { Image } from 'astro:assets';
+import { render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { guides } from '../../lib/inhalt';
+import { SPIEL_URL } from '../../lib/spiel';
+
+export async function getStaticPaths() {
+  const liste = await guides();
+  return liste.map((g, i) => ({ params: { slug: g.id }, props: { g, vor: liste[i - 1] ?? null, nach: liste[i + 1] ?? null } }));
+}
+const { g, vor, nach } = Astro.props;
+const { Content, headings } = await render(g);
+const kapitel = headings.filter((h) => h.depth === 2);
+---
+<Base title={g.data.titel} aktiv="guides" description={g.data.kurz}>
+  <article>
+    <header class="g-kopf">
+      <Image src={g.data.bild} alt="" class="g-bild" widths={[800]} loading="eager" />
+      <div class="wrap g-kopf-in">
+        <a class="zurueck mono" href="/guides/">‹ Alle Guides</a>
+        <div class="tag">{g.data.stufe} · Stand {g.data.stand}</div>
+        <h1>{g.data.titel}</h1>
+        <p class="lead">{g.data.kurz}</p>
+      </div>
+    </header>
+    <div class="wrap g-body">
+      <aside class="toc">
+        <div class="mono toc-t">Inhalt</div>
+        <ol>{kapitel.map((h) => <li><a href={`#${h.slug}`}>{h.text}</a></li>)}</ol>
+      </aside>
+      <div class="prosa"><Content /></div>
+    </div>
+    <nav class="wrap g-weiter" aria-label="Weitere Guides">
+      {vor ? <a href={`/guides/${vor.id}/`}><span class="mono">‹ Vorheriger</span><b>{vor.data.titel}</b></a> : <span></span>}
+      {nach ? <a class="r" href={`/guides/${nach.id}/`}><span class="mono">Nächster ›</span><b>{nach.data.titel}</b></a> : <a class="r" href={SPIEL_URL}><span class="mono">Genug gelesen ›</span><b>Jetzt spielen</b></a>}
+    </nav>
+  </article>
+</Base>
+<style>
+  .g-kopf { position: relative; overflow: hidden; isolation: isolate; border-bottom: 1px solid var(--line); }
+  .g-bild { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; opacity: .55; }
+  .g-kopf::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, var(--bg) 0%, rgba(4,7,11,.75) 50%, rgba(4,7,11,.35) 100%), linear-gradient(0deg, var(--bg) 0%, transparent 60%); }
+  .g-kopf-in { padding-top: clamp(40px, 7vw, 88px); padding-bottom: clamp(36px, 5vw, 56px); }
+  .zurueck { display: inline-block; font-size: 13px; color: var(--mut); text-decoration: none; margin-bottom: 26px; letter-spacing: .08em; }
+  .zurueck:hover { color: var(--txt); }
+  h1 { font-size: clamp(42px, 6.4vw, 76px); text-transform: uppercase; margin: 10px 0 14px; }
+  .lead { max-width: 620px; color: #c9d4de; font-size: 18px; margin: 0; }
+  .g-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 56px; padding-top: 44px; padding-bottom: 40px; }
+  .toc { position: sticky; top: 88px; align-self: start; }
+  .toc-t { font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-bottom: 10px; }
+  .toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); }
+  .toc a { display: block; padding: 6px 0 6px 14px; color: var(--mut); text-decoration: none; font-size: 14.5px; line-height: 1.35; }
+  .toc a:hover { color: var(--txt); }
+  .prosa :global(h2:first-child) { margin-top: 0; padding-top: 0; border-top: 0; }
+  .g-weiter { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-bottom: clamp(56px, 8vw, 96px); padding-top: 12px; }
+  .g-weiter a { display: flex; flex-direction: column; gap: 4px; padding: 18px 20px; border: 1px solid var(--line); text-decoration: none; color: var(--txt); background: var(--panel); }
+  .g-weiter a:hover { border-color: var(--line2); }
+  .g-weiter a.r { text-align: right; }
+  .g-weiter span { font-size: 12.5px; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; }
+  .g-weiter b { font: 600 22px var(--head); letter-spacing: .05em; text-transform: uppercase; }
+  @media (max-width: 900px) { .g-body { grid-template-columns: minmax(0, 1fr); gap: 24px; } .toc { position: static; } }
+  @media (max-width: 560px) { .g-weiter { grid-template-columns: 1fr; } .g-weiter > span { display: none; } }
+</style>

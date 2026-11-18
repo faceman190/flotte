@@ -1,0 +1,65 @@
+---
+// Galaxiekarte aus den Spieldaten (src/data/galaxy.ts): Sektoren, Sprungtore, Zonen. Gleiche Koordinaten wie die Karte im Spiel (M).
+import { SECTORS, FACTION } from '../lib/spiel';
+
+const byId = Object.fromEntries(SECTORS.map((s) => [s.id, s]));
+const kanten: [number, number, number, number, string][] = [];
+const seen = new Set<string>();
+for (const s of SECTORS) for (const l of s.links) {
+  const k = [s.id, l].sort().join('|');
+  const t = byId[l];
+  if (seen.has(k) || !t) continue;
+  seen.add(k);
+  kanten.push([s.map[0], s.map[1], t.map[0], t.map[1], s.faction === t.faction ? s.faction : 'mix']);
+}
+const farbe = (f: string) => (FACTION as Record<string, { c: string }>)[f]?.c ?? '#7cc4ff';
+// Beschriftung unter dem Punkt, außer wo es eng wird
+const oben = new Set(['lichtwall', 'wacht', 'schwarzglas', 'stummfeld', 'nebeltor', 'eisgarten']);
+---
+<figure class="galaxie">
+  <div class="gx-scroll">
+    <svg viewBox="0 50 1030 530" role="img" aria-label="Karte der bekannten Galaxie mit 18 Sektoren in drei Zonen">
+      <defs>
+        <pattern id="gx-raster" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M40 0H0V40" fill="none" stroke="rgba(124,196,255,.06)" stroke-width="1" />
+        </pattern>
+      </defs>
+      <rect x="0" y="50" width="1030" height="530" fill="url(#gx-raster)" />
+      {kanten.map(([x1, y1, x2, y2, f]) => (
+        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={f === 'mix' ? 'rgba(200,210,220,.28)' : farbe(f)} stroke-opacity={f === 'mix' ? 1 : 0.38} stroke-width="1.5" stroke-dasharray={f === 'ferrox' ? '4 4' : undefined} />
+      ))}
+      {SECTORS.map((s) => {
+        const [x, y] = s.map;
+        const c = farbe(s.faction);
+        const st = s.stations.length;
+        return (
+          <g class="gx-s">
+            <title>{`${s.name} · ${FACTION[s.faction].n} · Gefahr ${s.danger}/5 · ${s.desc}`}</title>
+            {s.id === 'heimstatt' && <circle cx={x} cy={y} r="17" fill="none" stroke={c} stroke-opacity=".5" />}
+            <circle cx={x} cy={y} r={st ? 7 : 5} fill="#04070b" stroke={c} stroke-width="2" />
+            {st > 0 && <circle cx={x} cy={y} r="2.6" fill={c} />}
+            <text x={x} y={oben.has(s.id) ? y - 15 : y + 24} text-anchor="middle" class="gx-n">{s.name}</text>
+            <text x={x} y={oben.has(s.id) ? y - 31 : y + 39} text-anchor="middle" class="gx-d">{'▮'.repeat(s.danger) + '▯'.repeat(5 - s.danger)}</text>
+          </g>
+        );
+      })}
+    </svg>
+  </div>
+  <figcaption class="gx-leg">
+    {Object.entries(FACTION).map(([, f]) => <span><i style={`background:${f.c}`}></i>{f.n}</span>)}
+    <span class="mono muted">● mit Station · ▮ Gefahrenstufe 0–5</span>
+  </figcaption>
+</figure>
+
+<style>
+  .galaxie { margin: 0; }
+  .gx-scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); -webkit-overflow-scrolling: touch; }
+  svg { display: block; width: 100%; min-width: 720px; height: auto; }
+  .gx-n { font: 600 15px var(--head); letter-spacing: .06em; fill: #d3dee7; text-transform: uppercase; }
+  .gx-d { font: 400 8px var(--mono); fill: #ff8a6a; letter-spacing: 1px; opacity: .8; }
+  .gx-s { cursor: default; }
+  .gx-s:hover .gx-n { fill: #fff; }
+  .gx-leg { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 14px; font-size: 14px; color: var(--mut); }
+  .gx-leg span { display: inline-flex; align-items: center; gap: 8px; }
+  .gx-leg i { width: 14px; height: 3px; display: inline-block; }
+</style>

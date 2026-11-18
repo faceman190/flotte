@@ -1,0 +1,42 @@
+---
+import { Image } from 'astro:assets';
+import Base from '../../layouts/Base.astro';
+import { guides } from '../../lib/inhalt';
+const liste = await guides();
+---
+<Base title="Guides" aktiv="guides" description="Guides zu Letzte Crew: Einstieg, Bergbau, Handel und der Kampf gegen die Ferrox.">
+  <section class="wrap kopfzeile">
+    <div class="tag">Guides</div>
+    <h1>Handbuch der Crew</h1>
+    <p class="muted">Was neue Piloten in den ersten Schichten wissen sollten. Die Angaben beziehen sich auf die jeweils genannte Spielversion.</p>
+  </section>
+  <section class="wrap raster">
+    {liste.map((g, i) => (
+      <a class="karte tafel" href={`/guides/${g.id}/`}>
+        <Image src={g.data.bild} alt="" widths={[480, 900]} sizes="(max-width: 760px) 100vw, 50vw" />
+        <div class="k-txt">
+          <span class="mono k-meta"><span>{String(i + 1).padStart(2, '0')}</span><span>{g.data.stufe}</span></span>
+          <h2>{g.data.titel}</h2>
+          <p>{g.data.kurz}</p>
+          <span class="k-mehr">Lesen ›</span>
+        </div>
+      </a>
+    ))}
+  </section>
+</Base>
+<style>
+  .kopfzeile { padding-top: clamp(36px, 6vw, 64px); padding-bottom: 32px; }
+  .kopfzeile h1 { font-size: clamp(44px, 7vw, 84px); text-transform: uppercase; margin: 10px 0 12px; }
+  .kopfzeile p { max-width: 620px; margin: 0; }
+  .raster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; padding-bottom: clamp(56px, 8vw, 96px); }
+  .karte { display: flex; flex-direction: column; text-decoration: none; color: var(--txt); overflow: hidden; }
+  .karte img { aspect-ratio: 16 / 8; object-fit: cover; width: 100%; border-bottom: 1px solid var(--line); transition: filter .2s; filter: saturate(.9) brightness(.92); }
+  .karte:hover img { filter: none; }
+  .k-txt { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .k-meta { display: flex; justify-content: space-between; font-size: 12.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--data); }
+  .k-meta span:first-child { color: var(--dim); }
+  .karte h2 { font-size: 32px; text-transform: uppercase; }
+  .karte p { color: var(--mut); margin: 0; flex: 1; }
+  .k-mehr { font: 500 15px var(--head); letter-spacing: .14em; text-transform: uppercase; color: var(--acc); margin-top: 6px; }
+  @media (max-width: 760px) { .raster { grid-template-columns: 1fr; } .karte h2 { font-size: 28px; } }
+</style>

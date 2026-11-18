@@ -1,0 +1,45 @@
+---
+import { Image } from 'astro:assets';
+import Base from '../../layouts/Base.astro';
+import { neuigkeiten, datum } from '../../lib/inhalt';
+const liste = await neuigkeiten();
+---
+<Base title="Neuigkeiten" aktiv="neuigkeiten" description="Neuigkeiten und Devlog von Letzte Crew: neue Schiffe, neue Versionen, was sich im Spiel ändert.">
+  <section class="wrap kopfzeile">
+    <div class="tag">Neuigkeiten · Devlog</div>
+    <h1>Aus der Werft</h1>
+    <p class="muted">Was in jeder neuen Alpha dazukommt. Neue Versionen sind ein bis zwei Minuten nach der Fertigstellung online.</p>
+  </section>
+  <section class="wrap liste">
+    {liste.map((n) => (
+      <a class="eintrag" href={`/neuigkeiten/${n.id}/`}>
+        <div class="e-meta mono">
+          <time datetime={n.data.datum.toISOString()}>{datum(n.data.datum)}</time>
+          {n.data.version && <span>{n.data.version}</span>}
+        </div>
+        <div class="e-txt">
+          <h2>{n.data.titel}</h2>
+          <p>{n.data.kurz}</p>
+        </div>
+        {n.data.bild ? <Image src={n.data.bild} alt="" widths={[320, 640]} sizes="(max-width: 760px) 100vw, 260px" class="e-bild" /> : <span class="e-bild leer"></span>}
+      </a>
+    ))}
+  </section>
+</Base>
+<style>
+  .kopfzeile { padding-top: clamp(36px, 6vw, 64px); padding-bottom: 32px; }
+  .kopfzeile h1 { font-size: clamp(44px, 7vw, 84px); text-transform: uppercase; margin: 10px 0 12px; }
+  .kopfzeile p { max-width: 620px; margin: 0; }
+  .liste { padding-bottom: clamp(56px, 8vw, 96px); }
+  .eintrag { display: grid; grid-template-columns: 160px minmax(0, 1fr) 260px; gap: 28px; align-items: center; padding: 24px 0; border-top: 1px solid var(--line); text-decoration: none; color: var(--txt); }
+  .eintrag:last-child { border-bottom: 1px solid var(--line); }
+  .eintrag:hover h2 { color: var(--acc); }
+  .e-meta { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--dim); letter-spacing: .06em; align-self: start; padding-top: 4px; }
+  .e-meta span { color: var(--data); }
+  .eintrag h2 { font-size: clamp(24px, 2.6vw, 32px); text-transform: uppercase; transition: color .15s; margin-bottom: 8px; }
+  .eintrag p { color: var(--mut); margin: 0; }
+  .e-bild { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border: 1px solid var(--line); }
+  .e-bild.leer { display: block; background: repeating-linear-gradient(135deg, var(--panel) 0 10px, var(--bg2) 10px 20px); }
+  @media (max-width: 860px) { .eintrag { grid-template-columns: 120px minmax(0, 1fr); } .e-bild { display: none !important; } }
+  @media (max-width: 520px) { .eintrag { grid-template-columns: 1fr; gap: 8px; } .e-meta { flex-direction: row; gap: 12px; } }
+</style>

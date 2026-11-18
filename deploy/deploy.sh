@@ -2,11 +2,11 @@
 # =====================================================================================
 # Letzte Crew – neue Version ausrollen (läuft als Benutzer "crew", jede Minute über letzte-crew-deploy.timer)
 #  1. Gibt es auf GitHub (main) einen neuen Stand? Sonst sofort fertig.
-#  2. Holen, bauen (tsc + vite), Dateien vorkomprimieren.
-#  3. Ins Live-Verzeichnis kopieren, das Caddy ausliefert (Spiel nach /srv/letzte-crew/dist, Website site/ nach /srv/letzte-crew/site). Alte Spieldateien bleiben liegen (Spieler mit der alten Seite
+#  2. Holen, Spiel bauen (tsc + vite), Website bauen (Astro, Ordner website/), Dateien vorkomprimieren.
+#  3. Ins Live-Verzeichnis kopieren, das Caddy ausliefert (Spiel nach /srv/letzte-crew/dist, Website website/dist nach /srv/letzte-crew/site). Alte Spieldateien bleiben liegen (Spieler mit der alten Seite
 #     laden sie noch; das Spiel räumt seinen eigenen Speicher selbst auf).
 #  4. Den Node-Server nur neu starten, wenn sich server/ oder die Pakete geändert haben (Neustart trennt die Mehrspieler kurz).
-# Schlägt der Build fehl, bleibt die laufende Version unverändert online; derselbe Stand wird dann nicht jede Minute neu
+# Schlägt ein Build fehl (Spiel oder Website), bleibt die laufende Version unverändert online; derselbe Stand wird dann nicht jede Minute neu
 # versucht, erst der nächste Push (oder --force).
 # Von Hand: sudo -u crew -H bash /opt/letzte-crew/repo/deploy/deploy.sh --force
 # Protokoll: journalctl -u letzte-crew-deploy -n 50
@@ -53,6 +53,17 @@ fi
 echo "Bauen …"
 npm run build --silent
 
+# Website (website/, Astro): vor dem Ausrollen bauen, damit ein Fehler hier nichts halb ausgerollt zurücklässt.
+# Liest die Spieldaten aus src/data und kopiert die Schiffsmodelle aus public/assets (website/scripts/modelle.mjs).
+if [[ -d website ]]; then
+  if [[ $FULL == 1 || ! -d website/node_modules ]] || grep -qx 'website/package-lock.json' <<<"$CHANGED"; then
+    echo "Website: Pakete installieren …"
+    (cd website && npm ci --no-audit --no-fund --loglevel=error)
+  fi
+  echo "Website bauen …"
+  (cd website && npm run build --silent)
+fi
+
 echo "Vorkomprimieren …"
 mkdir -p "$STAGE" "$LIVE"
 # Spiegel des Builds; .br/.gz sind ausgenommen und bleiben deshalb vom Löschen verschont (precompress räumt Verwaiste weg).
@@ -63,8 +74,8 @@ node deploy/precompress.mjs "$STAGE"
 echo "Ausrollen …"
 # --delay-updates: alle geänderten Dateien werden erst am Ende auf einmal eingesetzt (Seite, Code und .br passen zusammen)
 rsync -rlc --delay-updates "$STAGE/" "$LIVE/"
-# Website (vorerst fertige Dateien in site/; wird später gebaut)
-if [[ -d site ]]; then mkdir -p "$SITE"; rsync -rlc --delete --delay-updates site/ "$SITE/"; fi
+# Website: gebaute Fassung spiegeln (Seiten und Bilder tragen bei Änderungen neue Namen, verwaiste Dateien fliegen raus)
+if [[ -d website/dist ]]; then mkdir -p "$SITE"; rsync -rlc --delete --delay-updates website/dist/ "$SITE/"; fi
 
 if [[ $FULL == 1 ]] || grep -qE '^(server/|package-lock\.json$|package\.json$)' <<<"$CHANGED"; then
   echo "Server neu starten …"

@@ -1,0 +1,257 @@
+---
+import { Image } from 'astro:assets';
+import { neuigkeiten, guides as alleGuides } from '../lib/inhalt';
+import Base from '../layouts/Base.astro';
+import Galaxie from '../components/Galaxie.astro';
+import { SPIEL_URL, STATUS_URL, SCHIFFE, SECTORS, credits } from '../lib/spiel';
+import hero from '../assets/bilder/bastion-heimstatt.jpg';
+import bFlug from '../assets/bilder/bastion2-spiel-fern.jpg';
+import bBergbau from '../assets/bilder/elster-spiel.jpg';
+import bHandel from '../assets/bilder/terminals-125-markt.jpg';
+import bKampf from '../assets/bilder/wuerger-spiel-heck.jpg';
+import bDeck from '../assets/bilder/deck-120-treffpunkt.jpg';
+import bPlanet from '../assets/bilder/schmelzwerk-098-hof.jpg';
+
+const news = await neuigkeiten();
+const version = news.find((n) => n.data.version)?.data.version ?? 'Alpha';
+const guides = await alleGuides();
+const stationen = SECTORS.reduce((n, s) => n + s.stations.length, 0);
+
+const taten = [
+  { t: 'Fliegen', b: bFlug, x: 'Vom Abfangjäger Venom bis zur begehbaren Korvette. Reiseflug, Sprungtore, Andocken von Hand.' },
+  { t: 'Abbauen', b: bBergbau, x: 'Asteroiden scannen, mit dem Laser zerlegen, Sprengladungen setzen. Erz wird zu Barren geschmolzen.' },
+  { t: 'Handeln', b: bHandel, x: 'Jede Station hat ihren Markt. Preise hängen von Herkunft und Nachfrage ab, Piloten handeln untereinander.' },
+  { t: 'Kämpfen', b: bKampf, x: 'Ferrox-Jäger fliegen Angriffe in Rotten. Kanonen, Raketen und Schilde gegen den Schwarm.' },
+  { t: 'Zu Fuß', b: bDeck, x: 'Aussteigen, über das Deck der Bastion laufen, an Terminals arbeiten, mit der Crew reden.' },
+  { t: 'Landen', b: bPlanet, x: 'Elf Planeten und Monde mit Bergbau-Rover, Wracks, Minen und der Großraffinerie Schmelzwerk Zwölf.' },
+];
+---
+<Base aktiv="" description="Letzte Crew ist ein Weltraumspiel im Browser: Die Crew der Bastion ist hinter dem Riss gestrandet. Fliege, baue Erz ab, handle und halte die Ferrox auf – allein oder mit anderen Piloten.">
+  <section class="hero">
+    <Image src={hero} alt="Die Bastion vor Heimstatt II, im Hintergrund der Nebel der Heimstatt" class="hero-bild" loading="eager" fetchpriority="high" widths={[960, 1440, 1920]} sizes="100vw" quality={78} />
+    <div class="wrap hero-in">
+      <div class="tag">Weltraumspiel im Browser · {version}</div>
+      <h1>Letzte<br>Crew</h1>
+      <p class="lead">Hinter dem Riss gestrandet, baut die Crew der Bastion einen neuen Menschenraum auf. Fliege dein eigenes Schiff,
+        baue Erz ab, handle zwischen den Häfen und halte die Ferrox auf. Allein oder mit anderen Piloten.</p>
+      <div class="cta">
+        <a class="btn big" href={SPIEL_URL}>Jetzt spielen <span class="pfeil">›</span></a>
+        <a class="btn ghost big" href="/schiffe/">Schiffe ansehen</a>
+      </div>
+      <div class="status tafel" id="status" data-url={STATUS_URL}>
+        <div><span class="lbl">Server</span><b id="st-server" class="mono">prüfe …</b></div>
+        <div><span class="lbl">Piloten online</span><b id="st-online" class="mono">–</b></div>
+        <div class="st-info"><span class="lbl">Voraussetzung</span><b>Chrome, Edge oder Firefox · kostenlos</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec lage">
+    <div class="wrap lage-in">
+      <div>
+        <div class="tag">Jahr 38 nach dem Riss</div>
+        <h2>Niemand kommt uns holen</h2>
+      </div>
+      <div class="lage-txt">
+        <p>Als Vorhut von zwölf Kolonieschiffen sprang das Werftschiff <strong>Bastion</strong> durch das uralte Halden-Tor. Minuten später
+          brach das Tor hinter ihr zusammen. Die elf Schiffe dahinter kamen nie an. Seitdem nennen sich die 2.400 Menschen an Bord
+          <strong>die letzte Crew</strong>.</p>
+        <p>Achtunddreißig Jahre später leben rund 6.000 Menschen auf Stationen, Außenposten und Planetenbasen. Jedes Schiff zählt, jeder
+          Pilot ist bekannt. Im Osten frisst ein Schwarm aus Metall, die <strong>Ferrox</strong>, alles, was die Crew aufgebaut hat. Du bist
+          ein frisch vereidigter Pilot.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="wrap">
+      <div class="sec-head">
+        <div><div class="tag">Was du tust</div><h2>Schicht für Schicht</h2></div>
+        <p>Kein Auserwählter, kein Superheld. Erz, Fracht, Patrouillen. Was du verdienst, steckst du in Ausbauten und neue Schiffe.</p>
+      </div>
+      <div class="taten">
+        {taten.map((t, i) => (
+          <article class="tat tafel">
+            <Image src={t.b} alt={`Szene aus dem Spiel: ${t.t}`} widths={[400, 800]} sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 400px" />
+            <div class="tat-txt">
+              <span class="mono nr">{String(i + 1).padStart(2, '0')}</span>
+              <h3>{t.t}</h3>
+              <p>{t.x}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="wrap">
+      <div class="sec-head">
+        <div><div class="tag data">Bekannte Galaxie</div><h2>18 Sektoren, ein Schwarm</h2></div>
+        <p>Im Westen der Menschenraum mit der Bastion in Heimstatt. In der Mitte das Grenzgebiet der Grenzwacht. Im Osten das Gebiet
+          der Ferrox, wo die seltensten Erze liegen. {stationen} Stationen und Häfen, verbunden durch die Sprungtore der Erbauer.</p>
+      </div>
+      <Galaxie />
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="wrap">
+      <div class="sec-head">
+        <div><div class="tag">Werft der Bastion</div><h2>{SCHIFFE.length} Schiffe</h2></div>
+        <a class="btn ghost" href="/schiffe/">Zum Schiffs-Explorer <span class="pfeil">›</span></a>
+      </div>
+      <ul class="flotte">
+        {SCHIFFE.map((s) => (
+          <li>
+            <a href={`/schiffe/#${s.id}`}>
+              <i style={`background:${s.col}`}></i>
+              <b>{s.n}</b>
+              <span>{s.role}</span>
+              <span class="mono">{String(s.len).replace('.', ',')} m</span>
+              <span class="mono preis">{credits(s)}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="wrap zwei">
+      <div>
+        <div class="sec-head klein"><div><div class="tag">Neuigkeiten</div><h2>Aus der Werft</h2></div><a href="/neuigkeiten/">Alle Neuigkeiten ›</a></div>
+        <ul class="liste">
+          {news.slice(0, 4).map((n) => (
+            <li><a href={`/neuigkeiten/${n.id}/`}>
+              <span class="mono">{n.data.datum.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}{n.data.version ? ` · ${n.data.version}` : ''}</span>
+              <b>{n.data.titel}</b>
+            </a></li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <div class="sec-head klein"><div><div class="tag">Guides</div><h2>Erste Schichten</h2></div><a href="/guides/">Alle Guides ›</a></div>
+        <ul class="liste">
+          {guides.map((g) => (
+            <li><a href={`/guides/${g.id}/`}>
+              <span class="mono">{g.data.stufe}</span>
+              <b>{g.data.titel}</b>
+            </a></li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="schluss">
+    <div class="wrap schluss-in">
+      <h2>Die Crew braucht Piloten.</h2>
+      <p class="muted">Kostenlos im Browser, ohne Installation. Allein oder zusammen mit anderen Piloten.</p>
+      <a class="btn big" href={SPIEL_URL}>Jetzt spielen <span class="pfeil">›</span></a>
+    </div>
+  </section>
+</Base>
+
+<script>
+  // Serverstatus (spielen.letztecrew.de/status, CORS für letztecrew.de in Caddy erlaubt). Ohne Antwort: „nicht erreichbar“.
+  const box = document.getElementById('status')!;
+  const srv = document.getElementById('st-server')!, onl = document.getElementById('st-online')!;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 6000);
+  fetch(box.dataset.url!, { signal: ctl.signal, mode: 'cors' })
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((s: { online?: number }) => {
+      const n = Number(s.online) || 0;
+      srv.textContent = 'online';
+      box.classList.add('ok');
+      onl.textContent = String(n);
+    })
+    .catch(() => { srv.textContent = 'nicht erreichbar'; box.classList.add('aus'); })
+    .finally(() => clearTimeout(timer));
+</script>
+
+<style>
+  .hero { position: relative; min-height: min(92vh, 900px); display: flex; align-items: flex-end; overflow: hidden; isolation: isolate; border-bottom: 1px solid var(--line); }
+  .hero-bild { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 70% 50%; z-index: -2; }
+  .hero::after { content: ''; position: absolute; inset: 0; z-index: -1;
+    background: linear-gradient(180deg, rgba(4,7,11,.25) 0%, rgba(4,7,11,.15) 35%, rgba(4,7,11,.85) 78%, var(--bg) 100%),
+                linear-gradient(90deg, rgba(4,7,11,.85) 0%, rgba(4,7,11,.35) 45%, rgba(4,7,11,0) 70%); }
+  .hero-in { padding-top: 120px; padding-bottom: clamp(36px, 6vw, 64px); }
+  .hero h1 { font-size: clamp(64px, 12vw, 148px); font-weight: 700; line-height: .86; text-transform: uppercase; letter-spacing: .015em; margin: 14px 0 22px; }
+  .lead { max-width: 560px; font-size: clamp(17px, 1.6vw, 19.5px); color: #d0dbe5; }
+  .cta { display: flex; flex-wrap: wrap; gap: 14px; margin: 30px 0 36px; }
+  .status { display: grid; grid-template-columns: auto auto 1fr; gap: 0; max-width: 680px; background: rgba(8, 13, 19, .82); backdrop-filter: blur(6px); }
+  .status > div { padding: 12px 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+  .status > div:last-child { border-right: 0; }
+  .status .lbl { font: 400 11px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+  .status b { font-weight: 400; font-size: 16px; color: var(--mut); }
+  .status b.mono { font-size: 18px; color: var(--data); }
+  #st-server::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 8px; background: var(--dim); vertical-align: 1px; }
+  .status.ok #st-server::before { background: var(--grn); }
+  .status.ok #st-server { color: var(--grn); }
+  .status.aus #st-server::before { background: var(--bad); }
+  .status.aus #st-server { color: var(--mut); }
+  .st-info b { font-family: var(--body); font-size: 14.5px !important; color: var(--mut) !important; }
+
+  .lage-in { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 32px 64px; align-items: start; }
+  .lage h2 { font-size: clamp(34px, 4.6vw, 54px); text-transform: uppercase; margin-top: 10px; }
+  .lage-txt { font-size: 18px; color: #c9d4de; }
+  .lage-txt strong { color: var(--txt); font-weight: 500; }
+
+  .taten { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+  .tat { overflow: hidden; display: flex; flex-direction: column; }
+  .tat img { aspect-ratio: 16 / 10; object-fit: cover; width: 100%; border-bottom: 1px solid var(--line); filter: saturate(.92); }
+  .tat-txt { padding: 18px 20px 20px; position: relative; }
+  .tat .nr { position: absolute; top: 20px; right: 20px; color: var(--dim); font-size: 13px; }
+  .tat h3 { font-size: 25px; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 8px; }
+  .tat p { color: var(--mut); margin: 0; font-size: 15.5px; }
+
+  .flotte { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+  .flotte li { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .flotte a { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 3px 16px; padding: 16px 20px 16px 18px; text-decoration: none; color: var(--txt); height: 100%; align-items: baseline; }
+  .flotte a:hover { background: var(--panel); }
+  .flotte a:hover b { color: var(--acc); }
+  .flotte i { grid-column: 1; grid-row: 1 / 3; width: 4px; align-self: stretch; }
+  .flotte b { grid-column: 2; grid-row: 1; font: 600 23px/1.1 var(--head); letter-spacing: .06em; text-transform: uppercase; transition: color .15s; }
+  .flotte span { grid-column: 2; grid-row: 2; color: var(--mut); font-size: 14.5px; }
+  .flotte span.mono { grid-column: 3; grid-row: 1; font-size: 13px; text-align: right; color: var(--data); }
+  .flotte span.preis { grid-row: 2; color: var(--mut); }
+  @media (max-width: 1000px) { .flotte { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { .flotte { grid-template-columns: 1fr; } }
+
+  .zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 48px 64px; }
+  .sec-head.klein { align-items: end; margin-bottom: 18px; }
+  .sec-head.klein h2 { font-size: clamp(28px, 3.4vw, 38px); }
+  .sec-head.klein a { font: 500 15px var(--head); letter-spacing: .1em; text-transform: uppercase; text-decoration: none; }
+  .liste { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .liste li { border-bottom: 1px solid var(--line); }
+  .liste a { display: flex; flex-direction: column; gap: 2px; padding: 14px 0; text-decoration: none; color: var(--txt); }
+  .liste a:hover b { color: var(--acc); }
+  .liste span { font-size: 12.5px; color: var(--dim); letter-spacing: .06em; }
+  .liste b { font: 500 21px/1.2 var(--head); letter-spacing: .03em; transition: color .15s; }
+
+  .schluss { border-top: 1px solid var(--line); background: radial-gradient(ellipse at 50% 120%, rgba(255, 154, 46, .1), transparent 60%), var(--bg2); }
+  .schluss-in { padding-top: clamp(64px, 9vw, 110px); padding-bottom: clamp(64px, 9vw, 110px); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .schluss h2 { font-size: clamp(36px, 5.4vw, 64px); text-transform: uppercase; }
+  .schluss p { margin: 0 0 14px; }
+
+  @media (max-width: 1000px) {
+    .taten { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lage-in, .zwei { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    /* Handy: Bild als Band oben (Schiff und Planet sichtbar), Text darunter */
+    .hero { min-height: auto; display: block; }
+    .hero-bild { position: relative; inset: auto; height: 46vh; min-height: 280px; object-position: 66% 55%; }
+    .hero::after { bottom: auto; height: max(46vh, 280px); background: linear-gradient(180deg, rgba(4,7,11,.1) 0%, rgba(4,7,11,0) 55%, var(--bg) 100%); }
+    .hero-in { padding-top: 0; margin-top: -56px; position: relative; }
+    .hero h1 { margin-top: 10px; }
+    .cta .btn { flex: 1 1 100%; }
+    .status { grid-template-columns: 1fr 1fr; }
+    .status .st-info { grid-column: 1 / -1; border-top: 1px solid var(--line); border-right: 0; }
+    .status > div:nth-child(2) { border-right: 0; }
+    .taten { grid-template-columns: 1fr; }
+    .lage-txt { font-size: 17px; }
+  }
+</style>

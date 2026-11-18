@@ -1,0 +1,121 @@
+---
+// Gemeinsamer Rahmen aller Seiten: Kopfzeile mit Navigation und „Jetzt spielen“, Fußzeile
+import '../styles/global.css';
+import { SPIEL_URL } from '../lib/spiel';
+
+interface Props { title?: string; description?: string; bild?: string; aktiv?: string }
+const { title, description = 'Letzte Crew: Weltraumspiel im Browser. Fliegen, Erz abbauen, handeln, gegen die Ferrox kämpfen – allein oder mit anderen Piloten.', bild = '/og.jpg', aktiv = '' } = Astro.props;
+const voll = title ? `${title} – Letzte Crew` : 'Letzte Crew – Weltraumspiel im Browser';
+const nav = [
+  { href: '/schiffe/', t: 'Schiffe', k: 'schiffe' },
+  { href: '/guides/', t: 'Guides', k: 'guides' },
+  { href: '/neuigkeiten/', t: 'Neuigkeiten', k: 'neuigkeiten' },
+  { href: '/community/', t: 'Community', k: 'community' },
+];
+const og = new URL(bild, Astro.site).href;
+---
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{voll}</title>
+  <meta name="description" content={description}>
+  <meta name="theme-color" content="#04070b">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Letzte Crew">
+  <meta property="og:title" content={voll}>
+  <meta property="og:description" content={description}>
+  <meta property="og:image" content={og}>
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site).href}>
+  <link rel="icon" href="/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=Saira+Condensed:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <slot name="head" />
+</head>
+<body>
+  <header class="kopf">
+    <div class="wrap kopf-in">
+      <a class="marke" href="/" aria-label="Letzte Crew – Startseite">
+        <img src="/icon.png" alt="" width="30" height="30">
+        <span>Letzte Crew</span>
+      </a>
+      <nav class="nav" id="nav" aria-label="Hauptnavigation">
+        {nav.map((n) => <a href={n.href} class={aktiv === n.k ? 'an' : ''} aria-current={aktiv === n.k ? 'page' : undefined}>{n.t}</a>)}
+      </nav>
+      <a class="btn kopf-btn" href={SPIEL_URL}>Jetzt spielen</a>
+      <button class="menue" id="menue" aria-label="Menü" aria-expanded="false" aria-controls="nav"><span></span><span></span></button>
+    </div>
+  </header>
+  <main>
+    <slot />
+  </main>
+  <footer class="fuss">
+    <div class="wrap fuss-in">
+      <div>
+        <div class="marke klein"><img src="/icon.png" alt="" width="22" height="22"><span>Letzte Crew</span></div>
+        <p class="muted">Weltraumspiel im Browser · Alpha · kostenlos, ohne Installation</p>
+      </div>
+      <nav class="fuss-nav" aria-label="Fußzeile">
+        <a href={SPIEL_URL}>Spielen</a>
+        {nav.map((n) => <a href={n.href}>{n.t}</a>)}
+      </nav>
+      <p class="mono fuss-k">© {new Date().getFullYear()} Letzte Crew · Jahr 38 nach dem Riss</p>
+    </div>
+  </footer>
+  <script>
+    // Menü auf schmalen Bildschirmen
+    const b = document.getElementById('menue'), n = document.getElementById('nav');
+    b?.addEventListener('click', () => {
+      const auf = document.body.classList.toggle('nav-auf');
+      b.setAttribute('aria-expanded', String(auf));
+    });
+    n?.addEventListener('click', (e) => { if ((e.target as HTMLElement).tagName === 'A') document.body.classList.remove('nav-auf'); });
+  </script>
+</body>
+</html>
+
+<style is:global>
+  .kopf { position: sticky; top: 0; z-index: 50; background: rgba(4, 7, 11, .86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .kopf-in { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .marke { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--txt); font: 700 21px/1 var(--head); letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
+  .marke:hover { color: var(--txt); }
+  .marke.klein { font-size: 17px; margin-bottom: 10px; }
+  .nav { display: flex; gap: 4px; margin-left: auto; }
+  .nav a { position: relative; padding: 8px 14px; color: var(--mut); text-decoration: none; font: 500 16px/1 var(--head); letter-spacing: .14em; text-transform: uppercase; }
+  .nav a:hover { color: var(--txt); }
+  .nav a.an { color: var(--txt); }
+  .nav a.an::after { content: ''; position: absolute; left: 14px; right: 14px; bottom: -14px; height: 2px; background: var(--acc); }
+  .kopf-btn { min-height: 40px; padding: 10px 20px; font-size: 15px; }
+  .menue { display: none; width: 44px; height: 44px; margin-left: 4px; background: none; border: 1px solid var(--line2); cursor: pointer; padding: 0; position: relative; }
+  .menue span { position: absolute; left: 12px; right: 12px; height: 1.5px; background: var(--txt); transition: transform .2s; }
+  .menue span:first-child { top: 17px; } .menue span:last-child { top: 25px; }
+  .nav-auf .menue span:first-child { transform: translateY(4px) rotate(45deg); }
+  .nav-auf .menue span:last-child { transform: translateY(-4px) rotate(-45deg); }
+
+  @media (max-width: 860px) {
+    .kopf-in { gap: 10px; height: 58px; }
+    .marke { font-size: 18px; }
+    .marke span { display: none; }
+    .kopf-btn { margin-left: auto; }
+    .menue { display: block; }
+    .nav { position: fixed; top: 58px; left: 0; right: 0; flex-direction: column; gap: 0; margin: 0; padding: 8px var(--gut) 20px; background: var(--bg); box-shadow: 0 24px 40px rgba(0, 0, 0, .6); border-bottom: 1px solid var(--line);
+           transform: translateY(-8px); opacity: 0; visibility: hidden; transition: opacity .18s, transform .18s, visibility .18s; }
+    .nav-auf .nav { transform: none; opacity: 1; visibility: visible; }
+    .nav a { padding: 16px 0; font-size: 20px; border-bottom: 1px solid var(--line); }
+    .nav a.an::after { display: none; }
+    .nav a.an { color: var(--acc); }
+  }
+  @media (min-width: 420px) and (max-width: 860px) { .marke span { display: inline; } }
+
+  .fuss { border-top: 1px solid var(--line); background: var(--bg2); padding: 40px 0 34px; margin-top: 0; }
+  .fuss-in { display: grid; grid-template-columns: 1fr auto; gap: 20px 40px; align-items: start; }
+  .fuss p { margin: 0; font-size: 14.5px; }
+  .fuss-nav { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+  .fuss-nav a { color: var(--mut); text-decoration: none; font: 500 15px var(--head); letter-spacing: .12em; text-transform: uppercase; }
+  .fuss-nav a:hover { color: var(--txt); }
+  .fuss-k { grid-column: 1 / -1; color: var(--dim); font-size: 12.5px !important; padding-top: 18px; border-top: 1px solid var(--line); }
+  @media (max-width: 640px) { .fuss-in { grid-template-columns: 1fr; } }
+</style>

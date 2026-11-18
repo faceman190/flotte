@@ -1,0 +1,16 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base title="Nicht gefunden">
+  <section class="wrap leer">
+    <div class="tag">Fehler 404 · Kein Signal</div>
+    <h1>Sektor nicht kartiert</h1>
+    <p class="muted">Diese Seite gibt es nicht (mehr).</p>
+    <p><a class="btn" href="/">Zur Startseite</a></p>
+  </section>
+</Base>
+<style>
+  .leer { padding-top: clamp(64px, 12vw, 160px); padding-bottom: clamp(64px, 12vw, 160px); text-align: center; }
+  h1 { font-size: clamp(44px, 7vw, 84px); text-transform: uppercase; margin: 14px 0 16px; }
+  p:last-child { margin-top: 28px; }
+</style>

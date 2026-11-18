@@ -1,6 +1,6 @@
 # Letzte Crew – Caddy auf dem eigenen Server (Vorlage; setup.sh ersetzt __DOMAIN__ und legt sie als /etc/caddy/Caddyfile ab)
 # Caddy holt die HTTPS-Zertifikate selbst.
-#   __DOMAIN__           Website (Ordner site/ im Repository, später gebaut)
+#   __DOMAIN__           Website (Ordner website/ im Repository, Astro; deploy.sh baut sie nach /srv/letzte-crew/site)
 #   www.__DOMAIN__       leitet auf die Website um
 #   spielen.__DOMAIN__   das Spiel: Dateien direkt von der Platte (vorkomprimiert, Range für Musik),
 #                        Mehrspieler (/ws) und Statusseite (/status) gehen an den Node-Server

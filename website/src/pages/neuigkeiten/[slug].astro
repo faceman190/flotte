@@ -1,0 +1,45 @@
+---
+import { Image } from 'astro:assets';
+import { render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { neuigkeiten, datum } from '../../lib/inhalt';
+import { SPIEL_URL } from '../../lib/spiel';
+
+export async function getStaticPaths() {
+  const liste = await neuigkeiten();
+  return liste.map((n, i) => ({ params: { slug: n.id }, props: { n, neuer: liste[i - 1] ?? null, aelter: liste[i + 1] ?? null } }));
+}
+const { n, neuer, aelter } = Astro.props;
+const { Content } = await render(n);
+const meta = datum(n.data.datum) + (n.data.version ? ' · ' + n.data.version : '');
+---
+<Base title={n.data.titel} aktiv="neuigkeiten" description={n.data.kurz}>
+  <article class="wrap beitrag">
+    <a class="zurueck mono" href="/neuigkeiten/">‹ Alle Neuigkeiten</a>
+    <div class="tag">{meta}</div>
+    <h1>{n.data.titel}</h1>
+    <p class="lead">{n.data.kurz}</p>
+    {n.data.bild && <Image src={n.data.bild} alt="" class="b-bild" widths={[800]} loading="eager" />}
+    <div class="prosa"><Content /></div>
+    <p class="spielen"><a class="btn" href={SPIEL_URL}>Jetzt spielen <span class="pfeil">›</span></a></p>
+    <nav class="weiter" aria-label="Weitere Neuigkeiten">
+      {aelter ? <a href={`/neuigkeiten/${aelter.id}/`}><span class="mono">‹ Älter</span><b>{aelter.data.titel}</b></a> : <span></span>}
+      {neuer ? <a class="r" href={`/neuigkeiten/${neuer.id}/`}><span class="mono">Neuer ›</span><b>{neuer.data.titel}</b></a> : <span></span>}
+    </nav>
+  </article>
+</Base>
+<style>
+  .beitrag { max-width: calc(800px + 2 * var(--gut)); padding-top: clamp(36px, 6vw, 64px); padding-bottom: clamp(56px, 8vw, 96px); }
+  .zurueck { display: inline-block; font-size: 13px; color: var(--mut); text-decoration: none; margin-bottom: 26px; letter-spacing: .08em; }
+  .zurueck:hover { color: var(--txt); }
+  h1 { font-size: clamp(38px, 5.6vw, 64px); text-transform: uppercase; margin: 10px 0 14px; }
+  .lead { color: #c9d4de; font-size: 19px; }
+  .b-bild { width: 100%; margin: 28px 0 32px; border: 1px solid var(--line); }
+  .spielen { margin: 36px 0; }
+  .weiter { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; border-top: 1px solid var(--line); padding-top: 24px; }
+  .weiter a { display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: var(--txt); }
+  .weiter a.r { text-align: right; }
+  .weiter span { font-size: 12.5px; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; }
+  .weiter b { font: 600 20px var(--head); letter-spacing: .04em; text-transform: uppercase; }
+  .weiter a:hover b { color: var(--acc); }
+</style>
