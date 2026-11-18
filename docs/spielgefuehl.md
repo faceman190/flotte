@@ -95,3 +95,21 @@ Ergebnis: erstes Andocken 0,48 s, Neues Spiel kommt ohne Blende in den Hangar. D
 (direkt an der Decke strahlten sie die eigene Abdeckung gleißend an). An Bord: Grund- und Sonnenlicht von draußen auf 30 %, Leuchtflächen
 gedimmt und ohne Grundfarbe (`ROOM_GLOW` in `interior.ts`: Deckenlicht, Lichtband, Blitzlicht, Leuchte, Bodenlicht, Portallicht).
 Die Materialien teilen sich alle Schiffe; beim Aussteigen wird alles zurückgestellt (von außen leuchten die Lichter wie vorher).
+
+## Waffenmodule mit eigenem Geschoss (2026-11-18, nach Alpha 1.45)
+
+Vorher hoben die Module im Waffen-Steckplatz nur Schaden oder Feuerrate; sie sahen und klangen wie die Serienkanone. Jetzt kann ein Modul
+ein eigenes Geschoss vorgeben (`bolt` in `data/gear.ts`, Stile in `game/bolts.ts`, Auswahl in `playerBolt(dmg, cls, mod)`):
+
+| Modul | Geschoss | Eigenheit |
+|---|---|---|
+| Rotationsverschluss | Schnellfeuer-Bolzen (kurz, gelb) | heller Ton |
+| Gauss-Beschleuniger | Gauss-Geschoss (lang, dünn, cyan) | 35 % schneller (`speed`), gleiche Reichweite, Zielhilfe rechnet mit dem Tempo |
+| Zwillingslafette | Zwillingsbolzen (rotorange) | |
+| Ferrox-Lanze | Ferrit-Lanze (dick, violett) | schwerer Einschlag |
+
+Läufe, Lader und Zielrechner geben kein Geschoss vor: Dann gilt weiter die Laserstufe nach Schaden (p1 bis p4).
+Laden und Inventar zeigen „Geschoss: …“ in der Werteliste (`statLine`). Neues Modul mit eigenem Geschoss: Stil in `BOLTS` und `bolt` am Modul.
+
+Nebenbei: Beim Aussteigen aus einem Schiff stellt das Spiel jetzt genau das Licht von vor dem Einsteigen wieder her (vorher pauschal
+`setExposure(0.2)`; gemessen ohne sichtbaren Unterschied, aber unabhängig von späteren Änderungen am Licht).

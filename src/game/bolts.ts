@@ -17,14 +17,20 @@ export interface BoltStyle {
   muzzle: number;     // Größe des Mündungsblitzes in m (0 = keiner)
   impact: number;     // Faktor für Blitz und Funken beim Einschlag
   pitch: number;      // Tonhöhe des Schusses (1 = Aufnahme)
+  speed?: number;     // Geschosstempo als Faktor (fehlt = 1)
 }
-export type BoltId = 'p1' | 'p2' | 'p3' | 'p4' | 'w' | 'e';
+export type BoltId = 'p1' | 'p2' | 'p3' | 'p4' | 'w' | 'e' | 'rot' | 'gauss' | 'zwil' | 'lanze';
 export const BOLTS: Record<BoltId, BoltStyle> = {
   // eigene Kanonen, nach Stärke
   p1: { n: 'Leichter Laser', core: 0xfff1d0, halo: 0xff9a2e, w: 0.2, len: 26, glow: 1.1, muzzle: 2.2, impact: 1, pitch: 1.08 },
   p2: { n: 'Laser', core: 0xfff4dc, halo: 0xff7a1e, w: 0.27, len: 32, glow: 1.2, muzzle: 3, impact: 1.3, pitch: 1 },
   p3: { n: 'Schwerer Laser', core: 0xfff8ec, halo: 0xff4a24, w: 0.36, len: 38, glow: 1.15, muzzle: 4, impact: 1.7, pitch: 0.9 },
   p4: { n: 'Plasmalaser', core: 0xf2f8ff, halo: 0x4aa8ff, w: 0.48, len: 46, glow: 1.3, muzzle: 5.2, impact: 2.2, pitch: 0.8 },
+  // Waffenmodule mit eigenem Geschoss (data/gear.ts, bolt): Sie geben die Stufe fest vor, unabhängig vom Schaden
+  rot: { n: 'Schnellfeuer-Bolzen', core: 0xfffbe6, halo: 0xffc23a, w: 0.17, len: 18, glow: 1.0, muzzle: 1.8, impact: 0.8, pitch: 1.22 },
+  gauss: { n: 'Gauss-Geschoss', core: 0xf4ffff, halo: 0x1ff4ff, w: 0.18, len: 64, glow: 0.85, muzzle: 3.6, impact: 1.9, pitch: 0.72, speed: 1.35 },
+  zwil: { n: 'Zwillingsbolzen', core: 0xfff0dc, halo: 0xff5a26, w: 0.31, len: 30, glow: 1.25, muzzle: 3.2, impact: 1.4, pitch: 0.95 },
+  lanze: { n: 'Ferrit-Lanze', core: 0xfff0ff, halo: 0xd070ff, w: 0.52, len: 42, glow: 1.4, muzzle: 5, impact: 2.4, pitch: 0.7 },
   // Patrouillen und Mitspieler
   w: { n: 'Patrouille', core: 0xfffbe8, halo: 0xffd27a, w: 0.18, len: 22, glow: 0.7, muzzle: 1.6, impact: 0.8, pitch: 1.1 },
   // Ferrox: violettes Geschoss, etwas dicker und kürzer (langsamer)
@@ -32,8 +38,10 @@ export const BOLTS: Record<BoltId, BoltStyle> = {
 };
 const IDS = Object.keys(BOLTS) as BoltId[];
 
-// Stufe der eigenen Kanonen: nach Schaden je Schuss (Kanonen-Ausbau, Klasse, Waffenmodule). Eine Klasse kann eine Stufe fest vorgeben (bolt).
-export function playerBolt(dmg: number, cls?: { bolt?: BoltId }): BoltId {
+// Stufe der eigenen Kanonen: nach Schaden je Schuss (Kanonen-Ausbau, Klasse, Waffenmodule). Ein Waffenmodul mit eigenem Geschoss (mod) oder
+// eine Klasse (bolt) gibt die Stufe fest vor.
+export function playerBolt(dmg: number, cls?: { bolt?: BoltId }, mod?: string): BoltId {
+  if (mod && mod in BOLTS) return mod as BoltId;
   if (cls && cls.bolt) return cls.bolt;
   return dmg >= 26 ? 'p4' : dmg >= 15 ? 'p3' : dmg >= 9 ? 'p2' : 'p1';
 }

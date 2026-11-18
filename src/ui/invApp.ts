@@ -5,6 +5,7 @@ import { SHIPS } from '../data/ships';
 import { GEAR_SLOTS, SLOT_N, SHIP_SLOTS, SHIP_SLOT_N, KIND_N, RARITY, STAT_N, STAT_IDS, PILOT_STATS, SHIP_STATS, HANDEL_MAX, gearDef, isShipKind, type GearSlot, type ShipSlot, type GearDef, type StatId } from '../data/gear';
 import { invCap, gearStat, shipStat, equip, unequip, unequipShip, useItem, dropAt, gearSellPrice } from '../game/inventory';
 import { gearIcon } from './icons';
+import { BOLTS, type BoltId } from '../game/bolts';
 
 // =====================================================================================
 // App „Ausrüstung“ im Flottenband: links, was der Pilot trägt, in der Mitte der Rucksack, rechts der gewählte Gegenstand.
@@ -22,7 +23,7 @@ export function statRows(d: GearDef, cmp?: GearDef) {
     return `<div class="row"><span>${STAT_N[k].n}</span><b>${statText(k, v)}${cmp && diff ? ` <span class="${diff > 0 ? 'good' : 'bad'}">(${sgn(diff)})</span>` : ''}</b></div>`;
   }).join('');
 }
-export const statLine = (d: GearDef) => STAT_IDS.filter(k => d.st?.[k]).map(k => `${STAT_N[k].n} ${statText(k, d.st![k]!)}`).join(' · ');
+export const statLine = (d: GearDef) => [...STAT_IDS.filter(k => d.st?.[k]).map(k => `${STAT_N[k].n} ${statText(k, d.st![k]!)}`), ...(d.bolt && BOLTS[d.bolt as BoltId] ? [`Geschoss: ${BOLTS[d.bolt as BoltId].n}`] : [])].join(' · ');
 
 export function invApp(): string {
   const cap = invCap();

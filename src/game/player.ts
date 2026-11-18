@@ -12,6 +12,7 @@ import { world, SECTOR_RADIUS, decoNear, shatterDeco } from './world';
 import { burst, puff, sparks, flash, shieldRipple, followRipples } from './fx';
 import { fireBullet, launchRocket } from './combat';
 import { playerBolt, BOLTS } from './bolts';
+import { gearDef } from '../data/gear';
 import { radio } from '../ui/radio';
 import { updateMining, throwCharge } from './mining';
 
@@ -244,9 +245,11 @@ export function updatePlayer(dt: number) {
       if (fullWarn <= 0) { radio('SYSTEM', 'Munition leer! An einer Station nachladen.'); fullWarn = 5; }
     } else {
       G.cool = st.rate;
+      // Laserbolzen nach Stärke der Kanonen oder nach Waffenmodul (bolts.ts)
+      const bolt = playerBolt(st.dmg, st.cls as any, gearDef(P.shipGear?.waffe || '')?.bolt), bs = BOLTS[bolt];
       const dir = f.clone(), lk = G.lockT;
       if (lk) {
-        const d = d3(lk.x, lk.y, lk.z, P.x, P.y, P.z), t = d / 1400;
+        const d = d3(lk.x, lk.y, lk.z, P.x, P.y, P.z), t = d / (1400 * (bs.speed || 1));   // Zielhilfe mit dem Tempo des Geschosses
         _v.set(lk.x + lk.vx * t - P.x, lk.y + lk.vy * t - P.y, lk.z + lk.vz * t - P.z).normalize();
         if (_v.dot(f) > 0.985) dir.copy(_v);
       }
@@ -254,12 +257,11 @@ export function updatePlayer(dt: number) {
       G.gunSide ^= 1;
       const s = G.gunSide ? 1 : -1, pts: number[][] = SHIP.gunPts.map(q => [q[0] * s, q[1], q[2]]);
       if (P.up.guns >= 2) for (const q of SHIP.extraGunPts) pts.push([q[0] * s, q[1], q[2]]);
-      // Laserbolzen nach Stärke der Kanonen (bolts.ts); Mündungsblitz an jeder feuernden Kanone
-      const bolt = playerBolt(st.dmg, st.cls as any), bs = BOLTS[bolt];
+      // Mündungsblitz an jeder feuernden Kanone
       for (const g of pts) {
         _v.set(g[0], g[1], g[2]).applyEuler(_e);
         const gx = P.x + _v.x, gy = P.y + _v.y, gz = P.z + _v.z;
-        const b = fireBullet(world.bullets, gx, gy, gz, dir.x + rand(-0.006, 0.006), dir.y + rand(-0.006, 0.006), dir.z + rand(-0.006, 0.006), 1400, 0.75, st.dmg, 'p', { bolt });
+        const b = fireBullet(world.bullets, gx, gy, gz, dir.x + rand(-0.006, 0.006), dir.y + rand(-0.006, 0.006), dir.z + rand(-0.006, 0.006), 1400 * (bs.speed || 1), 0.75 / (bs.speed || 1), st.dmg, 'p', { bolt });   // schnellere Geschosse fliegen gleich weit
         b.vx += P.vx * 0.5; b.vy += P.vy * 0.5; b.vz += P.vz * 0.5;
         if (bs.muzzle) flash(gx + f.x * 1.5, gy + f.y * 1.5, gz + f.z * 1.5, '#' + bs.halo.toString(16).padStart(6, '0'), bs.muzzle, 0.05);
       }

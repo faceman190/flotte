@@ -60,6 +60,7 @@ export interface GearDef {
   stack?: number;                                  // Stapelgröße (fehlt = 1)
   use?: { hull?: number; shield?: number };        // Verbrauchsgut: füllt Hülle oder Schild des Schiffs auf
   shop?: 0 | 1 | 2;                                // im Laden: 0 fast überall, 1 seltener, 2 nur in gefährlichen Sektoren; fehlt = nur zu finden
+  bolt?: string;                                   // Waffenmodul: eigenes Geschoss der Bordkanonen (game/bolts.ts, BOLTS)
 }
 
 export const GEAR = {
@@ -115,10 +116,10 @@ export const GEAR = {
   sw_lauf: { n: 'Gehärtete Läufe', kind: 'schiffswaffe', rar: 0, val: 400, desc: 'Halten mehr Druck aus als die Serienläufe.', st: { s_dmg: 6 }, shop: 0 },
   sw_lader: { n: 'Schnelllader', kind: 'schiffswaffe', rar: 0, val: 380, desc: 'Führt die Munition schneller nach.', st: { s_rate: 6 }, shop: 0 },
   sw_zielrechner: { n: 'Zielrechner Mk II', kind: 'schiffswaffe', rar: 1, val: 1400, desc: 'Rechnet den Vorhalt für jede Salve neu.', st: { s_dmg: 10, s_rate: 4 }, shop: 0 },
-  sw_rotation: { n: 'Rotationsverschluss', kind: 'schiffswaffe', rar: 1, val: 1500, desc: 'Sechs Kammern, ein Lauf.', st: { s_rate: 14 }, shop: 1 },
-  sw_gauss: { n: 'Gauss-Beschleuniger', kind: 'schiffswaffe', rar: 2, val: 5200, desc: 'Spulenringe treiben das Geschoss ein zweites Mal an.', st: { s_dmg: 22 }, shop: 2 },
-  sw_zwilling: { n: 'Zwillingslafette', kind: 'schiffswaffe', rar: 2, val: 5600, desc: 'Zwei Kanonen auf einer Lafette, abwechselnd feuernd.', st: { s_rate: 20, s_dmg: 6 }, shop: 2 },
-  sw_lanze: { n: 'Ferrox-Lanze', kind: 'schiffswaffe', rar: 3, val: 18000, desc: 'Aus einem Bienenstock geborgen. Sie will benutzt werden.', st: { s_dmg: 32, s_rate: 12 } },
+  sw_rotation: { n: 'Rotationsverschluss', kind: 'schiffswaffe', rar: 1, val: 1500, desc: 'Sechs Kammern, ein Lauf.', st: { s_rate: 14 }, shop: 1, bolt: 'rot' },
+  sw_gauss: { n: 'Gauss-Beschleuniger', kind: 'schiffswaffe', rar: 2, val: 5200, desc: 'Spulenringe treiben das Geschoss ein zweites Mal an.', st: { s_dmg: 22 }, shop: 2, bolt: 'gauss' },
+  sw_zwilling: { n: 'Zwillingslafette', kind: 'schiffswaffe', rar: 2, val: 5600, desc: 'Zwei Kanonen auf einer Lafette, abwechselnd feuernd.', st: { s_rate: 20, s_dmg: 6 }, shop: 2, bolt: 'zwil' },
+  sw_lanze: { n: 'Ferrox-Lanze', kind: 'schiffswaffe', rar: 3, val: 18000, desc: 'Aus einem Bienenstock geborgen. Sie will benutzt werden.', st: { s_dmg: 32, s_rate: 12 }, bolt: 'lanze' },
   // ----- Abwehrsysteme -----
   sa_platten: { n: 'Schottplatten', kind: 'schiffsabwehr', rar: 0, val: 420, desc: 'Zusätzliche Platten an den Schotten.', st: { s_hull: 10 }, shop: 0 },
   sa_kondensator: { n: 'Schildkondensator', kind: 'schiffsabwehr', rar: 0, val: 440, desc: 'Speichert etwas mehr Ladung für den Schild.', st: { s_shield: 12 }, shop: 0 },

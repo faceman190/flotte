@@ -116,7 +116,7 @@ let mesh: ReturnType<typeof buildMeshRoom> = null, boarding = false;   // Innenr
 // eigene Figur in der Außensicht (Taste V): hängt in einem Halter, der dem aktuellen Raum folgt (Station oder Schiff)
 const meHolder = new THREE.Group(); meHolder.matrixAutoUpdate = false; meHolder.visible = false; scene.add(meHolder);
 let me: Avatar | null = null;
-let saved: null | { group: THREE.Group | null; rects: Rect[]; obstacles: Rect[]; shipObs: Rect[]; inters: Inter[]; shipInters: Inter[]; labels: Label[]; shipLabels: Label[]; x: number; z: number; yaw: number; lamps: [THREE.Vector3, number, number][] } = null;
+let saved: null | { group: THREE.Group | null; rects: Rect[]; obstacles: Rect[]; shipObs: Rect[]; inters: Inter[]; shipInters: Inter[]; labels: Label[]; shipLabels: Label[]; x: number; z: number; yaw: number; lamps: [THREE.Vector3, number, number][]; light: [number, number, number] } = null;
 
 // Drei feste Lichter (immer in der Szene, außerhalb mit Stärke 0 – so müssen keine Shader neu gebaut werden)
 const lamps = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xfff0dc, 0, 100, 0); scene.add(l); return l; });
@@ -907,7 +907,7 @@ export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: num
   }
   if (room) leaveShip();
   if (!planet) {
-    saved = { group, rects, obstacles, shipObs, inters, shipInters, labels, shipLabels, x: IN.x, z: IN.z, yaw: IN.yaw, lamps: lamps.map(l => [l.position.clone(), l.distance, l.intensity] as [THREE.Vector3, number, number]) };
+    saved = { group, rects, obstacles, shipObs, inters, shipInters, labels, shipLabels, x: IN.x, z: IN.z, yaw: IN.yaw, lamps: lamps.map(l => [l.position.clone(), l.distance, l.intensity] as [THREE.Vector3, number, number]), light: [ambient.intensity, sun.intensity, rim.intensity] };
   } else {
     IN.active = true; IN.station = null; G.inside = true;
     camera.near = 0.12; camera.updateProjectionMatrix();
@@ -964,7 +964,9 @@ export function leaveShip(exitWorld?: THREE.Vector3) {
     IN.x = s.x; IN.z = s.z; IN.yaw = s.yaw;
     if (exitWorld && group) { const p = group.worldToLocal(exitWorld.clone()); IN.x = p.x; IN.z = p.z; IN.yaw = yawW - group.rotation.y; }
     lamps.forEach((l, i) => { l.position.copy(s.lamps[i][0]); l.distance = s.lamps[i][1]; l.intensity = s.lamps[i][2]; });
-    setExposure(0.2);
+    // genau das Licht von vor dem Einsteigen (früher setExposure(0.2): Die Hangar-Lichtsteuerung hielt das für eine neue Grundhelligkeit und
+    // dunkelte noch einmal ab, Schiffe und Figuren im Hangar waren danach zu dunkel)
+    ambient.intensity = s.light[0]; sun.intensity = s.light[1]; rim.intensity = s.light[2];
     saved = null;
     G.mode = 'walk';
     if (!exitWorld) sfx('door_close', 0.6, 1, () => snd(220, 0.5, 'sawtooth', 0.03, 120));
