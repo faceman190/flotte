@@ -14,7 +14,6 @@ export const WERTE: Wert[] = [
   { k: 'cargo', t: 'Frachtraum', e: 'Einheiten', gruppe: 'flug' },
   { k: 'scan', t: 'Scanner', e: 'm', gruppe: 'flug' },
   { k: 'laser', t: 'Bergbaulaser', e: 'Förderleistung', fmt: x, gruppe: 'bergbau' },
-  { k: 'beams', t: 'Laserstrahlen', e: 'Stück', fmt: n, gruppe: 'bergbau' },
   { k: 'laserRange', t: 'Laserreichweite', e: 'm', fmt: n, gruppe: 'bergbau' },
   { k: 'charges', t: 'Sprengladungen', e: 'Stück', fmt: n, gruppe: 'bergbau' },
   { k: 'drones', t: 'Bergbaudrohnen', e: 'Stück', fmt: n, gruppe: 'bergbau' },

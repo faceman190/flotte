@@ -25,7 +25,7 @@ export const SCHIFFE: SchiffInfo[] = order.map((id) => {
     modell: (modelle.ship as Record<string, string>)[s.model] ?? null,
     werte: {
       hull: s.hull, shield: s.shield, speed: s.speed, turn: s.turn, cargo: s.cargo, dmg: s.dmg,
-      ammo: s.ammo, rockets: s.rockets, laser: s.laser, beams: s.beams, laserRange: s.laserRange,
+      ammo: s.ammo, rockets: s.rockets, laser: s.laser, laserRange: s.laserRange,
       scan: s.scan, charges: s.charges, drones: s.drones,
     },
   };

@@ -4,7 +4,7 @@ kurz: Wie die Märkte rechnen, wo sich Routen lohnen, Lieferaufträge, Lager, Ru
 reihe: 3
 stufe: Fortgeschritten
 bild: ../../assets/bilder/terminals-125-markt.jpg
-stand: Alpha 1.42
+stand: Alpha 1.48
 ---
 
 Jede Station hat ihren eigenen **Markt**. Wer weiß, was wo knapp ist, verdient mit einem vollen Frachtraum mehr als mit jedem Erzfeld.
@@ -39,8 +39,9 @@ in einem Zug aus.
   alles, was die Ferrox hinterlassen.
 - **Seltene Erden** gibt es nur auf Planeten. Sie sind leicht, teuer und überall gefragt.
 
-Für echte Handelsrouten ist der **Kärrner** gebaut: 280 Einheiten Frachtraum, dafür kein Bergbaulaser. Die **Pfeil** verbindet einen
-großen Frachtraum mit Laser und Kanonen.
+Für echte Handelsrouten ist der **Wisent** gebaut: 340 Einheiten Frachtraum und sechs Doppeltürme gegen Überfälle, dafür kein
+Bergbaulaser. Die **Pfeil** (220) verbindet einen großen Frachtraum mit Laser und Kanonen, die **Kormoran** (150) ist der günstigere
+Einstieg in den Frachtflug.
 
 ## Lieferaufträge
 

@@ -4,7 +4,7 @@ kurz: Kanonen, Raketen, Schilde und die Angriffe des Schwarms – und mit welche
 reihe: 4
 stufe: Fortgeschritten
 bild: ../../assets/bilder/wuerger-spiel.jpg
-stand: Alpha 1.42
+stand: Alpha 1.48
 ---
 
 Die **Ferrox** sind ein Schwarm aus Metall. Sie fressen Erz, Wracks und Schiffe. Der Erstkontakt war im Jahr 12 bei Rotfels, seit dem
@@ -19,10 +19,10 @@ Osten wird es ernst.
 | <kbd>F</kbd> | Rakete auf das erfasste Ziel |
 
 **Zielerfassung:** Halte einen Ferrox nah an der Bildmitte, bis zu 1.400 m entfernt. Ein Ton meldet das erfasste Ziel, links unten
-leuchtet dann **Rakete abfeuern** auf. Raketen sind knapp: Die Venom trägt vier, der Habicht acht.
+leuchtet dann **Rakete abfeuern** auf. Raketen sind knapp: Die Venom trägt vier, der schwere Frachter Wisent zwanzig.
 
 Schaden, Feuerrate, Rumpf und Schild baust du in der **Werkstatt** der Bastion in Stufen aus. Module aus dem Inventar (<kbd>I</kbd>)
-geben weitere Prozente.
+geben weitere Prozente. Waffenmodule wie Gauss-Beschleuniger, Zwillingslafette oder Ferrox-Lanze verschießen eigene Geschosse.
 
 ## Wie die Ferrox angreifen
 
@@ -31,7 +31,8 @@ geben weitere Prozente.
 - **Bomber** jagen Frachter mit Torpedos.
 - **Bienenstöcke** sind Mutterschiffe in den tiefen Sektoren. Sie zu zerstören ist eine eigene Mission.
 
-Treffer lassen die Panzerung der Ferrox kurz aufglühen, so siehst du, ob du triffst.
+Treffer lassen die Panzerung der Ferrox kurz aufglühen, so siehst du, ob du triffst. Ferrox in der Ferne bekommen einen Rahmen mit
+Entfernung, Angreifer sind rötlich markiert, und ein Pfeil am Bildrand zeigt Ferrox bis 2,5 km Abstand.
 
 ## Schutz durch Stationen
 
@@ -40,7 +41,7 @@ Stationen im Menschenraum und im Grenzgebiet haben eine **Flak**. Sie schießt a
 
 ## Lohn
 
-Jeder Abschuss bringt **Kopfgeld** und Ruf bei der Fraktion des Sektors, im Grenzgebiet bei der Grenzwacht. Ein höherer
+Jeder Abschuss bringt **Kopfgeld** (für Jäger und Bomber seit Alpha 1.47 doppelt so viel) und Ruf bei der Fraktion des Sektors, im Grenzgebiet bei der Grenzwacht. Ein höherer
 Grenzwacht-Rang erhöht das Kopfgeld. Aus Wracks fällt **Ferrox-Schrott**, den die Bastion und der Tess-Vorposten gut bezahlen, manchmal
 auch Ausrüstung.
 
@@ -57,10 +58,10 @@ Höchstens zwei Missionen laufen gleichzeitig. Abbrechen kostet Ruf.
 | Schiff | Rolle | Stärke |
 |---|---|---|
 | Venom | Abfangjäger | schnell und wendig, wenig Panzerung |
-| Habicht | Schwerer Jäger | starke Kanonen, 8 Raketen, 500 Schuss |
 | Würger | Schwerer Jäger | Schienenkanone, höchster Schaden, dicke Panzerung |
 | Kormoran | Korvette | Rückenturm, sechs Flugkörper, innen begehbar |
-| Pfeil | Kreuzer | stärkster Rumpf und Schild der Flotte |
+| Pfeil | Kreuzer | starker Rumpf, Bergbaulaser und Drohne, innen begehbar |
+| Wisent | Schwerer Frachter | stärkster Rumpf und Schild, sechs Doppeltürme, 20 Raketen |
 
 Alle Werte nebeneinander im [Schiffs-Explorer](/schiffe/).
 

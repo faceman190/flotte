@@ -4,21 +4,20 @@ kurz: Scannen, Laser, Hitze, Sprengladungen und Raffinerie – wie aus Gestein C
 reihe: 2
 stufe: Einsteiger
 bild: ../../assets/bilder/elster-spiel-hangar.jpg
-stand: Alpha 1.42
+stand: Alpha 1.48
 ---
 
 Bergbau ist das Rückgrat der Crew. Jede Werft, jede Panzerplatte und jede Treibstoffzelle beginnt als Brocken in einem Asteroidenfeld.
 
 ## Ausrüstung
 
-Jedes Schiff mit Bergbaulaser kann abbauen, aber die Unterschiede sind groß:
+Drei Schiffe der Werft haben einen Bergbaulaser. Würger, Kormoran und Wisent sind Kampf- und Frachtschiffe und können nicht abbauen.
 
 | Schiff | Laser | Frachtraum | Besonderheit |
 |---|---|---|---|
 | Venom | einfach | 32 | Startschiff, gut für die ersten Runden |
 | Elster | stark (1,7 ×) | 70 | weiter Scanner, vier Sprengladungen |
-| Maulwurf | Doppellaser | 160 | zwei Bergbaudrohnen, langsam und träge |
-| Pfeil | mittel | 220 | Kreuzer mit Drohne, innen begehbar |
+| Pfeil | mittel (1,2 ×) | 220 | Kreuzer mit Drohne und Sprengladungen, innen begehbar |
 
 Werte und Modelle aller Schiffe stehen im [Schiffs-Explorer](/schiffe/).
 
@@ -29,19 +28,21 @@ Werte und Modelle aller Schiffe stehen im [Schiffs-Explorer](/schiffe/).
    So siehst du, was in welchem Brocken steckt.
 3. **Laser wählen** mit <kbd>2</kbd>, auf einen Asteroiden zielen und die Maustaste **halten**. Der Brocken bekommt Risse, schrumpft und
    zerfällt, das Erz landet im Frachtraum.
-4. **Hitze beobachten.** Der Laser heizt sich auf. Bei 100 % schaltet er ab und kühlt erst auf 35 % herunter, bevor er wieder feuert. Kurze
-   Pausen vor der Grenze sind schneller als eine Zwangspause.
+4. **Hitze beobachten.** Der Laser heizt sich auf. Bei 100 % schaltet er ab und kühlt erst auf 35 % herunter, bevor er wieder feuert.
+5. **Im Kühlfenster loslassen.** Kurz vor der Grenze, zwischen 72 und 94 % Hitze, leuchtet die Hitzeanzeige hellblau. Lässt du jetzt los,
+   startet eine **Schnellkühlung**: Der Laser kühlt dreimal so schnell ab. Feuern, im Fenster loslassen, weiter – so baust du ohne
+   Zwangspause ab.
 
 ## Sprengladungen
 
-Elster, Maulwurf und Pfeil tragen Sprengladungen (<kbd>3</kbd>). Eine Ladung haftet am Asteroiden und sprengt ihn nach kurzer Zeit in
+Elster und Pfeil tragen je vier Sprengladungen (<kbd>3</kbd>). Eine Ladung haftet am Asteroiden und sprengt ihn nach kurzer Zeit in
 Bruchstücke. Das bringt insgesamt mehr Ertrag als der Laser allein, und manchmal liegt ein **seltener Kern** in den Trümmern.
 Reichweite: 500 m. Nachschub gibt es an Stationen.
 
 ## Drohnen
 
-Der Maulwurf hat zwei Bergbaudrohnen, die Pfeil eine. Mit <kbd>4</kbd> schickst du sie los: Sie bauen Asteroiden in deiner Nähe selbstständig
-ab, während du selbst weiter lasert.
+Die Pfeil hat eine Bergbaudrohne. Mit <kbd>4</kbd> schickst du sie los: Sie baut Asteroiden in deiner Nähe selbstständig ab, während du
+selbst weiter laserst.
 
 ## Was wo vorkommt
 
