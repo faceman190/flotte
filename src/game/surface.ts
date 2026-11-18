@@ -458,7 +458,7 @@ export function addOrbitZone(sector: string) {
   const pd = PLANETS[sector], sec = SECTOR[sector];
   if (!pd || !sec.planet) return;
   const d = new THREE.Vector3(...sec.planet.dir).normalize(), h = new THREE.Vector3(d.x, 0, d.z).normalize();
-  const x = h.x * 5000, z = h.z * 5000, y = clamp(d.y * 2200, -900, 900);
+  const D = sec.size?.orbit ?? 5000, x = h.x * D, z = h.z * D, y = clamp(d.y * 2200, -900, 900);   // großer Sektor: Anflugzone weiter draußen (galaxy.ts, size)
   const m = buildGate(0x7cc4ff);
   m.g.position.set(x, y, z);
   m.g.lookAt(0, y, 0);

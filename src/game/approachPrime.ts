@@ -3,6 +3,7 @@ import { scene, camera, renderer, warm } from '../core/engine';
 import { world } from './world';
 import { G, P } from './state';
 import { hasDeck, loadDeck, buildDeck, type Deck } from './deck';
+import { navTarget } from './schnellflug';
 
 // =====================================================================================
 // Vorbereiten beim Anflug (seit 2026-11-18): Das erste Andocken an einer Station mit Deck (Eisenkrone) dauerte 7 s hinter der Blende,
@@ -83,7 +84,9 @@ function makeJob(id: string) {
 export function updateApproachPrime() {
   if (G.mode !== 'play' || warm.hold || world.surface) { if (G.mode !== 'play') job = null; return; }
   if (!job) {
-    const st = world.stations.find(s => hasDeck(s.id) && !done.has(s.id) && Math.hypot(s.x - P.x, s.y - P.y, s.z - P.z) < RANGE);
+    // Navigationsziel (Kurzsprung, seit Alpha 1.50) gleich vorbereiten, egal wie weit: Der Kurzsprung ist in wenigen Sekunden da
+    const nt = navTarget(), ns = nt && nt.kind === 'st' ? world.stations.find(s => s.id === nt.id && hasDeck(s.id) && !done.has(s.id)) : undefined;
+    const st = ns || world.stations.find(s => hasDeck(s.id) && !done.has(s.id) && Math.hypot(s.x - P.x, s.y - P.y, s.z - P.z) < RANGE);
     if (!st) return;
     job = makeJob(st.id);
   }

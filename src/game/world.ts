@@ -4,7 +4,7 @@ import { buildCityModel, cityLoaded, loadCity, initCity } from './city';
 import { resetBasePad } from './basewalk';
 import { scene, glowMat } from '../core/engine';
 import { texMat, boxUV } from '../core/textures';
-import { setSky } from '../core/sky';
+import { setSky, setSpaceFog } from '../core/sky';
 import { setAmbience } from '../core/ambience';
 import { rng, hashStr, rand, d3 } from '../core/util';
 import { SECTOR, gatePos, FACTION, type SectorDef, type StationDef, type FieldDef, type Faction } from '../data/galaxy';
@@ -72,7 +72,8 @@ export const world = {
   extras: [] as THREE.Object3D[],       // zusätzliche Szenenobjekte (Gelände, Anflugzone) – werden beim Leeren entfernt
   orbit: null as null | { x: number; y: number; z: number; name: string; mesh: THREE.Object3D },
 };
-export const SECTOR_RADIUS = 8000;
+// Größe des geladenen Sektors (große Sektoren wie Heimstatt geben sie in galaxy.ts vor, size). Wird in buildSector gesetzt; Importe sehen den neuen Wert.
+export let SECTOR_RADIUS = 8000, SECTOR_HEIGHT = 1600;
 
 // ---------------- Asteroiden ----------------
 const ROCK: Record<RockKind, THREE.MeshStandardMaterial> = {
@@ -353,7 +354,7 @@ export function dropPick(x: number, y: number, z: number, k: ItemId, amt: number
 // ---------------- Stationen & Tore ----------------
 const Y = new THREE.Vector3(0, 1, 0);
 // Eisenkrone: Das Hangartor (im Modell +X) zeigt schräg zur Bastion, die Erzannahme am anderen Ende zum Metallfeld
-const EISENKRONE_YAW = 0.455;
+const EISENKRONE_YAW = 0.869;   // seit Alpha 1.50 (Eisenkrone 20 km südlich der Bastion): 0.455 + 0.414, damit das Tor wie früher schräg zur Bastion zeigt
 export function addStation(sd: StationDef, yaw: number) {
   let model: any;
   if (sd.city && !cityLoaded(sd.city)) {
@@ -453,12 +454,15 @@ export function buildSector(id: string) {
   clearSector();
   const def = SECTOR[id];
   world.def = def;
+  SECTOR_RADIUS = def.size?.r ?? 8000; SECTOR_HEIGHT = def.size?.h ?? 1600;
+  setSpaceFog(def.size ? 0.000016 : 0.00005);   // großer Sektor: weiter sehen (bei 20 km knapp 10 % Dunst statt 63 %)
   const R = rng(hashStr(id));
   setSky({
     neb: def.neb, tint: def.tint, gain: def.sky?.gain,
     rot: (() => { const r: [number, number, number] = [R.range(-0.5, 0.5), R.range(0, 6.28), R.range(-0.4, 0.4)]; return def.sky?.rot || r; })(),
     sunDir: [R.range(-1, 1), R.range(0.2, 1), R.range(-1, 1)],
     planet: def.planet && { ...def.planet, ...planetLook(id) },
+    near: def.size?.orbit,
   });
   setAmbience({ id: def.id, neb: def.neb, faction: def.faction, fields: def.fields });
   for (const sd of def.stations) addStation(sd, R.range(0, Math.PI * 2));

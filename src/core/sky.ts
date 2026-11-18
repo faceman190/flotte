@@ -123,6 +123,12 @@ function applySky(t: THREE.Texture, tint: number, rot: [number, number, number],
   skySphere.rotation.set(...rot);
 }
 export const planetInfo = { dir: new THREE.Vector3(), angR: 0, on: false };
+// Großer Sektor (Heimstatt): Der Planet hat eine gedachte Lage im Raum und wird beim Anflug größer. Von der Sektormitte aus sieht er genau so aus wie
+// bisher (gleicher Winkel, also auch im Hauptmenü). Er steht dafür weiter weg (PLANET_FAR) und schreibt keine Tiefe: Stationen und ihre Fernansicht
+// (bis 7 km, farview.ts) liegen immer davor. Größter Winkelradius 42° (dann liegt die Vorderseite noch gut 8 km entfernt).
+const PLANET_FAR = 24000, PLANET_MAXSIN = Math.sin(42 * Math.PI / 180);
+let planetNear: null | { c: THREE.Vector3; R: number; size: number } = null;
+const _pv = new THREE.Vector3();
 
 export interface SkyDef {
   neb: string;
@@ -131,6 +137,7 @@ export interface SkyDef {
   rot: [number, number, number];
   sunDir: [number, number, number];
   planet?: { size: number; tint: number; dir: [number, number, number]; atm?: number; type?: string; cities?: number; ring?: number };
+  near?: number;   // großer Sektor: Abstand der Anflugzone von der Mitte (m); der Planet wächst beim Anflug (sonst fest am Himmel)
 }
 
 export function setSky(d: SkyDef) {
@@ -150,6 +157,7 @@ export function setSky(d: SkyDef) {
     planet = null;
   }
   planetInfo.on = false;
+  planetNear = null;
   const pg = d.planet ? buildPlanet(d.planet, sunDir) : null;
   if (d.planet && pg) {
     const p = d.planet;
@@ -160,6 +168,17 @@ export function setSky(d: SkyDef) {
     planetInfo.dir.copy(planet.position).normalize();
     planetInfo.angR = Math.asin(Math.min(1, p.size / 11000));
     planetInfo.on = true;
+    if (d.near) {
+      // Gedachte Lage: so weit draußen, dass der Planet von der Anflugzone aus gut 40° Winkelradius hat (von der Mitte aus wie bisher)
+      const s0 = p.size / 11000, dir = new THREE.Vector3(...p.dir).normalize(), cosT = Math.hypot(dir.x, dir.z), want = 0.643;
+      const Dp = want * d.near * cosT / (want - s0);
+      planetNear = { c: dir.multiplyScalar(Dp), R: s0 * Dp, size: p.size };
+      const s = planet.getObjectByName('surf') as THREE.Mesh | undefined;
+      if (s) {
+        (s.material as THREE.Material).depthWrite = false; s.renderOrder = -0.5;   // nach dem Himmel (-1), vor allem anderen
+        s.geometry.dispose(); s.geometry = new THREE.SphereGeometry(p.size, 288, 180);   // bis 42° groß: feiner, sonst sieht man Kanten am Rand
+      }
+    }
   } else if (d.planet && TEXT.planet) {
     const p = d.planet;
     const pm = new THREE.Mesh(
@@ -276,6 +295,8 @@ atmDome.renderOrder = -1;
 atmDome.visible = false;
 sky.add(atmDome);
 const SPACE_FOG = { color: 0x05060a, density: 0.00005 };
+// Dunst im All je Sektor (große Sektoren: dünner, damit man Stationen auf 20–30 km sieht); gilt ab sofort und nach jeder Landung
+export function setSpaceFog(density: number) { SPACE_FOG.density = density; if (!atmDome.visible) (scene.fog as THREE.FogExp2).density = density; }
 const RIM_SPACE = rim.color.getHex(), GREY = new THREE.Color(0x808080);
 export interface SurfaceSky {
   horizon: number; zenith: number; fog: number; fogDensity: number;
@@ -326,6 +347,13 @@ export function updateSky(camPos: THREE.Vector3) {
   atmMat.uniforms.time.value = performance.now() / 1000;
   const t = (performance.now() - t0) / 1000, pr = renderer.getPixelRatio();
   for (const m of starUniforms) { m.uniforms.time.value = t; m.uniforms.pr.value = pr; }
+  if (planet && planet.visible && planetNear) {
+    _pv.copy(planetNear.c).sub(camPos);
+    const dist = Math.max(1, _pv.length()), sn = Math.min(PLANET_MAXSIN, planetNear.R / dist);
+    planet.position.copy(_pv).multiplyScalar(PLANET_FAR / dist);
+    planet.scale.setScalar(PLANET_FAR * sn / planetNear.size);
+    planetInfo.dir.copy(_pv).normalize(); planetInfo.angR = Math.asin(sn);
+  }
   if (planet && planet.visible) updatePlanet(planet as THREE.Group, t);
   if (pending && ready(pending.t)) { applySky(pending.t, pending.tint, pending.rot, pending.gain); pending = null; if (atmDome.visible) skySphere.visible = false; }
   if (curNeb && scene.environment === DEFAULT_ENV) {

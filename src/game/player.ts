@@ -8,13 +8,14 @@ import type { ShipId } from '../data/ships';
 import type { Paint } from '../models/gltfShips';
 import { ITEMS, ITEM_IDS } from '../data/items';
 import { flightMax, P, G, stats, cargoUsed, settings } from './state';
-import { world, SECTOR_RADIUS, decoNear, shatterDeco } from './world';
+import { world, SECTOR_RADIUS, SECTOR_HEIGHT, decoNear, shatterDeco } from './world';
 import { burst, puff, sparks, flash, shieldRipple, followRipples } from './fx';
 import { fireBullet, launchRocket } from './combat';
 import { playerBolt, BOLTS } from './bolts';
 import { gearDef } from '../data/gear';
 import { radio } from '../ui/radio';
 import { updateMining, throwCharge } from './mining';
+import { updateSchnellflug, SF, schnellflugHit } from './schnellflug';
 
 // Das Modell des aktiven Schiffs (wird beim Umsteigen ausgetauscht)
 export let SHIP: ShipModel = buildShipModel('venom');
@@ -52,6 +53,7 @@ export function placePlayer(x: number, y: number, z: number, yaw: number, speed 
 export function hurtPlayer(d: number) {
   if (!playerTargetable()) return;
   G.sinceHit = 0;
+  schnellflugHit();
   if (G.cruise) { G.cruise = false; radio('SYSTEM', 'Treffer: Reiseflug abgebrochen.'); }
   G.shake = Math.min(1.6, G.shake + d * 0.05);
   (SHIP.shield.material as THREE.MeshBasicMaterial).opacity = P.shield > 0 ? 0.07 : 0;   // die ganze Blase nur schwach, die Welle am Einschlag trägt (impactFx)
@@ -136,7 +138,7 @@ export function updatePlayer(dt: number) {
   const direct = settings.steer !== 'zeiger';
   if (direct && !keys.ArrowLeft && !keys.ArrowRight && !keys.ArrowUp && !keys.ArrowDown) { mx = 0; my = 0; }   // direkt: kein Zeiger-Ausschlag
   if (settings.invertY) my = -my;
-  const sens = settings.sens * (G.cruise ? 0.45 : 1);   // im Reiseflug lenkt das Schiff träge
+  const sens = settings.sens * (SF.phase === 'fly' ? 0.3 : G.cruise ? 0.45 : 1);   // im Reiseflug lenkt das Schiff träge, im Schnellflug noch träger
   const maxYaw = 2.1 * sens * st.turn, maxPitch = 1.6 * sens * st.turn;
   let yawRate = -(mx * 0.5 + mx * Math.abs(mx) * 0.5) * maxYaw, pitchRate = -(my * 0.5 + my * Math.abs(my) * 0.5) * maxPitch;
   if (direct && !look.free) {
@@ -149,6 +151,7 @@ export function updatePlayer(dt: number) {
     turnWish.y -= cy; turnWish.p -= cp;
     yawRate += cy / Math.max(dt, 1e-4); pitchRate += cp / Math.max(dt, 1e-4);
   } else { turnWish.y = turnWish.p = 0; }
+  if (SF.auto && SF.phase !== 'off') { yawRate = pitchRate = 0; turnWish.y = turnWish.p = 0; }   // Kurzsprung: der Autopilot lenkt
   steer.dx = steer.dy = 0;
   P.yaw += yawRate * dt;
   P.pitch = clamp(P.pitch + pitchRate * dt, -1.15, 1.15);
@@ -157,6 +160,9 @@ export function updatePlayer(dt: number) {
   const f = fwd(), r = right();
   let th = 0;
   // Flugstufen: Manöverflug fährt zügig an (Jäger: knapp 2 s bis 140 m/s, seit Alpha 1.40; vorher 4,5 s), Reiseflug baut langsam bis 300 m/s auf
+  // Schnellflug/Kurzsprung (schnellflug.ts) übernimmt das Tempo ganz
+  if (updateSchnellflug(dt)) th = 1;
+  else {
   const vmax = flightMax(), acc = st.acc * (G.cruise ? 0.135 : 0.19);
   if (keys.KeyW) { P.vx += f.x * acc * dt; P.vy += f.y * acc * dt; P.vz += f.z * acc * dt; th = 1; }
   const brk = st.acc * (G.cruise ? 0.135 : 0.115) * 2;   // Bremsen/Rückwärts wie bisher (sonst flöge man rückwärts so schnell wie vorwärts)
@@ -171,6 +177,7 @@ export function updatePlayer(dt: number) {
   const sp = Math.hypot(P.vx, P.vy, P.vz);
   // über der Grenze (z. B. nach dem Zurückschalten aus dem Reiseflug) weich abbremsen statt hart kappen
   if (sp > vmax) { const k = Math.max(vmax / sp, Math.pow(0.35, dt)); P.vx *= k; P.vy *= k; P.vz *= k; }
+  }
   P.x += P.vx * dt; P.y += P.vy * dt; P.z += P.vz * dt;
   G.thrust += (th - G.thrust) * Math.min(1, dt * 6);
   // ---- Sektorgrenze bzw. Boden und Rand auf Planeten ----
@@ -188,7 +195,7 @@ export function updatePlayer(dt: number) {
     P.vx -= P.x / hd * 900 * dt; P.vz -= P.z / hd * 900 * dt;
     if (boundWarn <= 0) { radio('SYSTEM', 'Sektorgrenze erreicht. Andere Sektoren erreichst du über die Sprungtore.'); boundWarn = 10; }
   }
-  if (!world.surface && Math.abs(P.y) > 1600) P.vy -= Math.sign(P.y) * 900 * dt;
+  if (!world.surface && Math.abs(P.y) > SECTOR_HEIGHT) P.vy -= Math.sign(P.y) * 900 * dt;
   // ---- Kollisionen ----
   for (const s of world.stations) collideBig(s, st.radius);
   for (const s of world.traffic) collideBig(s, st.radius);

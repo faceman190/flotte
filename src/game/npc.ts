@@ -18,7 +18,7 @@ const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
 function trafficCap() {
   const d = world.def;
   if (!d || d.faction === 'ferrox' || !world.stations.length || !world.gates.length) return 0;
-  return d.faction === 'core' ? 4 : 2;
+  return d.size ? 7 : d.faction === 'core' ? 4 : 2;   // großer Sektor: mehr Frachter, sonst wirkt er leer
 }
 function holdPoint(s: Station) {
   const a = rand(0, Math.PI * 2), r = s.R + rand(220, 380);
@@ -112,14 +112,18 @@ export function updateTraffic(dt: number) {
       t.vx *= Math.pow(0.5, dt); t.vy *= Math.pow(0.5, dt); t.vz *= Math.pow(0.5, dt);
       if (t.wait <= 0) t.goal = gateGoal(pick(world.gates));
     } else {
-      let spd = t.spd;
+      let spd = t.spd, gap = Infinity;
       if (g.station) spd = Math.min(spd, d * 0.4 + 8);
       _v.set(dx / d * spd, dy / d * spd, dz / d * spd);
       for (const s of world.stations) {
         const sd = d3(t.x, t.y, t.z, s.x, s.y, s.z);
+        gap = Math.min(gap, sd - s.R);
         if (sd < s.R + 120) { _v.x += (t.x - s.x) / sd * 60; _v.y += (t.y - s.y) / sd * 60; _v.z += (t.z - s.z) / sd * 60; }
       }
-      const k = Math.min(1, dt * 0.6);
+      // Großer Sektor (Heimstatt, 50 km bis zum Tor): Frachter fliegen die lange Strecke im Schnellflug (bis 2,5 km/s), weit weg von Stationen und Ziel
+      const far = world.def?.size && !t.story ? Math.min(d - 2500, gap - 1500) : 0;
+      if (far > 0) { const fs = Math.min(2500, far * 0.4); if (fs > spd) _v.multiplyScalar(fs / spd); }
+      const k = Math.min(1, dt * (Math.hypot(t.vx, t.vy, t.vz) > 400 || far > 0 ? 2 : 0.6));
       t.vx += (_v.x - t.vx) * k; t.vy += (_v.y - t.vy) * k; t.vz += (_v.z - t.vz) * k;
       if (g.station && d < 40) t.wait = rand(20, 45);
       if (g.gate && d < 75) {

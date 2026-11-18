@@ -45,6 +45,8 @@ import { SECTOR, FACTION } from './data/galaxy';
 import { loadShipModels, setGear, setDoors, RAMP, type Paint } from './models/gltfShips';
 import { hasInterior } from './data/ships';
 import { loadRockModel } from './game/world';
+import { updateFarView } from './game/farview';
+import { toggleSchnellflug, pickNav, bigSectorHint } from './game/schnellflug';
 import { loadStationModels } from './models/stationModels';
 import { loadCharModels } from './models/charModels';
 import type { Gate, Station } from './game/world';
@@ -98,6 +100,7 @@ function enterSector(id: string, arrive: { gateFrom?: string; station?: string; 
   } else placePlayer(P.x, P.y, P.z, P.yaw, 0);
   const fac = FACTION[def.faction];
   showBanner(def.name.toUpperCase(), `${fac.n} · Gefahr ${def.danger}/5`, fac.c);
+  if (def.size) setTimeout(bigSectorHint, 3200);   // großer Sektor: einmal erklären, wie man die Strecken fliegt
   if (P.route === id) { P.route = null; setTimeout(() => radio('SYSTEM', 'Ziel erreicht. Route beendet.'), 1500); }
   if (first && id !== 'heimstatt') setTimeout(() => radio('SYSTEM', `Neuer Sektor erkundet: ${def.name}. Kartendaten aktualisiert.`), 2200);
   if (first && PLANETS[id]) setTimeout(() => radio('SYSTEM', `Der Planet ${PLANETS[id].name} ist landbar. Die Anflugzone ist markiert.`), 5000);
@@ -312,6 +315,8 @@ onKey(code => {
   }
   if (code === 'KeyR' && G.mode === 'play') { scan(); noteScan(); return; }
   if (code === 'KeyJ' && G.mode === 'play') { toggleJumpDrive(); return; }
+  if (code === 'KeyH' && G.mode === 'play') { toggleSchnellflug(); return; }                                  // Schnellflug / Kurzsprung (schnellflug.ts)
+  if (code === 'KeyN' && G.mode === 'play' && !world.surface) { pickNav(camera.getWorldDirection(new THREE.Vector3())); return; }   // Navigationsziel im Fadenkreuz
   if ((code === 'ShiftLeft' || code === 'ShiftRight') && G.mode === 'play') { G.cruise = !G.cruise; return; }   // ohne Funkmeldung (Wunsch des Spielers): Ton und blaue Tempoanzeige reichen
   // Ich-Sicht / Außensicht: überall zu Fuß (Station, Hangar, Schiff, Mine, Planetenboden)
   if (code === 'KeyV' && (G.mode === 'walk' || G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { toggleView(); return; }
@@ -691,6 +696,7 @@ function loop(now: number, manual = false) {
     else if (!IN.active && G.mode !== 'menu' && G.mode !== 'intro') aimShadows(P.x, P.y, P.z, sunDir, world.surface ? 320 : 240, true);
     else aimShadows(camera.position.x, camera.position.y, camera.position.z, sunDir, 240, false);
     updateSky(camera.position);
+    updateFarView(camera.position, G.time);   // ferne Stationen und Tore verkleinert heranrücken (große Sektoren)
     updateAmbience(dt);
     syncParticles();
     syncBolts([world.bullets, world.ebullets]);

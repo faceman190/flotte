@@ -14,6 +14,7 @@ import { NET, remoteMarkers } from '../game/net';
 import { trackedMission, missionLines, missionMarkers } from '../game/missions';
 import { storyObjective, storyMarkers } from '../game/story';
 import { floats } from '../game/fx';
+import { SF, SF_MAX, navTarget, sfEta } from '../game/schnellflug';
 
 const TAU = Math.PI * 2;
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
@@ -98,6 +99,19 @@ export function drawHUD() {
       ux.fillStyle = col; ux.font = (isHop ? '700 ' : '') + '12px "Share Tech Mono",Consolas,monospace'; ux.fillText(label, p.x, p.y);
       if (isHop) { const c = proj(g.x, g.y, g.z); if (onScreen(c)) brackets(c, clamp(9000 / Math.max(d, 1), 12, 90), col, 2); }
     } else if (isHop) edgeArrow(p, col, label);
+  }
+  // Navigationsziel (N oder Sektorkarte): Klammern um den Ort, am Rand ein Pfeil
+  {
+    const nt = navTarget();
+    if (nt) {
+      const p = proj(nt.x, nt.y, nt.z), d = d3(nt.x, nt.y, nt.z, P.x, P.y, P.z), col = '#bfe6ff', label = `◇ ZIEL · ${nt.name.toUpperCase()} · ${fmtD(d)}`;
+      if (onScreen(p, 20)) {
+        const br = clamp(nt.R * 260 / Math.max(d, 1), 14, 80);
+        brackets(p, br, col, 1.5);
+        // Stationen, Tore und Anflugzone tragen schon ihren Namen: dann nur die Klammern (sonst doppelt am Fadenkreuz). Felder haben keine eigene Beschriftung.
+        if (nt.kind === 'field') { ux.fillStyle = col; ux.font = '700 11px "Share Tech Mono",Consolas,monospace'; ux.fillText(label, p.x, p.y + br + 16); }
+      } else edgeArrow(p, col, label);
+    }
   }
   // Verkehr
   for (const s of world.traffic) {
@@ -191,12 +205,22 @@ export function drawHUD() {
       }
       if (G.hitMark > 0) { ux.lineWidth = 2; for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { ux.beginPath(); ux.moveTo(a.x + dx * 6, a.y + dy * 6); ux.lineTo(a.x + dx * 12, a.y + dy * 12); ux.stroke(); } }
       // Tempo am Fadenkreuz (seit Alpha 1.40): Zahl links, darunter ein dünner Balken bis zur Höchstgeschwindigkeit der Flugstufe
-      const sp = Math.hypot(P.vx, P.vy, P.vz), vm = Math.max(1, flightMax()), sx = a.x - 40, sy = a.y + 4;
-      ux.textAlign = 'right'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = G.cruise ? '#7cc4ff' : 'rgba(228,238,245,.85)';
-      ux.fillText(String(Math.round(sp)), sx, sy);
-      ux.font = '9px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = 'rgba(228,238,245,.5)'; ux.fillText(G.cruise ? 'm/s · REISE' : 'm/s', sx, sy + 11);
+      const fast = SF.phase === 'fly';   // Schnellflug: km/s, Balken bis 8 km/s
+      const sp = Math.hypot(P.vx, P.vy, P.vz), vm = fast ? SF_MAX : Math.max(1, flightMax()), sx = a.x - 40, sy = a.y + 4;
+      ux.textAlign = 'right'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = fast ? '#bfe6ff' : G.cruise ? '#7cc4ff' : 'rgba(228,238,245,.85)';
+      ux.fillText(fast ? (sp / 1000).toFixed(1).replace('.', ',') : String(Math.round(sp)), sx, sy);
+      ux.font = '9px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = 'rgba(228,238,245,.5)'; ux.fillText(fast ? 'km/s · SCHNELL' : G.cruise ? 'm/s · REISE' : 'm/s', sx, sy + 11);
       ux.fillStyle = 'rgba(255,255,255,.12)'; ux.fillRect(sx - 34, sy + 15, 34, 2);
-      ux.fillStyle = G.cruise ? '#7cc4ff' : 'rgba(255,210,122,.9)'; ux.fillRect(sx - 34, sy + 15, 34 * clamp(sp / vm, 0, 1), 2);
+      ux.fillStyle = fast ? '#bfe6ff' : G.cruise ? '#7cc4ff' : 'rgba(255,210,122,.9)'; ux.fillRect(sx - 34, sy + 15, 34 * clamp(sp / vm, 0, 1), 2);
+      // Schnellflug: Laden bzw. Ziel und Restzeit unter dem Fadenkreuz
+      if (SF.phase !== 'off') {
+        const nt = navTarget(), eta = sfEta();
+        ux.textAlign = 'center'; ux.font = '700 11px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = '#bfe6ff';
+        const line = SF.phase === 'spool' ? `${SF.auto ? 'KURZSPRUNG' : 'SCHNELLFLUG'} LÄDT · ${Math.max(0, SF.t).toFixed(1).replace('.', ',')} s` + (SF.auto && SF.t <= 0 ? ' · AUSRICHTEN' : '')
+          : SF.auto && nt ? `KURZSPRUNG → ${nt.name.toUpperCase()}${eta != null ? ' · ' + Math.ceil(eta) + ' s' : ''}` : 'SCHNELLFLUG · S/H BEENDET';
+        ux.fillText(line, a.x, a.y + 48);
+        if (SF.phase === 'spool') { ux.fillStyle = 'rgba(255,255,255,.12)'; ux.fillRect(a.x - 50, a.y + 54, 100, 2); ux.fillStyle = '#bfe6ff'; ux.fillRect(a.x - 50, a.y + 54, 100 * clamp(1 - SF.t / 3.5, 0, 1), 2); }
+      }
       ux.textAlign = 'center';
     }
     if (settings.steer !== 'zeiger') {      // direkte Lenkung (seit 2026-11-18): kein Kreis, kein Lenkzeiger
@@ -565,7 +589,7 @@ export function updatePanels(dt: number) {
   $('locNet').innerHTML = NET.status === 'online' ? `<span class="good">online · ${NET.roster.length}</span>` : NET.status === 'verbinde' ? '<span class="acc">verbinde …</span>' : NET.status === 'fehler' ? '<span class="bad">getrennt</span>' : '<span style="color:var(--dim)">allein</span>';
   updateObjectives();
   $('objP').style.transform = `scale(${settings.hud})`;
-  $('speed').textContent = `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} / ${flightMax()} m/s${G.cruise ? ' · REISE' : ''}${G.jd ? ` · SPRUNG ${G.jd.toFixed(1)} s` : ''}` + (world.ground ? ` · Höhe ${Math.round(P.y - world.ground(P.x, P.z))} m` : '');
+  $('speed').textContent = `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} / ${flightMax()} m/s${G.cruise ? ' · REISE' : ''}${G.jd ? ` · SPRUNG ${G.jd.toFixed(1)} s` : ''}${SF.phase === 'fly' ? ' · SCHNELLFLUG' : ''}` + (world.ground ? ` · Höhe ${Math.round(P.y - world.ground(P.x, P.z))} m` : '');
   const pr = $('prompt'), st = G.mode === 'play' ? nearDock() : null, li = !st && G.mode === 'play' ? landInfo() : null;
   if (st) { pr.textContent = `[E] An „${st.name}“ andocken`; pr.classList.remove('hidden'); }
   else if (li) { pr.textContent = li.text; pr.classList.remove('hidden'); }

@@ -9,6 +9,7 @@ import { TRADE } from '../game/trade';
 import { isOnline } from '../game/net';
 import { MINE } from '../game/mining';
 import { DUN } from '../game/dungeon';
+import { SF, navTarget } from '../game/schnellflug';
 import { FOOT } from '../game/onfoot';
 
 // Steuerungsleiste links unten: zeigt nur die Tasten, die gerade Sinn ergeben.
@@ -61,11 +62,12 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     r.push(['Klick', fire, P.tool === 'laser' && !!MINE.target]);
     r.push(['W / S', 'Schub / Bremsen'], ['Maus', 'Lenken'], ['A / D', 'Ausweichen'], ['Leer / Strg', 'Hoch / Runter'], ['Q / E', 'Rollen'], ['Umschalt', G.cruise ? 'Reiseflug aktiv' : 'Reiseflug', G.cruise]);
     r.push(['J', G.jd ? 'Sprung abbrechen' : 'Sprungantrieb', !!G.jd]);
+    if (!world.surface) r.push(['H', SF.phase === 'fly' ? 'Schnellflug beenden' : SF.phase === 'spool' ? 'Schnellflug lädt' : navTarget() ? 'Kurzsprung zum Ziel' : 'Schnellflug', SF.phase !== 'off'], ['N', navTarget() ? 'Ziel: ' + navTarget()!.name : 'Ziel im Fadenkreuz wählen', !!navTarget()]);
     r.push(['1–4', st.laser ? 'Werkzeug wählen' : 'Waffen']);
     if (st.laser) r.push(['R', 'Asteroiden scannen']);
     r.push(['C / V', look.free ? 'Freie Kamera aktiv' : 'Freie Kamera halten / fest', look.free], ['Mausrad', 'Zoom']);
     r.push(['B', 'Flottenband'], ['M', 'Karte']);
-    return { title: world.surface ? `Flug · ${world.def?.name || ''}` : `Flug · ${P.tool === 'laser' ? 'Bergbau' : P.tool === 'charge' ? 'Sprengen' : 'Kampf'}`, rows: r.slice(0, 15) };
+    return { title: world.surface ? `Flug · ${world.def?.name || ''}` : `Flug · ${P.tool === 'laser' ? 'Bergbau' : P.tool === 'charge' ? 'Sprengen' : 'Kampf'}`, rows: r.slice(0, 17) };
   }
   return null;
 }

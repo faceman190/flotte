@@ -24,11 +24,11 @@ function updateDust(dt: number) {
   if (!camInit) { lastCam.copy(c); camInit = true; }
   if (dt > 0) {
     const v = new THREE.Vector3().subVectors(c, lastCam).divideScalar(dt);
-    if (v.length() > 2000) v.set(0, 0, 0);   // Sprung/Teleport: keine Riesenstreifen
+    if (v.length() * dt > 2500) v.set(0, 0, 0);   // Sprung/Teleport: keine Riesenstreifen (nach Weg je Bild, der Schnellflug fliegt bis 8 km/s)
     camVel.lerp(v, Math.min(1, dt * 8));
   }
   lastCam.copy(c);
-  const sp = camVel.length(), k = Math.min(0.09, 0.02 + sp * 0.00012);
+  const sp = camVel.length(), k = Math.min(0.09, 0.02 + sp * 0.00012, 140 / Math.max(sp, 1));   // Streifen höchstens 140 m lang (Schnellflug)
   for (let i = 0; i < DUST; i++) {
     let x = dustP[i * 3] - c.x, y = dustP[i * 3 + 1] - c.y, z = dustP[i * 3 + 2] - c.z;
     x = ((x + HALF) % BOX + BOX) % BOX - HALF; y = ((y + HALF) % BOX + BOX) % BOX - HALF; z = ((z + HALF) % BOX + BOX) % BOX - HALF;

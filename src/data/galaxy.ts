@@ -33,6 +33,9 @@ export interface SectorDef {
   fields: FieldDef[];
   hives?: number;               // Ferrox-Bienenstöcke (Mutterschiffe)
   sky?: { rot?: [number, number, number]; gain?: number };   // feste Himmelsdrehung und Helligkeit (sonst zufällig je Sektor)
+  // Großer Sektor (seit Alpha 1.50, Heimstatt): eigener Radius und eigene Höhe, Tore und Anflugzone weiter draußen (alle Angaben in m).
+  // Ohne Angabe: 8 km Radius, ±1,6 km Höhe, Tore bei 6 km, Anflugzone bei 5 km. Weite Strecken überbrückt der Schnellflug (src/game/schnellflug.ts).
+  size?: { r: number; h: number; gate: number; orbit: number };
 }
 
 export const FACTION = {
@@ -48,15 +51,18 @@ export const SECTORS: SectorDef[] = [
     desc: 'Herz des Menschenraums. Hier ging die Bastion vor Anker, nachdem ihre Crew hinter dem Riss gestrandet war.',
     // Nebel-Mitte (Bildmitte) liegt hinter der Menüszene: Drehung π − 0,6 passt zur Menükamera (main.ts, MENU_ORBIT)
     neb: 'heimat', tint: 0xffffff, sky: { rot: [0, Math.PI - 0.6, 0], gain: 1.7 }, planet: { size: 3000, tint: 0xc8dcff, dir: [-0.6, -0.2, -0.8], atm: 0x80b0ff },
+    // Großer Sektor (Alpha 1.50, Konzept in docs/heimstatt.md): Die Bastion bleibt in der Mitte (alle Story-Koordinaten beziehen sich auf sie). Der Heimstatt-Ring
+    // liegt 30 km Richtung Planet neben der Anflugzone, der Eisengürtel mit der Eisenkrone 18–26 km im Süden, der Reifschleier (Eis) 28 km im Ostsüdosten, die Tore bei 50 km.
+    size: { r: 60000, h: 6000, gate: 50000, orbit: 32000 },
     stations: [
       { id: 'bastion', kind: 'carrier', name: 'Bastion', pos: [0, 0, 0], prices: { schrott: 1.2 } },
-      { id: 'heimring', kind: 'station', name: 'Heimstatt-Ring', pos: [1100, 120, -900], prices: { zellen: 1.15 } },
-      // Gildehütte am Metallfeld: die Raffinerie des Sektors (Alpha 1.22). Eigenes Modell (src/models/eisenkrone.ts), eigenes Deck (src/game/deck.ts).
-      // Werft, Ausrüster und Werkstatt bleiben auf der Bastion. Lage: südlich der Bastion am Ostrand des Metallfelds. Nicht nach Westen oder Nordwesten
-      // verlegen: Dort liegen die Ankerplätze der Flotte aus Kapitel 5 (SLOTS in chapter5.ts), die Schiffe bleiben sonst an der Station hängen.
-      { id: 'eisenkrone', kind: 'station', name: 'Eisenkrone', pos: [-540, 60, 1460], prices: { erz: 1.1, kupfer: 1.1, stahl: 0.95, kupferb: 0.95 }, refinery: true, gilde: true, no: ['ausruester', 'werft', 'werkstatt'] },
+      { id: 'heimring', kind: 'station', name: 'Heimstatt-Ring', pos: [-16500, -300, -24500], prices: { zellen: 1.15 } },
+      // Gildehütte am Eisengürtel: die Raffinerie des Sektors (Alpha 1.22). Eigenes Modell (src/models/eisenkrone.ts), eigenes Deck (src/game/deck.ts).
+      // Werft, Ausrüster und Werkstatt bleiben auf der Bastion. Lage: am Ostrand des Eisengürtels, das Hangartor zeigt nach Norden Richtung Bastion.
+      // Nicht in die Ankerbucht westlich oder nordwestlich der Bastion legen: Dort liegen die Ankerplätze der Flotte aus Kapitel 5 (SLOTS in chapter5.ts).
+      { id: 'eisenkrone', kind: 'station', name: 'Eisenkrone', pos: [1200, 60, 20500], prices: { erz: 1.1, kupfer: 1.1, stahl: 0.95, kupferb: 0.95 }, refinery: true, gilde: true, no: ['ausruester', 'werft', 'werkstatt'] },
     ],
-    fields: [{ kind: 'metal', pos: [-1800, 0, 1000], r: 900, n: 40 }, { kind: 'ice', pos: [1700, -100, 1500], r: 700, n: 22 }],
+    fields: [{ kind: 'metal', pos: [-1700, 0, 22500], r: 2500, n: 110 }, { kind: 'ice', pos: [26000, -100, 10000], r: 1100, n: 34 }],
   },
   {
     id: 'lichtwall', name: 'Lichtwall', faction: 'core', danger: 0, map: [270, 180], links: ['heimstatt', 'eisgarten', 'rotfels'],
@@ -185,6 +191,7 @@ export const SECTORS: SectorDef[] = [
 // deutlich größer und voller. Die Zahlen oben sind die alten Grundwerte; hier werden sie einmal beim Start umgerechnet.
 export const STRETCH = 1.3;
 for (const s of SECTORS) {
+  if (s.size) continue;   // große Sektoren (Heimstatt seit Alpha 1.50) stehen schon in echten Metern da
   for (const st of s.stations) st.pos = [Math.round(st.pos[0] * STRETCH), st.pos[1], Math.round(st.pos[2] * STRETCH)];
   for (const f of s.fields) { f.pos = [Math.round(f.pos[0] * STRETCH), f.pos[1], Math.round(f.pos[2] * STRETCH)]; f.r = Math.round(f.r * 1.4); f.n = Math.round(f.n * 1.6); }
 }
@@ -215,6 +222,6 @@ export function findRoute(from: string, to: string): string[] | null {
 export const GATE_DIST = 6000;
 export function gatePos(from: string, to: string): [number, number, number] {
   const a = SECTOR[from].map, b = SECTOR[to].map, dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
-  const yOff = ((from.length * 37 + to.length * 53) % 300) - 150;
-  return [dx / l * GATE_DIST, yOff, dy / l * GATE_DIST];
+  const yOff = ((from.length * 37 + to.length * 53) % 300) - 150, D = SECTOR[from].size?.gate ?? GATE_DIST;
+  return [dx / l * D, yOff, dy / l * D];
 }

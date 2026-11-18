@@ -104,6 +104,82 @@ Die Bilder zeigen die Richtung, nicht das Ergebnis im Spiel: Ein Jäger mit 3.00
 - Abweichungen vom Bild: Der Rumpf ist kantiger (ein Keil aus vier Abschnitten), der Schneidkopf dreht sich nicht, die Zangen haben keine Zähne.
 - Nicht geprüft: das Aussehen im Gefecht aus der Sicht des Piloten bei voller Bildrate, und Mitspieler (dort bleiben die Greifer in Ruhelage).
 
+## Jäger, Fassung 2: Schaumodell in Blender (18.11.2026)
+
+Wunsch: „Entwerfe jetzt anhand der Bilder einen Ferrox Jäger in Blender. Ich erwarte ein Ergebnis auf dem Niveau der letzten Schiffe oder noch besser.“
+Gebaut wie Würger, Elster und Wisent als Schaumodell (noch nicht im Spiel; die Fassung 1 aus Alpha 1.11 fliegt weiter).
+
+![Ferrox-Jäger Fassung 2](bilder/ferrox-jaeger2-blatt.jpg)
+
+- **Dateien:** `asset-src/neu/fxjaeger/` (`fxj_kit.py` Bau, `fxj_lauf.py` Bau und Bilder, `fxj_blatt.py` Übersichtsblatt), Ausgabe `FerroxJaeger.blend`,
+  Bilder `fxj-<ansicht>.jpg` (schraeg, front, seite, draufsicht, heck, detail, unten, weltraum, jagd). Aufruf:
+  `blender.exe -b --python fxj_lauf.py -- alle` (Proben schneller mit `KOR_SAMPLES=48`). Werkzeuge, Platten und Nieten kommen aus `../wuerger/wue_kit.py`.
+- **Maße:** 23,6 × 12,6 m, schwebt (Rumpfmitte 3,2 m über dem Boden), rund 130.000 Dreiecke.
+- **Rumpf:** flacher Keil aus neun Spanten mit Grat, Schulterfacette, Seitenkante, Lippe und starkem Einzug darunter; Plattenraster mit schrägen Fugen,
+  sieben erhabene Platten der Erbauer, darüber drei schief aufgeschweißte Bleche (hell mit „FRACHT 4“, oliv, Rostblech) mit Schweißnähten;
+  Panzerschürzen rechts drei, links zwei (in der Lücke liegen Zylinder, Kasten und Kabel offen); Stirn mit Krempe, zwei Gittern und Schläuchen.
+- **Kopf:** achteckiger Kragen, Trommel mit vier Zahnkränzen (einige Zähne ausgebrochen), Bohrspitze; darüber ein Keil als Linsenhaube mit sieben
+  ungleichen Linsen aus dunklem Glas mit kleinem violettem Kern (kein Gesicht). Im Weltraum glüht ein Ring zwischen Trommel und Spitze.
+- **Arme:** rechts der Arm der Erbauer (Kastenoberarm mit zwei Zylindern, gebogener Unterarm, große gezahnte Zange aus zwei Backen),
+  links der Ersatz aus Menschenstahl (zwei Rohrträger mit Querstreben, Haken und Dorn) mit dem Frachterblech „KRN 2207“ außen am Unterarm.
+- **Bewaffnung** (Wunsch „er braucht auch Bewaffnung“, weiter nach „Werkzeug, nicht Waffe“: umgebautes Bergbaugerät und Beute):
+  rechts unter dem Rumpf die **Schneidlanze** der Erbauer (Gehäuse, Lauf mit neun Kühlrippen, Fokusringe, drei Zinken um einen Ferrit-Emitter,
+  glüht beim Feuern), links eine **erbeutete Menschenkanone** (angeschweißte Halteplatten, Gehäuse in Oliv mit „BK 30“, Laufmantel, Mündungsbremse,
+  Patronenkasten „30 MM“ mit Gurtzuführung), auf dem Rücken ein **Sprengladungswerfer** (Drehkranz, Kasten mit sechs Rohren, ein Rohr leer,
+  Ladungen mit glühendem Band, zwei Richtzylinder). Fürs Spiel: Lanze = die heutigen Schüsse, Werfer = Raketen, Kanone als zweite Waffe denkbar.
+  Mündungspunkte in `fxj-anker.json` (`lanze`, `kanone`, `werfer`).
+- **Ferrit:** sechs Gruppen, die größte auf der rechten Schulter; Adern violett, sparsam, nur fleckweise (Voronoi-Kanten im Material).
+- **Lehren:** Spiegelndes Metall wirkt im grauen Studio wie helle Fliesen; matte Platten mit wenig Glanz (low_spec 0,18) lesen sich wie Rost und Ruß.
+  Schrift, die über einer Fläche schwebt, wirft im Sonnenlicht einen zweiten Schriftzug als Schatten (Schatten der Schrift aus).
+  Ein Abgaskegel aus leuchtender Hülle zeigt in Cycles seine Rückwand als harten Zylinder; die Glut sitzt deshalb nah an der Düsenöffnung.
+- **Im Spiel (ersetzt Fassung 1):** `fxj_export.py` schreibt `asset-src/glb/station/Ferrox_Jaeger2.glb` (Nahmodell, rund 27.000 Dreiecke:
+  Rumpf und die Knoten `arm_r` = Arm der Erbauer auf −X, `arm_l` = Ersatzarm auf +X) und `Ferrox_Jaeger2Fern.glb` (ein Netz ohne Teile unter 60 cm,
+  rund 8.500 Dreiecke), dazu `fxj-spiel.json` mit Mündungen, Düsen und Schultern in Spielkoordinaten (Nase +Z, oben +Y, Ursprung Rumpfmitte).
+  Aufruf: `blender.exe -b FerroxJaeger.blend --python fxj_export.py`, danach `npm run assets`.
+  - Materialien in drei Gruppen mit Eckfarben (`fx2_plat`, `fx2_stahl`, `fx2_blech`, dazu Glas, Ferrit und Glut): so braucht ein Jäger 29 Zeichenaufrufe
+    statt 85. Rost, Flecken und Adern rechnet `fx2Material()` in `src/models/ferrox.ts` im Shader aus der Lage im Modell (keine Texturen).
+  - `ferroxDrone()` baut ein `THREE.LOD` (Fernmodell ab 300 m), Düsen- und Linsenschein als Sprites, Faktor 1,1 (`userData.big`, im Spiel rund 26 m wie früher).
+  - Greifer: Beim Packen landen Verschiebung und Maßstab in den Knoten der Arme; deshalb hängt jeder Arm unter einem eigenen Gelenk an der Schulter
+    (`FX2_PIVOT`). `combat.ts` dreht nach außen je nach Seite des Arms (Vorzeichen aus der Lage), passend für Fassung 1 und 2.
+  - Schüsse kommen aus der Schneidlanze (`userData.muzzle`), der Schweif beginnt an den Düsen (`userData.trailZ`).
+  - Fassung 1 (`station/Ferrox_Jaeger`) bleibt als Ersatz, falls die neuen Dateien fehlen.
+
+## Bienenstock: Schaumodell in Blender (18.11.2026)
+
+Wunsch: „Wir sollten das Mutterschiff oder Bienenstock der Ferrox entwerfen. Mach das Modell in Blender. Zeig mir den Entwurf.“
+Anders als in Entscheidung 6 vorgeschlagen (Tripo) also in Blender gebaut, nach dem Konzeptbild. Noch nicht im Spiel.
+
+![Bienenstock](bilder/ferrox-bienenstock-blatt.jpg)
+
+- **Dateien:** `asset-src/neu/fxbienen/` (`fxb_kit.py` Bau, `fxb_lauf.py -- alle` Bau und Bilder, `fxb_blatt.py` Übersichtsblatt),
+  Ausgabe `FerroxBienenstock.blend`, Bilder `fxb-<ansicht>.jpg`. Werkzeuge, Materialien und Kristalle aus `../fxjaeger/fxj_kit.py`
+  (dort gibt es dafür `NUR_HELFER_FXJ`).
+- **Maßstab 1 : 10** (1 Blender-Einheit = 10 m). Gebaut wird in der ersten Größe, am Ende vergrößert `rescale(K)` alles um K = 1,9 auf rund
+  **400 m Rumpf** (Wunsch nach der ersten Fassung: „ein wenig größer, ca. 400 m, mehr Details“). Die Vergrößerung wird in die Daten geschrieben,
+  damit die Muster der Materialien (Objektkoordinaten, für Meter gebaut) ihre Größe behalten und am großen Rumpf feiner wirken.
+  Maße mit Wracks und Kristallen rund 427 × 152 × 218 m; rund 290.000 Dreiecke ohne die Jäger (mit den acht Jäger-Instanzen 1,5 Millionen).
+- **Rumpf:** Superellipsen-Spanten, Kopf breiter als der Leib, Plattenraster mit großen Flickenfeldern (Rost, Menschenblech, Oliv),
+  am Kopf geschichtete Panzerplatten mit Nieten. Zwölf Spanten außen über der Ofenmitte, dazwischen 160 orange Glutfenster.
+- **Maul:** Ober- und Unterkiefer ragen weit vor, die Mundwinkel liegen zurück. Innen ein gerippter Schlund (jede dritte Rippe glüht)
+  bis zur Glutwand mit Roststäben; Brechwalzen im Unterkiefer, unregelmäßige Zähne an der Lippe (Werkzeug, nicht Waffe).
+- **Linke Flanke:** Galerie mit Geländer, Leitungen und Kästen, darunter acht Startschächte (Trichter, innen glühend, Klappen mit Zylindern).
+- **Rechte Flanke und Heck:** Ferrit-Spitzen bis rund 30 m hoch, an der Flanke kleinere Gruppen; drei Heckdüsen in blassem Violett.
+- **Bauch:** Gerüst aus Trägern, Hängestreben, Querjochen und Seilwinden; an Trossen hängen sechs halb gefressene Frachter
+  (Bug, Kiel, Spanten in den Fraßlöchern, Deckreste, Brückenaufbau).
+- **Schmelzhütte auf dem Rücken** (zweite Fassung): vier Schornsteine mit Glut, zwei Greifkräne (einer hebt ein Blech), vier Leitungsstränge mit
+  Stützen, Lüfter und Sensormasten; an den unteren Flanken Leitungen mit Schellen, Kästen und runde Luken; weitere Panzerplatten an den Kopfseiten;
+  ein Frachter steckt halb im Maul. Plattenraster feiner (72 Felder um den Rumpf).
+- **Größenvergleich:** acht echte Jäger (Fassung 2, aus `FerroxJaeger.blend` angehängt und als Instanzen gesetzt) fallen aus den Schächten und fliegen vor dem Maul.
+- **Im Spiel (ersetzt den Zwanzigflächner):** das Wrack im Maul wurde vorher auf Wunsch entfernt. `fxb_export.py` schreibt
+  `asset-src/glb/station/Ferrox_Bienenstock.glb` (Nahmodell, rund 107.000 Dreiecke, 4,6 MB) und `Ferrox_BienenstockFern.glb` (ohne Teile unter 6 m,
+  rund 17.000 Dreiecke, ab 1.600 m), dazu `fxb-spiel.json` mit Maul, Glutwand, Startschächten, Düsen und Schornsteinen in Spielkoordinaten
+  (Meter, Maul +Z). Aufruf: `blender.exe -b FerroxBienenstock.blend --python fxb_export.py`, danach `npm run assets`.
+  - `hive2()` in `src/models/ferrox.ts`: gleiche Materialgruppen und derselbe Rost- und Adern-Shader wie beim Jäger 2, Glut als Sprites
+    (Schlund, Glutwand, Schornsteine, Schächte, Düsen), zufällige Ausrichtung je Bienenstock, er dreht sich nicht mehr (`userData.still`).
+  - `combat.ts`: Trefferkugeln als Kette über die ganze Länge (`userData.spheres`, `hitBall()`, gilt für Laser und Raketen); Jäger fallen aus den
+    Startschächten (`userData.launch`); Schüsse kommen aus dem Maul (`userData.maw`); die Shader werden beim Betreten des Sektors vorgewärmt.
+  - Der Zwanzigflächner bleibt Ersatz, falls die Dateien fehlen.
+
 ## Technik (für die Umsetzung)
 
 - Ein gemeinsames Texturblatt für alle Ferrox (Platte der Erbauer, Menschenblech, Rost, Adern, Ferrit), damit sie zusammengehören und wenig Speicher kosten.

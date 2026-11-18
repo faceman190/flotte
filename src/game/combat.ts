@@ -86,6 +86,26 @@ function hitFlashable(root: THREE.Object3D) {
   });
   return u;
 }
+// Trefferkugeln eines Feindes: der Bienenstock (userData.spheres) hat eine Kette über die ganze Länge, sonst eine Kugel je Typ.
+// test(c, r) prüft eine Kugel; zurück kommt die getroffene Kugel oder null.
+const _hb = new THREE.Vector3();
+function hitBall(e: any, test: (c: { x: number; y: number; z: number }, r: number) => boolean): { c: { x: number; y: number; z: number }; r: number } | null {
+  const S = e.mesh.userData.spheres as number[][] | undefined;
+  if (S) {
+    const k = e.mesh.scale.x;
+    for (const q of S) { const c = e.mesh.localToWorld(_hb.set(q[0], q[1], q[2])); if (test(c, q[3] * k)) return { c: { x: c.x, y: c.y, z: c.z }, r: q[3] * k }; }
+    return null;
+  }
+  const r = e.type === 'mother' ? 80 : e.type === 'bomber' ? 18 : 13;
+  return test(e, r) ? { c: e, r } : null;
+}
+// Mündung der Schneidlanze in Weltkoordinaten (Jäger 2: userData.muzzle in Modellmetern), sonst null
+const _mz = new THREE.Vector3();
+function muzzle(e: any) {
+  const p = e.mesh.userData.muzzle as THREE.Vector3 | undefined;
+  if (!p) return null;
+  e.mesh.updateMatrixWorld(); return e.mesh.localToWorld(_mz.copy(p));
+}
 function dropFlashMats(e: any) {
   if (!e.hitU) return;
   const seen = new Set<THREE.Material>();
@@ -96,6 +116,7 @@ export function warmFerrox() {
   try {
     const g = new THREE.Group();
     for (const m of [ferroxDrone(), BOMBER_T.clone()]) { hitFlashable(m); g.add(m); }
+    g.add(buildMother());      // Bienenstock (eigene Materialien) gleich mit
     compileFor(g, scene);
   } catch (err) { console.warn('Ferrox vorwärmen:', err); }
 }
@@ -104,13 +125,13 @@ export function spawnEnemy(type: 'drone' | 'bomber' | 'mother', x: number, y: nu
   const m = type === 'drone' ? ferroxDrone() : type === 'bomber' ? BOMBER_T.clone() : buildMother();
   // Jäger und Bomber größer als maßstabsgetreu, damit man sie im Kampf sieht; dazu Triebwerksspur und Glühpunkt
   let glow: THREE.Sprite | null = null;
-  const big = type === 'drone' ? 1.6 : type === 'bomber' ? 1.4 : 1;
+  const big = type === 'drone' ? (m.userData.big ?? 1.6) : type === 'bomber' ? 1.4 : 1;
   if (type !== 'mother') {
     m.scale.multiplyScalar(big);
     const gk = 1 / m.scale.x;   // Kinder in Metern angeben
     glow = new THREE.Sprite(glowMat(0xc0b0ff, 0.6));      // blass violett-weiß (Entwurf: weniger Leuchten) glow.position.set(0, 0, -5 * gk * big); glow.scale.setScalar(9 * gk); m.add(glow);
     const tm = basicAdd(0xa890ff); tm.opacity = 0.28; tm.side = THREE.DoubleSide;
-    const trail = new THREE.Mesh(TRAIL_GEO, tm); trail.scale.setScalar(gk * big * (type === 'bomber' ? 1.5 : 1)); trail.position.set(0, 0, -4 * gk * big); m.add(trail);
+    const trail = new THREE.Mesh(TRAIL_GEO, tm); trail.scale.setScalar(gk * big * (type === 'bomber' ? 1.5 : 1)); trail.position.set(0, 0, m.userData.trailZ ?? -4 * gk * big); m.add(trail);      // Jäger 2: Schweif an den Düsen
   }
   m.position.set(x, y, z);
   scene.add(m);
@@ -290,21 +311,27 @@ export function updateEnemies(dt: number) {
   for (let i = list.length - 1; i >= 0; i--) {
     const e = list[i];
     if (e.type === 'mother') {
-      e.mesh.rotation.y += dt * 0.1;
+      if (!e.mesh.userData.still) e.mesh.rotation.y += dt * 0.1;
       e.mesh.userData.ring.rotation.z += dt * 0.4;
       e.launch -= dt;
       const dp = d3(P.x, P.y, P.z, e.x, e.y, e.z);
       if (e.launch <= 0 && list.filter(x => x.type === 'drone').length < 16) {
         e.launch = dp < 2500 ? 14 : 30;
-        for (let k = 0; k < 2; k++) spawnEnemy('drone', e.x + rand(-90, 90), e.y + rand(-40, 40), e.z + rand(-90, 90), { x: e.x, y: e.y, z: e.z });
+        const L = e.mesh.userData.launch as THREE.Vector3[] | undefined;
+        if (L) e.mesh.updateMatrixWorld();
+        for (let k = 0; k < 2; k++) {
+          if (L) { const p = e.mesh.localToWorld(_mz.copy(L[Math.floor(Math.random() * L.length)])); spawnEnemy('drone', p.x, p.y, p.z, { x: e.x, y: e.y, z: e.z }); }
+          else spawnEnemy('drone', e.x + rand(-90, 90), e.y + rand(-40, 40), e.z + rand(-90, 90), { x: e.x, y: e.y, z: e.z });
+        }
       }
       e.cool -= dt;
       let aim: any = playerVisible() && dp < 750 ? P : null;
       for (const p of SHARED.pilots) if (d3(p.x, p.y, p.z, e.x, e.y, e.z) < (aim ? d3(aim.x, aim.y, aim.z, e.x, e.y, e.z) : 750)) aim = p;
       if (aim && e.cool <= 0) {
         e.cool = 0.6;
-        _v.set(aim.x - e.x, aim.y - e.y, aim.z - e.z).normalize();
-        fireBullet(world.ebullets, e.x + _v.x * 70, e.y + _v.y * 70, e.z + _v.z * 70, _v.x + rand(-0.03, 0.03), _v.y + rand(-0.03, 0.03), _v.z + rand(-0.03, 0.03), 600, 1.6, 0, 'e', { dmgP: e.es.dmgP, dmgS: e.es.dmgS });
+        const mw = e.mesh.userData.maw as THREE.Vector3 | undefined, o = mw ? (e.mesh.updateMatrixWorld(), e.mesh.localToWorld(_mz.copy(mw))) : null;
+        _v.set(aim.x - (o ? o.x : e.x), aim.y - (o ? o.y : e.y), aim.z - (o ? o.z : e.z)).normalize();
+        fireBullet(world.ebullets, o ? o.x : e.x + _v.x * 70, o ? o.y : e.y + _v.y * 70, o ? o.z : e.z + _v.z * 70, _v.x + rand(-0.03, 0.03), _v.y + rand(-0.03, 0.03), _v.z + rand(-0.03, 0.03), 600, 1.6, 0, 'e', { dmgP: e.es.dmgP, dmgS: e.es.dmgS });
       }
       continue;
     }
@@ -391,8 +418,10 @@ export function updateEnemies(dt: number) {
     if (e.arms && e.arms[0]) {      // Greifer: im Angriff weit offen und schnappend, sonst fast geschlossen und träge pendelnd
       e.armK += ((attacking ? 1 : 0) - e.armK) * Math.min(1, dt * 2.5);
       const snap = attacking ? Math.max(0, Math.sin(e.bob * 5.5)) * 0.16 : 0, sway = Math.sin(e.bob * 0.9) * 0.05;
-      e.arms[0].rotation.y = 0.06 + e.armK * 0.3 - snap + sway;
-      if (e.arms[1]) e.arms[1].rotation.y = -(0.08 + e.armK * 0.26 - snap * 0.8) + sway;
+      // Öffnen heißt nach außen drehen: das Vorzeichen folgt der Seite des Arms (Jäger 2 hat arm_r auf −X, der alte auf +X)
+      const a0 = e.arms[0], a1 = e.arms[1];
+      a0.rotation.y = (Math.sign(a0.position.x) || 1) * (0.06 + e.armK * 0.3 - snap) + sway;
+      if (a1) a1.rotation.y = (Math.sign(a1.position.x) || -1) * (0.08 + e.armK * 0.26 - snap * 0.8) + sway;
     }
     if (e.glow) e.glow.scale.setScalar(Math.max(10, d3(e.x, e.y, e.z, camera.position.x, camera.position.y, camera.position.z) * 0.02) / e.mesh.scale.x);
     e.cool -= dt;
@@ -405,13 +434,15 @@ export function updateEnemies(dt: number) {
         e.cool = rand(0.5, 0.75);
         // genauer als im Nahkreis früher (±10 m auf 190 m): auf große Entfernung sonst kaum ein Treffer. Seitlich ausweichen (A/D) hilft.
         _v.set(tx - e.x + rand(-6, 6), ty - e.y + rand(-6, 6), tz - e.z + rand(-6, 6)).normalize();
-        fireBullet(world.ebullets, e.x + _v.x * 8, e.y + _v.y * 8, e.z + _v.z * 8, _v.x, _v.y, _v.z, 750, 1.2, 0, 'e', { dmgP: e.es.dmgP, dmgS: e.es.dmgS });
+        const mz = muzzle(e);
+        fireBullet(world.ebullets, mz ? mz.x : e.x + _v.x * 8, mz ? mz.y : e.y + _v.y * 8, mz ? mz.z : e.z + _v.z * 8, _v.x, _v.y, _v.z, 750, 1.2, 0, 'e', { dmgP: e.es.dmgP, dmgS: e.es.dmgS });
         if (d3(e.x, e.y, e.z, P.x, P.y, P.z) < 800) snd(320, 0.06, 'square', 0.015, -150);
       }
     } else if (d < (isShip ? e.target.ship.R + 500 : 650) && e.cool <= 0) {
       e.cool = isShip ? rand(0.6, 1) : rand(0.8, 1.5);
       _v.set(tx - e.x + rand(-10, 10), ty - e.y + rand(-10, 10), tz - e.z + rand(-10, 10)).normalize();
-      fireBullet(world.ebullets, e.x + _v.x * 8, e.y + _v.y * 8, e.z + _v.z * 8, _v.x, _v.y, _v.z, 750, 1.4, 0, 'e', { dmgP: e.es.dmgP, dmgS: e.es.dmgS });
+      const mz = e.type === 'drone' ? muzzle(e) : null;
+      fireBullet(world.ebullets, mz ? mz.x : e.x + _v.x * 8, mz ? mz.y : e.y + _v.y * 8, mz ? mz.z : e.z + _v.z * 8, _v.x, _v.y, _v.z, 750, 1.4, 0, 'e', { dmgP: e.es.dmgP, dmgS: e.es.dmgS });
       if (d3(e.x, e.y, e.z, P.x, P.y, P.z) < 800) { snd(320, 0.06, 'square', 0.015, -150); if (G.time - lastScreech > 4.5) { lastScreech = G.time; sfx('ferrox_attack', 0.45, 0.9 + Math.random() * 0.2); } }
     }
   }
@@ -420,10 +451,10 @@ export function updateEnemies(dt: number) {
 // Einschlag am Ferrox (seit Alpha 1.40): Einschlagpunkt auf der Trefferkugel, heller Blitz, Funken vom Panzer weg, die Panzerung glüht kurz,
 // dazu ein leiser metallischer Ton (gedrosselt, sonst rattert das Dauerfeuer)
 let hitSnd = 0;
-function hitFx(e: any, b: any, r: number) {
-  let nx = b.px - e.x, ny = b.py - e.y, nz = b.pz - e.z;
+function hitFx(e: any, b: any, r: number, c: { x: number; y: number; z: number } = e) {
+  let nx = b.px - c.x, ny = b.py - c.y, nz = b.pz - c.z;
   const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
-  const k = e.type === 'mother' ? 0.85 : 0.6, x = e.x + nx * r * k, y = e.y + ny * r * k, z = e.z + nz * r * k;
+  const k = e.type === 'mother' ? 0.85 : 0.6, x = c.x + nx * r * k, y = c.y + ny * r * k, z = c.z + nz * r * k;
   // Stärke und Farbe nach der Waffe (Stufe des Laserbolzens): schwere Laser schlagen größer ein
   const st = boltStyle(b.bolt), im = st.impact, hc = '#' + st.halo.toString(16).padStart(6, '0');
   flash(x, y, z, '#ffe8c8', (e.type === 'mother' ? 16 : 7) * (0.7 + 0.3 * im), 0.08 + 0.02 * im);
@@ -445,10 +476,10 @@ export function updateProjectiles(dt: number) {
     b.life -= dt; b.age = (b.age || 0) + dt;
     let hit = false;
     for (let j = enemies.length - 1; j >= 0; j--) {
-      const e = enemies[j], r = e.type === 'mother' ? 80 : e.type === 'bomber' ? 18 : 13;   // Trefferkugel passend zur neuen Größe
-      if (segHit(b, e.x, e.y, e.z, r)) {
+      const e = enemies[j], hb = hitBall(e, (c, r) => segHit(b, c.x, c.y, c.z, r));   // Trefferkugel(n) passend zur Größe
+      if (hb) {
         hit = true;
-        if (b.kind === 'p') { G.hitMark = 0.12; hitFx(e, b, r); }
+        if (b.kind === 'p') { G.hitMark = 0.12; hitFx(e, b, hb.r, hb.c); }
         else burst(b.px, b.py, b.pz, '#d0a0ff', 6, 35, 0.35);
         if (!b.remote) hitEnemy(e, j, b.dmg, b.kind === 'p');
         break;
@@ -482,8 +513,9 @@ export function updateProjectiles(dt: number) {
     puff(r.x, r.y, r.z, 0, 0, 0, '#ffb070', 0.15);
     let boom = r.life <= 0;
     for (let j = enemies.length - 1; j >= 0 && !boom; j--) {
-      const e = enemies[j], rr = e.type === 'mother' ? 85 : e.type === 'bomber' ? 15 : 10;
-      if (d3(r.x, r.y, r.z, e.x, e.y, e.z) < rr) { boom = true; hitEnemy(e, j, 150 + 20 * P.up.guns, true); }
+      const e = enemies[j];
+      // Raketen wie vorher: Jäger 10 m, Bomber 15 m, Stock 85 m
+      if (hitBall(e, (c, rad) => d3(r.x, r.y, r.z, c.x, c.y, c.z) < rad + (e.type === 'mother' ? 5 : -3))) { boom = true; hitEnemy(e, j, 150 + 20 * P.up.guns, true); }
     }
     if (boom) { burst(r.x, r.y, r.z, '#ffd27a', 60, 60, 0.9); sfx('explosion' + Math.floor(Math.random() * 3), 0.6, 1.25, () => snd(120, 0.4, 'sawtooth', 0.06, -60)); scene.remove(r.mesh); rockets.splice(i, 1); }
   }
