@@ -3,11 +3,12 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { scene, camera, ambient, rim, sun, view, ux, gl, overlay } from '../core/engine';
 import { keys, mouse, releaseAll } from '../core/input';
 import { clamp, rng, hashStr } from '../core/util';
-import { snd, sfx } from '../core/audio';
+import { snd, sfx, shotSfx } from '../core/audio';
+import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, SHELL_PORT } from './footfx';
 import { texMat, std } from '../core/textures';
 import { P, G, settings, saveGame } from './state';
 import { world } from './world';
-import { burst, clearParticles, particleSize } from './fx';
+import { burst, flash, clearParticles, particleSize } from './fx';
 import { GEAR_IDS, RARITY, gearDef } from '../data/gear';
 import { addItem, canAdd, gearStat, gearFactor } from './inventory';
 import { SECTOR } from '../data/galaxy';
@@ -42,7 +43,7 @@ interface Entrance { id: string; x: number; y: number; z: number; yaw: number; s
 export type DungeonEntrance = Entrance;
 interface Crate { tx: number; tz: number; g: THREE.Group; lid: THREE.Object3D; open: boolean; big: boolean; idx: number; a: number; med?: boolean }
 interface Foe { id: number; nx?: number; nz?: number; x: number; z: number; y: number; hp: number; max: number; g: THREE.Group; eye: THREE.MeshBasicMaterial; boss: boolean; cool: number; aim: number; alert: boolean; tx: number; tz: number; ph: number; hit: number; vis?: DroneVis | null; atk?: number }
-interface Bolt { m: THREE.Mesh; x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; dmg: number }
+interface Bolt { m: THREE.Object3D; x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; dmg: number; col: string; big: boolean }
 
 export const DUN = {
   active: false, e: null as Entrance | null,
@@ -64,6 +65,7 @@ const SH = () => DUN.e?.kind === 'schiff';
 const AR = () => DUN.e?.kind === 'archiv';
 let group: THREE.Group | null = null, lamps: THREE.Vector3[] = [], pool: THREE.PointLight[] = [], head: THREE.SpotLight | null = null, gun: THREE.Group | null = null;
 let tracer: THREE.Line | null = null, tracerT = 0, lampT = 0, pathT = 0, stepT = 0, grabT = 0;
+let shotsN = 0, vmShotsN = 0;
 let vm: ViewModel | null = null, mflash: THREE.PointLight | null = null, WALL_R = 0.42;     // Waffe im Bild (eigene Ebene), Mündungslicht in der Welt, Abstand zur Wand
 const sway = { x: 0, y: 0, yaw: 0, pitch: 0 };
 let me: Avatar | null = null;                                              // eigene Figur (Außensicht, src/game/avatar.ts)
@@ -583,14 +585,15 @@ function buildFoe(tx: number, tz: number, boss: boolean): Foe {
 }
 
 // ---------- Waffe des Piloten ----------
-const WEAP: Record<string, { iv: number; n: number; spread: number; auto: boolean; col: string; snd: number }> = {
+const WEAP: Record<string, { iv: number; n: number; spread: number; auto: boolean; col: string; snd: number; sfx?: string }> = {   // sfx: eigene Schussaufnahme (Schnellfeuer, audio.ts shotSfx)
   waffe_pistole: { iv: 0.3, n: 1, spread: 0.008, auto: false, col: '#ffd9a0', snd: 1.5 }, waffe_karabiner: { iv: 0.13, n: 1, spread: 0.018, auto: true, col: '#ffd9a0', snd: 1.25 },
+  waffe_smg: { iv: 0.075, n: 1, spread: 0.024, auto: true, col: '#ffd9a0', snd: 1.05, sfx: 'smg_shot' },
   waffe_flinte: { iv: 0.85, n: 7, spread: 0.075, auto: false, col: '#ffc080', snd: 0.8 }, waffe_impuls: { iv: 0.2, n: 1, spread: 0.006, auto: true, col: '#b090ff', snd: 1.9 },
   waffe_splitter: { iv: 0.24, n: 2, spread: 0.03, auto: true, col: '#c070ff', snd: 2.2 },
 };
 export const weapon = () => {
   const id = P.gear?.waffe || '', d = gearDef(id), w = WEAP[id];
-  return w && d ? { ...w, dmg: (d.st?.schaden || 6) / (w.n > 1 ? w.n * 0.45 : 1), name: d.n } : { iv: 0.42, n: 1, spread: 0.012, auto: false, col: '#ffb060', snd: 2.6, dmg: 5, name: 'Schneidbrenner' };
+  return w && d ? { ...w, dmg: (d.st?.schaden || 6) / (w.n > 1 ? w.n * 0.45 : 1), name: d.n } : { iv: 0.42, n: 1, spread: 0.012, auto: false, col: '#ffb060', snd: 2.6, dmg: 5, name: 'Schneidbrenner', sfx: undefined as string | undefined };
 };
 function buildGun() {
   const g = new THREE.Group(), c1 = new THREE.MeshBasicMaterial({ color: 0x1b1d21 }), c2 = new THREE.MeshBasicMaterial({ color: 0x2c3036 }), c3 = new THREE.MeshBasicMaterial({ color: 0x0e0f11 }), c4 = new THREE.MeshBasicMaterial({ color: 0x4a4f57 });
@@ -712,11 +715,12 @@ function sendFull() {
   coopSend('mfull', { e: DUN.e.id, since: grp.mine, sw: DUN.sws.map((q, i) => (q.on ? i : -1)).filter(i => i >= 0), cr: DUN.crates.filter(c => c.open).map(c => c.idx) });
 }
 // Geschoss eines Wächters (beim Gastgeber erzeugt, bei allen anderen aus seinem Ereignis)
+// seit 2026-11-19: Energiebolzen mit Kern, Leuchten und Schweif, Mündungsblitz und eigener Drohnenton (footfx.ts)
 function spawnBolt(x: number, y: number, z: number, vx: number, vy: number, vz: number, dmg: number, boss: number) {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(boss ? 0.13 : 0.09, 8, 6), new THREE.MeshBasicMaterial({ color: boss ? 0xc070ff : 0xff5030 })); m.userData.sh = false; scene.add(m);
-  m.position.set(BASE.x + x, BASE.y + y, BASE.z + z);
-  DUN.bolts.push({ m, x, y, z, vx, vy, vz, life: 4, dmg });
-  sfx('laser', 0.2, boss ? 0.7 : 1.4, () => snd(300, 0.15, 'sawtooth', 0.04, -200));
+  const col = boss ? '#c070ff' : '#ff5a30', m = makeBolt(col, boss ? 0.1 : 0.065); scene.add(m);
+  m.position.set(BASE.x + x, BASE.y + y, BASE.z + z); orientBolt(m, vx, vy, vz);
+  DUN.bolts.push({ m, x, y, z, vx, vy, vz, life: 4, dmg, col, big: !!boss });
+  const l = Math.hypot(vx, vy, vz) || 1; droneFire(BASE.x + x, BASE.y + y, BASE.z + z, col, vx / l, vy / l, vz / l, !!boss);
 }
 const sameMine = (m: any) => DUN.active && !!DUN.e && m.e === DUN.e.id;
 onCoop('mfull', m => {
@@ -922,9 +926,13 @@ function hurtPlayer(d: number) {
 }
 function shoot() {
   const w = weapon();
-  DUN.cool = w.iv; DUN.kick = 1; DUN.flash = 0.06; noteShot();
-  sfx('gun', 0.32, w.snd, () => snd(900, 0.06, 'square', 0.04, -500));
+  DUN.cool = w.iv; DUN.kick = 1; DUN.flash = 0.06; shotsN++; noteShot();
+  if (w.sfx) shotSfx(w.sfx, 0.5, 0.96 + Math.random() * 0.08, () => sfx('gun', 0.32, w.snd));   // SMG: eigene Aufnahme, Schnellfeuer
+  else sfx('gun', 0.32, w.snd, () => snd(900, 0.06, 'square', 0.04, -500));
   const cp = camera.getWorldPosition(_v).clone();
+  const tpm = VIEW.tp && me?.s.weapon ? me.s.weapon.localToWorld(_w.copy(me.s.muzzle)).clone() : null;
+  const a = tpm || (vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : gun ? gun.localToWorld(_w.set(0, 0.008, -0.6)).clone() : cp.clone());
+  if (tpm) flash(tpm.x, tpm.y, tpm.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);
   let end: THREE.Vector3 | null = null;
   for (let s = 0; s < w.n; s++) {
     _e.set(DUN.pitch + (Math.random() - 0.5) * 2 * w.spread, DUN.yaw + (Math.random() - 0.5) * 2 * w.spread, 0);
@@ -944,15 +952,12 @@ function shoot() {
       if (px * px + py * py + pz * pz < r * r) { bt = t; best = f; }
     }
     const hp = cp.clone().addScaledVector(d, bt); end = hp;
-    if (best && mates.size && !amHost(mates.keys())) { best.hit = 0.12; coopSend('mh', { e: DUN.e!.id, i: best.id, d: w.dmg }); burst(hp.x, hp.y, hp.z, '#ffb060', 6, 2.2, 0.25); G.hitMark = 0.12; }
-    else if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; burst(hp.x, hp.y, hp.z, '#ffb060', 6, 2.2, 0.25); G.hitMark = 0.12; }
-    else burst(hp.x, hp.y, hp.z, w.col, 3, 2, 0.2);
+    if (best && mates.size && !amHost(mates.keys())) { best.hit = 0.12; coopSend('mh', { e: DUN.e!.id, i: best.id, d: w.dmg }); impact(hp, d, 'metall'); G.hitMark = 0.12; }
+    else if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; impact(hp, d, 'metall'); G.hitMark = 0.12; }
+    else impact(hp, d, 'boden', w.col);
+    fxTracer(a, hp, w.col, w.n > 1 ? 0.04 : 0.065);                  // Leuchtspur je Kugel
   }
-  if (tracer && end && (gun || vm)) {
-    const a = VIEW.tp && me?.s.weapon ? me.s.weapon.localToWorld(_w.copy(me.s.muzzle)).clone() : vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : gun!.localToWorld(_w.set(0, 0.008, -0.6)).clone();
-    (tracer.geometry as THREE.BufferGeometry).setFromPoints([a, end]); tracer.visible = true; tracerT = 0.05;
-    (tracer.material as THREE.LineBasicMaterial).color.set(w.col);
-  }
+  void end;
 }
 export function dungeonKey(code: string) {
   if (!DUN.active || DUN.dead) return;
@@ -1044,7 +1049,7 @@ export function updateDungeon(dt: number) {
     const fo = DUN.foes[i];
     if (fo.hp <= -900) { group.remove(fo.g); DUN.foes.splice(i, 1); continue; }   // schon vorher zerstört (Abgleich)
     if (fo.hp <= 0) {
-      burst(BASE.x + fo.x, BASE.y + fo.y, BASE.z + fo.z, '#ffb060', fo.boss ? 60 : 22, fo.boss ? 5 : 3.5, 0.6); sfx('explosion0', fo.boss ? 0.7 : 0.4, fo.boss ? 0.8 : 1.5, () => snd(90, 0.4, 'sawtooth', 0.07, -40));
+      droneDeath(BASE.x + fo.x, BASE.y + fo.y, BASE.z + fo.z, () => BASE.y, !!fo.boss);   // Blitz, Funken, Rauch, Trümmer (footfx.ts)
       group.remove(fo.g); DUN.foes.splice(i, 1); DUN.kills++; droneBark('tot', Math.hypot(DUN.x - fo.x, DUN.z - fo.z));
       if (fo.boss) say(AR() ? 'Wächterkern zerstört. Der Speicherkern ist frei.' : WR() ? 'Wächterkern zerstört. Die Brücke ist frei.' : 'Wächterkern zerstört. Der Tresor ist frei.', '#ffb347');
       continue;
@@ -1118,7 +1123,7 @@ export function updateDungeon(dt: number) {
     b.m.position.set(BASE.x + b.x, BASE.y + b.y, BASE.z + b.z);
     const hitP = Math.hypot(b.x - DUN.x, b.z - DUN.z) < 0.45 && Math.abs(b.y - (EYE() - 0.5)) < 1.0;
     if (hitP) hurtPlayer(b.dmg);
-    if (hitP || b.life <= 0 || b.y < 0 || solidAt(b.x, b.z)) { burst(BASE.x + b.x, BASE.y + b.y, BASE.z + b.z, '#ff7040', 5, 3, 0.25); scene.remove(b.m); b.m.geometry.dispose(); DUN.bolts.splice(i, 1); }
+    if (hitP || b.life <= 0 || b.y < 0 || solidAt(b.x, b.z)) { if (b.life > 0) boltHit(BASE.x + b.x, BASE.y + Math.max(0.05, b.y), BASE.z + b.z, b.col, b.big); scene.remove(b.m); DUN.bolts.splice(i, 1); }
   }
   // Lampenlichter den nächsten Lampen zuteilen, Stirnlampe mitführen
   lampT -= dt;
@@ -1168,9 +1173,11 @@ export function dungeonCamera() {
     poseViewModel(vm, { walked: DUN.walked, bob: b, kick: DUN.kick, sx: sway.x, sy: sway.y, run, reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });   // mineArt.ts
     if (vm.glow) { const k = 0.82 + 0.18 * Math.sin(performance.now() * 0.004); vm.glow.color.setHex(vm.id === 'ef2' ? 0x6fc2ff : 0x8fd0ff).multiplyScalar(k); }
     vm.gun.visible = DUN.dead <= 0;
-    const f = DUN.flash > 0; vm.flash.visible = f; vm.flashLight.intensity = f ? 2.6 : 0;
-    if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(0.11 + Math.random() * 0.08); }
+    const sup = vm.id === 'smg', f = DUN.flash > 0 && (!sup || shotsN % 3 === 0); vm.flash.visible = f; vm.flashLight.intensity = f ? (sup ? 0.12 : 2.6) : 0;   // SMG mit Schalldämpfer: kleines Mündungsfeuer
+    if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
+    if (shotsN !== vmShotsN) { vmShotsN = shotsN; const port = SHELL_PORT[vm.id]; if (port) vmShell(vm.scene, vm.gun, port); }   // Hülse fliegt rechts heraus
   }
+  updateFootFx();
   if (gun) {
     gun.position.copy(camera.localToWorld(_w.set(0.13, -0.12 + DUN.bob * 0.4, -0.26 + DUN.kick * 0.04)));
     gun.quaternion.copy(camera.quaternion).multiply(_q.setFromEuler(_e.set(DUN.kick * 0.12, 0.03, 0)));

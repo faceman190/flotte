@@ -100,6 +100,20 @@ export function sfxHeld(key: string, vol = 1): null | (() => void) {
   s.connect(g).connect(ac.destination); s.start(0, TRIM[key]?.[0] || 0);
   return () => { g.gain.setTargetAtTime(0, ac.currentTime, 0.05); setTimeout(() => { try { s.stop(); } catch (e) { /* schon aus */ } }, 300); };
 }
+// Schuss für Schnellfeuer (seit 2026-11-19, SMG): jeder Schuss startet die Aufnahme neu, der vorige wird in rund 40 ms ausgeblendet.
+// So überlagern sich nicht 13 Schüsse je Sekunde mit vollem Nachhall, und am Ende einer Salve klingt der letzte Schuss ganz aus.
+const lastShotSrc: Record<string, { g: GainNode; s: AudioBufferSourceNode } | undefined> = {};
+export function shotSfx(key: string, vol = 1, rate = 1, fallback?: () => void) {
+  const b = want(key);
+  if (!b || !AC) { fallback?.(); return false; }
+  const ac = AC, t = ac.currentTime, prev = lastShotSrc[key];
+  if (prev) { prev.g.gain.setTargetAtTime(0, t, 0.014); const p = prev; setTimeout(() => { try { p.s.stop(); } catch (e) { /* schon aus */ } }, 200); }
+  const s = ac.createBufferSource(), g = ac.createGain();
+  s.buffer = b; s.playbackRate.value = rate; g.gain.value = vol * audio.volume;
+  s.connect(g).connect(ac.destination); s.start(t, TRIM[key]?.[0] || 0);
+  lastShotSrc[key] = { g, s };
+  return true;
+}
 // Explosion: eine von drei Aufnahmen, Tonhöhe leicht gestreut (rate < 1 = größer, tiefer)
 export function boom(vol = 0.8, rate = 1, fallback?: () => void) { return sfx('explosion' + Math.floor(Math.random() * 3), vol, rate * (0.92 + Math.random() * 0.16), fallback); }
 // Zusätzliche Schleifen neben dem Grundgeräusch (Rover, Bohrer, Drohnen, Mutterschiff, Torpedo): Lautstärke je Bild setzen, 0 blendet aus
@@ -285,11 +299,18 @@ export const hasLaserSound = () => !!BUF.laser;
 // Ferrox, Gefechte vor der Station, Explosionen, zerbrechende Asteroiden, der Alarmton bei Ferrox-Kontakt. Die Welt läuft weiter, während der
 // Pilot zu Fuß in einer Station, im eigenen Schiff oder in einem Wrack ist; bis Alpha 1.19 hörte er dort alles, als säße er im Cockpit.
 // main.ts setzt outside.muted je Bild; combat.ts, npc.ts und world.ts nutzen die Fassungen mit „Out“. Funksprüche (Text) kommen weiter an.
-export const outside = { muted: false };
-export const sndOut: typeof snd = (f, d, type, v, slide) => { if (!outside.muted) snd(f, d, type, v, slide); };
-export const sfxOut: typeof sfx = (key, vol, rate, fallback) => (outside.muted ? false : sfx(key, vol, rate, fallback));
-export const boomOut: typeof boom = (vol, rate, fallback) => (outside.muted ? false : boom(vol, rate, fallback));
-export const gunSoundOut: typeof gunSound = (vol, pitch) => (outside.muted ? true : gunSound(vol, pitch));
+// Seit 2026-11-19 zusätzlich: k = Grunddämpfung (zu Fuß oder im Rover auf einem Planeten liegt das Gefecht oben am Himmel, main.ts setzt 0,3),
+// at = Ort des Hörers (Kamera, je Bild aus main.ts). outVol(x, y, z) gibt den Faktor nach Entfernung: Explosionen und Todesschreie der Ferrox
+// klangen vorher überall im Sektor gleich laut (Kapitel 2 am Boden von Schlacke Prime: Abschüsse der Patrouillen hoch über dem Spieler).
+export const outside = { muted: false, k: 1, at: { x: 0, y: 0, z: 0 } };
+export function outVol(x: number, y: number, z: number, ref = 450) {
+  const a = outside.at, d = Math.hypot(x - a.x, y - a.y, z - a.z) / ref;
+  return outside.muted ? 0 : 1 / (1 + d * d);
+}
+export const sndOut: typeof snd = (f, d, type, v, slide) => { if (!outside.muted) snd(f, d, type, (v ?? 0.04) * outside.k, slide); };
+export const sfxOut: typeof sfx = (key, vol, rate, fallback) => (outside.muted ? false : sfx(key, (vol ?? 1) * outside.k, rate, fallback));
+export const boomOut: typeof boom = (vol, rate, fallback) => (outside.muted ? false : boom((vol ?? 0.8) * outside.k, rate, fallback));
+export const gunSoundOut: typeof gunSound = (vol, pitch) => (outside.muted ? true : gunSound((vol ?? 1) * outside.k, pitch));
 export const audioDebug = () => ({ musicEl: music, musicMode, musicSrc: music?.src || '', musicPlaying: !!music && !music.paused, musicTime: music?.currentTime || 0, musicDur: music?.duration || 0, loaded: Object.keys(BUF), trim: TRIM, ctx: AC?.state });
 
 // ---------------- Freischalten nach der ersten Eingabe ----------------

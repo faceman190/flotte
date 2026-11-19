@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { scene, camera, view, ux, overlay } from '../core/engine';
 import { mouse } from '../core/input';
 import { rng, hashStr, clamp } from '../core/util';
-import { sfx, snd } from '../core/audio';
+import { sfx, snd, shotSfx } from '../core/audio';
+import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, SHELL_PORT } from './footfx';
 import { P, saveGame } from './state';
 import { world } from './world';
 import { terrainAt } from './surface';
@@ -15,7 +16,7 @@ import { droneBark } from './barks';
 import { gearStat, addItem, canAdd } from './inventory';
 import { GEAR_IDS, gearDef } from '../data/gear';
 import { SECTOR } from '../data/galaxy';
-import { burst } from './fx';
+import { burst, flash } from './fx';
 import { radio } from '../ui/radio';
 import { SALV, salvageFull } from './salvage';
 import { onCoop, coopSend, coopNet, pack, CoopGroup } from './coop';
@@ -27,8 +28,8 @@ import { onCoop, coopSend, coopNet, pack, CoopGroup } from './coop';
 // =====================================================================================
 
 interface Foe { id: number; nx?: number; ny?: number; nz?: number; x: number; y: number; z: number; hx: number; hz: number; hr: number; hp: number; max: number; alert: boolean; cool: number; ph: number; hit: number; atk: number; vis: DroneVis | null; g: THREE.Object3D; dead: boolean }
-interface Bolt { m: THREE.Mesh; x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; dmg: number }
-export const FIGHT = { hp: 100, max: 100, cool: 0, kick: 0, flash: 0, hurt: 0, down: 0, foes: [] as Foe[], bolts: [] as Bolt[], lastShot: -99, msg: [] as { t: string; c: string; life: number }[] };
+interface Bolt { m: THREE.Object3D; x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; dmg: number }
+export const FIGHT = { hp: 100, max: 100, cool: 0, kick: 0, flash: 0, shots: 0, hurt: 0, down: 0, foes: [] as Foe[], bolts: [] as Bolt[], lastShot: -99, msg: [] as { t: string; c: string; life: number }[] };
 let vm: ViewModel | null = null, tracer: THREE.Line | null = null, tracerT = 0, mflash: THREE.PointLight | null = null, sector = '';
 const danger = () => (SECTOR[P.sector] && SECTOR[P.sector].danger) || 1;
 const say = (t: string, c = '#dfe8f0') => { FIGHT.msg.unshift({ t, c, life: 5 }); if (FIGHT.msg.length > 4) FIGHT.msg.pop(); };
@@ -71,7 +72,7 @@ export function addGuardDrones(x: number, z: number, n: number) {
 export const guardsLeft = () => guards.filter(f => !f.dead).length;
 export function clearFieldFoes() {
   guards = [];
-  for (const b of FIGHT.bolts) { scene.remove(b.m); b.m.geometry.dispose(); }
+  for (const b of FIGHT.bolts) scene.remove(b.m);                   // Bolzen teilen Geometrie und Material (footfx.ts)
   FIGHT.bolts = []; FIGHT.foes = []; FIGHT.msg = [];
 }
 
@@ -113,11 +114,13 @@ onCoop('fst', m => {
   // beim Gastgeber schon zerstört (z. B. vor dem Dazukommen): still entfernen
   for (const f of FIGHT.foes) if (f.id >= 0 && !f.dead && !seen.has(f.id)) { f.dead = true; f.g.visible = false; }
 });
+// Energiebolzen der Drohne (seit 2026-11-19: Kern, Leuchten, Schweif, Mündungsblitz und eigener Ton statt einer violetten Kugel und Piepton)
+const BOLT_COL = '#c070ff';
 function spawnBolt(x: number, y: number, z: number, vx: number, vy: number, vz: number, dmg: number) {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshBasicMaterial({ color: 0xc070ff }));
-  m.position.set(x, y, z); scene.add(m);
+  const m = makeBolt(BOLT_COL, 0.075);
+  m.position.set(x, y, z); orientBolt(m, vx, vy, vz); scene.add(m);
   FIGHT.bolts.push({ m, x, y, z, vx, vy, vz, life: 4, dmg });
-  snd(520, 0.12, 'square', 0.03, -300);
+  const l = Math.hypot(vx, vy, vz) || 1; droneFire(x, y, z, BOLT_COL, vx / l, vy / l, vz / l);
 }
 
 // Sichtlinie über dem Gelände (Hügel verdecken)
@@ -137,8 +140,11 @@ function hurt(d: number) {
 const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _v = new THREE.Vector3(), _w = new THREE.Vector3();
 function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, muzzle: THREE.Vector3 | null) {
   const w = weapon();
-  FIGHT.cool = w.iv; FIGHT.kick = 1; FIGHT.flash = 0.06; FIGHT.lastShot = performance.now(); noteShot();
-  sfx('gun', 0.32, w.snd, () => snd(900, 0.06, 'square', 0.04, -500));
+  FIGHT.cool = w.iv; FIGHT.kick = 1; FIGHT.flash = 0.06; FIGHT.lastShot = performance.now(); FIGHT.shots++; noteShot();
+  if (w.sfx) shotSfx(w.sfx, 0.5, 0.96 + Math.random() * 0.08, () => sfx('gun', 0.32, w.snd));   // SMG: eigene Aufnahme, Schnellfeuer
+  else sfx('gun', 0.32, w.snd, () => snd(900, 0.06, 'square', 0.04, -500));
+  const a = muzzle ? muzzle.clone() : vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : new THREE.Vector3(px, py - 0.15, pz);
+  if (muzzle) flash(muzzle.x, muzzle.y, muzzle.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);   // Außensicht: kleines Mündungsfeuer (SMG gedämpft)
   let end: THREE.Vector3 | null = null;
   for (let s = 0; s < w.n; s++) {
     _e.set(pitch + (Math.random() - 0.5) * 2 * w.spread, yaw + (Math.random() - 0.5) * 2 * w.spread, 0);
@@ -154,23 +160,19 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
       if (qx * qx + qy * qy + qz * qz < 0.62 * 0.62) { bt = t; best = f; }
     }
     end = new THREE.Vector3(px + d.x * bt, py + d.y * bt, pz + d.z * bt);
-    if (best && best.id >= 0 && isClient()) { best.hit = 0.12; coopSend('fh', { s: P.sector, i: best.id, d: w.dmg }); burst(end.x, end.y, end.z, '#ffb060', 6, 2.2, 0.25); }
+    if (best && best.id >= 0 && isClient()) { best.hit = 0.12; coopSend('fh', { s: P.sector, i: best.id, d: w.dmg }); impact(end, d, 'metall'); }
     else if (best) {
-      if (!best.alert) droneBark('alarm', Math.hypot(best.x - px, best.z - pz)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; burst(end.x, end.y, end.z, '#ffb060', 6, 2.2, 0.25);
+      if (!best.alert) droneBark('alarm', Math.hypot(best.x - px, best.z - pz)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; impact(end, d, 'metall');
       if (best.hp <= 0) kill(best, coopNet.id);
-    } else if (bt < tw + 0.01 && tw < 120) burst(end.x, end.y, end.z, '#8a7a66', 3, 1.5, 0.2);
-  }
-  if (tracer && end) {
-    const a = muzzle || _v.set(px, py - 0.15, pz);
-    (tracer.geometry as THREE.BufferGeometry).setFromPoints([a.clone(), end]); tracer.visible = true; tracerT = 0.05;
-    (tracer.material as THREE.LineBasicMaterial).color.set(w.col);
+    } else if (bt < tw + 0.01 && tw < 120) impact(end, d, 'boden', w.col);
+    fxTracer(a, end, w.col, w.n > 1 ? 0.04 : 0.065);                 // Leuchtspur je Kugel
   }
 }
 function kill(f: Foe, by = coopNet.id) {
   f.dead = true; f.g.visible = false;
   droneBark('tot', camera.position.distanceTo(f.g.position));
-  burst(f.x, f.y, f.z, '#b070ff', 40, 6, 0.9); burst(f.x, f.y, f.z, '#ffb060', 20, 4, 0.5);
-  sfx('ferrox_death', 0.6, 1, () => snd(160, 0.4, 'sawtooth', 0.05, -120));
+  droneDeath(f.x, f.y, f.z, terrainAt);                              // Blitz, Funken, Rauch, Trümmer (footfx.ts)
+  sfx('ferrox_death', 0.35, 1.1, () => snd(160, 0.4, 'sawtooth', 0.05, -120));
   if (f.id >= 0 && mates.length && !isClient()) coEv.push(['k', f.id, by]);
   if (by !== coopNet.id) return;                                   // ein Mitspieler hat sie erwischt
   const cr = Math.round((40 + Math.random() * 50) * (1 + 0.4 * (danger() - 1)));
@@ -194,6 +196,7 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
   FIGHT.cool -= dt; FIGHT.kick = Math.max(0, FIGHT.kick - dt * 7); FIGHT.flash -= dt; FIGHT.hurt = Math.max(0, FIGHT.hurt - dt * 1.6);
   for (const m of FIGHT.msg) m.life -= dt; FIGHT.msg = FIGHT.msg.filter(m => m.life > 0);
   if (tracer.visible && (tracerT -= dt) <= 0) tracer.visible = false;
+  updateFootFx(dt);
   const px = me.x, pz = me.z, py = me.y + me.eye;
   // Schießen
   gunUpdate(dt);
@@ -263,7 +266,9 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
     b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.life -= dt; b.m.position.set(b.x, b.y, b.z);
     const hitMe = me.active && Math.hypot(b.x - px, b.z - pz) < 0.45 && b.y > me.y && b.y < me.y + 1.9;
     if (hitMe) hurt(b.dmg);
-    if (hitMe || b.life <= 0 || terrainAt(b.x, b.z) > b.y) { scene.remove(b.m); b.m.geometry.dispose(); FIGHT.bolts.splice(i, 1); }
+    const ground = terrainAt(b.x, b.z) > b.y;
+    if (hitMe || ground) boltHit(b.x, ground ? terrainAt(b.x, b.z) + 0.05 : b.y, b.z, BOLT_COL);
+    if (hitMe || b.life <= 0 || ground) { scene.remove(b.m); FIGHT.bolts.splice(i, 1); }
   }
 }
 // Zusammengebrochen: Zeit läuft, dann am Schiff aufwachen (rückt der Aufrufer)
@@ -284,10 +289,12 @@ export function fieldViewModel(show: boolean, bob: number, walked: number) {
   vm.cam.aspect = view.W / view.H; vm.cam.updateProjectionMatrix();
   poseViewModel(vm, { walked, bob, kick: FIGHT.kick, reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });   // mineArt.ts
   vm.gun.visible = FIGHT.down <= 0;
-  const f = FIGHT.flash > 0; vm.flash.visible = f; vm.flashLight.intensity = f ? 2.6 : 0;
-  if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(0.11 + Math.random() * 0.08); }
+  const sup = vm.id === 'smg', f = FIGHT.flash > 0 && (!sup || FIGHT.shots % 3 === 0); vm.flash.visible = f; vm.flashLight.intensity = f ? (sup ? 0.12 : 2.6) : 0;   // SMG mit Schalldämpfer: kleines Mündungsfeuer
+  if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
+  if (FIGHT.shots !== vmShots) { vmShots = FIGHT.shots; const port = SHELL_PORT[vm.id]; if (port) vmShell(vm.scene, vm.gun, port); }   // Hülse fliegt rechts heraus
   return vm;
 }
+let vmShots = 0;
 export function hideFieldViewModel() { if (vm && overlay.scene === vm.scene) { overlay.scene = null; overlay.camera = null; } }
 export const fieldVM = () => vm;   // für Tests (Lage der Waffe einstellen)
 

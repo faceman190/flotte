@@ -15,6 +15,7 @@ import { storyObjective, storyMarkers } from '../game/story';
 import { floats } from '../game/fx';
 import { PLANETS } from '../data/planets';
 import { SF, SF_MAX, navTarget, sfEta } from '../game/schnellflug';
+import { ORTE, orteHud, ortePrompt } from '../game/orte';
 
 const TAU = Math.PI * 2;
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
@@ -84,6 +85,15 @@ export function drawHUD() {
       }
     }
   }
+  // Orte im Sektor (Übungsgelände, Werft): Name und Entfernung, solange man nicht mitten drin ist; dann die Hinweise des Orts selbst
+  for (const o of ORTE) {
+    const d = d3(o.x, o.y, o.z, P.x, P.y, P.z);
+    if (d < o.R * 0.6) continue;
+    const p = proj(o.x, o.y + Math.min(o.R * 0.3, 400), o.z);
+    if (onScreen(p, 20)) { ux.fillStyle = '#a8c8d8'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.fillText(`${o.name.toUpperCase()} · ${fmtD(d)}`, p.x, p.y - 16); }   // etwas höher: liegt oft in Richtung eines Tors (Werft → Sonnenfeld)
+  }
+  for (const h of orteHud) h({ proj, onScreen, edgeArrow, brackets });
+  ux.textAlign = 'center';
   // Anflugzone zum Planeten
   if (world.orbit) {
     const o = world.orbit, p = proj(o.x, o.y + 100, o.z), d = d3(o.x, o.y, o.z, P.x, P.y, P.z);
@@ -564,7 +574,10 @@ export function updatePanels(dt: number) {
   const pr = $('prompt'), st = G.mode === 'play' ? nearDock() : null, li = !st && G.mode === 'play' ? landInfo() : null;
   if (st) { pr.textContent = `[E] An „${st.name}“ andocken`; pr.classList.remove('hidden'); }
   else if (li) { pr.textContent = li.text; pr.classList.remove('hidden'); }
-  else pr.classList.add('hidden');
+  else {
+    const t = G.mode === 'play' && !G.dead ? ortePrompt.reduce<string | null>((a, f) => a || f(), null) : null;
+    if (t) { pr.textContent = t; pr.classList.remove('hidden'); } else pr.classList.add('hidden');
+  }
 }
 
 // ---------- Aufgaben (rechts oben): verfolgter Auftrag mit Teilschritten, sonst die geplante Route ----------

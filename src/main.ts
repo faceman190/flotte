@@ -46,6 +46,10 @@ import { loadShipModels, setGear, setDoors, RAMP, type Paint } from './models/gl
 import { hasInterior } from './data/ships';
 import { loadRockModel } from './game/world';
 import { updateFarView } from './game/farview';
+import { orteKey } from './game/orte';
+import { updateAkademie } from './game/akademie';
+import { updateAlteWerft } from './game/altewerft';
+import { updateLeitbojen } from './game/leitbojen';
 import { gunReload } from './game/footgun';
 import { hideFieldViewModel } from './game/fieldfight';
 import { toggleSchnellflug, pickNav, bigSectorHint } from './game/schnellflug';
@@ -357,6 +361,7 @@ onKey(code => {
       if (st && world.surface && settings.walk && basePad(st)) { if (landAtBase(st)) { G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); } }   // Planetenbasis: aufs Landefeld, zu Fuß hinein
       else if (st) openDock(st);
       else if (world.surface && landShip()) { footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); }
+      else if (!world.surface && !G.dead) { for (const k of orteKey) if (k()) break; }   // Orte im Sektor (z. B. Bergung in der Alten Werft)
     }
   }
 });
@@ -579,6 +584,8 @@ function animateStructures(dt: number) {
 function simulate(dt: number) {
   const m = G.mode, live = m === 'play' || m === 'jump' || m === 'dock' || m === 'walk' || m === 'rover' || m === 'entry' || m === 'launch' || m === 'dungeon';
   outside.muted = IN.active || DUN.active;   // zu Fuß in Station, Schiff oder Wrack: kein Gefechtslärm von draußen
+  outside.k = world.surface && (m === 'rover' || m === 'walk') ? 0.3 : 1;   // zu Fuß oder im Rover auf dem Planeten: das Gefecht ist oben am Himmel
+  outside.at.x = camera.position.x; outside.at.y = camera.position.y; outside.at.z = camera.position.z;
   if (!(live || m === 'menu' || m === 'intro')) return;
   G.time += dt;
   if (live) P.playtime += dt;
@@ -605,6 +612,7 @@ function simulate(dt: number) {
   if (m !== 'menu') { updateSpawning(dt); updateEnemies(dt); updateProjectiles(dt); updateStationDefense(dt); }
   if (m === 'play') updateApproachPrime();   // erstes Andocken an Stationen mit Deck beim Anflug vorbereiten (approachPrime.ts)
   updateTraffic(dt);
+  if (m !== 'menu' && m !== 'intro') { hook('akademie', () => updateAkademie(dt)); hook('altewerft', () => updateAlteWerft(dt)); }   // Orte in Heimstatt (Phase 2)
   updateAllies(dt);
   updateParticles(dt);
   if (live) updateScan(dt);
@@ -701,6 +709,7 @@ function loop(now: number, manual = false) {
     else if (!IN.active && G.mode !== 'menu' && G.mode !== 'intro') aimShadows(P.x, P.y, P.z, sunDir, world.surface ? 320 : 240, true);
     else aimShadows(camera.position.x, camera.position.y, camera.position.z, sunDir, 240, false);
     updateSky(camera.position);
+    hook('leitbojen', () => updateLeitbojen(camera.position));   // Leitbojen in Heimstatt
     updateFarView(camera.position, G.time);   // ferne Stationen und Tore verkleinert heranrücken (große Sektoren)
     updateAmbience(dt);
     syncParticles();

@@ -7,7 +7,8 @@ import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, viewModelId, 
 // Figur und Clips: Soldat.glb aus asset-src/neu/soldier/soldat_anim.py (Mixamo-Gewehrclips, Ganzkörper übertragen).
 //  - Laufen: Überblendung nach Laufrichtung relativ zum Körper (vor, vor-links, links, …, zurück). Alle Laufclips laufen
 //    im selben Schrittzyklus (Phase), die Phase rückt nach Tempo ÷ Schrittlänge vor: die Füße rutschen nicht.
-//  - Stehen: Gewehr gesenkt (idle); nach einem Schuss einige Sekunden im Anschlag (aim).
+//  - Stehen: Gewehr gesenkt (idle); nach einem Schuss einige Sekunden im Anschlag (aim). Mit der SMG ist der Anschlag s_aim (Idle-Aim aus
+//    Cascadeur, vom Spieler animiert, seit 2026-11-19): Die Waffe liegt dann so, wie der Clip sie hält.
 //  - Gangarten walk / run / sprint (je 8 Richtungen) nach Tempo, geduckt crouch_* (Taste C, STANCE.crouch), Sprung: jump.
 //  - Schießen: Oberkörper-Ebene aus dem Clip fire. Tod: death_* (geduckt death_c).
 //  - Drehen im Stand: der Körper folgt dem Blick erst ab einem Winkel, dann mit kleinen Seitschritten; bis dahin dreht der Oberkörper.
@@ -40,6 +41,7 @@ export function readNetFlags(n: NetAct, s?: string | null) {
 const GRIP: Record<string, [number, number, number]> = {
   ar39: [0.42, -0.058, 0.05], k12: [0.58, -0.045, 0.03], ig3: [0.55, -0.045, 0.03], ef2: [0.6, -0.045, 0.03], sw: [0.5, -0.045, 0.035],
   p9: [0.05, -0.07, 0.06],                                     // Pistole: die linke Hand stützt die rechte von unten
+  smg: [0.493, 0.022, -0.072],                                  // SMG: gemessen im Cascadeur-Clip s_aim (soldat_clip_neu.py, grip_left in soldat_tp.json)
 };
 
 const UPPER = /^(spine_02|spine_03|neck_01|head|clavicle_|upperarm_|lowerarm_|hand_|thumb_|index_|middle_|ring_|pinky_)/;
@@ -50,7 +52,7 @@ type A = THREE.AnimationAction;
 interface Loco { a: A; ang: number; stride: number; ph: number; dur: number; speed: number }
 interface Gait { L: Loco[]; speed: number }                     // Gangart: walk_* oder run_* (Clipnamen), mittleres Tempo
 export interface Avatar {
-  s: SoldierVis; ready: boolean; gaits: Gait[]; cgait: Gait | null; idle?: A; aim?: A; cidle?: A; caim?: A; jump?: A; upAim?: A; upFire?: A; upReload?: A; reloadW: number; relL?: THREE.Vector3; death: A[]; cdeath?: A; dying: A | null; cw: number; airW: number;
+  s: SoldierVis; ready: boolean; gaits: Gait[]; cgait: Gait | null; idle?: A; aim?: A; saim?: A; upSAim?: A; sW: number; cidle?: A; caim?: A; jump?: A; upAim?: A; upFire?: A; upReload?: A; reloadW: number; relL?: THREE.Vector3; death: A[]; cdeath?: A; dying: A | null; cw: number; airW: number;
   body: number; phase: number; aimW: number; fireW: number; fireT: number; aimT: number; turning: number; first: boolean;
   hitN: number; hitT: number; hitS: number; armL: THREE.Object3D[] | null;
 }
@@ -59,7 +61,7 @@ export interface Drive { x: number; y: number; z: number; yaw: number; pitch: nu
 export function makeAvatar(gear: { helm?: string; anzug?: string; rucksack?: string }): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
   const arm = ['upperarm_l', 'lowerarm_l', 'hand_l'].map(n => s.root.getObjectByName(n));
-  return { s, ready: false, reloadW: 0, gaits: [], cgait: null, death: [], dying: null, cw: 0, airW: 0, body: 0, phase: 0, aimW: 0, fireW: 0, fireT: 0, aimT: 0, turning: 0, first: true,
+  return { s, ready: false, sW: 0, reloadW: 0, gaits: [], cgait: null, death: [], dying: null, cw: 0, airW: 0, body: 0, phase: 0, aimW: 0, fireW: 0, fireT: 0, aimT: 0, turning: 0, first: true,
     hitN: -1, hitT: 0, hitS: 1, armL: arm.every(Boolean) ? arm as THREE.Object3D[] : null };
 }
 // Figur im Halter halten; bei geänderter Ausrüstung (Helm, Anzug, Rucksack) neu bauen
@@ -88,13 +90,13 @@ function setup(a: Avatar) {
     if (k === 'crouch') a.cgait = g; else a.gaits.push(g);
   }
   a.gaits.sort((p, q) => p.speed - q.speed);
-  a.idle = act('idle', 1); a.aim = act('aim'); a.cidle = act('cidle'); a.caim = act('caim'); a.jump = act('jump');
+  a.idle = act('idle', 1); a.aim = act('aim'); a.cidle = act('cidle'); a.caim = act('caim'); a.jump = act('jump'); a.saim = act('s_aim');
   const sub = (n: string) => {
     const c = find(n); if (!c) return undefined;
     const x = m.clipAction(new THREE.AnimationClip(n + '_oben', c.duration, c.tracks.filter(t => UPPER.test(t.name))));
     x.play(); x.setEffectiveWeight(0); return x;
   };
-  a.upAim = sub('aim'); a.upFire = sub('fire');
+  a.upAim = sub('aim'); a.upFire = sub('fire'); a.upSAim = sub('s_aim');
   a.upReload = sub('reload'); if (a.upReload) a.upReload.timeScale = 0;   // Nachladen (Mixamo „Reloading“, seit Alpha 1.55): Zeit setzt driveAvatar nach dem Magazin
   for (const n of ['death_f', 'death_b', 'death_r', 'death_h', 'death_c']) {
     const c = find(n); if (!c) continue; const x = m.clipAction(c); x.setLoop(THREE.LoopOnce, 1); x.clampWhenFinished = true;
@@ -159,12 +161,14 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
     a.jump?.setEffectiveWeight(a.airW * live);
     // Stehen und Anschlag
     a.aimW += ((combat ? 1 : 0) - a.aimW) * Math.min(1, dt * 5);
-    const st = (1 - move) * live * ground, cs = a.cidle ? a.cw : 0;
+    const st = (1 - move) * live * ground, cs = a.cidle ? a.cw : 0, sA = s.wid === 'smg' && a.saim ? 1 : 0;   // SMG: eigener Anschlag (Idle-Aim aus Cascadeur)
     a.idle?.setEffectiveWeight(st * (1 - a.aimW) * (1 - cs));
-    a.aim?.setEffectiveWeight(st * a.aimW * (1 - cs));
+    a.aim?.setEffectiveWeight(st * a.aimW * (1 - cs) * (1 - sA));
+    a.sW = st * a.aimW * (1 - cs) * sA; a.saim?.setEffectiveWeight(a.sW);
     a.cidle?.setEffectiveWeight(st * (1 - a.aimW) * cs);
     a.caim?.setEffectiveWeight(st * a.aimW * cs);
-    a.upAim?.setEffectiveWeight(move * a.aimW * 2.5 * live * (1 - a.reloadW));
+    a.upAim?.setEffectiveWeight(move * a.aimW * 2.5 * live * (1 - a.reloadW) * (1 - sA));
+    a.upSAim?.setEffectiveWeight(move * a.aimW * 2.5 * live * (1 - a.reloadW) * sA);
     a.fireW += ((a.fireT > 0 ? 1 : 0) - a.fireW) * Math.min(1, dt * 14);
     a.upFire?.setEffectiveWeight(a.fireW * 3 * live * (1 - a.reloadW));
     // Nachladen: Oberkörper-Clip, über die Nachladezeit der Waffe gestreckt (footgun.ts); verdrängt Anschlag und Schuss
@@ -223,7 +227,7 @@ function gripWeapon(a: Avatar, d: Drive) {
   //    Die Lage der Waffe an der rechten Hand stammt aus dem Zielclip (soldat_anim.py, weapon_rels); in Ruhe, beim Gehen und Laufen halten die
   //    Mixamo-Hände das Gewehr anders, es stand deshalb um 70 bis 90 Grad verdreht. Die Pistole: schräg nach unten vor dem Körper.
   //    Dazu die Drehung um die Laufachse: Oberseite nach oben (vorher blieb die Rolle aus dem Handgelenk stehen).
-  const lk = (1 - k) * (1 - a.airW * 0.5);
+  const lk = (1 - k) * (1 - a.airW * 0.5) * (1 - a.sW);   // SMG im Anschlag: der Clip hält die Waffe richtig, nicht nachdrehen
   if (lk > 0.01) {
     if (s.wid === 'p9') { const by = a.body, dn = 0.9; _v2.set(-Math.sin(by) * Math.cos(dn), -Math.sin(dn), -Math.cos(by) * Math.cos(dn)).applyQuaternion(_gq); }
     else if (a.armL) {

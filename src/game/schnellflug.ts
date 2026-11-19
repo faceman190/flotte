@@ -7,6 +7,7 @@ import { world, SECTOR_RADIUS, SECTOR_HEIGHT } from './world';
 import { radio } from '../ui/radio';
 import { storyMarkers } from './story';
 import { missionMarkers } from './missions';
+import { ORTE } from './orte';
 
 // Schnellflug und Kurzsprung (seit Alpha 1.50, für große Sektoren wie Heimstatt mit 60 km Radius; geht in jedem Sektor)
 // H lädt den Antrieb (3,5 s), danach fliegt das Schiff bis 8 km/s. Ohne Navigationsziel lenkt der Spieler selbst (träge, kein Seitwärtsdriften).
@@ -16,7 +17,7 @@ import { missionMarkers } from './missions';
 export const SF_MAX = 8000;
 const SPOOL = 3.5, DROP_CLEAR = 900, ARRIVE = 1000;
 
-export type NavKind = 'st' | 'gate' | 'field' | 'orbit' | 'mark';
+export type NavKind = 'st' | 'gate' | 'field' | 'orbit' | 'mark' | 'ort';
 export interface NavRef { kind: NavKind; id: string }
 export interface NavPoint extends NavRef { name: string; x: number; y: number; z: number; R: number }
 export const SF = {
@@ -37,6 +38,7 @@ export function navPoints(): NavPoint[] {
   for (const s of world.stations) out.push({ kind: 'st', id: s.id, name: s.name, x: s.x, y: s.y, z: s.z, R: s.R });
   for (const g of world.gates) out.push({ kind: 'gate', id: g.to, name: 'Tor → ' + g.name, x: g.x, y: g.y, z: g.z, R: 250 });
   world.fields.forEach((f, i) => out.push({ kind: 'field', id: String(i), name: fieldName(i), x: f.x, y: f.y, z: f.z, R: f.r }));
+  for (const o of ORTE) out.push({ kind: 'ort', id: o.id, name: o.name, x: o.x, y: o.y, z: o.z, R: o.R });   // Übungsgelände, Werft (orte.ts)
   if (world.orbit) out.push({ kind: 'orbit', id: 'orbit', name: 'Anflug → ' + world.orbit.name, x: world.orbit.x, y: world.orbit.y, z: world.orbit.z, R: 300 });
   // Ziele aus Geschichte und Aufträgen (ohne die, die nur eine Station markieren)
   for (const m of [...storyMarkers(), ...missionMarkers()]) {
@@ -84,6 +86,7 @@ function clearance(x: number, y: number, z: number) {
   for (const s of world.stations) m = Math.min(m, d3(x, y, z, s.x, s.y, s.z) - s.R);
   for (const g of world.gates) m = Math.min(m, d3(x, y, z, g.x, g.y, g.z) - 250);
   for (const f of world.fields) m = Math.min(m, d3(x, y, z, f.x, f.y, f.z) - f.r);
+  for (const o of ORTE) m = Math.min(m, d3(x, y, z, o.x, o.y, o.z) - o.R);
   if (world.orbit) m = Math.min(m, d3(x, y, z, world.orbit.x, world.orbit.y, world.orbit.z) - 300);
   return m;
 }
@@ -96,6 +99,8 @@ export function toggleSchnellflug() {
   if (G.jd) { radio('SYSTEM', 'Der Sprungantrieb lädt gerade.'); return; }
   if (world.enemies.some(e => d3(e.x, e.y, e.z, P.x, P.y, P.z) < 2500)) { radio('SYSTEM', 'Feindkontakt: Der Schnellflug lädt nicht im Gefecht.'); return; }
   if (world.fields.some(f => d3(P.x, P.y, P.z, f.x, f.y, f.z) < f.r)) { radio('SYSTEM', 'Im Asteroidenfeld geht kein Schnellflug. Flieg erst aus dem Feld.'); return; }
+  const inO = ORTE.find(o => d3(P.x, P.y, P.z, o.x, o.y, o.z) < o.R);
+  if (inO) { radio('SYSTEM', `Im Bereich „${inO.name}“ geht kein Schnellflug. Flieg erst ein Stück hinaus.`); return; }
   if (world.stations.some(s => d3(P.x, P.y, P.z, s.x, s.y, s.z) < s.R + 500)) { radio('SYSTEM', 'Zu nah an der Station für den Schnellflug. Flieg ein Stück hinaus.'); return; }
   const tgt = navTarget();
   if (tgt && d3(P.x, P.y, P.z, tgt.x, tgt.y, tgt.z) < tgt.R + ARRIVE + 1500) { radio('SYSTEM', `${tgt.name} ist schon nah. Flieg im Reiseflug hin.`); return; }

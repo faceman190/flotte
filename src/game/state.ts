@@ -57,7 +57,10 @@ export interface Player {
   shipGear: Partial<Record<ShipSlot, string>>;  // Module des aktiven Schiffs
   legends?: string[];                                       // gefundene legendäre Stücke (feste Fundorte, src/game/salvage.ts): jedes gibt es je Spielstand einmal
   salvage?: Record<string, { t: number; open: number[] }>;   // je Planet: Zeitpunkt, geöffnete Kisten (Wracks und Versorgungskisten, src/game/salvage.ts)
-  dungeons?: Record<string, { t: number; open: number[]; sw?: boolean; sws?: number[] }>;   // je Mine: Zeitpunkt des letzten frischen Besuchs, geöffnete Kisten, Schalter
+  dungeons?: Record<string, { t: number; open: number[]; sw?: boolean; sws?: number[] }>;
+  smgStart?: boolean;                                       // ältere Spielstände: SMG einmal in den leeren Waffenplatz gelegt (loadGame)
+  akademie?: { ring?: number; schuss?: number; med: { ring: number; schuss: number } };   // Übungsgelände Heimstatt: Bestzeiten (s), Abzeichen 0–3 (src/game/akademie.ts)
+  werft?: Record<string, number>;                           // Alte Werft: Bergungsgut → Zeitpunkt der Bergung (ms), kommt nach einer Weile wieder (src/game/altewerft.ts)   // je Mine: Zeitpunkt des letzten frischen Besuchs, geöffnete Kisten, Schalter
 }
 export type Tool = 'guns' | 'laser' | 'charge';
 export interface Contract { id: string; station: string; sector: string; stName: string; item: ItemId; amount: number; reward: number; trust?: boolean }
@@ -79,7 +82,7 @@ export function newPlayer(name: string): Player {
     tool: 'guns', mined: 0, market: {}, contracts: [], cctr: {},
     // Startschiff: Venom
     cls: 'venom', shipName: 'Venom', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2, rep: {}, missions: [], story: { prolog: 'done' },
-    inv: [], gear: { anzug: 'anzug_overall' }, locker: [], shipGear: {},
+    inv: [], gear: { anzug: 'anzug_overall', waffe: 'waffe_smg' }, locker: [], shipGear: {},   // Startwaffe: SMG (seit 2026-11-19)
   };
 }
 export function setPlayer(p: Player) {
@@ -108,6 +111,12 @@ export function rawSave(): any { try { return JSON.parse(localStorage.getItem(sa
 export function writeRawSave(d: any) { try { localStorage.setItem(saveKey, JSON.stringify(d)); } catch (e) { /* ignorieren */ } }
 // Spielstand des lokalen Platzes (für „von diesem Gerät übernehmen“)
 export function localSave(): any { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return null; } }
+// Ältere Spielstände ohne Handwaffe: die SMG einmal in den Waffenplatz legen (vorher zeigte die Ich-Sicht ein Gewehr, der Platz im Inventar war leer)
+export function startWeapon(p: Player) {
+  if (p.smgStart) return;
+  p.smgStart = true; p.gear = p.gear || {};
+  if (!p.gear.waffe) p.gear.waffe = 'waffe_smg';
+}
 export function loadGame(): Player | null {
   try {
     const d = JSON.parse(localStorage.getItem(saveKey) || 'null');
@@ -116,6 +125,7 @@ export function loadGame(): Player | null {
     const p: Player = { ...base, ...d, cargo: { ...base.cargo, ...d.cargo }, up: { ...base.up, ...d.up } };
     if (!Array.isArray(p.missions)) p.missions = [];
     sanitizeInv(p);
+    startWeapon(p);
     p.fleet = (p.fleet || []).map(r => ({ ...r, cargo: { ...emptyCargo(), ...r.cargo }, up: { ...emptyUp(), ...r.up } }));
     retireShips(p);
     return p;

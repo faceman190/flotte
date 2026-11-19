@@ -252,6 +252,10 @@ function drawSector(t: number) {
     } else if (p.kind === 'gate') {
       const g = world.gates.find(q => q.to === p.id); col = g ? FACTION[g.faction].c : HOLO;
       cx.fillStyle = col; cx.beginPath(); cx.moveTo(x, y - 7); cx.lineTo(x + 6, y + 5); cx.lineTo(x - 6, y + 5); cx.closePath(); cx.fill();
+    } else if (p.kind === 'ort') {
+      col = '#a8c8d8'; cx.strokeStyle = col; cx.lineWidth = 2; cx.beginPath();
+      for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + Math.PI / 6; cx[k ? 'lineTo' : 'moveTo'](x + Math.cos(a) * 7, y + Math.sin(a) * 7); }
+      cx.closePath(); cx.stroke();
     } else if (p.kind === 'mark') {
       col = '#ffb347'; cx.fillStyle = col; cx.beginPath(); cx.moveTo(x, y - 7); cx.lineTo(x + 6, y); cx.lineTo(x, y + 7); cx.lineTo(x - 6, y); cx.closePath(); cx.fill();
     } else { col = '#7cc4ff'; cx.strokeStyle = col; cx.lineWidth = 2; cx.beginPath(); cx.arc(x, y, 6, 0, TAU2); cx.stroke(); }
@@ -279,7 +283,7 @@ function drawSector(t: number) {
   cx.fillStyle = '#ffffff'; cx.font = '700 11px "Share Tech Mono",Consolas,monospace'; cx.textAlign = 'center'; cx.fillText('DU', mx, my - 14);
   // Legende
   cx.textAlign = 'left'; cx.fillStyle = '#8aa0b0'; cx.font = '11px "Share Tech Mono",Consolas,monospace';
-  cx.fillText('■ Station   ▲ Sprungtor   ○ Anflug Planet   ● Feld   ◆ Ziel   · Klick: Navigationsziel   H: Kurzsprung   N: Ziel im Fadenkreuz', 18, H - 14);
+  cx.fillText('■ Station   ⬡ Ort   ▲ Sprungtor   ○ Anflug Planet   ● Feld   ◆ Ziel   · Klick: Navigationsziel   H: Kurzsprung   N: Ziel im Fadenkreuz', 18, H - 14);
 }
 let sekSideT = 0;
 // jede Sekunde nur die Entfernungen nachtragen (ein Neuaufbau der Liste würde Klicks verschlucken); neu aufbauen, wenn Orte dazukommen oder wegfallen
@@ -302,7 +306,7 @@ function renderSekSide() {
   let h = `<h2 style="margin-bottom:4px">${esc(s.name.toUpperCase())}</h2><div class="hint" style="margin-bottom:10px">Sektorkarte · ${fmtD(SECTOR_RADIUS)} Radius</div>`;
   h += nt ? `<div class="row"><span class="hint">Ziel</span><b style="color:#bfe6ff">${esc(nt.name)}</b></div><p style="font-size:13px">Mit <b>H</b> startet der Kurzsprung: Der Autopilot fliegt hin und hält gut 1 km davor.</p>`
     : `<p style="font-size:13px">Klick auf einen Ort, um ihn als Ziel zu setzen. <b>H</b> startet dann den Kurzsprung. Ohne Ziel ist <b>H</b> der freie Schnellflug (bis 8 km/s, du lenkst selbst).</p>`;
-  const grp: [string, NavPoint[]][] = [['ZIELE', pts.filter(p => p.kind === 'mark')], ['STATIONEN', pts.filter(p => p.kind === 'st')], ['FELDER', pts.filter(p => p.kind === 'field')], ['TORE UND ANFLUG', pts.filter(p => p.kind === 'gate' || p.kind === 'orbit')]];
+  const grp: [string, NavPoint[]][] = [['ZIELE', pts.filter(p => p.kind === 'mark')], ['STATIONEN', pts.filter(p => p.kind === 'st')], ['ORTE', pts.filter(p => p.kind === 'ort')], ['FELDER', pts.filter(p => p.kind === 'field')], ['TORE UND ANFLUG', pts.filter(p => p.kind === 'gate' || p.kind === 'orbit')]];
   for (const [n, l] of grp) if (l.length) h += `<h3>${n}</h3>` + l.map(row).join('');
   if (nt) h += `<div class="btnRow" style="justify-content:stretch;margin-top:10px"><button style="flex:1" id="mapNavClr">Ziel löschen</button></div>`;
   if (SF.phase !== 'off') h += `<p class="hint">${SF.phase === 'spool' ? 'Schnellflug lädt …' : 'Schnellflug aktiv'}</p>`;

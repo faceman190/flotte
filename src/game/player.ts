@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ZIELE } from './orte';
 import { scene, view } from '../core/engine';
 import { keys, mouse, actions, look, steer } from '../core/input';
 import { rand, clamp, d3 } from '../core/util';
@@ -199,6 +200,7 @@ export function updatePlayer(dt: number) {
   // ---- Kollisionen ----
   for (const s of world.stations) collideBig(s, st.radius);
   for (const s of world.traffic) collideBig(s, st.radius);
+  for (const s of world.solids) collideBig(s, st.radius);
   for (const a of world.asteroids) {
     const dd = d3(a.x, a.y, a.z, P.x, P.y, P.z), m = a.r + st.radius;
     if (dd < m && dd > 0) {
@@ -238,6 +240,15 @@ export function updatePlayer(dt: number) {
     _v.divideScalar(d);
     const c = _v.dot(f);
     if (c > best) { best = c; G.lockT = e; }
+  }
+  for (const z of ZIELE) {                                              // Übungsziele lassen sich ebenso erfassen (Akademie)
+    if (!z.alive) continue;
+    _v.set(z.x - P.x, z.y - P.y, z.z - P.z);
+    const d = _v.length();
+    if (d > 1400) continue;
+    _v.divideScalar(d);
+    const c = _v.dot(f);
+    if (c > best) { best = c; G.lockT = z; }
   }
   if (G.lockT && G.lockT !== hadLock) sfx('lock_tone', 0.5);   // neues Ziel erfasst
   // ---- Kanonen ----

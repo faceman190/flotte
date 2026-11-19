@@ -116,7 +116,7 @@ export interface ViewModel {
 }
 // Modelle je Waffe (Blender: waffe_build.py für den K-12, waffen_build.py für IG-3 und EF-2). Knoten: Körper, Glas, Absehen, Leuchtteile.
 // muzzle: Mündung im Spiel-Raum (Blender x, z, −y); pos: Lage vor der Kamera (rechts, unten, vorn).
-interface WDef { tpl: string; body: string; glas: string; absehen: string; licht: string; tex: string; muzzle: [number, number, number]; pos: [number, number, number]; col: number; env?: number; tone?: number }   // env: Spiegelung der Umgebung (viel Metall → weniger); tone: Farbe abdunkeln (heller Lack überstrahlt sonst)
+interface WDef { tpl: string; body: string; glas: string; absehen: string; licht: string; tex: string; muzzle: [number, number, number]; pos: [number, number, number]; col: number; env?: number; tone?: number; plain?: number; raw?: boolean; glasEnv?: number }   // plain: Farbe, solange die Texturen fehlen; raw: siehe soldierWeapon   // env: Spiegelung der Umgebung (viel Metall → weniger); tone: Farbe abdunkeln (heller Lack überstrahlt sonst)
 const WDEFS: Record<string, WDef> = {
   // AR-39: ein Netz ohne eigene Glas- und Leuchtteile (die drei Knoten fehlen und werden übersprungen). Der Lauf liegt 10,75 cm über dem Nullpunkt,
   // weil der Nullpunkt wie bei den anderen Waffen am Griff sitzt und das Gehäuse hoch baut. Lage tiefer und weiter rechts, sonst verdeckt das Visier das Bild.
@@ -125,13 +125,21 @@ const WDEFS: Record<string, WDef> = {
   ig3: { tpl: 'Mine_W_ig3', body: 'ig3', glas: 'ig3_glas', absehen: 'ig3_absehen', licht: 'ig3_licht', tex: 'waffe_ig3', muzzle: [0, 0.046, -0.724], pos: [0.128, -0.228, -0.42], col: 0x8fd0ff },
   ef2: { tpl: 'Mine_W_ef2', body: 'ef2', glas: 'ef2_glas', absehen: 'ef2_absehen', licht: 'ef2_licht', tex: 'waffe_ef2', muzzle: [0, 0.046, -0.330], pos: [0.112, -0.168, -0.29], col: 0x6fc2ff, env: 0.07 },
   p9: { tpl: 'Mine_W_p9', body: 'p9', glas: 'p9_glas', absehen: 'p9_absehen', licht: 'p9_licht', tex: 'waffe_p9', muzzle: [0, 0.030, -0.112], pos: [0.12, -0.13, -0.36], col: 0xffe2b0 },   // seit Alpha 1.55 weiter weg (vorher zu groß und zu nah)
+  // SMG des Spielers (asset-src/neu/soldier/smg_glb.py, Nullpunkt am Griff wie die anderen). Texturen fehlen noch: bis dahin schlichtes Grau (plain).
+  smg: { tpl: 'Mine_W_smg', body: 'smg', glas: 'smg_glas', absehen: 'smg_absehen', licht: 'smg_licht', tex: 'waffe_smg', muzzle: [0, 0.0616, -0.5068], pos: [0.12, -0.235, -0.40], col: 0xfff2dc, plain: 0x2c2f33, raw: true, glasEnv: 0.2 },
   sw: { tpl: 'Mine_W_sw', body: 'sw', glas: 'sw_glas', absehen: 'sw_absehen', licht: 'sw_licht', tex: 'waffe_sw', muzzle: [0, 0.038, -0.232], pos: [0.12, -0.10, -0.34], col: 0xc070ff, env: 0.12 },   // seit Alpha 1.55 höher (lag fast ganz unter dem Bildrand)
 };
 // Welches Modell zur angelegten Waffe gehört. Standard ist das AR-39 (Gewehr der Flotte, auch ohne angelegte Waffe und für Wachen);
 // fehlt eine Datei, nimmt das Spiel den K-12.
 export function viewModelId(gear?: string) {
-  const id = gear === 'waffe_impuls' ? 'ig3' : gear === 'waffe_flinte' ? 'ef2' : gear === 'waffe_pistole' ? 'p9' : gear === 'waffe_splitter' ? 'sw' : 'ar39';
+  const id = gear === 'waffe_impuls' ? 'ig3' : gear === 'waffe_flinte' ? 'ef2' : gear === 'waffe_pistole' ? 'p9' : gear === 'waffe_splitter' ? 'sw' : gear === 'waffe_smg' ? 'smg' : 'ar39';
   return stationTemplate(WDEFS[id].tpl) ? id : 'k12';
+}
+// Material einer Waffe: die Bilder waffe_<id>_col/_nrm/_orm; fehlen sie (plain), Metall in einer schlichten Farbe
+function wMat(W: WDef) {
+  if (W.plain !== undefined && !window.TEXDATA?.[W.tex + '_col']) return new THREE.MeshStandardMaterial({ color: W.plain, metalness: 0.55, roughness: 0.48, envMapIntensity: W.env ?? 0.22 });
+  const gm = pbr(W.tex); gm.envMapIntensity = W.env ?? 0.22; if (W.tone) gm.color.setScalar(W.tone);
+  return gm;
 }
 let ENV: THREE.Texture | null = null;
 export function buildViewModel(id = 'k12'): ViewModel | null {
@@ -142,14 +150,15 @@ export function buildViewModel(id = 'k12'): ViewModel | null {
   sceneV.environment = ENV;
   const cam = new THREE.PerspectiveCamera(52, 16 / 9, 0.01, 10);
   const gun = new THREE.Group(), inner = new THREE.Group(); gun.add(inner);
-  const gm = pbr(W.tex); gm.envMapIntensity = W.env ?? 0.22; if (W.tone) gm.color.setScalar(W.tone);
+  const gm = wMat(W);
   let lens: THREE.MeshBasicMaterial | null = null;
   for (const n of [W.body, W.glas, W.absehen, W.licht]) {
     const node = t.getObjectByName(n); if (!node) continue;
     const c = node.clone(true); inner.add(c);
     const src = meshOf(c, n); if (!src) continue;
     const m = src; m.material = gm;
-    if (n === W.glas) m.material = new THREE.MeshPhysicalMaterial({ color: 0x0b1418, roughness: 0.04, metalness: 0, transmission: 0, transparent: true, opacity: 0.38, envMapIntensity: 1.4, clearcoat: 1 });
+    if (n === W.body) c.traverse((o: any) => { if (o.isMesh) { o.material = gm; o.frustumCulled = false; } });   // Körper aus mehreren Teilnetzen (SMG: Gehäuse und Visier)
+    if (n === W.glas) m.material = new THREE.MeshPhysicalMaterial({ color: 0x0b1418, roughness: 0.04, metalness: 0, transmission: 0, transparent: true, opacity: 0.38, envMapIntensity: W.glasEnv ?? 1.4, clearcoat: W.glasEnv !== undefined ? 0.3 : 1 });   // glasEnv: großes Visierfenster (SMG) spiegelte sonst weiß
     if (n === W.absehen) m.material = new THREE.MeshBasicMaterial({ color: 0xff2a14, toneMapped: false });
     if (n === W.licht) { lens = new THREE.MeshBasicMaterial({ color: W.col, toneMapped: false }); m.material = lens; }
     m.frustumCulled = false; m.renderOrder = n === W.glas ? 2 : n === W.absehen ? 3 : 0;
@@ -243,10 +252,12 @@ export function soldierWeapon(s: SoldierVis, id: string) {
   const W = WDEFS[id] || WDEFS.k12, t = stationTemplate(W.tpl), rel = TP.weapon_in_hand[id] || TP.weapon_in_hand.k12;
   const node = t?.getObjectByName(W.body); if (!node || !rel) return;
   const w = new THREE.Group(), c = node.clone(true); w.add(c);
-  const gm = pbr(W.tex); gm.envMapIntensity = W.env ?? 0.22; if (W.tone) gm.color.setScalar(W.tone);
+  const gm = wMat(W);
   c.traverse((o: any) => { if (o.isMesh) { o.material = gm; o.frustumCulled = false; } o.userData.sh = false; o.userData.shared = true; });
   const R = new THREE.Matrix4(); R.set(...(rel.flat() as [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]));
-  w.matrixAutoUpdate = false; w.matrix.copy(C).multiply(R).multiply(CI);
+  // Die Knochen behalten im glTF die Achsen aus Blender (gemessen 2026-11-19 an der SMG): richtig ist R · CI. Die älteren Waffen hängen mit C · R · CI
+  // und werden von avatar.ts (orientWeapon) ohnehin nachgedreht; die SMG (raw) liegt im Stand genau so, wie der Cascadeur-Clip sie hält.
+  w.matrixAutoUpdate = false; if (W.raw) w.matrix.copy(R).multiply(CI); else w.matrix.copy(C).multiply(R).multiply(CI);
   s.hand.add(w); s.weapon = w; s.wid = id; s.muzzle.set(...W.muzzle);
 }
 

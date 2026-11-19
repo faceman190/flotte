@@ -1,7 +1,8 @@
 import * as THREE from 'three';
+import { ZIELE } from './orte';
 import { scene, camera, basicAdd, glowMat, compileFor } from '../core/engine';
 import { rand, ri, pick, d3, clamp, rng, hashStr } from '../core/util';
-import { sndOut as snd, sfxOut as sfx, boomOut as boom } from '../core/audio';   // im Inneren einer Station stumm (siehe audio.ts)
+import { sndOut as snd, sfxOut as sfx, boomOut as boom, outVol } from '../core/audio';   // im Inneren einer Station stumm (siehe audio.ts)
 import { ferroxDrone, BOMBER_T, buildMother } from '../models/ferrox';
 import { MK } from '../models/ships';
 import { world, dropPick, breakAst, SECTOR_RADIUS } from './world';
@@ -262,7 +263,8 @@ export function killEnemy(e: any, i: number, byPlayer = false, drops = true) {
   if (e.type === 'mother') {
     for (let k = 0; k < 6; k++) setTimeout(() => {
       burst(e.x + rand(-60, 60), e.y + rand(-60, 60), e.z + rand(-60, 60), k % 2 ? '#d0a0ff' : '#ffd27a', 160, 140, 2);
-      boom(0.9, 0.7 + k * 0.04, () => snd(50 + k * 10, 0.9, 'sawtooth', 0.08, -25));
+      const ov = Math.max(0.15, outVol(e.x, e.y, e.z, 1200));      // der Bienenstock ist groß: weit zu hören, aber nicht überall voll
+      boom(0.9 * ov, 0.7 + k * 0.04, () => snd(50 + k * 10, 0.9, 'sawtooth', 0.08 * ov, -25));
       G.shake = Math.min(3, G.shake + 1);
     }, k * 200);
     if (drops) for (let k = 0; k < 10; k++) dropPick(e.x, e.y, e.z, 'schrott', 2, 80);
@@ -273,8 +275,11 @@ export function killEnemy(e: any, i: number, byPlayer = false, drops = true) {
   }
   burst(e.x, e.y, e.z, '#c070ff', e.type === 'bomber' ? 110 : 60, e.type === 'bomber' ? 90 : 70, 1.2);
   burst(e.x, e.y, e.z, '#ffd27a', 40, 50, 0.9);
-  boom(0.7, 1.1, () => snd(110, 0.5, 'sawtooth', 0.07, -70));
-  sfx('ferrox_death', 0.55, 0.9 + Math.random() * 0.25);   // das Zerbrechen der Ferrox über der Explosion
+  const ov = outVol(e.x, e.y, e.z);                                  // nach Entfernung zum Hörer (vorher überall im Sektor gleich laut)
+  if (ov > 0.02) {
+    boom(0.7 * ov, 1.1, () => snd(110, 0.5, 'sawtooth', 0.07 * ov, -70));
+    sfx('ferrox_death', 0.55 * ov, 0.9 + Math.random() * 0.25);   // das Zerbrechen der Ferrox über der Explosion
+  }
   if (d3(e.x, e.y, e.z, P.x, P.y, P.z) < 600) G.shake = Math.min(2, G.shake + 0.5);
   if (!drops) return;
   if (e.type === 'bomber') { dropPick(e.x, e.y, e.z, 'schrott', 1); dropPick(e.x, e.y, e.z, 'schrott', 1); }
@@ -485,8 +490,11 @@ export function updateProjectiles(dt: number) {
         break;
       }
     }
+    if (!hit && b.kind === 'p') for (const z of ZIELE) if (z.alive && segHit(b, z.x, z.y, z.z, z.r)) {   // Übungsziele (Zieldrohnen der Akademie, orte.ts)
+      hit = true; G.hitMark = 0.12; burst(b.px, b.py, b.pz, '#ffd9a0', 8, 40, 0.35); z.hit(b.dmg); break;
+    }
     if (!hit) for (const t of ebullets) if (t.torp && t.life > 0 && segHit(b, t.x, t.y, t.z, 4.5)) {
-      t.life = 0; burst(t.x, t.y, t.z, '#c070ff', 30, 45, 0.6); boom(0.35, 1.6, () => snd(300, 0.15, 'triangle', 0.04, -150)); hit = true; break;
+      t.life = 0; burst(t.x, t.y, t.z, '#c070ff', 30, 45, 0.6); { const ov = outVol(t.x, t.y, t.z); boom(0.35 * ov, 1.6, () => snd(300, 0.15, 'triangle', 0.04 * ov, -150)); } hit = true; break;
     }
     if (!hit && b.kind === 'p') for (let j = asteroids.length - 1; j >= 0; j--) {
       const a = asteroids[j];
@@ -494,13 +502,14 @@ export function updateProjectiles(dt: number) {
       if (segHit(b, a.x, a.y, a.z, a.r)) { a.hp -= b.dmg; burst(b.px, b.py, b.pz, '#cfd6e3', 4, 30, 0.3); hit = true; if (a.hp <= 0) breakAst(j); break; }
     }
     if (!hit) for (const s of world.stations) if (sphSeg(b, s)) { hit = true; break; }
+    if (!hit) for (const s of world.solids) if (sphSeg(b, s)) { hit = true; break; }
     if (!hit) for (const s of world.traffic) if (sphSeg(b, s)) { hit = true; break; }
     if (hit || b.life <= 0) { scene.remove(b.mesh); bullets.splice(i, 1); }
   }
   for (let i = rockets.length - 1; i >= 0; i--) {
     const r = rockets[i];
     r.life -= dt;
-    if (r.target && enemies.includes(r.target)) {
+    if (r.target && (enemies.includes(r.target) || (r.target.type === 'ziel' && r.target.alive))) {
       const t = r.target, k = Math.min(1, dt * 4);
       _v.set(t.x - r.x, t.y - r.y, t.z - r.z).normalize().multiplyScalar(720);
       r.vx += (_v.x - r.vx) * k; r.vy += (_v.y - r.vy) * k; r.vz += (_v.z - r.vz) * k;
@@ -517,7 +526,8 @@ export function updateProjectiles(dt: number) {
       // Raketen wie vorher: Jäger 10 m, Bomber 15 m, Stock 85 m
       if (hitBall(e, (c, rad) => d3(r.x, r.y, r.z, c.x, c.y, c.z) < rad + (e.type === 'mother' ? 5 : -3))) { boom = true; hitEnemy(e, j, 150 + 20 * P.up.guns, true); }
     }
-    if (boom) { burst(r.x, r.y, r.z, '#ffd27a', 60, 60, 0.9); sfx('explosion' + Math.floor(Math.random() * 3), 0.6, 1.25, () => snd(120, 0.4, 'sawtooth', 0.06, -60)); scene.remove(r.mesh); rockets.splice(i, 1); }
+    if (!boom) for (const z of ZIELE) if (z.alive && d3(r.x, r.y, r.z, z.x, z.y, z.z) < z.r + 4) { boom = true; z.hit(150 + 20 * P.up.guns); break; }
+    if (boom) { burst(r.x, r.y, r.z, '#ffd27a', 60, 60, 0.9); const ov = Math.max(0.3, outVol(r.x, r.y, r.z)); sfx('explosion' + Math.floor(Math.random() * 3), 0.6 * ov, 1.25, () => snd(120, 0.4, 'sawtooth', 0.06 * ov, -60)); scene.remove(r.mesh); rockets.splice(i, 1); }
   }
   for (let i = ebullets.length - 1; i >= 0; i--) {
     const b = ebullets[i];

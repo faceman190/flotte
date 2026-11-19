@@ -4,8 +4,8 @@ import { P } from './state';
 // Magazin der Handwaffe zu Fuß (seit Alpha 1.54, mit der neuen Ringanzeige): Planeten und Minen teilen sich denselben Stand.
 // Der Vorrat ist unbegrenzt, nur das Magazin zählt. Leer lädt die Waffe von selbst nach, R lädt früher nach. Der Schneidbrenner (ohne Waffe)
 // läuft mit Energie und braucht kein Magazin.
-const MAG: Record<string, number> = { waffe_pistole: 12, waffe_karabiner: 30, waffe_flinte: 6, waffe_impuls: 24, waffe_splitter: 20 };
-const RELOAD: Record<string, number> = { waffe_flinte: 2.2, waffe_karabiner: 1.8, waffe_splitter: 1.9 };
+const MAG: Record<string, number> = { waffe_pistole: 12, waffe_smg: 40, waffe_karabiner: 30, waffe_flinte: 6, waffe_impuls: 24, waffe_splitter: 20 };
+const RELOAD: Record<string, number> = { waffe_smg: 1.6, waffe_flinte: 2.2, waffe_karabiner: 1.8, waffe_splitter: 1.9 };
 export const GUN = { id: '?', mag: 0, max: 0, reload: 0, reloadT: 1.5 };
 
 export function gunSync() {

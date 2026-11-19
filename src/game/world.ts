@@ -71,7 +71,11 @@ export const world = {
   ground: null as null | ((x: number, z: number) => number),
   extras: [] as THREE.Object3D[],       // zusätzliche Szenenobjekte (Gelände, Anflugzone) – werden beim Leeren entfernt
   orbit: null as null | { x: number; y: number; z: number; name: string; mesh: THREE.Object3D },
+  // feste Großobjekte außer Stationen (Orte im Sektor, src/game/orte.ts): Kollision mit dem Schiff, halten Geschosse auf
+  solids: [] as { x: number; y: number; z: number; sph: number[][]; R: number }[],
 };
+// Zusätzliche Inhalte eines Sektors (Orte wie Übungsgelände und Werft, Leitbojen): werden nach buildSector aufgerufen, beim Leeren clear
+export const sectorHooks: { build: (id: string) => void; clear: () => void }[] = [];
 // Größe des geladenen Sektors (große Sektoren wie Heimstatt geben sie in galaxy.ts vor, size). Wird in buildSector gesetzt; Importe sehen den neuen Wert.
 export let SECTOR_RADIUS = 8000, SECTOR_HEIGHT = 1600;
 
@@ -445,7 +449,8 @@ export function clearSector() {
   world.traffic = []; world.allies = []; world.enemies = []; world.bullets = []; world.ebullets = []; world.rockets = [];
   world.hiveT = [];
   for (const o of world.extras) { scene.remove(o); disposeTree(o); }
-  world.extras = []; world.orbit = null; world.surface = null; world.ground = null;
+  world.extras = []; world.orbit = null; world.surface = null; world.ground = null; world.solids = [];
+  for (const h of sectorHooks) h.clear();
   clearParticles();
   world.def = null;
 }
@@ -480,6 +485,7 @@ export function buildSector(id: string) {
     buildDeco(f, id);
   }
   world.regrowT = 12;
+  for (const h of sectorHooks) h.build(id);
 }
 
 export const stationById = (id: string) => world.stations.find(s => s.id === id) || null;

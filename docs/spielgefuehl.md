@@ -210,3 +210,31 @@ Danach beim Abdocken nur noch: Startaufnahme, Fahrwerk, Funkspruch der Andockkon
 - Station zu Fuß: Kasten oben links (Ort, Credits, Fracht) entfällt, der Ort steht klein oben in der Mitte. Aufforderung „[E] …“ in Station,
   auf Planeten und in Minen einheitlich (Tastenfeld und Text, Rajdhani).
 - Beim Andocken entfällt der alte Sinus-Ping (`openDock`).
+
+## Kampf zu Fuß: Effekte und Töne (19.11.2026, noch nicht veröffentlicht)
+
+`src/game/footfx.ts`, gemeinsam für Planetenboden (`fieldfight.ts`) und Minen (`dungeon.ts`), alles aus Pools ohne Lichtquellen:
+- **Leuchtspuren** je Kugel: kurze helle Striche (Kreuz aus zwei Flächen, weicher Verlaufsstreifen), fliegen sichtbar mit 240 m/s vom Lauf zum
+  Einschlag (vorher eine Linie, 50 ms stehend). Breite 6,5 cm, Schrot 4 cm.
+- **Einschläge:** Boden/Fels: wenige Funken, kleiner Blitz, Staubwölkchen. Drohne (Metall): mehr Funken, oranger Blitz.
+- **Hülsen** in der Ich-Sicht (Szene der Waffe): fliegen rechts aus dem Auswurf (`SHELL_PORT` je Waffe, Energiewaffen ohne), fallen aus dem Bild.
+- **SMG:** eigener Schuss `smg_shot` (vom Spieler) über `shotSfx` (audio.ts): jeder Schuss startet die Aufnahme neu, der vorige wird in rund
+  40 ms ausgeblendet, so klingt nur der letzte Schuss einer Salve aus. Mündungsfeuer gedämpft (Schalldämpfer): nur jedes dritte Bild, klein,
+  kaum Licht; in der Außensicht kleiner Blitz an der Mündung der Figur.
+- **Drohnen:** Energiebolzen mit hellem Kern, Leuchten und Schweif (statt Kugel), Mündungsblitz und eigener Ton `drone_shot` (vom Spieler,
+  leiser mit der Entfernung), Einschlagblitz mit Funken, Explosion mit hellem und orangem Blitz, Funkenregen, Rauch und Trümmern mit Schwerkraft.
+  Die alte große violette Partikelwolke beim Abschuss ist weg (Partikel des Alls sind 3,4 m groß).
+
+## Gefechtslärm am Boden (19.11.2026, noch nicht veröffentlicht)
+
+Kapitel 2 auf Schlacke Prime (Gefahr 3): Über dem Spieler kämpfen Ferrox und Patrouillen, jede Explosion und jeder Todesschrei der Ferrox klang
+in voller Lautstärke, egal wie weit weg. Jetzt (`audio.ts`): `outside.at` = Ort des Hörers (Kamera, je Bild), `outVol(x, y, z)` dämpft nach
+Entfernung (halbe Lautstärke bei 450 m), `outside.k` = 0,3 zu Fuß oder im Rover auf einem Planeten. Genutzt in `combat.ts` (Abschuss,
+Bienenstock, Torpedo, Rakete) und `npc.ts` (Patrouillen-Schüsse und -Abschüsse, Frachterexplosion). Gemessen: Abschuss 220 m über dem
+Spieler zu Fuß 24 % statt 100 %, 800 m 7 %, 2 km 1,4 %.
+- Testhelfer: `scripts/fusstest.js` (nach `probelauf.js` und `ph2test.js`: `await __fuss('schlacke', 'waffe_smg')`, `T.drohne(abstand, hp)`).
+- Nachtrag: Die gelieferte `Drohne-SHot.mp3` ist Byte für Byte der vorhandene Kanonenton `gun` (Schiffskanonen) und sehr leise (Pegel etwa ein
+  Viertel des SMG-Schusses); in der Mine ging er unter. Jetzt verstärkt (1,9 statt 0,7, halbe Lautstärke bei 20 m). Ein eigener Drohnenton
+  steht noch aus.
+- **Startwaffe:** neue Piloten haben die SMG im Waffenplatz; ältere Spielstände ohne Handwaffe bekommen sie einmal beim Laden (`startWeapon`,
+  Merker `smgStart`). Wer danach die Waffe ablegt, behält einen leeren Platz (dann wie bisher Schneidbrenner, Bild zeigt das Gewehr).

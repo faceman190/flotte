@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { scene, GLOW } from '../core/engine';
 import { world } from './world';
 import { FACTION } from '../data/galaxy';
+import { ORTE } from './orte';
 
 // Fernansicht (seit Alpha 1.50, für große Sektoren wie Heimstatt mit 60 km Radius)
 // Stationen, Tore und die Anflugzone weiter als NEAR rücken verkleinert auf NEAR an die Kamera heran, in ihrer echten Richtung und mit
@@ -30,8 +31,9 @@ function rebuild() {
   for (const s of world.stations) add(s.mesh, 0xffe2b8, s.R > 400 ? 0.016 : 0.011);
   for (const g of world.gates) add(g.mesh, FACTION[g.faction].gate, 0.011, 1);
   if (world.orbit) add(world.orbit.mesh, 0x7cc4ff, 0.01, 1);
+  for (const o of ORTE) add(o.mesh, o.dot, 0.009);                    // Übungsgelände, Werft (orte.ts)
 }
-const expected = () => world.stations.length + world.gates.length + (world.orbit ? 1 : 0);
+const expected = () => world.stations.length + world.gates.length + (world.orbit ? 1 : 0) + ORTE.length;
 
 // pro Bild vor dem Zeichnen, nach der Kamera
 export function updateFarView(cam: THREE.Vector3, t: number) {

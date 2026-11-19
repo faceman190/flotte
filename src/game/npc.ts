@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { scene } from '../core/engine';
+import { scene, GLOW } from '../core/engine';
 import { rand, pick, d3, clamp } from '../core/util';
-import { sndOut as snd, gunSoundOut as gunSound, sfxOut as sfx, boomOut as boom } from '../core/audio';   // im Inneren einer Station stumm (siehe audio.ts)
+import { sndOut as snd, gunSoundOut as gunSound, sfxOut as sfx, boomOut as boom, outVol } from '../core/audio';   // im Inneren einer Station stumm (siehe audio.ts)
 import { buildCivilian, SHIPDEF, SHIPNAMES, type CivType } from '../models/ships';
 import { buildAllyModel } from '../models/playerShips';
 import { world, type Station, type Gate } from './world';
@@ -26,6 +26,24 @@ function holdPoint(s: Station) {
 }
 function gateGoal(g: Gate) { return { x: g.x, y: g.y, z: g.z, gate: g }; }
 
+// Sprungblitz am Tor (seit Heimstatt Phase 2): Wenn ein Frachter springt oder ankommt, leuchtet das Tor kurz hell auf. Der Blitz hängt am
+// Tormodell, so rückt ihn die Fernansicht mit heran (farview.ts) und man sieht Sprünge auch aus vielen Kilometern.
+const flashes: { s: THREE.Sprite; t: number; g: Gate }[] = [];
+export function gateFlash(g: Gate) {
+  const m = new THREE.SpriteMaterial({ map: GLOW, color: 0xdfeaff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+  const sp = new THREE.Sprite(m); sp.scale.setScalar(110); sp.renderOrder = 3;
+  g.mesh.add(sp); flashes.push({ s: sp, t: 0, g });
+}
+function updateFlashes(dt: number) {
+  for (let i = flashes.length - 1; i >= 0; i--) {
+    const f = flashes[i]; f.t += dt;
+    const k = f.t / 1.1;
+    if (k >= 1 || !f.s.parent) { f.s.parent?.remove(f.s); f.s.material.dispose(); flashes.splice(i, 1); continue; }
+    f.s.scale.setScalar(110 + 520 * Math.sqrt(k)); f.s.material.opacity = 0.7 * (1 - k) * (1 - k);
+  }
+}
+const nearGate = (x: number, y: number, z: number) => world.gates.reduce<Gate | null>((b, g) => (!b || d3(g.x, g.y, g.z, x, y, z) < d3(b.x, b.y, b.z, x, y, z) ? g : b), null);
+
 function spawnTraffic(initial: boolean) {
   const type = pick(Object.keys(SHIPDEF) as CivType[]), def = SHIPDEF[type];
   const used = new Set(world.traffic.map(t => t.name)), name = pick(SHIPNAMES.filter(n => !used.has(n))) || 'Frachter';
@@ -44,7 +62,10 @@ function spawnTraffic(initial: boolean) {
     type, def, name, x, y, z, vx: _v.x, vy: _v.y, vz: _v.z, hp: def.hp, maxhp: def.hp, sph: def.sph, R: def.R,
     mesh: b.g, parts: b, goal, wait: 0, hitT: 0, alertT: 0, alive: true, spd: def.spd * rand(0.9, 1.15),
   });
-  if (!initial) burst(x, y, z, '#ffffff', 40, 60, 0.8);
+  if (!initial) {
+    burst(x, y, z, '#ffffff', 40, 60, 0.8);
+    if (inbound) { gateFlash(gate); const t = world.traffic[world.traffic.length - 1]; t.arrive = 0.6; t.vx *= 6; t.vy *= 6; t.vz *= 6; }   // kommt gestreckt aus dem Tor geschossen
+  }
 }
 
 // Schiff der Geschichte (Kapitel 4: die Weitsicht): ein vergrößertes Zivilschiff, das zum Tor fliegt und springt. Die Ferrox greifen es an wie
@@ -79,7 +100,8 @@ function removeTraffic(i: number) {
 // Funkspruch, den im Mehrspieler auch die Mitspieler im Sektor hören
 function npcRadio(who: string, text: string, col?: string) { radio(who, text, col); hostEvent(['r', who, text, col || '']); }
 function trafficBoom(x: number, y: number, z: number) {
-  for (let i = 0; i < 6; i++) setTimeout(() => { burst(x + rand(-50, 50), y + rand(-15, 15), z + rand(-50, 50), i % 2 ? '#ffd27a' : '#ff7040', 140, 90, 1.8); snd(60 + i * 15, 0.8, 'sawtooth', 0.05, -30); }, i * 180);
+  const ov = Math.max(0.1, outVol(x, y, z, 900));
+  for (let i = 0; i < 6; i++) setTimeout(() => { burst(x + rand(-50, 50), y + rand(-15, 15), z + rand(-50, 50), i % 2 ? '#ffd27a' : '#ff7040', 140, 90, 1.8); snd(60 + i * 15, 0.8, 'sawtooth', 0.05 * ov, -30); }, i * 180);
 }
 export function damageTraffic(t: any, d: number) {
   if (!t.alive) return;
@@ -102,10 +124,20 @@ export function updateTraffic(dt: number) {
   const cap = trafficCap();
   world.trafficT -= dt;
   if (world.trafficT <= 0) { world.trafficT = rand(25, 45); if (world.traffic.length < cap) spawnTraffic(false); }
+  updateFlashes(dt);
   for (let i = world.traffic.length - 1; i >= 0; i--) {
     const t = world.traffic[i];
     t.hitT = Math.max(0, t.hitT - dt);
     t.alertT -= dt;
+    // Sprung: beim Abflug streckt sich der Frachter ins Tor, bei der Ankunft zieht er sich wieder zusammen (nur Optik)
+    if (t.leaving !== undefined) {
+      t.leaving -= dt; const k = 1 + 9 * (1 - Math.max(0, t.leaving) / 0.45);
+      t.vx *= 1 + dt * 8; t.vy *= 1 + dt * 8; t.vz *= 1 + dt * 8;
+      t.x += t.vx * dt; t.y += t.vy * dt; t.z += t.vz * dt; t.mesh.position.set(t.x, t.y, t.z); t.mesh.scale.set(1 / Math.sqrt(k), 1 / Math.sqrt(k), k);
+      if (t.leaving <= 0) removeTraffic(i);
+      continue;
+    }
+    if (t.arrive > 0) { t.arrive -= dt; const k = 1 + 7 * Math.max(0, t.arrive) / 0.6; t.mesh.scale.set(1 / Math.sqrt(k), 1 / Math.sqrt(k), k); if (t.arrive <= 0) t.mesh.scale.setScalar(1); }
     const g = t.goal, dx = g.x - t.x, dy = g.y - t.y, dz = g.z - t.z, d = Math.hypot(dx, dy, dz) || 1;
     if (t.wait > 0) {
       t.wait -= dt;
@@ -131,7 +163,9 @@ export function updateTraffic(dt: number) {
         if (t.nid) hostEvent(['g', t.nid]);
         burst(t.x, t.y, t.z, '#ffffff', 50, 70, 0.8);
         snd(200, 0.5, 'sine', 0.02, 400);
-        removeTraffic(i);
+        gateFlash(g.gate);
+        if (t.story) { removeTraffic(i); continue; }                 // Schiffe der Geschichte wie bisher sofort
+        t.leaving = 0.45;
         continue;
       }
     }
@@ -194,7 +228,7 @@ export function damageAlly(a: any, d: number) {
     npcRadio(a.name, 'Ich bin getroffen! Steige aus!', a.col);
   }
 }
-function allyBoom(a: any) { burst(a.x, a.y, a.z, '#ffb347', 90, 70, 1.2); boom(0.5, 1, () => snd(100, 0.6, 'sawtooth', 0.05, -60)); }
+function allyBoom(a: any) { burst(a.x, a.y, a.z, '#ffb347', 90, 70, 1.2); const ov = outVol(a.x, a.y, a.z); if (ov > 0.02) boom(0.5 * ov, 1, () => snd(100, 0.6, 'sawtooth', 0.05 * ov, -60)); }
 export function updateAllies(dt: number) {
   if (SHARED.client) { mirrorAllies(dt); return; }   // Mitspieler: Patrouillen kommen vom Gastgeber
   // Verluste nach einer Weile von der Station ersetzen
@@ -246,8 +280,8 @@ export function updateAllies(dt: number) {
         const lead = dd / 1300;
         _v.set(e.x + e.vx * lead - w.x + rand(-16, 16), e.y + e.vy * lead - w.y + rand(-16, 16), e.z + e.vz * lead - w.z + rand(-16, 16)).normalize();
         fireBullet(world.bullets, w.x + _v.x * 8, w.y + _v.y * 8, w.z + _v.z * 8, _v.x, _v.y, _v.z, 1300, 0.7, 4, 'w');
-        const pd = d3(w.x, w.y, w.z, P.x, P.y, P.z);
-        if (pd < 600) gunSound(0.4 * (1 - pd / 600));
+        const ov = outVol(w.x, w.y, w.z, 250);                       // nach Entfernung zum Hörer (vorher zum Schiff: zu Fuß daneben voll laut)
+        if (ov > 0.04) gunSound(0.4 * ov);
       }
     }
   }
@@ -299,7 +333,7 @@ export function applyNpc(n: any, ev: any[]) {
     if (e[0] === 'r') { radio(e[1], e[2], e[3] || undefined); if (e[4] === 'alarm') { snd(440, 0.25, 'square', 0.04); setTimeout(() => snd(440, 0.25, 'square', 0.04), 350); } }
     else if (e[0] === 'x' && e[1] === 't') { const t = world.traffic.find(o => o.nid === e[2]); if (t) { trafficBoom(t.x, t.y, t.z); removeTraffic(world.traffic.indexOf(t)); } }
     else if (e[0] === 'x' && e[1] === 'a') { const a = world.allies.find(o => o.nid === e[2]); if (a && a.alive) { a.alive = false; scene.remove(a.mesh); allyBoom(a); } }
-    else if (e[0] === 'g') { const t = world.traffic.find(o => o.nid === e[1]); if (t) { burst(t.x, t.y, t.z, '#ffffff', 50, 70, 0.8); snd(200, 0.5, 'sine', 0.02, 400); removeTraffic(world.traffic.indexOf(t)); } }
+    else if (e[0] === 'g') { const t = world.traffic.find(o => o.nid === e[1]); if (t) { burst(t.x, t.y, t.z, '#ffffff', 50, 70, 0.8); const ng = nearGate(t.x, t.y, t.z); if (ng) gateFlash(ng); snd(200, 0.5, 'sine', 0.02, 400); removeTraffic(world.traffic.indexOf(t)); } }
   }
   if (!n) return;
   const seenT = new Set<number>();
@@ -341,6 +375,7 @@ function follow(o: any, dt: number, rate: number) {
   o.vx = t.vx; o.vy = t.vy; o.vz = t.vz;
 }
 function mirrorTraffic(dt: number) {
+  updateFlashes(dt);
   for (const t of world.traffic) { t.hitT = Math.max(0, t.hitT - dt); follow(t, dt, 4); orientTraffic(t, dt); }
 }
 function mirrorAllies(dt: number) {
