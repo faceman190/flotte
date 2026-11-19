@@ -4,7 +4,7 @@ import { scene, camera, ambient, rim, sun, view, ux, gl, overlay } from '../core
 import { keys, mouse, releaseAll } from '../core/input';
 import { clamp, rng, hashStr } from '../core/util';
 import { snd, sfx, shotSfx } from '../core/audio';
-import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, SHELL_PORT } from './footfx';
+import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, clearFootFx, SHELL_PORT } from './footfx';
 import { texMat, std } from '../core/textures';
 import { P, G, settings, saveGame } from './state';
 import { world } from './world';
@@ -897,7 +897,7 @@ export function leaveDungeon(died = false) {
   overlay.scene = null; overlay.camera = null; vm = null; me = null;
   if (tracer) { scene.remove(tracer); tracer.geometry.dispose(); tracer = null; }
   for (const b of DUN.bolts) scene.remove(b.m);
-  DUN.bolts = []; DUN.foes = []; DUN.crates = []; pool = []; chunks = []; coEv = []; coSynced = 0;
+  DUN.bolts = []; DUN.foes = []; DUN.crates = []; pool = []; chunks = []; coEv = []; coSynced = 0; clearFootFx();
   ambient.intensity = saved.amb; sun.intensity = saved.sun; rim.intensity = saved.rim;
   const fog = scene.fog as THREE.FogExp2 | null; if (fog) { fog.color.setHex(saved.fogC); fog.density = saved.fogD; }
   camera.near = saved.near; camera.far = saved.far; camera.updateProjectionMatrix();

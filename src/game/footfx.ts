@@ -113,15 +113,15 @@ const shells = new Map<THREE.Scene, Shell[]>();
 let SHELL_GEO: THREE.BufferGeometry | null = null, SHELL_MAT: THREE.Material | null = null;
 // gun: Waffengruppe der Ich-Sicht; port: Auswurf in der Waffe (Spielachsen: x rechts, y oben, −z vorn)
 export function vmShell(sceneV: THREE.Scene, gun: THREE.Object3D, port: [number, number, number]) {
-  SHELL_GEO ||= new THREE.CylinderGeometry(0.006, 0.006, 0.025, 8).rotateZ(Math.PI / 2);   // etwas größer als echt, sonst im Bild kaum zu sehen
+  SHELL_GEO ||= new THREE.CylinderGeometry(0.0045, 0.0045, 0.019, 8).rotateZ(Math.PI / 2);   // echte Größe (größer wirkten sie am Bildrand wie Patronen)
   SHELL_MAT ||= new THREE.MeshStandardMaterial({ color: 0xc8a050, metalness: 0.9, roughness: 0.32 });
   let L = shells.get(sceneV); if (!L) { L = []; shells.set(sceneV, L); }
   let s = L.find(q => q.life <= 0);
   if (!s) { if (L.length >= 14) s = L[0]; else { const m = new THREE.Mesh(SHELL_GEO, SHELL_MAT); m.frustumCulled = false; sceneV.add(m); s = { m, v: new THREE.Vector3(), w: new THREE.Vector3(), life: 0 }; L.push(s); } }
   gun.updateMatrixWorld(true);
-  s.m.position.copy(gun.localToWorld(_v.set(...port))); s.m.visible = true; s.life = 0.75;
+  s.m.position.copy(gun.localToWorld(_v.set(...port))); s.m.visible = true; s.life = 0.45;
   s.m.quaternion.copy(gun.getWorldQuaternion(_q));
-  s.v.set(rand(0.9, 1.4), rand(0.9, 1.5), rand(0.1, 0.4)).applyQuaternion(_q);
+  s.v.set(rand(1.6, 2.3), rand(1.1, 1.7), rand(0.1, 0.4)).applyQuaternion(_q);
   s.w.set(rand(-30, 30), rand(-30, 30), rand(-30, 30));
 }
 function updShells(dt: number) {
@@ -183,6 +183,15 @@ export function droneDeath(x: number, y: number, z: number, ground: (x: number, 
   sfx('explosion' + Math.floor(Math.random() * 3), (big ? 0.75 : 0.5) * Math.max(0.15, kv), big ? 0.85 : 1.35);
 }
 
+// Alles ausblenden (Mine verlassen, Menü, Sektorwechsel)
+export function clearFootFx() {
+  for (const t of trs) t.on = false;
+  if (trMesh) { for (let i = 0; i < TMAX; i++) trMesh.setMatrixAt(i, _m.makeScale(0, 0, 0)); trMesh.instanceMatrix.needsUpdate = true; }
+  for (const c of chunks) c.on = false;
+  if (chMesh) { for (let i = 0; i < CMAX; i++) chMesh.setMatrixAt(i, _m.makeScale(0, 0, 0)); chMesh.instanceMatrix.needsUpdate = true; }
+  for (const d of dusts) { d.life = 0; d.sp.visible = false; }
+  for (const L of shells.values()) for (const s of L) { s.life = 0; s.m.visible = false; }
+}
 // ---------- je Bild ----------
 let lastT = 0;
 export function updateFootFx(dt?: number) {
@@ -195,8 +204,10 @@ export function updateFootFx(dt?: number) {
       if (!t.on) { continue; }
       any = true;
       t.t += dt;
-      const head = Math.min(t.dist, t.t * 240), tail = Math.max(0, head - t.len);   // sichtbares Tempo (echt wären ~400 m/s: auf 15 m nur ein Bild)
-      if (tail >= t.dist - 0.01) { t.on = false; trMesh.setMatrixAt(i, _m.makeScale(0, 0, 0)); continue; }
+      // sichtbares Tempo (echt wären ~400 m/s: auf 15 m nur ein Bild). Der Kopf bleibt am Einschlag stehen, das Ende läuft weiter nach,
+      // bis die Spur ganz im Ziel verschwunden ist (bis 2026-11-19 abends lief das Ende mit dem stehenden Kopf mit und die Spur verschwand nie)
+      const run = t.t * 240, head = Math.min(t.dist, run), tail = Math.max(0, run - t.len);
+      if (tail >= t.dist - 0.01 || t.t > 3) { t.on = false; trMesh.setMatrixAt(i, _m.makeScale(0, 0, 0)); continue; }
       _v.copy(t.a).addScaledVector(t.d, tail); _q.setFromUnitVectors(_z, t.d); _s.set(t.w, t.w, Math.max(0.05, head - tail));
       trMesh.setMatrixAt(i, _m.compose(_v, _q, _s));
     }

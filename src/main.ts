@@ -56,7 +56,8 @@ import { toggleSchnellflug, pickNav, bigSectorHint } from './game/schnellflug';
 import { loadStationModels } from './models/stationModels';
 import { loadCharModels } from './models/charModels';
 import type { Gate, Station } from './game/world';
-import { DUN, enterDungeon, updateDungeon, dungeonCamera, drawDungeonHUD, dungeonKey, nearEntrance, dunHooks } from './game/dungeon';
+import { DUN, enterDungeon, leaveDungeon, updateDungeon, dungeonCamera, drawDungeonHUD, dungeonKey, nearEntrance, dunHooks } from './game/dungeon';
+import { clearFootFx } from './game/footfx';
 import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover, landAtBase, leaveBaseOnFoot, nearFootTarget, drawGroundMarkers, footAt, prewarmFoot } from './game/onfoot';
 import { CITY, updateCity, insideCityGate, preloadCities, cityDoorOut, hangarPadPose, cityHooks, cityWorld } from './game/city';
 import { updateBaseFx } from './game/basefx';
@@ -192,6 +193,8 @@ function startGame(p: Player, fresh: boolean) {
 function toMenu() {
   setMusicMode('menu');
   if (IN.active) leaveInterior();
+  if (DUN.active) leaveDungeon(false);   // aus der Mine ins Menü: Mine abbauen (sonst blieb ihr letztes Bild stehen, auch nach „Weiterspielen“)
+  clearFootFx();
   hideRover();
   G.dockedAt = null;
   $('dock').classList.add('hidden');

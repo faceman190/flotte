@@ -3,7 +3,7 @@ import { scene, camera, view, ux, overlay } from '../core/engine';
 import { mouse } from '../core/input';
 import { rng, hashStr, clamp } from '../core/util';
 import { sfx, snd, shotSfx } from '../core/audio';
-import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, SHELL_PORT } from './footfx';
+import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, clearFootFx, SHELL_PORT } from './footfx';
 import { P, saveGame } from './state';
 import { world } from './world';
 import { terrainAt } from './surface';
@@ -73,7 +73,7 @@ export const guardsLeft = () => guards.filter(f => !f.dead).length;
 export function clearFieldFoes() {
   guards = [];
   for (const b of FIGHT.bolts) scene.remove(b.m);                   // Bolzen teilen Geometrie und Material (footfx.ts)
-  FIGHT.bolts = []; FIGHT.foes = []; FIGHT.msg = [];
+  FIGHT.bolts = []; FIGHT.foes = []; FIGHT.msg = []; clearFootFx();
 }
 
 // ---------- Koop (src/game/coop.ts): Mitspieler zu Fuß auf demselben Planeten ----------
