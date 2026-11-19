@@ -23,7 +23,7 @@ ROOT = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 OPT = dict({'rooms': [], 'lm': 1024, 'samples': 256, 'vsamples': 48, 'big': 0.03, 'margin': 3, 'gap': 2.0, 'mark': 'lm2.txt',
             'glb': 'Lichtraum2.glb', 'json': 'lichtraum2.json'}, **globals().get('OPT', {}))
 CELL = float(OPT.get('cell', 4.0))      # Zellmaß des Decks (Bastion 4 m, Hüttendeck der Eisenkrone 6 m)
-STAIN = ('Laufspur', 'Rostspur', 'Staubspur', 'Fleck', 'Abrieb')
+STAIN = ('Laufspur', 'Rostspur', 'Staubspur', 'Fleck', 'Abrieb') + tuple(OPT.get('skipmats', []))      # skipmats: Materialien, die im Spiel fehlen sollen (Rundhalle: Holoschleier)
 LOG = []
 def note(s):
     LOG.append(s); open(os.path.join(HERE, OPT['mark']), 'w', encoding='utf-8').write('\n'.join(LOG))
@@ -36,6 +36,7 @@ def kind(m):
     if b is None: return 'lit'
     es = sock(b, 'Emission Strength'); tr = sock(b, 'Transmission Weight', 'Transmission')
     if nm in ('Bildschirm', 'Wandbild'): return 'screen'
+    if 'bk' in m.keys() and json.loads(m['bk']).get('stripes') and json.loads(m['bk']).get('es', 0) > 0: return 'screen'      # leuchtende Streifen (Rundhalle: Ringschirm, Kurstafel, Auftragstafel, Sternkarte)
     if nm == 'Sternfeld': return 'stars'
     if es is not None and (es.is_linked or es.default_value > 0): return 'glow'
     if tr is not None and tr.default_value > 0.5: return 'glass'
@@ -214,6 +215,15 @@ def run():
                 p = byname.get(pre + key)
                 if p: p['emp'].append(e)
                 else: note('kein Teil für ' + e.name + ' (' + key + ')')
+    elif OPT.get('split') == 'rund':
+        # Rundhalle (rh_spiel.py): jede Instanz trägt ihren Teil in der Eigenschaft l2part
+        byname = {p['name']: p for p in parts}
+        for cn in ('Deck', 'Decke', 'Schilder'):
+            for e in bpy.data.collections[cn].objects:
+                if e.type == 'EMPTY' and not (e.instance_type == 'COLLECTION' and e.instance_collection): continue
+                if e.type not in ('EMPTY', 'MESH', 'CURVE', 'FONT') or e.hide_render: continue
+                p = byname.get(e.get('l2part', ''))
+                if p: p['emp'].append(e)
     else:
         for cn in ('Deck', 'Deck Decken', 'Deck Schilder'):      # dazu freie Objekte (Schilder und Schrift an Toren und auf dem Boden)
             if cn not in bpy.data.collections: continue

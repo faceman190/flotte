@@ -34,6 +34,35 @@ window.__deck = async () => {
   T.ready = async () => { const p = () => new Promise(q => { const c = new MessageChannel(); c.port1.onmessage = () => q(); c.port2.postMessage(0); }); const t = performance.now(); while (E.warm && E.warm.hold && performance.now() - t < 15000) await p(); lf.tick(0.2); return !(E.warm && E.warm.hold); };
   return Object.keys(DK);
 };
+// Rundhalle (deck_rund, seit 2026-11-19): Begehbarkeit vom Hangar aus wie __walkAll, geprüft werden Ansprechpunkte, Galaxiekarte, Wegpunkte
+// der Läufer und die Lampenplätze der Lichtraum-Teile. bild = true legt eine Draufsicht als Bild bei (grün begehbar, gelb Personal).
+window.__walkRund = async (bild = false) => {
+  const T = window.DT, D = T.DK.deckData('bastion'), HZ0 = -50, S = 0.25, K0 = D.kx0;
+  const gx = y => -y, gz = x => HZ0 - (x - K0);
+  const key = (i, j) => (i + 2048) * 8192 + (j + 4096), seen = new Set(), qu = [[0, Math.round(-46 / S)]]; seen.add(key(...qu[0]));
+  while (qu.length) {
+    const [i, j] = qu.pop();
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const a = i + di, b = j + dj, x = a * S, z = b * S;
+      if (z > -44 || z < -150 || Math.abs(x) > 60 || seen.has(key(a, b)) || !T.I.walkFree(x, z)) continue;
+      seen.add(key(a, b)); qu.push([a, b]);
+    }
+  }
+  const near = (x, z, r) => { for (let a = Math.floor((x - r) / S); a <= Math.ceil((x + r) / S); a++) for (let b = Math.floor((z - r) / S); b <= Math.ceil((z + r) / S); b++) if (seen.has(key(a, b)) && Math.hypot(a * S - x, b * S - z) <= r) return true; return false; };
+  const spotsOff = D.personal.filter(s => !near(gx(s.ty), gz(s.tx), 1.6)).map(s => s.tab);
+  if (!near(gx(D.karte_xy[1]), gz(D.karte_xy[0]), 2.4)) spotsOff.push('galaxiekarte');
+  const wegOff = []; D.wege.forEach((w, i) => w.forEach((n, k) => { if (!near(gx(n[1]), gz(n[0]), 0.6)) wegOff.push(`${i}.${k}`); }));
+  const out = { punkte: seen.size, flaeche: Math.round(seen.size * S * S), ansprechpunkteNichtErreichbar: spotsOff, wegpunkteNichtErreichbar: wegOff };
+  if (bild) {
+    const W = 440, H = 520, sc = 7, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+    const px = (x, z) => [W / 2 + x * sc, (-46 - z) * sc];
+    g.fillStyle = '#111'; g.fillRect(0, 0, W, H);
+    for (const k of seen) { const i = Math.floor(k / 8192) - 2048, j = (k % 8192) - 4096, [u, v] = px(i * S, j * S); g.fillStyle = '#2a6'; g.fillRect(u, v, 2, 2); }
+    g.fillStyle = '#fd4'; for (const s of D.personal) { const [u, v] = px(gx(s.y), gz(s.x)); g.fillRect(u - 2, v - 2, 5, 5); }
+    out.bild = cv.toDataURL('image/png');
+  }
+  return out;
+};
 // Begehbarkeit: füllt vom Hangar aus alle erreichbaren Punkte (Raster 0,25 m, dieselbe Prüfung wie beim Laufen) und meldet Zellen des Decks
 // und Ansprechpunkte, die nicht erreichbar sind. Erst nach __deck() und DT.enter().
 window.__walkAll = async () => {

@@ -29,9 +29,14 @@ Thumbs.db
 # Rohes Deckmodell des Lichtraums 2 (191 MB, über der Dateigrenze von GitHub). Das Spiel nutzt die gepackte Fassung in public/;
 # neu erzeugen: asset-src/neu/bastion/lm_lauf.py mit lm2_bastion.json und lm2_raum.py (docs/lichtraum2.md)
 /asset-src/glb/base/Lichtraum2Bastion.glb
+# seit 2026-11-19 im Archiv (die Bastion hat die Rundhalle)
+/asset-src/alt/bastion-plan-d/glb/Lichtraum2Bastion.glb
 
 # Rohes Hangarmodell des Lichtraums 2 (ebenfalls über der Dateigrenze); neu erzeugen: asset-src/neu/bastion/lm2_hangar_lauf.py mit lm2_hangar.json
 /asset-src/glb/base/Lichtraum2Hangar.glb
 
 # Rohes Hüttendeck der Eisenkrone im Lichtraum 2 (81 MB); neu erzeugen: asset-src/neu/huette/hk_deck_lauf.py -- backen
 /asset-src/glb/base/Lichtraum2HuetteEk.glb
+
+# Rohe Rundhalle der Bastion im Lichtraum 2 (80 MB); neu erzeugen: asset-src/neu/bastion/rh_back_lauf.py (docs/rundhalle.md)
+/asset-src/glb/base/Lichtraum2Rund.glb

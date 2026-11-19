@@ -31,6 +31,14 @@ interface DeckJson {
   // Maße des Decks (seit Alpha 1.34; ohne Angabe die des Bastion-Baukastens): Wandfläche ab Zellmitte, halbe Laufbreite der Türen, halbe Türöffnung
   // für die Sichtprüfung, Schott (halbe Öffnung, halbe Dicke), Ecksäule ab Zellmitte, Decke (Gang, Raum), Strahler (Höhe, Reichweite)
   masse?: { wand?: number; tuer?: number; tuerSicht?: number; schott?: number[]; eck?: number; decke?: number[]; spot?: number[] };
+  typ?: string; licht2?: [string, string];      // typ 'rund': Rundhalle (seit 2026-11-19), eigene Daten (RundJson), kein Zellraster
+}
+// Rundhalle (asset-src/neu/bastion/rh_spiel.py, docs/rundhalle.md): Laufflächen und Standflächen als Vielecke, Orte mit Deckenhöhe; alles in
+// Plankoordinaten (Hallenmitte im Ursprung, x nach Osten, y nach Norden, Hangartor bei x = kx0)
+interface RundJson {
+  typ: 'rund'; name: string; kx0: number; walk: number[][][]; blocks: number[][][]; orte: { name: string; poly: number[][]; decke: number }[];
+  personal: DeckJson['personal']; wege: DeckJson['wege']; gruppen: number[][]; karte_xy: number[]; licht2: [string, string];
+  mund: number[]; tor: number[];      // mund: Mündung des Korridors in die Halle (x, y, halbe Breite); tor: Hangartor (x, halbe Breite)
 }
 export interface DeckSpot { tab: string; x: number; z: number; face: number; tx: number; tz: number; titel?: string; satz?: string }      // titel und satz: Figur ohne Dienst, sagt nur ihren Satz
 export interface DeckNode { x: number; z: number; stop: null | { face: number; t: [number, number]; p: number; who: string | null } }
@@ -63,7 +71,8 @@ const LMCAP = { value: 1 }, LMSHADE = { value: 0 }, LMSPEC = { value: 1 };      
 // Je Station eine Liste in der Reihenfolge der Wahl: Das erste Deck, dessen Dateien da sind, gilt. Seit Alpha 1.34 hat die Eisenkrone ein Deck aus
 // dem Hütten-Baukasten (6-m-Raster, asset-src/neu/huette): nur Daten, ohne Bausteinmodell (es steht ganz im Lichtraum 2). Die Artifact-Fassung,
 // in die dessen Modell nicht passt, nimmt das alte Hüttendeck aus dem Bastion-Baukasten.
-const DECKS: Record<string, [string, string][]> = { bastion: [['deck_bastion', 'BastionDeck']], eisenkrone: [['deck_huette_ek', ''], ['deck_eisenkrone', 'EisenkroneDeck']] };
+// Bastion seit 2026-11-19: Rundhalle (nur Daten, ganz im Lichtraum 2); ohne deren Dateien (Artifact-Fassung) das alte Deck 3 nach Plan D
+const DECKS: Record<string, [string, string][]> = { bastion: [['deck_rund', ''], ['deck_bastion', 'BastionDeck']], eisenkrone: [['deck_huette_ek', ''], ['deck_eisenkrone', 'EisenkroneDeck']] };
 const LOADED: Record<string, { data: DeckJson; parts: Record<string, Part[]>; neu: boolean }> = {}, LOADING: Record<string, Promise<boolean>> = {};
 function pickDeck(id: string): [string, string, boolean] | null {
   const W = window as any;
@@ -128,7 +137,8 @@ function loadLicht(id: string): Promise<boolean> {
   if (LM[id]) return Promise.resolve(true);
   if (id in LMLOADING) return LMLOADING[id];
   const W = window as any, pick = (L: [string, string][] | undefined) => (L || []).map(([j, m]) => [W.DATAFILES?.[j], W.BASEDATA?.[m]]).filter(q => q[0] && q[1]) as [string, string][];
-  const sets2 = pick(LICHT2[id]), sets = sets2.length || LOADED[id]?.neu ? [] : pick(LICHT[id]);      // die neue Art ersetzt die alte ganz; ein Deck ohne Bausteinmodell hat nur die neue
+  const own = LOADED[id]?.data?.licht2;      // das Deck nennt seinen Lichtraum selbst (Rundhalle); sonst die Liste je Station
+  const sets2 = pick(own ? [own] : LICHT2[id]), sets = sets2.length || LOADED[id]?.neu ? [] : pick(LICHT[id]);      // die neue Art ersetzt die alte ganz; ein Deck ohne Bausteinmodell hat nur die neue
   if (!sets.length && !sets2.length) return Promise.resolve(false);
   return (LMLOADING[id] = (async () => {
     // jeder Satz für sich: Fehlt einer (Datei nicht geladen), bleiben seine Räume Bausteine
@@ -617,6 +627,7 @@ export function buildHangar(): HangarBuild | null {
 export function buildDeck(id: string, hz0: number): Deck | null {
   const L = LOADED[id];
   if (!L) return null;
+  if (L.data.typ === 'rund') return buildRund(id, L.data as unknown as RundJson, hz0);
   const D = L.data, PARTS = L.parts, K = D.karte, RO = K.length, CO = K[0].length, C = D.cell;
   const at = (r: number, c: number) => (r >= 0 && r < RO && c >= 0 && c < CO ? K[r][c] : '.');
   const isG = (ch: string) => 'GgHP'.includes(ch), up = (ch: string) => (isG(ch) ? 'G' : ch.toUpperCase());
@@ -863,6 +874,158 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     // Weg der Story-Figuren vom Hangar hinaus (und umgekehrt herein): durch das Tor, an der Kreuzung dahinter nach links außer Sicht
     // (so weit der Gang dort nach Norden reicht: auf der Bastion zwei Zellen, auf der Eisenkrone eine)
     way: (off: number) => [[off, hz0 + 4], [off * 0.5, hz0 - 1.2], [off * 0.5, hz0 - C * 1.5 + 0.4 - off * 0.4], [north || !south ? -(north * C - 0.6) : south * C - 0.6, hz0 - C * 1.5 + 0.2 - off * 0.4]],
+  };
+}
+
+// ---------- Rundhalle (seit 2026-11-19, docs/rundhalle.md): offene Halle statt Zellraster ----------
+// Laufflächen und Standflächen kommen als Vielecke; hier werden sie in Streifen von STRIP Metern Tiefe zerlegt (Rechtecke wie bei allen
+// Innenräumen: frei, wo Mittelpunkt und Körperrand in Laufflächen liegen und keine Standfläche getroffen wird). Gezeichnet wird alles in
+// Reichweite, die Halle ist offen. Die Lichtraum-Teile (Halle, Korridor, fünf Buchten, zwei Flügel) bringen statt Zellen ihre Punkte mit:
+// der erste ist der Aufnahmeort der Raumspiegelung, alle zusammen die Plätze der Schlüssellampen.
+const STRIP = 0.25;
+function strips(poly: number[][], out: Rect[]) {
+  let z0 = 1e9, z1 = -1e9; for (const p of poly) { z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
+  for (let z = Math.floor(z0 / STRIP) * STRIP; z < z1; z += STRIP) {
+    const zc = z + STRIP / 2, xs: number[] = [];
+    for (let i = 0; i < poly.length; i++) {
+      const [ax, az] = poly[i], [bx, bz] = poly[(i + 1) % poly.length];
+      if ((az <= zc && bz > zc) || (bz <= zc && az > zc)) xs.push(ax + (zc - az) / (bz - az) * (bx - ax));
+    }
+    xs.sort((a, b) => a - b);
+    for (let i = 0; i + 1 < xs.length; i += 2) if (xs[i + 1] - xs[i] > 0.01) out.push([xs[i], xs[i + 1], z, z + STRIP]);
+  }
+}
+const inPoly = (poly: number[][], x: number, y: number) => {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; }
+  return c;
+};
+function buildRund(id: string, D: RundJson, hz0: number): Deck {
+  const K0 = D.kx0, gx = (y: number) => -y, gz = (x: number) => hz0 - (x - K0);
+  const toPlan = (x: number, z: number): [number, number] => [K0 + (hz0 - z), -x];
+  const I = (poly: number[][]) => poly.map(([x, y]) => [gx(y), gz(x)]);
+  const rects: Rect[] = [], blocks: Rect[] = [];
+  for (const p of D.walk) strips(I(p), rects);
+  for (const p of D.blocks) strips(I(p), blocks);
+  const group = new THREE.Group(), meshes: { m: THREE.Mesh; c: THREE.Vector3; r: number }[] = []; let tris = 0;
+  // Lichtraum 2: Teile mit ihren Punkten (Plan → Innenraum)
+  const lm = deckTune.lichtraum ? LM[id] : undefined;
+  const lmT = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0));
+  const SPOT: Record<string, [number, number]> = { halle: [6.8, 14], korridor: [4.6, 9], bucht: [4.3, 8], fluegel: [3.15, 8] };      // Höhe und Reichweite der Schlüssellampen je Teil
+  const parts: { R: LmRoom; pts: [number, number][]; x: number; z: number; spot: [number, number]; gpu: boolean }[] = [];
+  if (lm) for (const R of lm.rooms2) {
+    for (const q of R.meshes) {
+      const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(lmT, q.mw); m.userData.shared = true;
+      if (q.mat.transparent) m.renderOrder = 3;
+      m.userData.sh = false; m.castShadow = false; m.receiveShadow = !q.mat.transparent;
+      group.add(m); meshes.push({ m, c: q.geo.boundingSphere!.center.clone().applyMatrix4(m.matrix), r: q.geo.boundingSphere!.radius }); tris += q.tris;
+    }
+    const pts = R.cells.map(([x, y]) => [gx(y), gz(x)] as [number, number]);
+    const kind = Object.keys(SPOT).find(k => R.name.includes(k)) || 'bucht';
+    parts.push({ R, pts: pts.slice(1), x: pts[0][0], z: pts[0][1], spot: SPOT[kind], gpu: false });
+  }
+  const keys: THREE.SpotLight[] = [], more: THREE.SpotLight[] = [];
+  if (lm) for (let i = 0; i < SPOTS_MAX; i++) {
+    const sp = new THREE.SpotLight(new THREE.Color().setRGB(0.82, 0.9, 1.0), 0, 10, 1.0, 1, 2);
+    sp.userData.key = '';
+    if (i < KEYS_MAX) { sp.castShadow = true; sp.shadow.mapSize.set(512, 512); sp.shadow.camera.near = 0.4; sp.shadow.bias = -0.0015; sp.shadow.normalBias = 0.02; sp.shadow.radius = 4; sp.shadow.autoUpdate = false; }
+    group.add(sp, sp.target); (i < KEYS_MAX ? keys : more).push(sp);
+  }
+  const capture = (w: (typeof parts)[number]) => {
+    try { group.updateWorldMatrix(true, false); w.R.env = lmProbe(w.R.meshes, new THREE.Matrix4().multiplyMatrices(group.matrixWorld, lmT), new THREE.Vector3(w.x, 1.7, w.z).applyMatrix4(group.matrixWorld), 120); w.gpu = true; }
+    catch (e) { console.warn('Raumspiegelung nicht aufgenommen:', w.R.name, e); w.R.env = (w.R.mats[0]?.userData.env?.[0] as THREE.Texture) || null; }
+  };
+  let state = '', live = false, tick = 0, queue = 0;
+  const apply = (px: number, pz: number) => {
+    if (!lm) return;
+    const hy = deckTune.hybrid;
+    let nEnv = parts.filter(q => q.R.env).length;
+    if (hy && !LM_BUSY && !warm.hold && (queue++ & 3) === 0) {      // Raumspiegelungen vorwärmen, der nächste Teil zuerst (wie im Zelldeck)
+      let w: (typeof parts)[number] | null = null, wd = 1e9;
+      for (const q of parts) { if (q.R.env) continue; const d = Math.hypot(q.x - px, q.z - pz); if (d < wd) { wd = d; w = q; } }
+      if (w) { capture(w); nEnv++; }
+    }
+    // aktiver Teil: der mit dem nächsten Lampenplatz; die Lampen mit Schatten auf dessen nächsten Plätzen, die übrigen dahinter
+    let act = -1, bd = 1e9;
+    parts.forEach((q, i) => { for (const [x, z] of q.pts) { const d = Math.hypot(x - px, z - pz); if (d < bd) { bd = d; act = i; } } });
+    const q = hy && act >= 0 ? parts[act] : null;
+    const order = q ? q.pts.map((_, i) => i).sort((a, b) => Math.hypot(q.pts[a][0] - px, q.pts[a][1] - pz) - Math.hypot(q.pts[b][0] - px, q.pts[b][1] - pz)) : [];
+    const near = order.slice(0, keys.length).sort((a, b) => a - b), far = order.slice(keys.length, keys.length + more.length);
+    const st = `${hy}|${act}|${near.join(',')}|${nEnv}|${deckTune.key}|${deckTune.shade}|${deckTune.envK}|${deckTune.spec}`;
+    if (st === state) return;
+    state = st;
+    for (const o of parts) for (const m of o.R.mats) {
+      const [e0, k0, kh] = m.userData.env as [THREE.Texture, number, number], use = hy && o.R.env ? o.R.env : e0;
+      if (m.envMap !== use) { m.envMap = use; m.needsUpdate = true; }
+      m.envMapIntensity = hy && o.R.env ? kh * deckTune.envK : k0;
+    }
+    const place = (L: THREE.SpotLight[], want: number[]) => {
+      const free = new Set(want.map(k => act + ':' + k)), todo: THREE.SpotLight[] = [];
+      for (const sp of L) { if (free.has(sp.userData.key)) free.delete(sp.userData.key); else todo.push(sp); }
+      const rest = [...free];
+      for (const sp of todo) {
+        const k = rest.pop();
+        if (!q || k === undefined) { sp.intensity = 0; sp.userData.key = ''; continue; }
+        const [x, z] = q.pts[+k.split(':')[1]];
+        sp.position.set(x, q.spot[0], z); sp.target.position.set(x, 0, z); sp.distance = q.spot[1]; sp.userData.key = k;
+      }
+      for (const sp of L) if (sp.userData.key && q) { sp.intensity = deckTune.key * (q.spot[0] > 5 ? 2.2 : 1); if (sp.castShadow) sp.shadow.needsUpdate = true; }
+    };
+    place(keys, near); place(more, far);
+    live = !!q;
+    LMSHADE.value = hy ? deckTune.shade : 0; LMSPEC.value = deckTune.spec;
+  };
+  // Personal, Wege, Gruppen (wie im Zelldeck)
+  const yaw = (deg: number) => { const f = deg * Math.PI / 180; return Math.atan2(-Math.sin(f), -Math.cos(f)); };
+  const spots: DeckSpot[] = D.personal.map(s => ({ tab: s.tab, x: gx(s.y), z: gz(s.x), face: yaw(s.face), tx: gx(s.ty), tz: gz(s.tx), titel: s.titel, satz: s.satz }));
+  const routes: DeckNode[][] = D.wege.map(w => w.map(n => { const s = n[2] as any; return { x: gx(n[1] as number), z: gz(n[0] as number), stop: s ? { face: yaw(s.face), t: s.t, p: s.p, who: s.who } : null }; }));
+  const chats = D.gruppen.map(q => [gx(q[1]), gz(q[0]), q[2]] as [number, number, number]);
+  const ort = (x: number, z: number) => { const [px, py] = toPlan(x, z); return D.orte.find(o => inPoly(o.poly, px, py)); };
+  // Hangar sichtbar? Im Korridor immer, in der Halle nur auf der Sichtlinie durch die Mündung des Korridors zum Tor
+  const [MX, , MH] = D.mund, TX = D.tor[0];
+  let camX = 1e9, camZ = 1e9;
+  const sight = (x: number, z: number) => {
+    const [px, py] = toPlan(x, z);
+    if (px < MX) return true;
+    const ym = py + (MX - px) * (0 - py) / (TX - px);
+    return Math.abs(ym) < MH;
+  };
+  const gate = () => sight(lastX, lastZ) || (camX < 1e8 && sight(camX, camZ));
+  let lastX = 0, lastZ = hz0 - 2;
+  // Figuren und ihre Namen nur zeigen, wo man sie sehen kann: Korridor, Halle samt Buchten, je Flügel (Gang und Raum) ein Bereich.
+  // Vom Korridor in Halle und Buchten nur durch die Mündung; in die Flügel nur aus dem Flügel selbst.
+  const RR = Math.hypot(D.mund[0], D.mund[2]) + 0.4;      // Hallenradius (aus der Mündung des Korridors)
+  const zoneOf = (px: number, py: number) => (px < MX ? 'k' : Math.hypot(px, py) < RR ? 'h' : (() => {
+    const d = Math.atan2(py, px) * 180 / Math.PI; return Math.abs(Math.abs(d) - 30) < 14 ? 'w' + Math.sign(d) : 'h';
+  })());
+  const seenFrom = (ex: number, ez: number, x: number, z: number) => {
+    const [ax, ay] = toPlan(ex, ez), [bx, by] = toPlan(x, z), za = zoneOf(ax, ay), zb = zoneOf(bx, by);
+    if (za === zb) return true;
+    if ((za === 'k' && zb === 'h') || (za === 'h' && zb === 'k')) { const t = (MX - ax) / (bx - ax || 1e-6), ym = ay + (by - ay) * t; return t >= 0 && t <= 1 && Math.abs(ym) < MH; }
+    return false;
+  };
+  return {
+    group, rects, blocks, spots, routes, chats, tris, map: { x: gx(D.karte_xy[1]), z: gz(D.karte_xy[0]) }, name: D.name,
+    inside: (z: number) => z < hz0 - 0.2 && z > hz0 - 90,
+    area: (x, z) => ort(x, z)?.name || D.name,
+    ceil: (x, z) => (ort(x, z)?.decke ?? 4),
+    view: (x, z) => { camX = x; camZ = z; },
+    update: (x, z) => {
+      lastX = x; lastZ = z;
+      for (const q of meshes) q.m.visible = Math.hypot(q.c.x - x, q.c.z - z) - q.r < RANGE;
+      if (lm) { apply(x, z); if (live) { tick++; const sp = keys[tick % keys.length]; if (sp.intensity > 0) sp.shadow.needsUpdate = true; } }
+    },
+    seen: (x, z) => (z > hz0 - 0.2 ? gate() : lastZ > hz0 - 0.2 ? sight(x, z) : seenFrom(lastX, lastZ, x, z) || (camX < 1e8 && camZ <= hz0 - 0.2 && seenFrom(camX, camZ, x, z))),
+    hangarSeen: gate,
+    release: () => { for (const q of parts) q.gpu = false; },
+    prime: () => {
+      if (!lm || !deckTune.hybrid) return;
+      for (const q of parts) { if (!q.R.env) capture(q); if (q.R.env) for (const m of q.R.mats) if (m.envMap !== q.R.env) { m.envMap = q.R.env; m.needsUpdate = true; } }
+    },
+    primeStep: () => { if (!lm || !deckTune.hybrid) return false; const q = parts.find(r => !r.R.env); if (!q) return false; capture(q); return true; },
+    stale: () => !lm && deckTune.lichtraum && !!LM[id],
+    // Weg der Story-Figuren: durch das Tor, den Korridor hinunter und in der Halle links außer Sicht der Sichtlinie zum Hangar
+    way: (off: number) => [[off, hz0 + 4], [off * 0.5, hz0 - 1.5], [off * 0.4, hz0 - 14], [-3.5, hz0 - 19], [-7.5, hz0 - 21.5]],
   };
 }
 

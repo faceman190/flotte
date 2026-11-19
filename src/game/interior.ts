@@ -1456,6 +1456,7 @@ export function drawWalkHUD() {
   for (const l of [...labels, ...shipLabels, ...otherLabels()]) {
     const d = Math.hypot(l.p.x - IN.x, l.p.z - IN.z);
     if (d > 26) continue;
+    if (deck && !room && l.p.z <= HZ0 && !deck.seen(l.p.x, l.p.z)) continue;      // Deck: Namen hinter Wänden nicht zeigen (Figur ist dann auch ausgeblendet)
     group.localToWorld(_p.copy(l.p)).project(camera);
     if (_p.z > 1 || Math.abs(_p.x) > 1.05 || Math.abs(_p.y) > 1.05) continue;
     ux.globalAlpha = clamp(1.6 - d / 16, 0.25, 1);

@@ -14,7 +14,7 @@ Der Name passt zur Prospektor-Klasse `elster` im Spiel, die bisher das gekaufte 
 
 ## Fassung 2: rund statt kantig (18.11.2026)
 
-Rückmeldung des Nutzers zur ersten Fassung: „Sie sollte wie das Vorbild eher runde Akzente haben, nicht so kantig. Das Modell schaut sehr schlicht aus. Gib dir mehr Mühe.“ `els_kit.py` ist neu geschrieben, die erste Fassung liegt als `els_kit_v1.py` daneben (und im Git, Alpha 1.39). Seit dem 18.11.2026 ist Fassung 2 lokal im Spiel (Abschnitt „Im Spiel: Fassung 2“).
+Rückmeldung des Nutzers zur ersten Fassung: „Sie sollte wie das Vorbild eher runde Akzente haben, nicht so kantig. Das Modell schaut sehr schlicht aus. Gib dir mehr Mühe.“ `els_kit.py` ist neu geschrieben, die erste Fassung liegt als `els_kit_v1.py` daneben (und im Git, Alpha 1.39). Seit Alpha 1.42 (18.11.2026) ist Fassung 2 im Spiel (Abschnitt „Im Spiel: Fassung 2“).
 
 - **Rumpf**: glatte Spanten aus Superellipsen (Breite, Ober- und Unterkante, Exponent je Station in `TBL`, monoton kubisch interpoliert), Eiernase, gerundetes Heck mit kleiner Hilfsdüse. 96 Punkte je Spant, 147 Spanten. Zweifarbig: oben Altweiß, unten Gussgrau, dazwischen ein Petrolband; dunkle Sensorspitze mit Ring.
 - **Plattenfugen und Nieten im Shader** (`panel_mat`): UV-Karte „Platten“ mit u = x und v = Winkel × 1,7 m, zwei versetzte Ziegelmuster als Fugen (vertieft), Nieten neben den Hauptfugen (erhaben), Flecken, Schmutz in Ecken, Laufspuren, abgegriffene Kanten. Achtung: Das ist Shader-Arbeit und fürs Spiel erst nach dem Backen sichtbar.
@@ -92,7 +92,7 @@ Text und Linien rendert eine eigene Szene schwarz auf Weiß, danach werden sie p
 - Felsbrocken: einzelne eingefärbte Dreiecke sahen nach Spielzeug aus. Besser sind eine feine Unterteilung, dreifache Verformung und Erzadern im Shader.
 - Cockpitbilder ohne Kanzelglas rendern, sonst sieht man nur Spiegelungen.
 
-## Im Spiel: Fassung 2 (18.11.2026, noch nicht veröffentlicht)
+## Im Spiel: Fassung 2 (Alpha 1.42, 18.11.2026)
 
 ![Im Spiel](bilder/elster-spiel.jpg)
 ![Im Spiel, nah](bilder/elster-spiel-nah.jpg)
