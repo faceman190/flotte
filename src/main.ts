@@ -47,6 +47,7 @@ import { hasInterior } from './data/ships';
 import { loadRockModel } from './game/world';
 import { updateFarView } from './game/farview';
 import { gunReload } from './game/footgun';
+import { hideFieldViewModel } from './game/fieldfight';
 import { toggleSchnellflug, pickNav, bigSectorHint } from './game/schnellflug';
 import { loadStationModels } from './models/stationModels';
 import { loadCharModels } from './models/charModels';
@@ -714,6 +715,7 @@ function loop(now: number, manual = false) {
   else boosterSound(false);
   drawHUD();
   if (world.def && G.mode !== 'map' && !IN.active && !DUN.active) drawFlare(ux, dt, flareOccluders());
+  if (!(FOOT.active && world.surface && G.mode === 'rover')) hideFieldViewModel();   // Waffe der Ich-Sicht nur zu Fuß auf einem Planeten (blieb nach Sektorwechsel sonst im Bild, auch in der Station)
   drawWalkHUD();
   if (!FOOT.active) { drawRoverHUD(); if (G.mode === 'rover' && ROVER.active) { drawSalvageHUD(ROVER.x, ROVER.z); drawGroundMarkers(); } } else drawFootHUD();
   drawDungeonHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, ROVER.active);

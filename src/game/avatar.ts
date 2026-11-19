@@ -50,16 +50,16 @@ type A = THREE.AnimationAction;
 interface Loco { a: A; ang: number; stride: number; ph: number; dur: number; speed: number }
 interface Gait { L: Loco[]; speed: number }                     // Gangart: walk_* oder run_* (Clipnamen), mittleres Tempo
 export interface Avatar {
-  s: SoldierVis; ready: boolean; gaits: Gait[]; cgait: Gait | null; idle?: A; aim?: A; cidle?: A; caim?: A; jump?: A; upAim?: A; upFire?: A; death: A[]; cdeath?: A; dying: A | null; cw: number; airW: number;
+  s: SoldierVis; ready: boolean; gaits: Gait[]; cgait: Gait | null; idle?: A; aim?: A; cidle?: A; caim?: A; jump?: A; upAim?: A; upFire?: A; upReload?: A; reloadW: number; relL?: THREE.Vector3; death: A[]; cdeath?: A; dying: A | null; cw: number; airW: number;
   body: number; phase: number; aimW: number; fireW: number; fireT: number; aimT: number; turning: number; first: boolean;
   hitN: number; hitT: number; hitS: number; armL: THREE.Object3D[] | null;
 }
-export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number }
+export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number }   // reload: Fortschritt 0..1, sonst −1
 
 export function makeAvatar(gear: { helm?: string; anzug?: string; rucksack?: string }): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
   const arm = ['upperarm_l', 'lowerarm_l', 'hand_l'].map(n => s.root.getObjectByName(n));
-  return { s, ready: false, gaits: [], cgait: null, death: [], dying: null, cw: 0, airW: 0, body: 0, phase: 0, aimW: 0, fireW: 0, fireT: 0, aimT: 0, turning: 0, first: true,
+  return { s, ready: false, reloadW: 0, gaits: [], cgait: null, death: [], dying: null, cw: 0, airW: 0, body: 0, phase: 0, aimW: 0, fireW: 0, fireT: 0, aimT: 0, turning: 0, first: true,
     hitN: -1, hitT: 0, hitS: 1, armL: arm.every(Boolean) ? arm as THREE.Object3D[] : null };
 }
 // Figur im Halter halten; bei geänderter Ausrüstung (Helm, Anzug, Rucksack) neu bauen
@@ -95,6 +95,7 @@ function setup(a: Avatar) {
     x.play(); x.setEffectiveWeight(0); return x;
   };
   a.upAim = sub('aim'); a.upFire = sub('fire');
+  a.upReload = sub('reload'); if (a.upReload) a.upReload.timeScale = 0;   // Nachladen (Mixamo „Reloading“, seit Alpha 1.55): Zeit setzt driveAvatar nach dem Magazin
   for (const n of ['death_f', 'death_b', 'death_r', 'death_h', 'death_c']) {
     const c = find(n); if (!c) continue; const x = m.clipAction(c); x.setLoop(THREE.LoopOnce, 1); x.clampWhenFinished = true;
     if (n === 'death_c') a.cdeath = x; else a.death.push(x);
@@ -163,9 +164,13 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
     a.aim?.setEffectiveWeight(st * a.aimW * (1 - cs));
     a.cidle?.setEffectiveWeight(st * (1 - a.aimW) * cs);
     a.caim?.setEffectiveWeight(st * a.aimW * cs);
-    a.upAim?.setEffectiveWeight(move * a.aimW * 2.5 * live);
+    a.upAim?.setEffectiveWeight(move * a.aimW * 2.5 * live * (1 - a.reloadW));
     a.fireW += ((a.fireT > 0 ? 1 : 0) - a.fireW) * Math.min(1, dt * 14);
-    a.upFire?.setEffectiveWeight(a.fireW * 3 * live);
+    a.upFire?.setEffectiveWeight(a.fireW * 3 * live * (1 - a.reloadW));
+    // Nachladen: Oberkörper-Clip, über die Nachladezeit der Waffe gestreckt (footgun.ts); verdrängt Anschlag und Schuss
+    const rl = d.reload !== undefined && d.reload >= 0 ? d.reload : -1;
+    a.reloadW += ((rl >= 0 ? 1 : 0) - a.reloadW) * Math.min(1, dt * 10);
+    if (a.upReload) { a.upReload.setEffectiveWeight(a.reloadW * 4 * live); if (rl >= 0) a.upReload.time = Math.min(0.999, rl) * a.upReload.getClip().duration; }
     // Tod
     if (d.dead && !a.dying && a.death.length) { a.dying = d.crouch && a.cdeath ? a.cdeath : a.death[Math.floor(Math.random() * a.death.length)]; a.dying.reset().setEffectiveWeight(1).play(); }
     if (!d.dead && a.dying) { a.dying.stop(); a.dying = null; }
@@ -200,17 +205,41 @@ function rotW(b: THREE.Object3D, q: THREE.Quaternion) {            // Knochen um
   b.parent!.getWorldQuaternion(_pq); b.getWorldQuaternion(_sq);
   b.quaternion.copy(_pq.invert().multiply(_t.copy(q).multiply(_sq))); b.updateMatrixWorld(true);
 }
+// Waffe über das rechte Handgelenk so drehen, dass ihr Lauf (−z) in Richtung dir zeigt und ihre Oberseite (+y) möglichst nach oben (Gewicht wt)
+const _m4 = new THREE.Matrix4(), _zero = new THREE.Vector3(), _wup = new THREE.Vector3(0, 1, 0), _q3 = new THREE.Quaternion();
+function orientWeapon(hand: THREE.Object3D, w: THREE.Object3D, dir: THREE.Vector3, wt: number) {
+  w.getWorldQuaternion(_q1);
+  _m4.lookAt(_zero, dir, Math.abs(dir.y) > 0.97 ? _v7.set(0, 0, 1) : _wup);   // Matrix4.lookAt: −z zeigt zum Ziel
+  _q3.setFromRotationMatrix(_m4);
+  _q2.copy(_q3).multiply(_q1.invert());                                         // Drehung in Weltachsen: von jetzt nach Soll
+  _q1.identity().slerp(_q2, wt);
+  rotW(hand, _q1);
+}
 function gripWeapon(a: Avatar, d: Drive) {
   const s = a.s, w = s.weapon, hand = s.hand;
   if (!w || !hand || !hand.parent) return;
-  // 1) Anschlag: Laufrichtung der Waffe (−z) auf den Blick
-  const k = a.aimW * (1 - a.airW);
+  const k = a.aimW * (1 - a.airW) * (1 - a.reloadW);   // beim Nachladen führt der Clip die Waffe
+  // 0) Außerhalb des Anschlags (seit Alpha 1.55): Das Gewehr liegt auf der Linie von der rechten zur linken Hand, wie der Clip es hält.
+  //    Die Lage der Waffe an der rechten Hand stammt aus dem Zielclip (soldat_anim.py, weapon_rels); in Ruhe, beim Gehen und Laufen halten die
+  //    Mixamo-Hände das Gewehr anders, es stand deshalb um 70 bis 90 Grad verdreht. Die Pistole: schräg nach unten vor dem Körper.
+  //    Dazu die Drehung um die Laufachse: Oberseite nach oben (vorher blieb die Rolle aus dem Handgelenk stehen).
+  const lk = (1 - k) * (1 - a.airW * 0.5);
+  if (lk > 0.01) {
+    if (s.wid === 'p9') { const by = a.body, dn = 0.9; _v2.set(-Math.sin(by) * Math.cos(dn), -Math.sin(dn), -Math.cos(by) * Math.cos(dn)).applyQuaternion(_gq); }
+    else if (a.armL) {
+      // Beim Nachladen greift die linke Hand ans Magazin: dann gilt die Lage der linken Hand von kurz vorher (relativ zur rechten Hand gemerkt)
+      a.armL[2].getWorldPosition(_v2);
+      if (a.reloadW < 0.02 || !a.relL) a.relL = hand.worldToLocal((a.relL || new THREE.Vector3()).copy(_v2));
+      else hand.localToWorld(_v2.copy(a.relL));
+      _v2.sub(hand.getWorldPosition(_v1));
+    }
+    else _v2.set(0, 0, 0);
+    if (_v2.lengthSq() > 1e-4) orientWeapon(hand, w, _v2.normalize(), lk);
+  }
+  // 1) Anschlag: Laufrichtung der Waffe (−z) auf den Blick, Oberseite nach oben
   if (k > 0.01) {
-    w.getWorldQuaternion(_q1);
-    const pp = d.pitch + flinchK(a) * 0.35, cur = _v1.set(0, 0, -1).applyQuaternion(_q1), cp = Math.cos(pp);
-    const want = _v2.set(-Math.sin(d.yaw) * cp, Math.sin(pp), -Math.cos(d.yaw) * cp).applyQuaternion(_gq);
-    _q2.setFromUnitVectors(cur, want); _q1.identity().slerp(_q2, k);
-    rotW(hand, _q1);
+    const pp = d.pitch + flinchK(a) * 0.35, cp = Math.cos(pp);
+    orientWeapon(hand, w, _v2.set(-Math.sin(d.yaw) * cp, Math.sin(pp), -Math.cos(d.yaw) * cp).applyQuaternion(_gq).normalize(), k);
   }
   // 2) Linke Hand: Zwei-Knochen-IK (Oberarm, Unterarm), Ellbogen bleibt auf seiner Seite, die Hand behält ihre Drehung
   if (!a.armL) return;
@@ -220,7 +249,7 @@ function gripWeapon(a: Avatar, d: Drive) {
   const fwd = _v3.set(0, 0, -1).applyQuaternion(_q1), L = _v4.copy(mz).sub(hp).dot(fwd);
   const T = _v5.copy(hp).addScaledVector(fwd, L * g[0]).addScaledVector(_v4.set(0, 1, 0).applyQuaternion(_q1), g[1]).addScaledVector(_v6.set(1, 0, 0).applyQuaternion(_q1), g[2]);
   const S = ua.getWorldPosition(_v1), E = la.getWorldPosition(_v2), H = hd.getWorldPosition(_v3); hd.getWorldQuaternion(_qh);
-  T.lerp(H, a.airW * 0.6);
+  T.lerp(H, Math.max(a.airW * 0.6, a.reloadW));   // im Sprung locker, beim Nachladen greift die linke Hand ans Magazin (Clip)
   const l1 = S.distanceTo(E), l2 = E.distanceTo(H), u = _v4.copy(T).sub(S); let dl = u.length(); if (dl < 1e-4) return;
   u.divideScalar(dl); dl = clamp(dl, Math.abs(l1 - l2) + 0.01, l1 + l2 - 0.003);
   const pe = _v6.copy(E).sub(S); pe.addScaledVector(u, -pe.dot(u)); if (pe.lengthSq() < 1e-8) pe.set(0, -1, 0); pe.normalize();

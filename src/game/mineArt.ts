@@ -124,8 +124,8 @@ const WDEFS: Record<string, WDef> = {
   k12: { tpl: 'Mine_Waffe', body: 'waffe', glas: 'glas', absehen: 'absehen', licht: 'lampenglas', tex: 'waffe', muzzle: [0, 0.04, -0.5585], pos: [0.118, -0.178, -0.30], col: 0xfff2dc },
   ig3: { tpl: 'Mine_W_ig3', body: 'ig3', glas: 'ig3_glas', absehen: 'ig3_absehen', licht: 'ig3_licht', tex: 'waffe_ig3', muzzle: [0, 0.046, -0.724], pos: [0.128, -0.228, -0.42], col: 0x8fd0ff },
   ef2: { tpl: 'Mine_W_ef2', body: 'ef2', glas: 'ef2_glas', absehen: 'ef2_absehen', licht: 'ef2_licht', tex: 'waffe_ef2', muzzle: [0, 0.046, -0.330], pos: [0.112, -0.168, -0.29], col: 0x6fc2ff, env: 0.07 },
-  p9: { tpl: 'Mine_W_p9', body: 'p9', glas: 'p9_glas', absehen: 'p9_absehen', licht: 'p9_licht', tex: 'waffe_p9', muzzle: [0, 0.030, -0.112], pos: [0.052, -0.080, -0.185], col: 0xffe2b0 },
-  sw: { tpl: 'Mine_W_sw', body: 'sw', glas: 'sw_glas', absehen: 'sw_absehen', licht: 'sw_licht', tex: 'waffe_sw', muzzle: [0, 0.038, -0.232], pos: [0.098, -0.140, -0.27], col: 0xc070ff, env: 0.12 },
+  p9: { tpl: 'Mine_W_p9', body: 'p9', glas: 'p9_glas', absehen: 'p9_absehen', licht: 'p9_licht', tex: 'waffe_p9', muzzle: [0, 0.030, -0.112], pos: [0.12, -0.13, -0.36], col: 0xffe2b0 },   // seit Alpha 1.55 weiter weg (vorher zu groß und zu nah)
+  sw: { tpl: 'Mine_W_sw', body: 'sw', glas: 'sw_glas', absehen: 'sw_absehen', licht: 'sw_licht', tex: 'waffe_sw', muzzle: [0, 0.038, -0.232], pos: [0.12, -0.10, -0.34], col: 0xc070ff, env: 0.12 },   // seit Alpha 1.55 höher (lag fast ganz unter dem Bildrand)
 };
 // Welches Modell zur angelegten Waffe gehört. Standard ist das AR-39 (Gewehr der Flotte, auch ohne angelegte Waffe und für Wachen);
 // fehlt eine Datei, nimmt das Spiel den K-12.
@@ -248,4 +248,16 @@ export function soldierWeapon(s: SoldierVis, id: string) {
   const R = new THREE.Matrix4(); R.set(...(rel.flat() as [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]));
   w.matrixAutoUpdate = false; w.matrix.copy(C).multiply(R).multiply(CI);
   s.hand.add(w); s.weapon = w; s.wid = id; s.muzzle.set(...W.muzzle);
+}
+
+// Haltung der Waffe in der Ich-Sicht je Bild (seit Alpha 1.55, Planet und Mine gemeinsam). Vorher wippte sie nur um Millimeter, der Rückstoß
+// war kaum zu sehen und beim Nachladen geschah nichts. Jetzt: Achterbewegung beim Gehen (rennend stärker), deutlicher Rückstoß, Pendeln bei
+// schnellen Drehungen (sx/sy vom Aufrufer) und eine Nachladebewegung (Waffe kippt nach unten innen und kommt zurück), alles ohne Clips.
+// reload: Fortschritt 0..1 während des Nachladens, sonst −1.
+export function poseViewModel(vm: ViewModel, o: { walked: number; bob: number; kick: number; sx?: number; sy?: number; run?: number; reload?: number }) {
+  const run = o.run || 0, sx = o.sx || 0, sy = o.sy || 0, w = o.walked * 2.1;
+  const lat = Math.cos(w) * 0.011 * (1 + run), vert = o.bob * 0.8 - Math.abs(Math.sin(w)) * 0.005 * (1 + run);
+  const rl = o.reload !== undefined && o.reload >= 0 ? Math.sin(Math.PI * Math.min(1, Math.max(0, o.reload))) : 0;
+  vm.gun.position.set(vm.pos[0] + sx + lat - rl * 0.02, vm.pos[1] + vert + sy - run * 0.02 - rl * 0.035, vm.pos[2] + o.kick * 0.075 + rl * 0.01);
+  vm.gun.rotation.set(o.kick * 0.16 + sy * 1.5 - run * 0.12 + rl * 0.12, 0.045 + sx * 2 + run * 0.25 + rl * 0.12, -sx * 2.5 + run * 0.18 + lat * 1.2 + rl * 0.42);
 }

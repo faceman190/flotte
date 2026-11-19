@@ -12,11 +12,11 @@ import { GEAR_IDS, RARITY, gearDef } from '../data/gear';
 import { addItem, canAdd, gearStat, gearFactor } from './inventory';
 import { SECTOR } from '../data/galaxy';
 import { PLANETS, PTYPE } from '../data/planets';
-import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
+import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, poseViewModel, type DroneVis, type ViewModel } from './mineArt';
 import { droneBark } from './barks';
 import { kitMaterials } from '../models/kit';
 import { onCoop, coopSend, coopNow, pack, CoopGroup } from './coop';
-import { gunReady, gunFired, gunUpdate } from './footgun';
+import { gunReady, gunFired, gunUpdate, GUN } from './footgun';
 import { drawFootRing, drawPrompt } from '../ui/footHud';
 import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, type Avatar, type RemoteFig } from './avatar';
 
@@ -1135,7 +1135,7 @@ export function updateDungeon(dt: number) {
   // eigene Figur (Außensicht): Laufen nach Richtung, Anschlag nach Schüssen, Neigung mit dem Blick
   if (me) {
     me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14) });
+    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });
   }
   for (const m of DUN.msg) m.life -= dt;
   DUN.msg = DUN.msg.filter(m => m.life > 0);
@@ -1165,9 +1165,8 @@ export function dungeonCamera() {
     const dyaw = DUN.yaw - sway.yaw, dp = DUN.pitch - sway.pitch; sway.yaw = DUN.yaw; sway.pitch = DUN.pitch;
     sway.x = clamp(sway.x * 0.86 + dyaw * 0.35, -0.03, 0.03); sway.y = clamp(sway.y * 0.86 - dp * 0.35, -0.03, 0.03);
     const run = Math.hypot(DUN.vx, DUN.vz) > 5 ? 1 : 0, b = DUN.bob;
-    vm.gun.position.set(vm.pos[0] + sway.x + Math.cos(DUN.walked * 2.1) * 0.006 * (1 + run), vm.pos[1] + b * 0.55 + sway.y - run * 0.02, vm.pos[2] + DUN.kick * 0.04);
+    poseViewModel(vm, { walked: DUN.walked, bob: b, kick: DUN.kick, sx: sway.x, sy: sway.y, run, reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });   // mineArt.ts
     if (vm.glow) { const k = 0.82 + 0.18 * Math.sin(performance.now() * 0.004); vm.glow.color.setHex(vm.id === 'ef2' ? 0x6fc2ff : 0x8fd0ff).multiplyScalar(k); }
-    vm.gun.rotation.set(DUN.kick * 0.07 + sway.y * 1.5 - run * 0.12, 0.045 + sway.x * 2 + run * 0.25, -sway.x * 2.5 + run * 0.18);
     vm.gun.visible = DUN.dead <= 0;
     const f = DUN.flash > 0; vm.flash.visible = f; vm.flashLight.intensity = f ? 2.6 : 0;
     if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(0.11 + Math.random() * 0.08); }

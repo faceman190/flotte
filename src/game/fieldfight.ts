@@ -6,9 +6,9 @@ import { sfx, snd } from '../core/audio';
 import { P, saveGame } from './state';
 import { world } from './world';
 import { terrainAt } from './surface';
-import { buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
+import { buildDrone, buildViewModel, viewModelId, poseViewModel, type DroneVis, type ViewModel } from './mineArt';
 import { weapon } from './dungeon';
-import { gunReady, gunFired, gunUpdate } from './footgun';
+import { gunReady, gunFired, gunUpdate, GUN } from './footgun';
 import { drawFootRing } from '../ui/footHud';
 import { flinch, noteShot } from './avatar';
 import { droneBark } from './barks';
@@ -282,14 +282,14 @@ export function fieldViewModel(show: boolean, bob: number, walked: number) {
   if (overlay.scene !== want && (want || (vm && overlay.scene === vm.scene))) { overlay.scene = want; overlay.camera = want ? vm!.cam : null; }
   if (!show || !vm) return null;
   vm.cam.aspect = view.W / view.H; vm.cam.updateProjectionMatrix();
-  vm.gun.position.set(vm.pos[0] + Math.cos(walked * 2.1) * 0.006, vm.pos[1] + bob * 0.55, vm.pos[2] + FIGHT.kick * 0.04);
-  vm.gun.rotation.set(FIGHT.kick * 0.07, 0.045, 0);
+  poseViewModel(vm, { walked, bob, kick: FIGHT.kick, reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });   // mineArt.ts
   vm.gun.visible = FIGHT.down <= 0;
   const f = FIGHT.flash > 0; vm.flash.visible = f; vm.flashLight.intensity = f ? 2.6 : 0;
   if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(0.11 + Math.random() * 0.08); }
   return vm;
 }
 export function hideFieldViewModel() { if (vm && overlay.scene === vm.scene) { overlay.scene = null; overlay.camera = null; } }
+export const fieldVM = () => vm;   // für Tests (Lage der Waffe einstellen)
 
 // Anzeige: Leben, Treffer-Rand, Meldungen, Drohnen-Markierungen
 const _p = new THREE.Vector3();

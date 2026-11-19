@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GUN } from './footgun';
 import { drawPrompt } from '../ui/footHud';
 import { CITY, cityTargets, cityDoorNear, cityDoorPos } from './city';
 import { scene, camera, view, ux, gl, compileFor, renderer } from '../core/engine';
@@ -175,7 +176,7 @@ export function updateFoot(dt: number) {
   if (VIEW.tp) me = syncAvatar(scene, me, P.gear || {});
   if (me) {
     me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert) });
+    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });
   }
   // Kampf: Schießen (Klick), Drohnen, Geschosse; in der Außensicht kommt der Leuchtstrich aus der Mündung der Figur
   const mz = VIEW.tp && me?.s.weapon ? me.s.weapon.localToWorld(new THREE.Vector3().copy(me.s.muzzle)) : null;
