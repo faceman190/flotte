@@ -4,7 +4,7 @@ kurz: Vom ersten Start bis zum ersten verdienten Credit – Steuerung, Bastion, 
 reihe: 1
 stufe: Einsteiger
 bild: ../../assets/bilder/bastion2-spiel.jpg
-stand: Alpha 1.51
+stand: Alpha 1.53
 ---
 
 Letzte Crew läuft direkt im Browser. Öffne [spielen.letztecrew.de](https://spielen.letztecrew.de/) in Chrome, Edge oder Firefox. Beim ersten
@@ -68,15 +68,18 @@ Flieg nah an eine Station heran, bis links unten **Andocken** aufleuchtet, und d
 Ab hier läufst du mit <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>, rennst mit <kbd>Umschalt</kbd> und benutzt Terminals oder
 sprichst Leute mit <kbd>E</kbd> an.
 
-Jeder Dienst hat seinen eigenen Ort. Auf der Bastion (Deck 3) findest du:
+Jeder Dienst hat seinen eigenen Ort. Auf der Bastion führt vom Hangar ein breiter Korridor in die **Rundhalle** (Deck 3). In der
+Mitte liegt der Treffpunkt, ringsum die Läden, jeder mit eigenem Leuchtschild. Leitspuren am Boden zeigen den Weg.
 
 | Ort | Dienste |
 |---|---|
 | Hangar, Deckmeister neben der Schleuse | Schiff wechseln, verkaufen, lackieren |
-| Lager | Markt, Ausrüster, Stationslager |
-| Werkstatt | Werft, Werkstatt (Ausbauten), Service |
-| Besprechung | Aufträge und Missionen |
-| Treffpunkt | Auskunft, Galaxiekarte |
+| Treffpunkt in der Hallenmitte | Auskunft, Galaxiekarte |
+| Aufträge (gegenüber dem Korridor) | Aufträge und Missionen |
+| Handelskontor | Markt, Stationslager |
+| Werft | Werft, Werkstatt (Ausbauten), Service |
+| Ausrüster | Ausrüstung und Module |
+| Kantine, Krankenstation, Besprechung | Leute zum Ansprechen |
 
 Zum Ablegen gehst du zurück zu deinem Schiff und steigst ein.
 
@@ -86,7 +89,7 @@ Du fliegst die **Venom**, einen schnellen Abfangjäger mit kleinem Frachtraum un
 gute Wege zum Geld:
 
 1. **Erz abbauen** im Eisengürtel von Heimstatt und gleich nebenan an der Gildehütte **Eisenkrone** verkaufen oder schmelzen. Siehe [Bergbau](/guides/bergbau/).
-2. **Lieferaufträge** aus der Besprechung: Ware von A nach B bringen. Siehe [Handel](/guides/handel/).
+2. **Lieferaufträge** aus dem Auftragsbüro: Ware von A nach B bringen. Siehe [Handel](/guides/handel/).
 3. **Die Geschichte** spielen. Die ersten Kapitel führen Schritt für Schritt durch die Grundlagen.
 
 ## Wenn es schiefgeht
