@@ -8,6 +8,8 @@ import { world } from './world';
 import { terrainAt } from './surface';
 import { buildDrone, buildViewModel, viewModelId, type DroneVis, type ViewModel } from './mineArt';
 import { weapon } from './dungeon';
+import { gunReady, gunFired, gunUpdate } from './footgun';
+import { drawFootRing } from '../ui/footHud';
 import { flinch, noteShot } from './avatar';
 import { droneBark } from './barks';
 import { gearStat, addItem, canAdd } from './inventory';
@@ -194,7 +196,8 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
   if (tracer.visible && (tracerT -= dt) <= 0) tracer.visible = false;
   const px = me.x, pz = me.z, py = me.y + me.eye;
   // Schießen
-  if (me.active && FIGHT.down <= 0 && mouse.down && FIGHT.cool <= 0) { shoot(px, py, pz, me.yaw, me.pitch, me.muzzle); if (!weapon().auto) mouse.down = false; }
+  gunUpdate(dt);
+  if (me.active && FIGHT.down <= 0 && mouse.down && FIGHT.cool <= 0 && gunReady()) { shoot(px, py, pz, me.yaw, me.pitch, me.muzzle); gunFired(); if (!weapon().auto) mouse.down = false; }   // Magazin: footgun.ts
   if (mflash) { mflash.position.set(px, py, pz); mflash.intensity = FIGHT.flash > 0 ? 30 : 0; }
   // Erholung außerhalb des Kampfes
   const fighting = FIGHT.foes.some(f => !f.dead && f.alert);
@@ -295,13 +298,8 @@ export function drawFieldHUD() {
   const W = view.W, H = view.H;
   ux.save();
   if (FIGHT.hurt > 0) { ux.fillStyle = `rgba(160,20,10,${0.35 * FIGHT.hurt})`; ux.fillRect(0, 0, W, H); }
-  const fighting = FIGHT.foes.some(f => !f.dead && f.alert);
-  if (fighting || FIGHT.hp < FIGHT.max - 0.5) {
-    const w = 220, x = W / 2 - w / 2, y = H - 54;
-    ux.fillStyle = 'rgba(6,16,26,.8)'; ux.fillRect(x - 2, y - 2, w + 4, 14);
-    ux.fillStyle = FIGHT.hp / FIGHT.max < 0.3 ? '#ff6b5b' : '#3ad06a'; ux.fillRect(x, y, w * clamp(FIGHT.hp / FIGHT.max, 0, 1), 10);
-    ux.fillStyle = '#dfe8f0'; ux.font = '11px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'center'; ux.fillText(`LEBEN ${Math.ceil(FIGHT.hp)} / ${FIGHT.max}`, W / 2, y - 6);
-  }
+  // Leben, Waffe, Magazin, Schussmodus: Ringanzeige unten rechts (seit Alpha 1.54, ui/footHud.ts; vorher ein Balken unten in der Mitte)
+  drawFootRing(FIGHT.hp, FIGHT.max, FIGHT.hurt);
   ux.font = '700 11px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'center';
   for (const f of FIGHT.foes) {
     if (f.dead || !f.alert) continue;
@@ -310,7 +308,7 @@ export function drawFieldHUD() {
     const x = (_p.x + 1) / 2 * W, y = (1 - _p.y) / 2 * H;
     ux.fillStyle = 'rgba(6,16,26,.7)'; ux.fillRect(x - 21, y - 3, 42, 6); ux.fillStyle = '#ff6b5b'; ux.fillRect(x - 20, y - 2, 40 * f.hp / f.max, 4);
   }
-  ux.textAlign = 'left'; ux.font = '600 14px "Share Tech Mono",Consolas,monospace';
+  ux.textAlign = 'left'; ux.font = '600 15px Rajdhani, "IBM Plex Sans", sans-serif';
   FIGHT.msg.forEach((m, i) => { ux.globalAlpha = Math.min(1, m.life); ux.fillStyle = m.c; ux.fillText(m.t, 24, H * 0.62 + i * 20); });
   ux.restore();
 }

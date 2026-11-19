@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { drawPrompt } from '../ui/footHud';
 import { CITY, cityTargets, cityDoorNear, cityDoorPos } from './city';
 import { scene, camera, view, ux, gl, compileFor, renderer } from '../core/engine';
 import { keys, mouse } from '../core/input';
@@ -234,14 +235,7 @@ export function drawFootHUD() {
   const bs = world.stations[0], bp = bs && basePad(bs);
   if (bp) { const dD = Math.hypot(FOOT.x - bp.door.x, FOOT.z - bp.door.z); if (dD > 4 && dD < 400) { _p.set(bp.door.x, padGround(bp.door.x, bp.door.z) + 3, bp.door.z).project(camera); if (_p.z < 1 && Math.abs(_p.x) < 1 && Math.abs(_p.y) < 1) { ux.fillStyle = '#7fe0a0'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'center'; ux.fillText(`EINGANG · ${Math.round(dD)} m`, (_p.x + 1) / 2 * W, (1 - _p.y) / 2 * H); } } }
   if (FOOT.locked) { ux.fillStyle = 'rgba(255,255,255,.75)'; ux.beginPath(); ux.arc(W / 2, H / 2, 2.2, 0, 6.283); ux.fill(); }
-  if (FOOT.prompt) {
-    const t = `[E] ${FOOT.prompt}`;
-    ux.font = '600 14px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'center';
-    const tw = ux.measureText(t).width + 30, y = H * 0.66;
-    ux.fillStyle = 'rgba(6,16,26,.88)'; ux.strokeStyle = '#e09030'; ux.lineWidth = 1;
-    ux.beginPath(); ux.rect(W / 2 - tw / 2, y - 20, tw, 32); ux.fill(); ux.stroke();
-    ux.fillStyle = '#e09030'; ux.fillText(t, W / 2, y + 1);
-  }
+  if (FOOT.prompt) drawPrompt(FOOT.prompt, '#e09030', H * 0.66);   // gleiche Aufforderung wie in Station und Mine (ui/footHud.ts)
   if (!FOOT.locked) { ux.textAlign = 'center'; ux.font = '11px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = '#8aa0b0'; ux.fillText('Klick: Maus einfangen', W / 2, H - 12); }
   ux.restore();
 }

@@ -197,3 +197,16 @@ Gemessen mit einem Mitschnitt aller Töne (WebAudio abgefangen, mit Aufrufstelle
   1,4 km hereinkommt.
 - Der Funkton jeder Meldung war ein heller 1400-Hz-Rechteckton (der „Ping“). Jetzt ein leiser, tieferer Klick (`ui/radio.ts`).
 Danach beim Abdocken nur noch: Startaufnahme, Fahrwerk, Funkspruch der Andockkontrolle.
+
+## Zu Fuß: Ringanzeige mit Waffe, Magazin und Modus; Terminal ohne Aufgaben (19.11.2026)
+
+- Terminal offen (Markt, Werft, Dienste): Aufgaben (`#storyObj`, `#objP`) und Steuerungsleiste sind ausgeblendet (`body.terminal`),
+  sie verdeckten den Knopf „Terminal verlassen“.
+- Neue Anzeige zu Fuß (`src/ui/footHud.ts`), auf Planeten und in Minen gleich: Ring mit dem Leben, die Zahl in der Mitte, links Waffe,
+  Magazin („30 / 30“, „Nachladen“ mit Balken, beim Schneidbrenner „Energie“) und Schussmodus (Einzelfeuer, Dauerfeuer, Schrot).
+  Vorher: Balken unten in der Mitte (Planet) bzw. Kasten mit Balken (Mine).
+- Neu: Magazin (`src/game/footgun.ts`): Pistole 12, Karabiner 30, Flinte 6, Impuls 24, Splitter 20; Vorrat unbegrenzt, leer lädt von selbst,
+  R lädt früher nach (Hinweis in der Steuerungsleiste unter halbem Magazin).
+- Station zu Fuß: Kasten oben links (Ort, Credits, Fracht) entfällt, der Ort steht klein oben in der Mitte. Aufforderung „[E] …“ in Station,
+  auf Planeten und in Minen einheitlich (Tastenfeld und Text, Rajdhani).
+- Beim Andocken entfällt der alte Sinus-Ping (`openDock`).

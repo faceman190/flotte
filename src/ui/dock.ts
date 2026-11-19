@@ -58,7 +58,7 @@ export function openDock(s: Station) {
   G.heat = 0; G.overheat = false;
   if (!world.surface) P.home = { sector: secId(), station: s.id };
   releaseAll();
-  snd(520, 0.2, 'sine', 0.05, 300); dockBark('an');
+  dockBark('an');   // ohne den alten Sinus-Ping (seit Alpha 1.54): Den Anflug begleiten Landeaufnahme und Aufsetzen im Hangar
   $('hud').classList.add('hidden');
   dockHooks.enter(s);
   saveGame();

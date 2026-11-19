@@ -1,3 +1,4 @@
+import { drawPrompt, drawPlaceLine } from '../ui/footHud';
 import * as THREE from 'three';
 import { scene, camera, view, ux, gl, setExposure, ambient, rim, sun, warmScene, compileFor, warm, uploadAll } from '../core/engine';
 import { texMat, std, boxUV, lightmapTex, WHITE_TEX } from '../core/textures';
@@ -1452,7 +1453,7 @@ export function drawWalkHUD() {
   const W = view.W, H = view.H, pal = IN.ship && !IN.station ? PAL.outpost : PAL[kind], title = IN.ship ? IN.ship.name : IN.station ? IN.station.name : '';
   ux.save();
   // Namen über Figuren und Schiffen
-  ux.textAlign = 'center'; ux.font = '12px "Share Tech Mono",Consolas,monospace';
+  ux.textAlign = 'center'; ux.font = '600 13px Rajdhani, "IBM Plex Sans", sans-serif';
   for (const l of [...labels, ...shipLabels, ...otherLabels()]) {
     const d = Math.hypot(l.p.x - IN.x, l.p.z - IN.z);
     if (d > 26) continue;
@@ -1472,29 +1473,14 @@ export function drawWalkHUD() {
     ux.beginPath(); ux.arc(W / 2, H / 2, W / 2 * 0.14, 0, 6.283); ux.stroke();
     ux.fillStyle = 'rgba(255,255,255,.85)'; ux.save(); ux.translate(mouse.x, mouse.y); ux.rotate(Math.PI / 4); ux.fillRect(-3.5, -3.5, 7, 7); ux.restore();
   }
-  // Aufforderung
-  if (IN.target) {
-    const t = `[E] ${IN.target.label()}`;
-    ux.font = '600 14px "Share Tech Mono",Consolas,monospace';
-    const tw = ux.measureText(t).width + 30, y = H * 0.66;
-    ux.fillStyle = 'rgba(6,16,26,.88)'; ux.strokeStyle = pal.css; ux.lineWidth = 1;
-    ux.beginPath(); ux.rect(W / 2 - tw / 2, y - 20, tw, 32); ux.fill(); ux.stroke();
-    ux.fillStyle = pal.css; ux.fillText(t, W / 2, y + 1);
-  }
-  // Ortsanzeige oben links
-  const k = settings.hud;
-  ux.save(); ux.translate(12, 12); ux.scale(k, k);
-  ux.fillStyle = 'rgba(6,16,26,.84)'; ux.strokeStyle = '#1e3a4a'; ux.lineWidth = 1;
-  ux.beginPath(); ux.rect(0, 0, 236, 84); ux.fill(); ux.stroke();
-  ux.textAlign = 'left'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = '#5fd0ff'; ux.fillText(title.toUpperCase(), 12, 20);
-  const rows: [string, string, string][] = [['Ort', IN.area, pal.css], ['Credits', fmtN(P.credits) + ' Cr', '#ffb347'], ['Fracht', `${cargoUsed()}/${stats().cargo}`, '#e4eef5']];
-  ux.font = '12px "Share Tech Mono",Consolas,monospace';
-  rows.forEach(([a, b, c], i) => { ux.textAlign = 'left'; ux.fillStyle = '#e4eef5'; ux.fillText(a, 12, 40 + i * 16); ux.textAlign = 'right'; ux.fillStyle = c; ux.fillText(b, 224, 40 + i * 16); });
-  ux.restore();
+  // Aufforderung (seit Alpha 1.54 dieselbe wie auf Planeten und in Minen, ui/footHud.ts)
+  if (IN.target) drawPrompt(IN.target.label(), pal.css, H * 0.66);
+  // Ort oben in der Mitte statt des Kastens oben links (Credits und Fracht stehen an den Terminals und im Flottenband)
+  drawPlaceLine(title && IN.area ? `${title} · ${IN.area}` : title || IN.area);
   // Gesprochenes
   if (IN.say.t > 0) {
     ux.globalAlpha = Math.min(1, IN.say.t);
-    ux.textAlign = 'center'; ux.font = '14px "Share Tech Mono",Consolas,monospace';
+    ux.textAlign = 'center'; ux.font = '500 15px Rajdhani, "IBM Plex Sans", sans-serif';
     const t = `${IN.say.who}: ${IN.say.text}`, tw = Math.min(W - 40, ux.measureText(t).width + 28);
     ux.fillStyle = 'rgba(6,16,26,.82)'; ux.fillRect(W / 2 - tw / 2, H - 92, tw, 28);
     ux.fillStyle = '#e4eef5'; ux.fillText(t, W / 2, H - 73, W - 60);

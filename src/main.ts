@@ -46,6 +46,7 @@ import { loadShipModels, setGear, setDoors, RAMP, type Paint } from './models/gl
 import { hasInterior } from './data/ships';
 import { loadRockModel } from './game/world';
 import { updateFarView } from './game/farview';
+import { gunReload } from './game/footgun';
 import { toggleSchnellflug, pickNav, bigSectorHint } from './game/schnellflug';
 import { loadStationModels } from './models/stationModels';
 import { loadCharModels } from './models/charModels';
@@ -314,6 +315,7 @@ onKey(code => {
     return;
   }
   if (code === 'KeyR' && G.mode === 'play') { scan(); noteScan(); return; }
+  if (code === 'KeyR' && (G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { gunReload(); return; }   // zu Fuß: nachladen (footgun.ts)
   if (code === 'KeyJ' && G.mode === 'play') { toggleJumpDrive(); return; }
   if (code === 'KeyH' && G.mode === 'play') { toggleSchnellflug(); return; }                                  // Schnellflug / Kurzsprung (schnellflug.ts)
   if (code === 'KeyN' && G.mode === 'play' && !world.surface) { pickNav(camera.getWorldDirection(new THREE.Vector3())); return; }   // Navigationsziel im Fadenkreuz
@@ -719,6 +721,8 @@ function loop(now: number, manual = false) {
   if (G.mode === 'play' || G.mode === 'jump' || G.mode === 'entry') updatePanels(dt);
   if (G.mode === 'map') drawBand();
   updateControls(dt, settings.hud);
+  // Terminal offen (Kauf, Werft, Dienste): Aufgaben, Funk und Steuerungsleiste ausblenden, sie verdeckten den Schließen-Knopf (style.css body.terminal)
+  document.body.classList.toggle('terminal', !$('dock').classList.contains('hidden'));
   netUpdate(dt);
   perfFrameEnd();
 }

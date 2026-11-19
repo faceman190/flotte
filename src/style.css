@@ -250,6 +250,7 @@ button.mini{padding:3px 8px;font-size:12px;letter-spacing:.5px}
 @keyframes dlgIn{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
 #dlgWho{font-family:var(--mono);font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px}
 #dlgTxt{font-size:18px;line-height:1.4;font-weight:500;color:#eaf6ff}
+body.terminal #storyObj,body.terminal #objP,body.terminal #ctrlP{display:none!important}
 #storyObj{position:fixed;top:16px;right:16px;width:min(340px,calc(100% - 32px));z-index:30;pointer-events:none}
 #scene,#intro{position:fixed;inset:0;z-index:60}
 #scene{background:radial-gradient(ellipse at center,rgba(0,0,0,.15),rgba(0,0,0,.65));cursor:pointer}

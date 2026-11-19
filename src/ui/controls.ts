@@ -13,6 +13,7 @@ import { SF, navTarget } from '../game/schnellflug';
 import { nextHop } from './hud';
 import { SECTOR } from '../data/galaxy';
 import { FOOT } from '../game/onfoot';
+import { GUN } from '../game/footgun';
 
 // Steuerungsleiste links unten: nur was gerade wichtig ist (seit Alpha 1.51, Wunsch des Spielers).
 // Keine Grundtasten mehr (W/S, Maus, A/D, V, Mausrad, Laufen, Springen …): die sind in jedem Spiel ähnlich und stehen unter Esc → Steuerung.
@@ -40,12 +41,14 @@ function rowsFor(): { title: string; rows: Row[] } | null {
   if ((m as string) === 'dungeon') {
     const r: Row[] = [];
     if (DUN.prompt) r.push(['E', DUN.prompt, true]);
+    if (GUN.max && GUN.reload <= 0 && GUN.mag < GUN.max * 0.5) r.push(['R', 'Nachladen']);
     return { title: DUN.e ? DUN.e.name : 'Mine', rows: r };
   }
   if (m === 'rover' && FOOT.active) {
     const r: Row[] = [];
     if (FOOT.prompt) r.push(['E', FOOT.prompt, true]);
-    if (FOOT.act === 'rover') r.push(['F', 'In den Rover steigen', true]);
+    if (FOOT.act === 'rover' && !FOOT.prompt) r.push(['F', 'In den Rover steigen', true]);   // steht die Aufforderung schon da (E), nicht doppelt
+    if (GUN.max && GUN.reload <= 0 && GUN.mag < GUN.max * 0.5) r.push(['R', 'Nachladen']);
     return { title: 'Zu Fuß', rows: r };
   }
   if (m === 'rover') {

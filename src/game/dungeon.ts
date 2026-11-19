@@ -16,6 +16,8 @@ import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buil
 import { droneBark } from './barks';
 import { kitMaterials } from '../models/kit';
 import { onCoop, coopSend, coopNow, pack, CoopGroup } from './coop';
+import { gunReady, gunFired, gunUpdate } from './footgun';
+import { drawFootRing, drawPrompt } from '../ui/footHud';
 import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
@@ -986,7 +988,8 @@ export function updateDungeon(dt: number) {
   // Schießen
   DUN.cool -= dt; DUN.kick = Math.max(0, DUN.kick - dt * 7); DUN.flash -= dt; DUN.hurt = Math.max(0, DUN.hurt - dt * 1.6);
   const wp = weapon();
-  if (mouse.down && DUN.cool <= 0) { shoot(); if (!wp.auto) mouse.down = false; }
+  gunUpdate(dt);
+  if (mouse.down && DUN.cool <= 0 && gunReady()) { shoot(); gunFired(); if (!wp.auto) mouse.down = false; }   // Magazin: footgun.ts
   if (tracer && tracer.visible && (tracerT -= dt) <= 0) tracer.visible = false;
   // Was liegt vor mir? (Kiste, Schalter, Förderkorb)
   DUN.prompt = ''; DUN.act = null;
@@ -1219,13 +1222,8 @@ export function drawDungeonHUD(roverX = 0, roverZ = 0, roverOn = false) {
   ux.strokeStyle = G.hitMark > 0 ? '#ffb347' : 'rgba(255,255,255,.8)'; ux.lineWidth = 1.5;
   for (const [ax, ay] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ux.beginPath(); ux.moveTo(W / 2 + ax * 5, H / 2 + ay * 5); ux.lineTo(W / 2 + ax * 12, H / 2 + ay * 12); ux.stroke(); }
   if (!DUN.locked) { ux.fillStyle = 'rgba(255,255,255,.7)'; ux.font = '14px Rajdhani,"Segoe UI",sans-serif'; ux.textAlign = 'center'; ux.fillText('Klicken, um die Maus einzufangen', W / 2, H / 2 + 40); }
-  // Leben und Waffe
-  const wp = weapon(), bx = W - 278, by = H - 54;
-  ux.fillStyle = 'rgba(6,16,26,.75)'; ux.fillRect(bx - 8, by - 26, 268, 64);
-  ux.font = '12px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'left'; ux.fillStyle = '#8fa0b0'; ux.fillText('LEBEN', bx, by - 8);
-  ux.fillStyle = 'rgba(255,255,255,.1)'; ux.fillRect(bx, by, 250, 10); ux.fillStyle = DUN.hp / DUN.maxHp > 0.35 ? '#3ad06a' : '#ff6b5b'; ux.fillRect(bx, by, 250 * clamp(DUN.hp / DUN.maxHp, 0, 1), 10);
-  ux.fillStyle = '#dfe8f0'; ux.textAlign = 'right'; ux.fillText(`${Math.ceil(DUN.hp)} / ${DUN.maxHp}`, bx + 250, by - 8);
-  ux.textAlign = 'left'; ux.fillStyle = '#ffb347'; ux.fillText(wp.name.toUpperCase(), bx, by + 28); ux.fillStyle = '#8fa0b0'; ux.textAlign = 'right'; ux.fillText(`${Math.round(wp.dmg * wp.n)} SCHADEN`, bx + 250, by + 28);
+  // Leben und Waffe: Ringanzeige unten rechts (seit Alpha 1.54, ui/footHud.ts; vorher ein Kasten mit Balken)
+  drawFootRing(DUN.hp, DUN.maxHp, DUN.hurt);
   // Meldungen
   ux.textAlign = 'left'; ux.font = '15px Rajdhani,"Segoe UI",sans-serif';
   DUN.msg.forEach((m, i) => { ux.globalAlpha = clamp(m.life, 0, 1); ux.fillStyle = 'rgba(6,16,26,.7)'; const tw = ux.measureText(m.t).width + 16; ux.fillRect(22, 24 + i * 26, tw, 22); ux.fillStyle = m.c; ux.fillText(m.t, 30, 40 + i * 26); });
@@ -1233,7 +1231,7 @@ export function drawDungeonHUD(roverX = 0, roverZ = 0, roverOn = false) {
   // Zeile der Geschichte (z. B. eine Frist)
   { const nt = DUN.e?.note?.(); if (nt) { ux.textAlign = 'center'; ux.font = '600 19px Rajdhani,"Segoe UI",sans-serif'; const tw = ux.measureText(nt).width + 30; ux.fillStyle = 'rgba(6,16,26,.82)'; ux.fillRect(W / 2 - tw / 2, H * 0.17, tw, 34); ux.fillStyle = '#ffb347'; ux.fillText(nt, W / 2, H * 0.17 + 23); } }
   // Hinweis
-  if (DUN.prompt) { const t = `[E]  ${DUN.prompt}`; ux.textAlign = 'center'; ux.font = '16px Rajdhani,"Segoe UI",sans-serif'; const tw = ux.measureText(t).width + 30; ux.fillStyle = 'rgba(6,16,26,.8)'; ux.fillRect(W / 2 - tw / 2, H * 0.68, tw, 32); ux.fillStyle = '#ffb347'; ux.fillText(t, W / 2, H * 0.68 + 21); }
+  if (DUN.prompt) drawPrompt(DUN.prompt, '#ffb347', H * 0.68 + 16);
   // Karte: deckt sich beim Erkunden auf, dreht nicht mit
   const cs = Math.max(4, Math.min(8, Math.floor(190 / DUN.W))), mw = DUN.W * cs, mx0 = W - mw - 22, my0 = 22;
   ux.fillStyle = 'rgba(6,16,26,.72)'; ux.fillRect(mx0 - 8, my0 - 8, mw + 16, DUN.H * cs + 48);
