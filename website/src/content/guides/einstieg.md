@@ -4,7 +4,7 @@ kurz: Vom ersten Start bis zum ersten verdienten Credit – Steuerung, Bastion, 
 reihe: 1
 stufe: Einsteiger
 bild: ../../assets/bilder/bastion2-spiel.jpg
-stand: Alpha 1.53
+stand: Alpha 1.54
 ---
 
 Letzte Crew läuft direkt im Browser. Öffne [spielen.letztecrew.de](https://spielen.letztecrew.de/) in Chrome, Edge oder Firefox. Beim ersten
@@ -82,6 +82,9 @@ Mitte liegt der Treffpunkt, ringsum die Läden, jeder mit eigenem Leuchtschild. 
 | Kantine, Krankenstation, Besprechung | Leute zum Ansprechen |
 
 Zum Ablegen gehst du zurück zu deinem Schiff und steigst ein.
+
+Auf Planeten und in Minen trägst du eine Handwaffe. Klick schießt, <kbd>R</kbd> lädt nach, ein leeres Magazin lädt von selbst nach.
+Unten rechts zeigt ein Ring dein Leben, daneben stehen Waffe, Magazin und Schussmodus.
 
 ## Die ersten Credits
 
