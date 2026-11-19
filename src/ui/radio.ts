@@ -24,6 +24,6 @@ export function radio(who: string, text: string, col?: string) {
   while (box.children.length > 4) box.firstChild!.remove();
   setTimeout(() => (el.style.opacity = '0'), 8000);
   setTimeout(() => el.remove(), 8700);
-  snd(1400, 0.04, 'square', 0.015);
+  snd(950, 0.035, 'sine', 0.012, -250);   // leiser Funkklick (bis Alpha 1.51 ein heller Rechteckton bei 1400 Hz, klang wie ein Ping)
 }
 export function clearRadio() { $('radio').innerHTML = ''; }

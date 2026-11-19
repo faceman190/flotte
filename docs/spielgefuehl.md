@@ -187,3 +187,13 @@ Wunsch des Spielers: nur was im Moment wichtig ist, keine Grundtasten. `rowsFor`
   „2 Bergbaulaser“ bzw. „R Scannen“, bei Ferrox mit dem Laser „1 Kanonen“, mit Route „J Sprung → Sektor“, in großen Sektoren mehr als 5 km
   von jeder Station „N Ziel wählen“ und „H Schnellflug“, „V Freie Kamera beenden“ nur während sie läuft.
 - In den ersten zehn Spielminuten kommen Umschalt (Reiseflug), B und M dazu. Ohne Zeilen verschwindet die Leiste.
+
+## Töne beim Abdocken (18.11.2026, nach Alpha 1.51)
+
+Gemessen mit einem Mitschnitt aller Töne (WebAudio abgefangen, mit Aufrufstelle) beim Ablegen von Bastion und Eisenkrone:
+- Nach der Startaufnahme spielte `undock` noch den alten synthetischen Sägezahn-Ton (Ersatz aus der Zeit vor den Aufnahmen). Jetzt nur noch
+  ohne Startablauf im Hangar, dann als Aufnahme mit Ersatzton.
+- An der Eisenkrone kam direkt nach dem Ablegen ihr Begrüßungsfunk („an anfliegendes Schiff“), samt Funkton. Jetzt nur, wenn man von weiter als
+  1,4 km hereinkommt.
+- Der Funkton jeder Meldung war ein heller 1400-Hz-Rechteckton (der „Ping“). Jetzt ein leiser, tieferer Klick (`ui/radio.ts`).
+Danach beim Abdocken nur noch: Startaufnahme, Fahrwerk, Funkspruch der Andockkontrolle.

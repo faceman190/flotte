@@ -101,7 +101,9 @@ export function undock() {
   const r = stats().radius;
   placePlayer(s.launch.x - Math.sin(s.launch.yaw) * r * 2, s.launch.y, s.launch.z - Math.cos(s.launch.yaw) * r * 2, s.launch.yaw, 140);
   centerMouse();
-  snd(300, 0.6, 'sawtooth', 0.05, 500); dockBark('ab', 1600);
+  // Startton nur ohne Startablauf im Hangar (der spielt die Aufnahme schon; bis Alpha 1.51 kam danach noch ein synthetischer Sägezahn-Ton)
+  if (!launched) sfx('launch', 0.6, 1, () => snd(300, 0.6, 'sawtooth', 0.05, 500));
+  dockBark('ab', 1600);
   saveGame();
 }
 

@@ -625,7 +625,7 @@ let last = performance.now(), shadowSweep = 0;
 // (Alpha 0.99 bis 0.99d: Ein Zugriff auf den fehlenden Spielstand im Hauptmenü warf hier in jedem Bild, die Schleife endete, der Schirm blieb leer.)
 const hookErr = new Set<string>();
 function hook(name: string, f: () => void) { try { f(); } catch (e) { if (!hookErr.has(name)) { hookErr.add(name); console.error('Fehler in ' + name + ':', e); } } }
-let ekHail = false;      // Funkgruß der Eisenkrone schon gesendet
+let ekHail = false, ekOut = false;      // Funkgruß der Eisenkrone schon gesendet; Schiff war seit dem letzten Ablegen schon weiter draußen
 function loop(now: number, manual = false) {
   if (!manual) requestAnimationFrame(t => loop(t));      // zuerst das nächste Bild anmelden: Ein Fehler weiter unten beendet die Schleife nicht
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
@@ -649,11 +649,13 @@ function loop(now: number, manual = false) {
   // Stadt: durchs offene Hallentor geflogen → andocken (Landeanflug im Hangar übernimmt)
   if (G.mode === 'play' && !G.dead && CITY.st && insideCityGate(P.x, P.y, P.z)) openDock(CITY.st);
   G.eBusy = G.mode === 'play' && (!!nearDock() || !!world.surface);
-  // Eisenkrone: Die Gildehütte meldet sich beim ersten Anflug (einmal je Sitzung)
+  // Eisenkrone: Die Gildehütte meldet sich beim ersten Anflug (einmal je Sitzung). Nur von draußen hereinkommend (vorher weiter als 1,4 km):
+  // Bis Alpha 1.51 kam der Gruß samt Funkton direkt nach dem Ablegen, weil man dann noch im Umkreis steht.
   if (G.mode === 'play' && !G.dead && !ekHail && world.def?.id === 'heimstatt' && !world.surface) {
-    const ek = stationById('eisenkrone');
-    if (ek && d3(P.x, P.y, P.z, ek.x, ek.y, ek.z) < 1100) { ekHail = true; radio('EISENKRONE', 'Gildehütte Eisenkrone an anfliegendes Schiff. Erz zur Annahme, Barren ab Lager. Folge der Lichterkette, das Tor ist frei.', '#ffb347'); }
-  }
+    const ek = stationById('eisenkrone'), d = ek ? d3(P.x, P.y, P.z, ek.x, ek.y, ek.z) : 1e9;
+    if (d > 1400) ekOut = true;
+    else if (ek && ekOut && d < 1100) { ekHail = true; radio('EISENKRONE', 'Gildehütte Eisenkrone an anfliegendes Schiff. Erz zur Annahme, Barren ab Lager. Folge der Lichterkette, das Tor ist frei.', '#ffb347'); }
+  } else if (G.mode !== 'play') ekOut = false;
   // Grundgeräusch zu Fuß: im Schiff ein tiefes Brummen, in der Station leiser
   // Grundgeräusch: zu Fuß Schiff, Hangar oder Station; auf einer Planetenoberfläche der Wind (je nach Planetenart)
   {
