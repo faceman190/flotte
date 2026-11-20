@@ -250,3 +250,34 @@ export const DURCHSAGE = {
   ch4: 'Die Weitsicht liegt vor Anker. Willkommen zu Hause, Weitsicht.',
   ch5: 'Neun Schiffe vor Anker, alle Schläfer geborgen. Die Crew dankt ihren Piloten.',
 } as Record<string, string>;
+
+// Städte auf den Planeten (city.ts): je Stadt eigene Sätze, dazu allgemeine für festen Boden; Wachen sagen eigene Sätze
+export const ORT_STADT: Record<string, string[]> = {
+  Talstadt: [
+    'Talstadt war die erste Siedlung auf festem Boden. Jahr sechs. Mein Opa hat die ersten Pfähle gesetzt.',
+    'Hier unten weht Wind. Echter Wind. Ich werd mich nie dran gewöhnen.',
+    'Die Gilde hat hier das Sagen. Krull sitzt im Kontor und rechnet, Tag und Nacht.',
+    'Auf der Bastion ist alles eng. Hier kannst du bis zum Horizont gucken.',
+    'Pass auf die Lastkarren auf. Die bremsen für niemanden.',
+    'Der Markt hier unten ist billiger als oben. Wenn du handeln kannst.',
+  ],
+  Neonhafen: [
+    'Neonhafen schläft nie. Ich auch nicht mehr.',
+    'Hier kriegst du alles. Es fragt nur keiner, woher.',
+    'Die Lichter hier sieht man aus dem Orbit. Sagt man jedenfalls.',
+    'Im Schleusenbräu gibt’s das beste Essen der Stadt. Und das einzige warme.',
+    'Wer hier lange bleibt, fliegt mit leeren Taschen nach Hause.',
+  ],
+};
+export const ORT_STADT_ALLE = [
+  'Boden unter den Füßen. Echter Boden. Manchmal knie ich mich hin und fass ihn an.',
+  'Draußen vor der Stadt sollte man nicht allein rumlaufen.',
+  'Hier unten riecht alles nach Staub und Maschinenöl. Ich mag das.',
+];
+export const WACHE = [
+  'Weitergehen, Pilot. Alles in Ordnung.',
+  'Nichts Besonderes heute. Gut so.',
+  'Halt die Augen offen. Nicht jeder hier meint es gut.',
+  'Ich steh hier seit sechs Stunden. Die Stiefel bringen mich um.',
+  'Waffen bleiben im Holster, solange ich hier stehe. Klar?',
+];

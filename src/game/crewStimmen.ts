@@ -43,7 +43,7 @@ interface Mem { kills: number; mined: number; earned: number; cls: string; done:
 type Taten = { abschuss: number; erz: number; geld: number; schiff: boolean; schaden: boolean; kapitel: string[] };
 let taten: Taten = { abschuss: 0, erz: 0, geld: 0, schiff: false, schaden: false, kapitel: [] };
 let gesagt: Record<string, number> = {};            // je Anlass, wie oft schon in diesem Besuch
-let station: { id: string; kind: string; sector: string; gilde: boolean } | null = null;
+let station: { id: string; kind: string; sector: string; gilde: boolean; stadt?: string } | null = null;
 let durchsageOffen: string | null = null;
 const zuletzt: string[] = [];                       // die letzten Sätze, damit sich nichts schnell wiederholt
 
@@ -61,6 +61,12 @@ export function crewBesuch(st: { id: string; def: StationDef }, sector: string) 
   const kap = taten.kapitel[taten.kapitel.length - 1];
   durchsageOffen = angriffKuerzlich(sector) ? S.DURCHSAGE.angriff : kap && st.id === 'bastion' && S.DURCHSAGE[kap] ? S.DURCHSAGE[kap] : null;
 }
+/** Stadt zu Fuß (city.ts): Ort wechseln, ohne die Taten des Besuchs zu verbrauchen (die Promenade zählt schon als Besuch) */
+export function crewStadt(st: { id: string; def: StationDef }, sector: string, stadt: string) {
+  if (!station || station.id !== st.id) crewBesuch(st, sector);
+  station = { id: st.id, kind: st.def.kind, sector, gilde: false, stadt };
+}
+export function crewWache(): string { return fill(pick(S.WACHE)!); }
 /** Einmal je Besuch: Text der Durchsage oder null */
 export function crewDurchsage(): string | null { const d = durchsageOffen; durchsageOffen = null; return d ? fill(d) : null; }
 /** Leute gehen schneller und bleiben seltener stehen, solange ein Angriff im Sektor frisch ist */
@@ -92,6 +98,7 @@ function tatSatz(): string | null {
 }
 function ortSaetze(): string[] {
   if (!station) return [];
+  if (station.stadt) return [...(S.ORT_STADT[station.stadt] || []), ...S.ORT_STADT_ALLE];
   const own = S.ORT_STATION[station.id] || [];
   if (station.id === 'bastion') return [...S.ORT_BASTION, ...own];
   if (station.gilde) return [...S.ORT_GILDE, ...own];
@@ -131,7 +138,9 @@ export function crewSpruch(): string | null {
   if (r < 0.3 && story.length) return fill(pick(story)!);
   if (r < 0.5 && ort.length) return fill(pick(ort)!);
   if (r < 0.68) { const g = Math.random() < 0.6 ? preisGeruecht() : null; return g || fill(pick(S.GERUECHT_FEST)!); }
-  return fill(pick(S.ALLTAG)!);
+  // in Städten unter freiem Himmel keine Sätze, die nur an Bord passen
+  const alltag = station?.stadt ? S.ALLTAG.filter(t => !/Hangardecke|Rumpfplatten|Abschnitt sieben|Lüfter/.test(t)) : S.ALLTAG;
+  return fill(pick(alltag)!);
 }
 /** Gesprächsfetzen aus einer Gruppe */
 export function crewFetzen(): string {

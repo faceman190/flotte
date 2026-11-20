@@ -15,6 +15,8 @@ import { staffBark } from './barks';
 import { world, type Station } from './world';
 import { IN, hangarDisplay } from './interior';
 import { radio } from '../ui/radio';
+import { G } from './state';
+import { crewSpruch, crewWache, crewHooks } from './crewStimmen';
 
 // =====================================================================================
 // Städte auf Planeten (ab Alpha 0.92): große, begehbare Orte mit Hangar, in den man hineinfliegt.
@@ -193,7 +195,7 @@ export function clearCity() {
   if (life) life.removeFromParent();
   life = null; walkers = []; vendors = []; guards = [];
   for (const f of flyers) { scene.remove(f.m.g); }
-  flyers = []; cityTargets.length = 0; CITY.st = null; CITY.name = ''; CITY.walk = false;
+  flyers = []; cityTargets.length = 0; CITY.st = null; CITY.name = ''; CITY.walk = false; cb = null;
 }
 
 // Tür des Promenadenhauses (außen) und Platz davor
@@ -264,6 +266,47 @@ export function updateCity(dt: number) {
   // Verkehr: alle 25–45 s ein Schiff, abwechselnd hinein und hinaus
   updateFlyers(dt, st, visible);
   if (meta(CITY.name).style === 'neon') updateNeon(dt, st, visible, near);
+}
+
+// ---------- Stimmen der Crew in der Stadt (seit 2026-11-20, wie in den Stationen: interior.ts crewTick) ----------
+// Passanten und Händler sagen beim Vorbeigehen einen Satz (crewStimmen.ts), Wachen eigene Sätze. onfoot.ts ruft cityBark und zeichnet cityBubble.
+let cb: { g: THREE.Object3D; text: string; t0: number; dur: number } | null = null, cbT = 0;
+const cbCool = new WeakMap<object, number>();
+export function cityBark(px: number, py: number, pz: number) {
+  const st = CITY.st; if (!st || !CITY.walk || !life || !life.visible) return;
+  const t = G.time;
+  if (cb && t - cb.t0 > cb.dur) cb = null;
+  if (cb || t < cbT || crewHooks.busy()) return;
+  const pl = st.mesh.worldToLocal(_w.set(px, py, pz));
+  type Cand = { o: object; g: THREE.Object3D; d: number; an?: CharAnim; w?: Walker; wache: boolean };
+  let best: Cand | null = null;
+  const consider = (o: object, g: THREE.Object3D, x: number, z: number, an: CharAnim | undefined, wache: boolean, w?: Walker) => {
+    if (!g.visible) return;
+    const d = Math.hypot(pl.x - x, pl.z - z);
+    if (d < 3.4 && d > 0.6 && (cbCool.get(o) || 0) < t && (!best || d < best.d)) best = { o, g, d, an, w, wache };
+  };
+  for (const w of walkers) consider(w, w.c.g, w.x, w.z, w.c.anim, false, w);
+  for (const v of vendors) consider(v, v.c.g, v.x, v.z, v.c.anim, false);
+  for (const gd of guards) consider(gd, gd.a.s.g, gd.x, gd.z, undefined, true);
+  const b = best as Cand | null;
+  if (!b) return;
+  cbT = t + 2.5;
+  if (Math.random() > 0.6) { cbCool.set(b.o, t + 20); return; }
+  const text = b.wache ? crewWache() : crewSpruch();
+  if (!text) return;
+  const dur = Math.min(8, Math.max(3.2, 2.2 + text.length * 0.055));
+  cb = { g: b.g, text, t0: t, dur }; cbCool.set(b.o, t + 75); cbT = t + dur + 6 + Math.random() * 6;
+  if (b.an) animTalk(b.an, dur * 0.8);
+  if (b.w) b.w.wait = Math.max(b.w.wait, Math.min(dur, 3.5));
+}
+// für Tests: Figuren in Weltkoordinaten, offene Blase
+export const cityDebug = () => ({ fig: [...walkers.map(w => w.c.g), ...vendors.map(v => v.c.g), ...guards.map(g => g.a.s.g)].map(g => { const p = g.getWorldPosition(new THREE.Vector3()); return [p.x, p.y, p.z]; }), bub: cb ? cb.text : null });
+/** Offene Sprechblase: Punkt über dem Kopf (Welt), Text, Deckkraft; sonst null */
+export function cityBubble() {
+  if (!cb || !CITY.walk) return null;
+  const age = G.time - cb.t0; if (age > cb.dur) return null;
+  const p = cb.g.getWorldPosition(new THREE.Vector3()); p.y += 2.1;
+  return { p, text: cb.text, a: Math.min(age * 4, (cb.dur - age) * 2) };
 }
 
 // ---------- Stil „neon“ ----------

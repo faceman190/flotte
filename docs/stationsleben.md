@@ -71,7 +71,9 @@ Geprüft: 14 Sekunden Gefecht mit Ferrox-Welle neben der Bastion ergeben im Hang
 ## Stimmen der Crew (seit 2026-11-20, Testserver)
 
 Code: `src/game/crewStimmen.ts` (Gedächtnis, Auswahl), Texte `src/data/crewSprueche.ts`, Anzeige und Auslösen in `interior.ts` (`crewTick`,
-`drawBubble`). Gilt in allen Stationsräumen (Hangar, Promenade, Deck 3, Hüttendeck), nicht in den Städten.
+`drawBubble`). Gilt in allen Stationsräumen (Hangar, Promenade, Deck 3, Hüttendeck) und seit demselben Tag auch zu Fuß in den Städten
+(`city.ts` `cityBark`/`cityBubble`, gezeichnet in `onfoot.ts`; eigene Sätze für Talstadt und Neonhafen, Wachen mit eigenen Sätzen, keine Sätze, die nur an Bord passen).
+Die Sprechblase zeichnet `drawSpeechBubble` in `ui/footHud.ts` für beide.
 
 - **Sprüche beim Vorbeigehen:** Kommt der Pilot einer Figur auf gut drei Meter nahe, sagt sie mit 60 % einen Satz: Sprechblase über dem
   Kopf (3 bis 8 s), Gebärde, ein Läufer bleibt kurz stehen. Danach 6 bis 12 s Ruhe, dieselbe Figur frühestens nach 75 s. Figuren der

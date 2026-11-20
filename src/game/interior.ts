@@ -1,4 +1,4 @@
-import { drawPrompt, drawPlaceLine } from '../ui/footHud';
+import { drawPrompt, drawPlaceLine, drawSpeechBubble } from '../ui/footHud';
 import * as THREE from 'three';
 import { scene, camera, view, ux, gl, setExposure, ambient, rim, sun, warmScene, compileFor, warm, uploadAll } from '../core/engine';
 import { texMat, std, boxUV, lightmapTex, WHITE_TEX } from '../core/textures';
@@ -1344,21 +1344,7 @@ function drawBubble(W: number, H: number) {
   if (deck && !room && p.z <= HZ0 && !deck.seen(p.x, p.z)) return;
   headOf(bub.p, _p); _p.y += 0.3; _p.project(camera);
   if (_p.z > 1 || Math.abs(_p.x) > 1.05 || Math.abs(_p.y) > 1.05) return;
-  const x = (_p.x + 1) / 2 * W, y = (1 - _p.y) / 2 * H;
-  ux.font = '500 14px Rajdhani, "IBM Plex Sans", sans-serif'; ux.textAlign = 'left';
-  const maxW = Math.min(300, W * 0.4), words = bub.text.split(' '), lines: string[] = [];
-  let cur = '';
-  for (const w of words) { const n = cur ? cur + ' ' + w : w; if (ux.measureText(n).width > maxW && cur) { lines.push(cur); cur = w; } else cur = n; }
-  if (cur) lines.push(cur);
-  const lh = 17, bw = Math.max(...lines.map(l => ux.measureText(l).width)) + 22, bh = lines.length * lh + 12;
-  const bx = clamp(x - bw / 2, 8, W - bw - 8), by = Math.max(8, y - bh - 12);
-  ux.globalAlpha = clamp(Math.min(age * 4, (bub.dur - age) * 2), 0, 1);
-  ux.fillStyle = 'rgba(8,18,28,.86)'; ux.strokeStyle = 'rgba(160,200,225,.35)'; ux.lineWidth = 1;
-  ux.beginPath(); ux.rect(bx, by, bw, bh); ux.fill(); ux.stroke();
-  ux.beginPath(); ux.moveTo(clamp(x, bx + 10, bx + bw - 10) - 6, by + bh); ux.lineTo(clamp(x, bx + 10, bx + bw - 10), by + bh + 8); ux.lineTo(clamp(x, bx + 10, bx + bw - 10) + 6, by + bh); ux.closePath(); ux.fill();
-  ux.fillStyle = '#e4eef5';
-  lines.forEach((l, i) => ux.fillText(l, bx + 11, by + 6 + lh * (i + 1) - 4));
-  ux.globalAlpha = 1;
+  drawSpeechBubble((_p.x + 1) / 2 * W, (1 - _p.y) / 2 * H, bub.text, Math.min(age * 4, (bub.dur - age) * 2));
 }
 // Leben im Raum: Figuren atmen, gebärden und schauen, Läufer gehen ihre Wege. Läuft auch, wenn der Pilot gerade nicht selbst läuft
 // (Kinoszene, Stationsmenü, Start und Landung): Bis Alpha 1.07 standen die Figuren dort eingefroren, in den Szenen der Geschichte

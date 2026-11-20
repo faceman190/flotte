@@ -1,5 +1,6 @@
 import './core/boot';   // zuerst: Spieldaten laden (Ladebalken), alles Weitere wartet darauf
-import { crewHooks } from './game/crewStimmen';
+import { initWeltLeben, updateWeltLeben } from './game/weltLeben';
+import { crewHooks, crewStadt } from './game/crewStimmen';
 import { dockBark } from './game/barks';
 import * as THREE from 'three';
 import { warm, camera, render, scene, aimShadows, markShadows, gl, compileFor, warmScene } from './core/engine';
@@ -91,6 +92,7 @@ function enterSector(id: string, arrive: { gateFrom?: string; station?: string; 
   initFerrox();
   initTraffic();
   initAllies();
+  initWeltLeben();
   addOrbitZone(id);
   const def = SECTOR[id], first = !P.visited.includes(id);
   P.sector = id;
@@ -128,6 +130,7 @@ function enterSurface(sector: string, at?: { x: number; y: number; z: number; ya
   for (const e of world.enemies) e.y = Math.max(e.y, (world.ground ? world.ground(e.x, e.z) : 0) + 220);
   initTraffic();
   initAllies();
+  initWeltLeben();
   P.sector = sector;
   P.surface = true;
   const a = at || { ...info.arrive, yaw: Math.atan2(-(0 - info.arrive.x), -(0 - info.arrive.z)) };
@@ -155,6 +158,7 @@ function introScene(id: string) {
   initFerrox();
   initTraffic();
   initAllies();
+  initWeltLeben();
   SHIP.g.visible = false;
 }
 function startGame(p: Player, fresh: boolean) {
@@ -250,6 +254,7 @@ function cityWalkOut() {
   const st = IN.station; if (!st) return;
   leaveInterior();
   G.cityWalk = true; CITY.walk = true;
+  crewStadt(st, P.sector, CITY.name);   // Stimmen der Crew: Sätze der Stadt
   ROVER.ship = hangarPadPose(st, stats().radius * 0.55);
   const rv = cityWorld(st, 52, 0, 4); ROVER.x = rv.x; ROVER.z = rv.z; ROVER.y = rv.y; ROVER.yaw = st.yaw;   // Rover hinten im Hangar
   ROVER.active = true;
@@ -471,6 +476,7 @@ function setupMenuScene() {
   buildSector('heimstatt');
   initTraffic();
   initAllies();
+  initWeltLeben();
   SHIP.g.visible = false;
 }
 
@@ -617,6 +623,7 @@ function simulate(dt: number) {
   if (m !== 'menu') { updateSpawning(dt); updateEnemies(dt); updateProjectiles(dt); updateStationDefense(dt); }
   if (m === 'play') updateApproachPrime();   // erstes Andocken an Stationen mit Deck beim Anflug vorbereiten (approachPrime.ts)
   updateTraffic(dt);
+  updateWeltLeben(dt);   // Funkverkehr, Schürfer, Frachtkisten, Notrufe (weltLeben.ts)
   if (m !== 'menu' && m !== 'intro') { hook('akademie', () => updateAkademie(dt)); hook('altewerft', () => updateAlteWerft(dt)); }   // Orte in Heimstatt (Phase 2)
   updateAllies(dt);
   updateParticles(dt);

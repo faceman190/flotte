@@ -66,3 +66,24 @@ export function drawPlaceLine(text: string) {
   ux.fillStyle = 'rgba(205,218,228,.62)'; ux.shadowColor = 'rgba(0,0,0,.8)'; ux.shadowBlur = 6; ux.fillText(text.toUpperCase(), view.W / 2, 22);
   ux.restore();
 }
+
+// Sprechblase über einem Kopf (Stimmen der Crew, seit 2026-11-20): Stationen (interior.ts) und Städte (city.ts) sehen gleich aus.
+// x, y: Bildpunkt über dem Kopf; alpha: Ein- und Ausblenden.
+export function drawSpeechBubble(x: number, y: number, text: string, alpha: number) {
+  const W = view.W;
+  ux.save();
+  ux.font = FONT(500, 14); ux.textAlign = 'left';
+  const maxW = Math.min(300, W * 0.4), lines: string[] = [];
+  let cur = '';
+  for (const w of text.split(' ')) { const n = cur ? cur + ' ' + w : w; if (ux.measureText(n).width > maxW && cur) { lines.push(cur); cur = w; } else cur = n; }
+  if (cur) lines.push(cur);
+  const lh = 17, bw = Math.max(...lines.map(l => ux.measureText(l).width)) + 22, bh = lines.length * lh + 12;
+  const bx = clamp(x - bw / 2, 8, W - bw - 8), by = Math.max(8, y - bh - 12), px = clamp(x, bx + 10, bx + bw - 10);
+  ux.globalAlpha = clamp(alpha, 0, 1);
+  ux.fillStyle = 'rgba(8,18,28,.86)'; ux.strokeStyle = 'rgba(160,200,225,.35)'; ux.lineWidth = 1;
+  ux.beginPath(); ux.rect(bx, by, bw, bh); ux.fill(); ux.stroke();
+  ux.beginPath(); ux.moveTo(px - 6, by + bh); ux.lineTo(px, by + bh + 8); ux.lineTo(px + 6, by + bh); ux.closePath(); ux.fill();
+  ux.fillStyle = TXT;
+  lines.forEach((l, i) => ux.fillText(l, bx + 11, by + 2 + lh * (i + 1)));
+  ux.restore();
+}

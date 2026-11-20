@@ -9,7 +9,7 @@ import { world, type Station, type Gate } from './world';
 import { burst } from './fx';
 import { fireBullet } from './combat';
 import { radio } from '../ui/radio';
-import { P } from './state';
+import { P, G } from './state';
 import { SHARED, hostEvent } from './shared';
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
@@ -26,6 +26,26 @@ function holdPoint(s: Station) {
   return { x: s.x + Math.cos(a) * r, y: s.y + rand(-60, 60), z: s.z + Math.sin(a) * r };
 }
 function gateGoal(g: Gate) { return { x: g.x, y: g.y, z: g.z, gate: g }; }
+// ---------- Andocken (seit 2026-11-20): Frachter fliegen durchs Hangartor hinein und legen später wieder ab ----------
+// st.launch liegt in der Ebene des Hangartors, f zeigt hinaus. Anflug: Punkt 700 m vor dem Tor, dann langsam aufs Tor zu und hinein;
+// 60 m hinter dem Tor verschwindet das Schiff (der Rumpf steckt dann fast ganz im Hangar). Nach ein bis zweieinhalb Minuten legt es wieder ab.
+// Ist der Pilot gerade in einer Station (G.inside), dockt niemand an: Der Innenraum liegt an derselben Stelle, das Schiff flöge hindurch.
+const dockF = (s: Station) => ({ fx: -Math.sin(s.launch.yaw), fz: -Math.cos(s.launch.yaw) });
+function dockGoal(s: Station, stage: 1 | 2 | 3) {
+  const { fx, fz } = dockF(s), L = s.launch, k = stage === 1 ? 700 : stage === 2 ? 0 : -60;
+  return { x: L.x + fx * k, y: L.y, z: L.z + fz * k, station: s, dockStage: stage };
+}
+const docked: { t: number; st: Station; type: CivType; name: string }[] = [];
+export const trafficDocked = () => docked;
+function undock(q: { st: Station; type: CivType; name: string }) {
+  const def = SHIPDEF[q.type], b = buildCivilian(q.type), { fx, fz } = dockF(q.st), L = q.st.launch;
+  for (const gl of b.glows) gl.userData.base = gl.scale.x / 10;
+  const x = L.x - fx * 40, y = L.y, z = L.z - fz * 40;
+  b.g.position.set(x, y, z); b.g.lookAt(x - fx, y, z - fz); scene.add(b.g);
+  const a = dockGoal(q.st, 1);
+  world.traffic.push({ type: q.type, def, name: q.name, x, y, z, vx: fx * 12, vy: 0, vz: fz * 12, hp: def.hp, maxhp: def.hp, sph: def.sph, R: def.R,
+    mesh: b.g, parts: b, goal: { x: a.x, y: a.y, z: a.z, undock: true }, wait: 0, hitT: 0, alertT: 0, alive: true, spd: def.spd * rand(0.9, 1.15), outT: G.time });
+}
 
 // Sprungblitz am Tor (seit Heimstatt Phase 2): Wenn ein Frachter springt oder ankommt, leuchtet das Tor kurz hell auf. Der Blitz hängt am
 // Tormodell, so rückt ihn die Fernansicht mit heran (farview.ts) und man sieht Sprünge auch aus vielen Kilometern.
@@ -47,11 +67,12 @@ const nearGate = (x: number, y: number, z: number) => world.gates.reduce<Gate | 
 
 function spawnTraffic(initial: boolean) {
   const type = pick(Object.keys(SHIPDEF) as CivType[]), def = SHIPDEF[type];
-  const used = new Set(world.traffic.map(t => t.name)), name = pick(SHIPNAMES.filter(n => !used.has(n))) || 'Frachter';
+  const used = new Set([...world.traffic.map(t => t.name), ...docked.map(d => d.name)]), name = pick(SHIPNAMES.filter(n => !used.has(n))) || 'Frachter';
   const st = pick(world.stations), gate = pick(world.gates);
   const inbound = Math.random() < 0.5;
   let x: number, y: number, z: number, goal: any;
-  if (inbound) { x = gate.x + gate.nx * 160; y = gate.y; z = gate.z + gate.nz * 160; goal = holdPoint(st); goal.station = st; }
+  if (!initial && !inbound && docked.length && docked[0].t <= G.time) { undock(docked.shift()!); return; }   // wer im Hangar lag, legt jetzt ab
+  if (inbound) { x = gate.x + gate.nx * 160; y = gate.y; z = gate.z + gate.nz * 160; goal = dockGoal(st, 1); }
   else { const h = holdPoint(st); x = h.x; y = h.y; z = h.z; goal = gateGoal(gate); }
   if (initial) { const t = rand(0.1, 0.8); x += (goal.x - x) * t; y += (goal.y - y) * t; z += (goal.z - z) * t; }
   const b = buildCivilian(type);
@@ -84,7 +105,7 @@ export function spawnStoryShip(name: string, kind: string, type: CivType, scale:
 }
 export function removeStoryShip(t: any) { const i = world.traffic.indexOf(t); if (i >= 0) removeTraffic(i); }
 export function initTraffic() {
-  world.traffic.length = 0;
+  world.traffic.length = 0; docked.length = 0;
   const n = trafficCap();
   for (let i = 0; i < n; i++) spawnTraffic(true);
   world.trafficT = rand(20, 35);
@@ -147,18 +168,29 @@ export function updateTraffic(dt: number) {
     } else {
       let spd = t.spd, gap = Infinity;
       if (g.station) spd = Math.min(spd, d * 0.4 + 8);
+      if (g.dockStage === 2 || g.dockStage === 3 || g.undock) spd = Math.min(spd, g.dockStage === 3 ? 14 : 26);   // durchs Tor nur langsam
       _v.set(dx / d * spd, dy / d * spd, dz / d * spd);
+      const atDoor = g.dockStage === 2 || g.dockStage === 3 || g.undock;
       for (const s of world.stations) {
         const sd = d3(t.x, t.y, t.z, s.x, s.y, s.z);
         gap = Math.min(gap, sd - s.R);
-        if (sd < s.R + 120) { _v.x += (t.x - s.x) / sd * 60; _v.y += (t.y - s.y) / sd * 60; _v.z += (t.z - s.z) / sd * 60; }
+        if (sd < s.R + 120 && !atDoor) { _v.x += (t.x - s.x) / sd * 60; _v.y += (t.y - s.y) / sd * 60; _v.z += (t.z - s.z) / sd * 60; }
       }
       // Großer Sektor (Heimstatt, 50 km bis zum Tor): Frachter fliegen die lange Strecke im Schnellflug (bis 2,5 km/s), weit weg von Stationen und Ziel
-      const far = world.def?.size && !t.story ? Math.min(d - 2500, gap - 1500) : 0;
+      const far = world.def?.size && !t.story && !atDoor ? Math.min(d - 2500, gap - 1500) : 0;
       if (far > 0) { const fs = Math.min(2500, far * 0.4); if (fs > spd) _v.multiplyScalar(fs / spd); }
       const k = Math.min(1, dt * (Math.hypot(t.vx, t.vy, t.vz) > 400 || far > 0 ? 2 : 0.6));
       t.vx += (_v.x - t.vx) * k; t.vy += (_v.y - t.vy) * k; t.vz += (_v.z - t.vz) * k;
-      if (g.station && d < 40) t.wait = rand(20, 45);
+      if (g.dockStage === 1 && d < 60) {
+        if (G.inside) { t.wait = rand(20, 45); t.goal = { ...g, dockStage: 0 }; }             // Pilot in einer Station: draußen warten, dann weiter
+        else { t.goal = dockGoal(g.station, 2); t.dockT = G.time; }
+      } else if (g.dockStage === 2 && d < 30) t.goal = dockGoal(g.station, 3);
+      else if (g.dockStage === 3 && d < 12) {
+        docked.push({ t: G.time + rand(60, 150), st: g.station, type: t.type, name: t.name });
+        if (t.nid) hostEvent(['k', t.nid]);                                   // Mitspieler: still entfernen (kein Sprungblitz)
+        removeTraffic(i); continue;
+      } else if (g.undock && d < 50) t.goal = gateGoal(pick(world.gates));
+      else if (g.station && !g.dockStage && d < 40) t.wait = rand(20, 45);
       if (g.gate && d < 75) {
         t.jumped = true;
         if (t.nid) hostEvent(['g', t.nid]);
@@ -334,6 +366,7 @@ export function applyNpc(n: any, ev: any[]) {
     if (e[0] === 'r') { radio(e[1], e[2], e[3] || undefined); if (e[4] === 'alarm') { crewAngriff(P.sector); snd(440, 0.25, 'square', 0.04); setTimeout(() => snd(440, 0.25, 'square', 0.04), 350); } }
     else if (e[0] === 'x' && e[1] === 't') { const t = world.traffic.find(o => o.nid === e[2]); if (t) { trafficBoom(t.x, t.y, t.z); removeTraffic(world.traffic.indexOf(t)); } }
     else if (e[0] === 'x' && e[1] === 'a') { const a = world.allies.find(o => o.nid === e[2]); if (a && a.alive) { a.alive = false; scene.remove(a.mesh); allyBoom(a); } }
+    else if (e[0] === 'k') { const t = world.traffic.find(o => o.nid === e[1]); if (t) removeTraffic(world.traffic.indexOf(t)); }
     else if (e[0] === 'g') { const t = world.traffic.find(o => o.nid === e[1]); if (t) { burst(t.x, t.y, t.z, '#ffffff', 50, 70, 0.8); const ng = nearGate(t.x, t.y, t.z); if (ng) gateFlash(ng); snd(200, 0.5, 'sine', 0.02, 400); removeTraffic(world.traffic.indexOf(t)); } }
   }
   if (!n) return;

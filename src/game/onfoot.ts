@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GUN } from './footgun';
-import { drawPrompt } from '../ui/footHud';
-import { CITY, cityTargets, cityDoorNear, cityDoorPos } from './city';
+import { drawPrompt, drawSpeechBubble } from '../ui/footHud';
+import { CITY, cityTargets, cityDoorNear, cityDoorPos, cityBark, cityBubble } from './city';
 import { scene, camera, view, ux, gl, compileFor, renderer } from '../core/engine';
 import { keys, mouse } from '../core/input';
 import { clamp } from '../core/util';
@@ -123,6 +123,7 @@ function blocked(x: number, z: number, ox: number, oz: number) {
 }
 
 export function updateFoot(dt: number) {
+  if (CITY.walk) cityBark(FOOT.x, FOOT.y, FOOT.z);   // Stimmen der Crew in der Stadt
   if (!FOOT.active) return;
   updateFlora(camera.position);
   // zusammengebrochen (Ferrox-Drohnen): kurz liegen bleiben, dann am Schiff aufwachen
@@ -231,6 +232,7 @@ export function drawFootHUD() {
   { const cd = cityDoorPos(); if (cd) { const dD = Math.hypot(FOOT.x - cd.x, FOOT.z - cd.z); if (dD > 4 && dD < 500) marker(cd.x, cd.y + 4, cd.z, `PROMENADE · ${Math.round(dD)} m`, '#7fe0a0', 2); } }
   if (ROVER.model && !CITY.walk) { const dR = Math.hypot(FOOT.x - ROVER.x, FOOT.z - ROVER.z); if (dR > 6) marker(ROVER.x, ROVER.y + 4, ROVER.z, `ROVER · ${Math.round(dR)} m`, '#e09030', 1); }
   drawSalvageHUD(FOOT.x, FOOT.z);
+  { const b = cityBubble(); if (b) { _p.copy(b.p).project(camera); if (_p.z < 1 && Math.abs(_p.x) < 1.05 && Math.abs(_p.y) < 1.05) drawSpeechBubble((_p.x + 1) / 2 * W, (1 - _p.y) / 2 * H, b.text, b.a); } }
   drawFieldHUD();
   drawGroundMarkers();
   const bs = world.stations[0], bp = bs && basePad(bs);
