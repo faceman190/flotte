@@ -783,3 +783,10 @@ try {
   el.classList.remove('hidden');
   console.error(e);
 }
+
+// Testserver (test.letztecrew.de, Zweig test): kleiner Hinweis oben links, damit niemand Test und echtes Spiel verwechselt
+if (location.hostname.startsWith('test.')) {
+  const b = document.createElement('div'); b.textContent = 'TESTSERVER';
+  b.style.cssText = 'position:fixed;left:8px;top:6px;z-index:9999;font:700 11px "Share Tech Mono",Consolas,monospace;color:#ffb347;background:rgba(8,12,16,.65);padding:2px 8px;letter-spacing:2px;pointer-events:none';
+  document.body.appendChild(b);
+}

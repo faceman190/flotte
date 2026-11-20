@@ -10,16 +10,21 @@
 # versucht, erst der nächste Push (oder --force).
 # Von Hand: sudo -u crew -H bash /opt/letzte-crew/repo/deploy/deploy.sh --force
 # Protokoll: journalctl -u letzte-crew-deploy -n 50
+# Testserver (seit 2026-11-20, test.letztecrew.de): dasselbe Skript mit LC_*-Variablen aus letzte-crew-test-deploy.service – Zweig test,
+# eigenes Repository, eigene Ordner, eigener Node-Dienst, ohne Website. Ohne die Variablen gilt alles wie vorher (Live).
 # =====================================================================================
 set -euo pipefail
 
-REPO=/opt/letzte-crew/repo
-STAGE=/srv/letzte-crew/stage
-LIVE=/srv/letzte-crew/dist
-SITE=/srv/letzte-crew/site
-BRANCH=main
-STATE=/srv/letzte-crew/ausgerollt        # zuletzt erfolgreich ausgerollter Stand
-FAILED=/srv/letzte-crew/fehlgeschlagen   # zuletzt gescheiterter Stand
+REPO=${LC_REPO:-/opt/letzte-crew/repo}
+SRV=${LC_SRV:-/srv/letzte-crew}
+STAGE=$SRV/stage
+LIVE=$SRV/dist
+SITE=$SRV/site
+BRANCH=${LC_BRANCH:-main}
+STATE=$SRV/ausgerollt        # zuletzt erfolgreich ausgerollter Stand
+FAILED=$SRV/fehlgeschlagen   # zuletzt gescheiterter Stand
+SERVICE=${LC_SERVICE:-letzte-crew}   # Node-Dienst, der bei Server-Änderungen neu startet
+WITH_SITE=${LC_SITE:-1}              # 0: Website nicht bauen (Testserver)
 FORCE=${1:-}
 
 cd "$REPO"
@@ -40,7 +45,7 @@ git reset --quiet --hard "$NEW"
 if [[ -z "${LC_NEUSTART:-}" && -n "$OLD" ]] && ! git diff --quiet "$OLD" "$NEW" -- deploy/deploy.sh 2>/dev/null; then
   echo "deploy.sh hat sich geändert – starte die neue Fassung"
   trap - ERR
-  LC_NEUSTART=1 exec bash "$REPO/deploy/deploy.sh" "$@"
+  LC_NEUSTART=1 exec bash "$REPO/deploy/deploy.sh" "$@"   # LC_*-Variablen gehen mit
 fi
 
 # Was hat sich geändert? Ohne bekannten alten Stand (erstes Ausrollen) gilt alles als geändert.
@@ -63,7 +68,7 @@ npm run build --silent
 
 # Website (website/, Astro): vor dem Ausrollen bauen, damit ein Fehler hier nichts halb ausgerollt zurücklässt.
 # Liest die Spieldaten aus src/data und kopiert die Schiffsmodelle aus public/assets (website/scripts/modelle.mjs).
-if [[ -d website ]]; then
+if [[ -d website && "$WITH_SITE" == "1" ]]; then
   if [[ $FULL == 1 || ! -d website/node_modules ]] || grep -qx 'website/package-lock.json' <<<"$CHANGED"; then
     echo "Website: Pakete installieren …"
     (cd website && npm ci --no-audit --no-fund --loglevel=error)
@@ -83,11 +88,11 @@ echo "Ausrollen …"
 # --delay-updates: alle geänderten Dateien werden erst am Ende auf einmal eingesetzt (Seite, Code und .br passen zusammen)
 rsync -rlc --delay-updates "$STAGE/" "$LIVE/"
 # Website: gebaute Fassung spiegeln (Seiten und Bilder tragen bei Änderungen neue Namen, verwaiste Dateien fliegen raus)
-if [[ -d website/dist ]]; then mkdir -p "$SITE"; rsync -rlc --delete --delay-updates website/dist/ "$SITE/"; fi
+if [[ -d website/dist && "$WITH_SITE" == "1" ]]; then mkdir -p "$SITE"; rsync -rlc --delete --delay-updates website/dist/ "$SITE/"; fi
 
 if [[ $FULL == 1 ]] || grep -qE '^(server/|package-lock\.json$|package\.json$)' <<<"$CHANGED"; then
   echo "Server neu starten …"
-  sudo /usr/bin/systemctl restart letzte-crew
+  sudo /usr/bin/systemctl restart "$SERVICE"
 fi
 echo "$NEW" > "$STATE"
 rm -f "$FAILED"

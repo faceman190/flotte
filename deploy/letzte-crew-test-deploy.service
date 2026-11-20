@@ -1,0 +1,20 @@
+# Letzte Crew – Testserver ausrollen: Zweig test nach /srv/letzte-crew-test (deploy.sh mit LC_*-Variablen). Gestartet vom Timer.
+[Unit]
+Description=Letzte Crew Testserver neue Version ausrollen
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=crew
+Group=crew
+WorkingDirectory=/opt/letzte-crew/test-repo
+Environment=HOME=/home/crew
+Environment=LC_REPO=/opt/letzte-crew/test-repo
+Environment=LC_SRV=/srv/letzte-crew-test
+Environment=LC_BRANCH=test
+Environment=LC_SERVICE=letzte-crew-test
+Environment=LC_SITE=0
+ExecStart=/bin/bash /opt/letzte-crew/test-repo/deploy/deploy.sh
+TimeoutStartSec=30min
+Nice=15

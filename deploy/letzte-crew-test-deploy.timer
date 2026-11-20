@@ -1,0 +1,11 @@
+# Jede Minute auf GitHub (Zweig test) nachsehen.
+[Unit]
+Description=Letzte Crew Testserver jede Minute auf neue Version prüfen
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,23 @@
+# Letzte Crew – Mehrspieler-Server des Testservers (test.letztecrew.de, Zweig test). Port 2568, eigene Spielstände in data/ des
+# Test-Repositorys (keine DATABASE_URL: Tests schreiben nie in die echte Datenbank). Einstellungen: /etc/letzte-crew-test.env
+[Unit]
+Description=Letzte Crew Testserver (Mehrspieler)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=crew
+Group=crew
+WorkingDirectory=/opt/letzte-crew/test-repo
+EnvironmentFile=/etc/letzte-crew-test.env
+ExecStart=/usr/bin/node server/server.mjs
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/letzte-crew/test-repo/data
+
+[Install]
+WantedBy=multi-user.target

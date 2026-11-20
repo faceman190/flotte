@@ -5,6 +5,7 @@
 #   www.__DOMAIN__       leitet auf die Website um
 #   spielen.__DOMAIN__   das Spiel: Dateien direkt von der Platte (vorkomprimiert, Range für Musik),
 #                        Mehrspieler (/ws) und Statusseite (/status) gehen an den Node-Server
+#   test.__DOMAIN__      Testserver (Zweig test, /srv/letzte-crew-test, Node-Server auf 2568), nicht für Suchmaschinen
 
 __DOMAIN__ {
 	root * /srv/letzte-crew/site
@@ -73,4 +74,33 @@ spielen.__DOMAIN__ {
 			roll_keep 5
 		}
 	}
+}
+
+test.__DOMAIN__ {
+	handle /ws {
+		reverse_proxy 127.0.0.1:2568
+	}
+	handle /status {
+		reverse_proxy 127.0.0.1:2568
+	}
+	handle {
+		root * /srv/letzte-crew-test/dist
+		@immutable path_regexp ^/assets/.+.[0-9a-f]{10}.[a-z0-9]+$
+		@mutable not path_regexp ^/assets/.+.[0-9a-f]{10}.[a-z0-9]+$
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		header @mutable Cache-Control "no-cache"
+		@glb path *.glb
+		header @glb Content-Type model/gltf-binary
+		@manifest path *.webmanifest
+		header @manifest Content-Type application/manifest+json
+		file_server {
+			precompressed br gzip
+		}
+	}
+	handle_errors {
+		header Cache-Control "no-store"
+		respond "{err.status_code} {err.status_text}"
+	}
+	header X-Robots-Tag "noindex, nofollow"
+	header -Server
 }
