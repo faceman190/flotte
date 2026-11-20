@@ -193,10 +193,8 @@ export const soldierMeta = () => { loadTP(); return TP?.clips || null; };
 // Kopf und Uniformfarbe wählt der Spieler (Charaktererstellung, Garderobe); Helm, Anzug und Rucksack zeigen, was angelegt ist.
 // Alles aus dem gekauften Soldaten (Soldat.glb): 8 Kopfmodelle (davon zwei Gesichter, Sturmhaube, Atemschutzmaske, vier Helme),
 // Uniform in vier Farben, Rüstungsteile Oberschenkel (Armor_Mesh01) und Schienbein (Armor_Mesh02), Rucksack (Bags_Mesh), Gürteltaschen (Bags_Mini).
-export interface Look { kopf: number; farbe: number; koerper?: 'm' | 'w' }
-export const LOOK_DEFAULT: Look = { kopf: 6, farbe: 0, koerper: 'm' };
-// Körper (Probe seit 2026-11-20): m = der gekaufte Soldat, w = die Pilotin aus MPFB (Pilotin.glb, asset-src/neu/pilotin/pilotin_bau.py) am selben Skelett
-export const LOOK_KOERPER: { k: 'm' | 'w'; n: string }[] = [{ k: 'm', n: 'Pilot' }, { k: 'w', n: 'Pilotin' }];
+export interface Look { kopf: number; farbe: number }
+export const LOOK_DEFAULT: Look = { kopf: 6, farbe: 0 };
 export const LOOK_KOEPFE: { k: number; n: string }[] = [{ k: 6, n: 'Glatze, Headset' }, { k: 8, n: 'Bart, Kappe, Brille' }, { k: 5, n: 'Sturmhaube' }];
 export const LOOK_FARBEN: { v: string; n: string; c: string }[] = [
   { v: 'soldat_col', n: 'Flotte (grau)', c: '#8d8f80' }, { v: 'soldat_col_v2', n: 'Wald', c: '#4f5a3a' },
@@ -213,10 +211,9 @@ const RUCK_TEILE: Record<string, string[]> = { ruck_tasche: ['Bags_Mini'], ruck_
 export const normLook = (l?: Partial<Look> | null): Look => ({
   kopf: LOOK_KOEPFE.some(q => q.k === l?.kopf) ? l!.kopf! : LOOK_DEFAULT.kopf,
   farbe: Number.isInteger(l?.farbe) && l!.farbe! >= 0 && l!.farbe! < LOOK_FARBEN.length ? l!.farbe! : LOOK_DEFAULT.farbe,
-  koerper: l?.koerper === 'w' ? 'w' : 'm',
 });
 export type FigGear = { helm?: string; anzug?: string; rucksack?: string; waffe?: string; look?: Look };
-export const soldierGearKey = (gear: FigGear) => [gear.helm || '', gear.anzug || '', gear.rucksack || '', gear.look ? gear.look.kopf + ',' + gear.look.farbe + (gear.look.koerper === 'w' ? ',w' : '') : ''].join('|');
+export const soldierGearKey = (gear: FigGear) => [gear.helm || '', gear.anzug || '', gear.rucksack || '', gear.look ? gear.look.kopf + ',' + gear.look.farbe : ''].join('|');
 function loadTP() {
   if (TP || tpLoading) return; tpLoading = true;
   const url = (window as any).DATAFILES?.soldat_tp;
@@ -238,41 +235,8 @@ function lodGeo(): Record<string, THREE.BufferGeometry> {
   else console.warn('Fernmodell des Soldaten passt nicht zum Skelett, es bleibt beim vollen Modell');
   return LODGEO;
 }
-// ---------- Pilotin (Probe): eigenes Netz und eigene Gelenkpunkte, Knochen wie der Soldat ausgerichtet ----------
-// Die Clips des Soldaten tragen für jeden Knochen auch die Lage (seine Knochenlängen). Für ihren Körper zählen nur die Drehungen;
-// die Lage bleibt bei ihrer Grundhaltung, nur das Becken bewegt sich (auf ihre Beckenhöhe umgerechnet).
-let PCLIPS: THREE.AnimationClip[] | null = null;
-function pilotinClips(root: THREE.Object3D): THREE.AnimationClip[] {
-  if (PCLIPS) return PCLIPS;
-  const src = stationClips('Soldat'), sp = stationTemplate('Soldat')?.getObjectByName('pelvis'), wp = root.getObjectByName('pelvis');
-  if (!src.length || !sp || !wp) return [];
-  const k = wp.position.length() / Math.max(1e-4, sp.position.length()), base = sp.position, mine = wp.position;
-  PCLIPS = src.map(c => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter(t => !t.name.endsWith('.position') || t.name.startsWith('pelvis.')).map(t => {
-    if (!t.name.startsWith('pelvis.') || !t.name.endsWith('.position')) return t;
-    const v = (t.values as Float32Array).slice();
-    for (let i = 0; i < v.length; i += 3) { v[i] = mine.x + (v[i] - base.x) * k; v[i + 1] = mine.y + (v[i + 1] - base.y) * k; v[i + 2] = mine.z + (v[i + 2] - base.z) * k; }
-    return new THREE.VectorKeyframeTrack(t.name, t.times as any, v as any);
-  })));
-  return PCLIPS;
-}
-function buildPilotin(gear: FigGear, t: THREE.Object3D): SoldierVis {
-  const root = skClone(t) as THREE.Group;
-  const inner = root.children[0]; if (inner) inner.position.set(0, 0, 0);
-  root.traverse((o: any) => {
-    o.userData.sh = false; o.userData.shared = true;
-    if (!o.isMesh) return;
-    o.frustumCulled = false;
-    const m = o.material as THREE.MeshStandardMaterial; m.envMapIntensity = 0.22; m.metalness = 0;
-    m.roughness = /Koerper/.test(o.name) ? 0.62 : /low_poly/.test(o.name) ? 0.25 : 0.88;   // Stoff matt, Haut leicht, Augen feucht
-    if (/eyebrow|eyelash|ponytail|hair/i.test(o.name)) { m.transparent = false; m.alphaTest = 0.45; m.side = THREE.DoubleSide; m.depthWrite = true; }
-  });
-  const g = new THREE.Group(); g.add(root);
-  return { g, root, mixer: new THREE.AnimationMixer(root), clips: pilotinClips(root), hand: root.getObjectByName('hand_r') || null, spine: root.getObjectByName('spine_03') || null,
-    spine2: root.getObjectByName('spine_02') || null, weapon: null, muzzle: new THREE.Vector3(), wid: '', gearKey: soldierGearKey(gear) };
-}
 export function buildSoldier(gear: FigGear): SoldierVis | null {
   loadTP();
-  if (gear.look?.koerper === 'w') { const pt = stationTemplate('Pilotin'); if (pt && stationTemplate('Soldat')) return buildPilotin(gear, pt); }
   const t = stationTemplate('Soldat'); if (!t) return null;
   const root = skClone(t) as THREE.Group;
   const inner = root.children[0]; if (inner) inner.position.set(0, 0, 0);                  // der Lader zentriert Modelle; hier gilt der Ursprung aus Blender (Boden)

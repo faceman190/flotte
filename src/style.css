@@ -477,11 +477,6 @@ td .gico{margin-right:8px}
 .ccHint{font-size:13px;color:var(--mut);margin:9px 0 0;line-height:1.45}
 .ccTiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .ccTiles.four{grid-template-columns:repeat(4,minmax(0,1fr))}
-.ccTiles.two{grid-template-columns:repeat(3,minmax(0,1fr))}
-.ccOffHint{display:none;margin:-4px 0 10px;font-size:13px;color:var(--amb)}
-.ccSec.ccOff .ccOffHint{display:block}
-.ccSec.ccOff .ccTiles{opacity:.3;pointer-events:none;filter:grayscale(.6)}
-.ccSec.ccOff .ccSel{visibility:hidden}
 .ccTile{position:relative;display:flex;flex-direction:column;padding:0;text-align:left;background:rgba(6,16,26,.9);border:1px solid var(--line);letter-spacing:.3px;clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%)}
 .ccTile .pt{display:block;aspect-ratio:1;background:#0b131a center/cover no-repeat;position:relative}
 .ccTile .pt:not(.ok)::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(95,208,255,.08) 50%,transparent 70%) 0 0/200% 100%;animation:ccLoad 1.2s linear infinite}
