@@ -273,9 +273,9 @@ function gripWeapon(a: Avatar, d: Drive) {
 export interface RemoteFig extends NetAct { av: Avatar | null; x: number; y: number; z: number; tx: number; ty: number; tz: number; yaw: number; vx: number; vz: number; gear: FigGear; wid: string; init: boolean }
 export const newRemoteFig = (): RemoteFig => ({ av: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, vx: 0, vz: 0, gear: {}, wid: 'k12', init: false, crouch: false, hit: 0, fire: 0, fl: '' });
 // Netzfeld g: [Helm, Anzug, Rucksack, Waffe, Haltung/Ereignisse, Aussehen „Kopf,Farbe“] (Aussehen seit 2026-11-20; fehlt es, gilt das Standardaussehen)
-export const lookToNet = () => { const l = normLook(P.look); return l.kopf + ',' + l.farbe; };
+export const lookToNet = () => { const l = normLook(P.look); return l.kopf + ',' + l.farbe + (l.koerper === 'w' ? ',w' : ''); };
 export function gearFromNet(g: string[] | null | undefined) {
-  const lk = String(g?.[5] || '').split(','), look = normLook({ kopf: +lk[0], farbe: +lk[1] });
+  const lk = String(g?.[5] || '').split(','), look = normLook({ kopf: +lk[0], farbe: +lk[1], koerper: lk[2] === 'w' ? 'w' : 'm' });
   return { gear: { helm: g?.[0] || undefined, anzug: g?.[1] || undefined, rucksack: g?.[2] || undefined, look } as FigGear, wid: g?.[3] || viewModelId() };
 }
 export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {

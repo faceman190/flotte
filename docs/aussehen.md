@@ -48,3 +48,18 @@ Ohne Helm sieht man das gewählte Gesicht. Wachen in der Stadt (ohne Aussehen) w
 
 Weitere Körper (z. B. weiblich) am selben Skelett und neue Helme, Overalls und Rüstungen; Weg offen: gekaufter modularer Bausatz auf dem
 Unreal-Skelett (am schnellsten) oder eigene Modelle.
+
+## Probe Pilotin (20.11.2026, Testserver)
+
+Weiblicher Körper aus **MPFB** (MakeHuman für Blender, alle Teile CC0) am Skelett der Spielerfigur. Wahl „Körper: Pilot / Pilotin“ in
+der Charaktererstellung und der Garderobe; Netz: `g[5]` = „Kopf,Farbe,w“.
+
+- Bau: `asset-src/neu/pilotin/pilotin_bau.py` (Blender im Hintergrund, Schritte `bauen`, `skelett`, `posen`, `export`) →
+  `asset-src/glb/station/Pilotin.glb` (rund 33.000 Dreiecke, Bilder 1024 px; im Spiel 0,99 MB).
+- MPFB-Figur mit dem MPFB-Skelett `game_engine` (dieselben Unreal-Namen wie der Soldat). Arme, Hände, Finger, Hals und Beine werden in
+  die Grundhaltung des Soldaten gedreht (Rumpf und Schlüsselbein nicht: dort setzen MPFB und der Soldat die Gelenke verschieden, es kippte
+  die Figur). Dann bekommt das Skelett des Soldaten ihre Gelenkpunkte bei unveränderter Ausrichtung jedes Knochens (Prüfung: 0,0°).
+- Clips: die des Soldaten. Seine Clips tragen für jeden Knochen auch die Lage (seine Knochenlängen); für sie zählen nur die Drehungen, das
+  Becken wird auf ihre Höhe umgerechnet (`pilotinClips` in mineArt.ts). Geprüft: Füße bleiben beim Gehen und Rennen am Boden.
+- Offen in der Probe: Helme, Rüstung und Rucksäcke (gehören zum Soldatennetz und passen ihr nicht), nur ein Gesicht und ein Overall
+  (Oliv, umgefärbter MPFB-Arbeitsanzug). Ich-Sicht-Arme bleiben die des Soldaten.

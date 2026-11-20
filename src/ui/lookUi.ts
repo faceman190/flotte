@@ -3,7 +3,7 @@ import { snd, sfx } from '../core/audio';
 import { P, G, saveGame } from '../game/state';
 import { IN } from '../game/interior';
 import { figGear } from '../game/avatar';
-import { LOOK_KOEPFE, LOOK_FARBEN, normLook, type Look } from '../game/mineArt';
+import { LOOK_KOEPFE, LOOK_FARBEN, LOOK_KOERPER, normLook, type Look } from '../game/mineArt';
 import { showFig, hideFig, figView, figRotate, figPortrait } from './figPreview';
 
 // =====================================================================================
@@ -26,12 +26,18 @@ export function lookPicker(containerId: string, look: Look, changed: () => void,
   const nr = (i: number) => String(n0 + i).padStart(2, '0');
   const kName = () => LOOK_KOEPFE.find(k => k.k === look.kopf)?.n || '';
   el.innerHTML = `
-    <section class="ccSec"><div class="ccSecH"><i>${nr(0)}</i>Gesicht<span class="ccSel" data-sel="k">${esc(kName())}</span></div>
+    <section class="ccSec"><div class="ccSecH"><i>${nr(0)}</i>Körper<span class="ccSel" data-sel="b"></span></div>
+      <div class="ccTiles two">${LOOK_KOERPER.map(b => `<button class="ccTile" data-b="${b.k}">
+        <span class="pt" data-pic="b${b.k}"></span><span class="nm">${esc(b.n)}</span></button>`).join('')}</div></section>
+    <section class="ccSec" data-nurm="1"><div class="ccSecH"><i>${nr(1)}</i>Gesicht<span class="ccSel" data-sel="k">${esc(kName())}</span></div>
+      <p class="ccOffHint">Die Pilotin hat in dieser Probe ein festes Gesicht.</p>
       <div class="ccTiles">${LOOK_KOEPFE.map(k => `<button class="ccTile${look.kopf === k.k ? ' on' : ''}" data-k="${k.k}">
         <span class="pt" data-pic="k${k.k}"></span><span class="nm">${esc(k.n)}</span></button>`).join('')}</div></section>
-    <section class="ccSec"><div class="ccSecH"><i>${nr(1)}</i>Uniform<span class="ccSel" data-sel="f">${esc(LOOK_FARBEN[look.farbe].n)}</span></div>
+    <section class="ccSec" data-nurm="1"><div class="ccSecH"><i>${nr(2)}</i>Uniform<span class="ccSel" data-sel="f">${esc(LOOK_FARBEN[look.farbe].n)}</span></div>
+      <p class="ccOffHint">Die Pilotin trägt in dieser Probe den olivfarbenen Overall.</p>
       <div class="ccTiles four">${LOOK_FARBEN.map((f, i) => `<button class="ccTile${look.farbe === i ? ' on' : ''}" data-f="${i}">
         <span class="pt" data-pic="f${i}" style="--c:${f.c}"></span><span class="nm"><span class="sw" style="background:${f.c}"></span>${esc(f.n)}</span></button>`).join('')}</div></section>`;
+  LOOK_KOERPER.forEach(b => pic(el, 'b' + b.k, { kopf: look.kopf, farbe: look.farbe, koerper: b.k }, 'kopf'));
   LOOK_KOEPFE.forEach(k => pic(el, 'k' + k.k, { kopf: k.k, farbe: look.farbe }, 'kopf'));
   LOOK_FARBEN.forEach((_, i) => pic(el, 'f' + i, { kopf: look.kopf, farbe: i }, 'brust'));
   const mark = () => {
@@ -39,10 +45,15 @@ export function lookPicker(containerId: string, look: Look, changed: () => void,
     el.querySelectorAll<HTMLElement>('[data-f]').forEach(b => b.classList.toggle('on', +b.dataset.f! === look.farbe));
     el.querySelector('[data-sel="k"]')!.textContent = kName();
     el.querySelector('[data-sel="f"]')!.textContent = LOOK_FARBEN[look.farbe].n;
+    el.querySelectorAll<HTMLElement>('[data-b]').forEach(b => b.classList.toggle('on', b.dataset.b === (look.koerper || 'm')));
+    el.querySelector('[data-sel="b"]')!.textContent = LOOK_KOERPER.find(b => b.k === (look.koerper || 'm'))!.n;
+    el.querySelectorAll<HTMLElement>('[data-nurm]').forEach(x => x.classList.toggle('ccOff', look.koerper === 'w'));
   };
+  mark();
   el.querySelectorAll<HTMLButtonElement>('.ccTile').forEach(b => {
     b.onclick = () => {
-      const k = b.dataset.k, f = b.dataset.f;
+      const k = b.dataset.k, f = b.dataset.f, bk = b.dataset.b;
+      if (bk) { look.koerper = bk === 'w' ? 'w' : 'm'; figView(0); }
       if (k) { look.kopf = +k; figView(1); }                  // Gesicht gewählt: Kamera geht nah heran
       if (f) { look.farbe = +f; figView(0); }                 // Uniform: ganze Figur
       snd(760, 0.05, 'sine', 0.03, 200);
