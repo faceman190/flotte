@@ -1,4 +1,7 @@
 import { $ } from '../core/util';
+import { LOOK_DEFAULT, type Look } from '../game/mineArt';
+import { lookPicker } from './lookUi';
+import { showFig, hideFig } from './figPreview';
 import { setQuality } from '../core/engine';
 import { gpuInfo } from '../core/perf';
 import { audio, snd, sfx, setMusicVolume } from '../core/audio';
@@ -6,7 +9,7 @@ import { settings, saveSettings, hasSave, G } from '../game/state';
 import { storageInfo, clearStoredAssets, ASSET_STATE, MANIFEST } from '../core/assets';
 
 export const menuHooks = {
-  newGame: (_name: string) => {},
+  newGame: (_name: string, _look: Look) => {},
   continueGame: () => {},
   resume: () => {},
   quit: () => {},
@@ -39,17 +42,21 @@ function openSub(id: string, from: string) { click(); returnTo = from; hide(from
 function closeSub(id: string) { click(); hide(id); if (returnTo) show(returnTo); returnTo = null; }
 
 $('mContinue').onclick = () => { click(); menuHooks.continueGame(); };
+// Neuer Pilot (seit 2026-11-20 mit Charaktererstellung): Rufzeichen, Gesicht, Uniform; drehbare Figur links (figPreview.ts)
+const ngLook: Look = { ...LOOK_DEFAULT };
 $('mNew').onclick = () => {
   click();
   $('ngWarn').textContent = hasSave() ? 'Achtung: Dein bisheriger Spielstand wird überschrieben.' : '';
   hide('menu'); show('newGame');
+  lookPicker('ngLook', ngLook, () => {});
+  showFig('ngFig', () => ({ anzug: 'anzug_overall', waffe: 'waffe_smg', look: ngLook }));   // so, wie der neue Pilot startet
   setTimeout(() => ($('ngName') as HTMLInputElement).select(), 30);
 };
-$('ngBack').onclick = () => { click(); hide('newGame'); show('menu'); };
+$('ngBack').onclick = () => { click(); hideFig(); hide('newGame'); show('menu'); };
 const goNew = () => {
   const name = (($('ngName') as HTMLInputElement).value || '').trim().slice(0, 16) || 'Falke';
-  hide('newGame');
-  menuHooks.newGame(name);
+  hideFig(); hide('newGame');
+  menuHooks.newGame(name, { ...ngLook });
 };
 $('ngGo').onclick = goNew;
 $('ngName').addEventListener('keydown', e => { if ((e as KeyboardEvent).key === 'Enter') goNew(); });

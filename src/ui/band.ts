@@ -1,4 +1,6 @@
 import { $, esc, fmtN, fmtD, d3 } from '../core/util';
+import { showFig, hideFig } from './figPreview';
+import { figGear } from '../game/avatar';
 import { snd, sfx } from '../core/audio';
 import { releaseAll } from '../core/input';
 import { P, G, stats, cargoUsed, saveGame, type Mode, type ShipRec } from '../game/state';
@@ -66,7 +68,7 @@ export function openBand(a?: App) {
 export function closeBand() {
   if (G.mode !== 'map') return;
   if (TRADE.open) cancelTrade();   // das Handelsfenster gehört zum Band: zu = Handel abgebrochen
-  hideMap();
+  hideMap(); hideFig();
   $('band').classList.add('hidden');
   if (hudWasOn) $('hud').classList.remove('hidden');
   if (dockWasOn) $('dock').classList.remove('hidden');
@@ -109,8 +111,10 @@ const hms = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor(s / 
 
 function render() {
   const b = $('bandBody');
+  if (app !== 'inventar') hideFig();
   b.innerHTML = app === 'start' ? startApp() : app === 'inventar' ? invApp() : app === 'auftraege' ? jobsApp() : app === 'fuhrpark' ? fleetApp() : app === 'fracht' ? cargoApp() : app === 'handel' ? tradeApp() : app === 'ruf' ? repApp() : funkApp();
   b.querySelectorAll<HTMLElement>('[data-a]').forEach(el => el.onclick = () => act(el.dataset.a!, el.dataset.k || ''));
+  if (app === 'inventar' && document.getElementById('invFig')) showFig('invFig', figGear);   // Figur mit der angelegten Ausrüstung
   const ci = document.getElementById('bandChat') as HTMLInputElement | null;
   if (ci) {
     const go = () => { sendChat(ci.value); ci.value = ''; };

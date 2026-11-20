@@ -14,7 +14,7 @@ import { IN, syncOtherPilots } from './interior';
 import { viewModelId } from './mineArt';
 import { FOOT } from './onfoot';
 import { DUN, syncMinePilots } from './dungeon';
-import { newRemoteFig, driveRemote, dropRemote, gearFromNet, readNetFlags, netFlags, type RemoteFig } from './avatar';
+import { newRemoteFig, driveRemote, dropRemote, gearFromNet, readNetFlags, netFlags, lookToNet, type RemoteFig } from './avatar';
 import { coopNet, coopReceive } from './coop';
 import { setFieldMates } from './fieldfight';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
@@ -172,7 +172,7 @@ function sendState() {
   const s = myState(), p = s.m === 'schiff' ? P : s.o.position, q = s.o.quaternion;
   // zu Fuß in einer Station (nicht im eigenen Schiff): Position im Stationsraum mitschicken
   const w = DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [IN.station.id, IN.x, IN.z, IN.yaw] : null;
-  const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe), netFlags()];
+  const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe), netFlags(), lookToNet()];
   sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g });
 }
 setInterval(sendState, 100);

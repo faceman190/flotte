@@ -87,3 +87,20 @@ der Eingang unter letztecrew.de/melden/eingang/ aufgeht. Meldungen liegen in `da
 
 Sicherheitsupdates laufen automatisch (Neustart falls nötig um 4:30). Die Firewall lässt nur SSH, 80 und 443 durch, fail2ban sperrt
 SSH-Rater, Anmeldung nur mit Schlüssel.
+
+## Testserver (seit 2026-11-20)
+
+Neue Stände gehen zuerst auf **https://test.letztecrew.de**; erst nach dem Test des Spielers auf das echte Spiel.
+
+- **Ablauf:** lokal auf `main` committen, dann `git push origin main:test` (nur der Zweig `test` auf GitHub ändert sich). Der VPS rollt ihn in
+  ein bis zwei Minuten plus Bauzeit aus. Nach dem Test des Spielers: Versionszeile setzen, `git push origin main` → echtes Spiel.
+- **Auf dem Server:** eigenes Repository `/opt/letzte-crew/test-repo` (Zweig `test`), Ordner `/srv/letzte-crew-test` (dist, stage,
+  ausgerollt), `letzte-crew-test-deploy.timer` + `.service` (dasselbe `deploy.sh` mit `LC_REPO`, `LC_SRV`, `LC_BRANCH=test`,
+  `LC_SERVICE=letzte-crew-test`, `LC_SITE=0`: keine Website), Node-Dienst `letzte-crew-test` auf Port 2568 mit `/etc/letzte-crew-test.env`.
+- **Getrennt vom echten Spiel:** keine `DATABASE_URL` (Online-Konten des Tests in `test-repo/data/accounts.json`), eigener Speicher im
+  Browser (andere Adresse), Caddy-Block `test.letztecrew.de` mit `X-Robots-Tag: noindex`. Im Spiel steht oben links „TESTSERVER“.
+- **Protokoll:** `journalctl -u letzte-crew-test-deploy -n 50`, von Hand:
+  `sudo -u crew -H env LC_REPO=/opt/letzte-crew/test-repo LC_SRV=/srv/letzte-crew-test LC_BRANCH=test LC_SERVICE=letzte-crew-test LC_SITE=0 bash /opt/letzte-crew/test-repo/deploy/deploy.sh --force`
+- **Passwort (offen):** Der Testserver ist ohne Passwort erreichbar (nur nicht in Suchmaschinen). Für einen Schutz kann der Spieler selbst
+  mit `caddy hash-password` einen Zugang erzeugen und im Block `test.letztecrew.de` eine `basic_auth`-Zeile ergänzen.
+- DNS: A/AAAA `test` → wie `spielen` (über die Hostinger-Verbindung angelegt).

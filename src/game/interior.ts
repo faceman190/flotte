@@ -25,7 +25,7 @@ import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom, interiorEnv } 
 import { stationTemplate } from '../models/stationModels';
 import { applyKit, kitMeta } from '../models/kit';
 import { HANGAR_BLOCKS } from '../data/hangarBlocks';
-import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, type Avatar, type NetAct } from './avatar';
+import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, figGear, gearFromNet, type Avatar, type NetAct } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
 import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, type Deck, type HangarBuild } from './deck';
@@ -1257,7 +1257,7 @@ export function updateWalk(dt: number) {
   }
   // eigene Figur (Außensicht)
   const tpOn = VIEW.tp && SEQ.t < 0;
-  if (tpOn) me = syncAvatar(meHolder, me, P.gear || {});
+  if (tpOn) me = syncAvatar(meHolder, me, figGear());
   meHolder.visible = tpOn && !!me;
   if (me && tpOn) {
     meHolder.matrix.copy(group.matrixWorld); meHolder.matrixWorldNeedsUpdate = true;
@@ -1530,7 +1530,7 @@ export function syncOtherPilots(list: { id: number; name: string; st: string; x:
     if (o.st !== here) continue;
     seen.add(o.id);
     let r = others.get(o.id);
-    const gear = { helm: o.g?.[0] || undefined, anzug: o.g?.[1] || undefined, rucksack: o.g?.[2] || undefined }, wid = o.g?.[3] || viewModelId();
+    const ng = gearFromNet(o.g), gear = ng.gear, wid = ng.wid;   // mit Aussehen (Kopf, Farbe) des Mitspielers
     if (!r) {
       // Soldat wie die eigene Figur (src/game/avatar.ts); fehlt das Modell, die einfache Figur
       const av = syncAvatar(stationGroup, null, gear);

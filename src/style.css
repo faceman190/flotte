@@ -438,3 +438,18 @@ td .gico{margin-right:8px}
 .tm ::-webkit-scrollbar-thumb{background:var(--tl)}
 @media (max-height:800px){.tm{padding:20px 24px 12px;gap:10px}.tm .tmT h1{font-size:30px}.tm .rw,.tm button.row,.tm .ol{min-height:44px}.tm button.big{min-height:52px;padding:13px 18px 10px;font-size:22px}.tm aside.pn{padding:16px 18px;gap:9px}}
 @media (max-width:1180px){.tm{padding-left:20px;padding-right:20px}.tmK>div:nth-child(n+2){display:none}.tm button.tmX{font-size:15px;padding:10px 12px 8px}}
+
+/* Charaktererstellung und Garderobe (seit 2026-11-20): Vorschau links, Auswahl rechts */
+.card.lookCard{max-width:760px}
+.lookWrap{display:flex;gap:22px;align-items:flex-start}
+.lookFig{width:260px;height:381px;border:1px solid var(--line2);border-radius:6px;background:#0d1215;flex:none;touch-action:none}
+.lookSide{flex:1;min-width:0}
+.lookRow{margin:12px 0}.lookRow .lb{font-size:12px;letter-spacing:2px;color:var(--dim,#8aa0b0);text-transform:uppercase;margin-bottom:6px}
+.lookOpts{display:flex;flex-wrap:wrap;gap:6px}
+.lookOpts button{padding:6px 10px;font-size:13px}
+.lookOpts button.on{border-color:var(--acc);color:var(--acc)}
+.lookOpts .sw{display:inline-block;width:14px;height:14px;border-radius:3px;margin-right:6px;vertical-align:-2px;border:1px solid rgba(255,255,255,.25)}
+@media (max-width:700px){.lookWrap{flex-direction:column;align-items:center}.lookFig{width:200px;height:293px}}
+#garderobe{z-index:60}
+.invFigBox{display:flex;flex-direction:column;align-items:center;gap:8px;margin:4px 0 12px}
+.invFigBox canvas{width:180px;height:245px;border:1px solid var(--line2);border-radius:6px;background:#0d1215;touch-action:none}

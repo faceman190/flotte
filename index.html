@@ -75,12 +75,32 @@
 </div>
 
 <!-- Neues Spiel -->
-<div id="newGame" class="overlay hidden"><div class="card narrow">
+<div id="newGame" class="overlay hidden"><div class="card lookCard">
   <h2>NEUER PILOT</h2>
-  <p>Du startest im Hangar der <b class="amb">Bastion</b> im Sektor Heimstatt, mit einem leichten Jäger und 300 Credits.</p>
-  <label class="fld">Rufzeichen<input id="ngName" maxlength="16" value="Falke" autocomplete="off"></label>
-  <p class="hint" id="ngWarn"></p>
-  <div class="btnRow"><button id="ngBack">Zurück</button><button class="pri" id="ngGo">Starten</button></div>
+  <div class="lookWrap">
+    <canvas id="ngFig" class="lookFig" width="300" height="440" title="Ziehen zum Drehen"></canvas>
+    <div class="lookSide">
+      <p>Du startest im Hangar der <b class="amb">Bastion</b> im Sektor Heimstatt, mit einem leichten Jäger und 300 Credits.</p>
+      <label class="fld">Rufzeichen<input id="ngName" maxlength="16" value="Falke" autocomplete="off"></label>
+      <div id="ngLook"></div>
+      <p class="hint">Helm, Anzug und Rucksack siehst du an der Figur, sobald du sie anlegst. Gesicht und Uniform kannst du später an der Garderobe im Quartier ändern.</p>
+      <p class="hint" id="ngWarn"></p>
+      <div class="btnRow"><button id="ngBack">Zurück</button><button class="pri" id="ngGo">Starten</button></div>
+    </div>
+  </div>
+</div></div>
+
+<!-- Garderobe: Gesicht und Uniform ändern (Flottenband, Ausrüstung) -->
+<div id="garderobe" class="overlay hidden"><div class="card lookCard">
+  <h2>GARDEROBE</h2>
+  <div class="lookWrap">
+    <canvas id="grFig" class="lookFig" width="300" height="440" title="Ziehen zum Drehen"></canvas>
+    <div class="lookSide">
+      <div id="grLook"></div>
+      <p class="hint">Helm, Anzug und Rucksack wechselst du im Flottenband unter „Ausrüstung“ (Taste I).</p>
+      <div class="btnRow"><button id="grBack">Abbrechen</button><button class="pri" id="grOk">Übernehmen</button></div>
+    </div>
+  </div>
 </div></div>
 
 <!-- Pause -->

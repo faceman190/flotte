@@ -214,7 +214,7 @@ function resume() { hidePause(); G.mode = pausedFrom; duckMusic(1); document.bod
 
 $('pSkip').onclick = () => { skipPrologue(); resume(); };
 storyHooks.banner = (t, s, c) => showBanner(t, s, c);
-menuHooks.newGame = name => startGame(newPlayer(NET.account || name), true);   // mit Konto heißt der Pilot wie das Konto
+menuHooks.newGame = (name, look) => { const p = newPlayer(NET.account || name); p.look = { ...look }; startGame(p, true); };   // mit Konto heißt der Pilot wie das Konto; Aussehen aus der Charaktererstellung
 menuHooks.continueGame = () => { const p = loadGame(); if (p) startGame(p, false); };
 menuHooks.resume = resume;
 menuHooks.quit = () => { saveGame(); toMenu(); };

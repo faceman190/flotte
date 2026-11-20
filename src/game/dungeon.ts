@@ -19,7 +19,7 @@ import { kitMaterials } from '../models/kit';
 import { onCoop, coopSend, coopNow, pack, CoopGroup } from './coop';
 import { gunReady, gunFired, gunUpdate, GUN } from './footgun';
 import { drawFootRing, drawPrompt } from '../ui/footHud';
-import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, type Avatar, type RemoteFig } from './avatar';
+import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, crouchK, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, figGear, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
 // Dungeons auf Planeten: verlassene Minen als Labyrinth.
@@ -871,7 +871,7 @@ export function enterDungeon(e: Entrance) {
   head = new THREE.SpotLight(0xe6eeff, 18, 38, 0.6, 0.55, 1.0); scene.add(head); scene.add(head.target);
   mflash = new THREE.PointLight(0xffb060, 0, 9, 1.6); scene.add(mflash);
   vm = buildViewModel(viewModelId(P.gear?.waffe));
-  me = makeAvatar(P.gear || {}); if (me) { me.s.g.visible = VIEW.tp; group.add(me.s.g); } resetTpCam();
+  me = makeAvatar(figGear()); if (me) { me.s.g.visible = VIEW.tp; group.add(me.s.g); } resetTpCam();
   if (vm) { overlay.scene = vm.scene; overlay.camera = vm.cam; } else { gun = buildGun(); scene.add(gun); }
   tracer = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.9 })); tracer.frustumCulled = false; tracer.visible = false; scene.add(tracer);
   camera.near = 0.06; camera.far = 38; camera.updateProjectionMatrix();      // dahinter verschluckt der Nebel alles; ferne Felsbereiche fallen weg

@@ -58,6 +58,7 @@ export interface Player {
   legends?: string[];                                       // gefundene legendäre Stücke (feste Fundorte, src/game/salvage.ts): jedes gibt es je Spielstand einmal
   salvage?: Record<string, { t: number; open: number[] }>;   // je Planet: Zeitpunkt, geöffnete Kisten (Wracks und Versorgungskisten, src/game/salvage.ts)
   dungeons?: Record<string, { t: number; open: number[]; sw?: boolean; sws?: number[] }>;
+  look?: { kopf: number; farbe: number };                   // Aussehen: Kopf und Uniformfarbe (Charaktererstellung, Garderobe; mineArt.ts LOOK_*)
   smgStart?: boolean;                                       // ältere Spielstände: SMG einmal in den leeren Waffenplatz gelegt (loadGame)
   akademie?: { ring?: number; schuss?: number; med: { ring: number; schuss: number } };   // Übungsgelände Heimstatt: Bestzeiten (s), Abzeichen 0–3 (src/game/akademie.ts)
   werft?: Record<string, number>;                           // Alte Werft: Bergungsgut → Zeitpunkt der Bergung (ms), kommt nach einer Weile wieder (src/game/altewerft.ts)   // je Mine: Zeitpunkt des letzten frischen Besuchs, geöffnete Kisten, Schalter
@@ -82,7 +83,7 @@ export function newPlayer(name: string): Player {
     tool: 'guns', mined: 0, market: {}, contracts: [], cctr: {},
     // Startschiff: Venom
     cls: 'venom', shipName: 'Venom', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2, rep: {}, missions: [], story: { prolog: 'done' },
-    inv: [], gear: { anzug: 'anzug_overall', waffe: 'waffe_smg' }, locker: [], shipGear: {},   // Startwaffe: SMG (seit 2026-11-19)
+    inv: [], gear: { anzug: 'anzug_overall', waffe: 'waffe_smg' }, locker: [], shipGear: {}, look: { kopf: 6, farbe: 0 },   // Startwaffe: SMG (seit 2026-11-19)
   };
 }
 export function setPlayer(p: Player) {

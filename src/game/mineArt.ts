@@ -189,7 +189,31 @@ export interface SoldierVis { g: THREE.Group; root: THREE.Object3D; mixer: THREE
 export interface ClipMeta { frames: number; loop: boolean; speed?: number; dir?: [number, number]; stride?: number; phase?: number }
 let TP: { weapon_in_hand: Record<string, number[][]>; clips?: Record<string, ClipMeta> } | null = null, tpLoading = false;
 export const soldierMeta = () => { loadTP(); return TP?.clips || null; };
-export const soldierGearKey = (gear: { helm?: string; anzug?: string; rucksack?: string }) => [gear.helm || '', gear.anzug || '', gear.rucksack || ''].join('|');
+// ---------- Aussehen des Piloten (seit 2026-11-20): selbst gewählt, getrennt von der Ausrüstung ----------
+// Kopf und Uniformfarbe wählt der Spieler (Charaktererstellung, Garderobe); Helm, Anzug und Rucksack zeigen, was angelegt ist.
+// Alles aus dem gekauften Soldaten (Soldat.glb): 8 Kopfmodelle (davon zwei Gesichter, Sturmhaube, Atemschutzmaske, vier Helme),
+// Uniform in vier Farben, Rüstungsteile Oberschenkel (Armor_Mesh01) und Schienbein (Armor_Mesh02), Rucksack (Bags_Mesh), Gürteltaschen (Bags_Mini).
+export interface Look { kopf: number; farbe: number }
+export const LOOK_DEFAULT: Look = { kopf: 6, farbe: 0 };
+export const LOOK_KOEPFE: { k: number; n: string }[] = [{ k: 6, n: 'Glatze, Headset' }, { k: 8, n: 'Bart, Kappe, Brille' }, { k: 5, n: 'Sturmhaube' }];
+export const LOOK_FARBEN: { v: string; n: string; c: string }[] = [
+  { v: 'soldat_col', n: 'Flotte (grau)', c: '#8d8f80' }, { v: 'soldat_col_v2', n: 'Wald', c: '#4f5a3a' },
+  { v: 'soldat_col_v4', n: 'Wüste', c: '#c8b48a' }, { v: 'soldat_col_v6', n: 'Nacht', c: '#3a3d42' },
+];
+// Helm → Kopfmodell (ohne Helm: der gewählte Kopf). Unbekannte Helme: der geschlossene schwarze Helm.
+const HELM_KOPF: Record<string, number> = { helm_werk: 7, helm_pilot: 2, helm_grenz: 1, helm_sturm: 4, helm_kristall: 3 };
+// Anzug → Rüstungsteile; Rucksack → Taschen (Namensanfang der Netze)
+const ANZUG_TEILE: Record<string, string[]> = {
+  anzug_overall: [], anzug_druck: ['Armor_Mesh02'], anzug_exo: ['Armor_Mesh01'],
+  anzug_panzer: ['Armor_Mesh01', 'Armor_Mesh02'], anzug_veteran: ['Armor_Mesh01', 'Armor_Mesh02'], anzug_sturm: ['Armor_Mesh01', 'Armor_Mesh02'],
+};
+const RUCK_TEILE: Record<string, string[]> = { ruck_tasche: ['Bags_Mini'], ruck_feld: ['Bags_Mesh'], ruck_lasten: ['Bags_Mesh', 'Bags_Mini'], ruck_schwebe: ['Bags_Mesh'] };
+export const normLook = (l?: Partial<Look> | null): Look => ({
+  kopf: LOOK_KOEPFE.some(q => q.k === l?.kopf) ? l!.kopf! : LOOK_DEFAULT.kopf,
+  farbe: Number.isInteger(l?.farbe) && l!.farbe! >= 0 && l!.farbe! < LOOK_FARBEN.length ? l!.farbe! : LOOK_DEFAULT.farbe,
+});
+export type FigGear = { helm?: string; anzug?: string; rucksack?: string; waffe?: string; look?: Look };
+export const soldierGearKey = (gear: FigGear) => [gear.helm || '', gear.anzug || '', gear.rucksack || '', gear.look ? gear.look.kopf + ',' + gear.look.farbe : ''].join('|');
 function loadTP() {
   if (TP || tpLoading) return; tpLoading = true;
   const url = (window as any).DATAFILES?.soldat_tp;
@@ -211,17 +235,20 @@ function lodGeo(): Record<string, THREE.BufferGeometry> {
   else console.warn('Fernmodell des Soldaten passt nicht zum Skelett, es bleibt beim vollen Modell');
   return LODGEO;
 }
-export function buildSoldier(gear: { helm?: string; anzug?: string; rucksack?: string; waffe?: string }): SoldierVis | null {
+export function buildSoldier(gear: FigGear): SoldierVis | null {
   loadTP();
   const t = stationTemplate('Soldat'); if (!t) return null;
   const root = skClone(t) as THREE.Group;
   const inner = root.children[0]; if (inner) inner.position.set(0, 0, 0);                  // der Lader zentriert Modelle; hier gilt der Ursprung aus Blender (Boden)
-  const variant = gear.anzug ? ['soldat_col', 'soldat_col_v2', 'soldat_col_v4', 'soldat_col_v6'][hashS(gear.anzug) % 4] : 'soldat_col';
+  // Mit Aussehen (Spieler, Mitspieler): Farbe und Kopf wie gewählt, Teile nach Ausrüstung. Ohne (Wachen in der Stadt): wie früher aus der Ausrüstung gewürfelt.
+  const look = gear.look ? normLook(gear.look) : null;
+  const variant = look ? LOOK_FARBEN[look.farbe].v : gear.anzug ? ['soldat_col', 'soldat_col_v2', 'soldat_col_v4', 'soldat_col_v6'][hashS(gear.anzug) % 4] : 'soldat_col';
   const body = pbr('soldat', { metalness: 1, roughness: 1 }); body.envMapIntensity = 0.25;
   if (variant !== 'soldat_col') { const m = tex(variant, true); if (m) body.map = m; }
   const km = pbr('kopf_m'); km.emissiveMap = tex('kopf_m_emi', true); km.emissive.set(0xffffff); km.emissiveIntensity = 1.5; km.envMapIntensity = 0.4;
   const kh = pbr('kopf_h'); kh.envMapIntensity = 0.35;
-  const head = gear.helm ? 1 + (hashS(gear.helm) % 8) : 6;
+  const head = look ? (gear.helm ? HELM_KOPF[gear.helm] ?? 1 : look.kopf) : gear.helm ? 1 + (hashS(gear.helm) % 8) : 6;
+  const parts = look ? [...(gear.anzug ? ANZUG_TEILE[gear.anzug] ?? ['Armor_Mesh01', 'Armor_Mesh02'] : []), ...(gear.rucksack ? RUCK_TEILE[gear.rucksack] ?? ['Bags_Mesh'] : [])] : null;
   root.traverse((o: any) => {
     o.userData.sh = false; o.userData.shared = true;
     if (!o.isMesh) return;
@@ -230,8 +257,8 @@ export function buildSoldier(gear: { helm?: string; anzug?: string; rucksack?: s
     o.material = mn === 'ext_kopf_m' ? km : mn === 'ext_kopf_h' ? kh : body;
     const n: string = o.name || '';
     const hm = n.match(/^Head0(\d)/); if (hm) o.visible = +hm[1] === head;
-    if (n.startsWith('Armor')) o.visible = !!gear.anzug;
-    if (n.startsWith('Bags')) o.visible = !!gear.rucksack;
+    if (parts) { if (n.startsWith('Armor') || n.startsWith('Bags')) o.visible = parts.some(p => n.startsWith(p)); }
+    else { if (n.startsWith('Armor')) o.visible = !!gear.anzug; if (n.startsWith('Bags')) o.visible = !!gear.rucksack; }
   });
   const g = new THREE.Group(); g.add(root);
   const mixer = new THREE.AnimationMixer(root);

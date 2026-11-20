@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { clamp } from '../core/util';
-import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, viewModelId, type SoldierVis } from './mineArt';
+import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, viewModelId, normLook, type SoldierVis, type FigGear } from './mineArt';
+import { P } from './state';
+// Eigene Figur: angelegte Ausrüstung plus das gewählte Aussehen (seit 2026-11-20)
+export const figGear = (): FigGear => ({ ...(P.gear || {}), look: normLook(P.look) });
 
 // =====================================================================================
 // Eigene Spielerfigur in der Außensicht – gemeinsam für Mine, Station, Hangar, Schiffe und den Planetenboden.
@@ -58,14 +61,14 @@ export interface Avatar {
 }
 export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number }   // reload: Fortschritt 0..1, sonst −1
 
-export function makeAvatar(gear: { helm?: string; anzug?: string; rucksack?: string }): Avatar | null {
+export function makeAvatar(gear: FigGear): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
   const arm = ['upperarm_l', 'lowerarm_l', 'hand_l'].map(n => s.root.getObjectByName(n));
   return { s, ready: false, sW: 0, reloadW: 0, gaits: [], cgait: null, death: [], dying: null, cw: 0, airW: 0, body: 0, phase: 0, aimW: 0, fireW: 0, fireT: 0, aimT: 0, turning: 0, first: true,
     hitN: -1, hitT: 0, hitS: 1, armL: arm.every(Boolean) ? arm as THREE.Object3D[] : null };
 }
 // Figur im Halter halten; bei geänderter Ausrüstung (Helm, Anzug, Rucksack) neu bauen
-export function syncAvatar(holder: THREE.Object3D, a: Avatar | null, gear: { helm?: string; anzug?: string; rucksack?: string }) {
+export function syncAvatar(holder: THREE.Object3D, a: Avatar | null, gear: FigGear) {
   if (a && a.s.gearKey === soldierGearKey(gear)) { if (a.s.g.parent !== holder) holder.add(a.s.g); return a; }
   const n = makeAvatar(gear); if (!n) return a;
   if (a) { a.s.g.removeFromParent(); n.body = a.body; n.first = false; }
@@ -267,9 +270,14 @@ function gripWeapon(a: Avatar, d: Drive) {
 }
 
 // Mitspieler als Figur: Zielwerte (aus dem Netz) weich nachführen, Tempo aus der Bewegung, gleiche Clips wie die eigene Figur
-export interface RemoteFig extends NetAct { av: Avatar | null; x: number; y: number; z: number; tx: number; ty: number; tz: number; yaw: number; vx: number; vz: number; gear: { helm?: string; anzug?: string; rucksack?: string }; wid: string; init: boolean }
+export interface RemoteFig extends NetAct { av: Avatar | null; x: number; y: number; z: number; tx: number; ty: number; tz: number; yaw: number; vx: number; vz: number; gear: FigGear; wid: string; init: boolean }
 export const newRemoteFig = (): RemoteFig => ({ av: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, vx: 0, vz: 0, gear: {}, wid: 'k12', init: false, crouch: false, hit: 0, fire: 0, fl: '' });
-export function gearFromNet(g: string[] | null | undefined) { return { gear: { helm: g?.[0] || undefined, anzug: g?.[1] || undefined, rucksack: g?.[2] || undefined }, wid: g?.[3] || viewModelId() }; }
+// Netzfeld g: [Helm, Anzug, Rucksack, Waffe, Haltung/Ereignisse, Aussehen „Kopf,Farbe“] (Aussehen seit 2026-11-20; fehlt es, gilt das Standardaussehen)
+export const lookToNet = () => { const l = normLook(P.look); return l.kopf + ',' + l.farbe; };
+export function gearFromNet(g: string[] | null | undefined) {
+  const lk = String(g?.[5] || '').split(','), look = normLook({ kopf: +lk[0], farbe: +lk[1] });
+  return { gear: { helm: g?.[0] || undefined, anzug: g?.[1] || undefined, rucksack: g?.[2] || undefined, look } as FigGear, wid: g?.[3] || viewModelId() };
+}
 export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {
   f.av = syncAvatar(holder, f.av, f.gear);
   if (!f.av) return;

@@ -6,6 +6,7 @@ import { GEAR_SLOTS, SLOT_N, SHIP_SLOTS, SHIP_SLOT_N, KIND_N, RARITY, STAT_N, ST
 import { invCap, gearStat, shipStat, equip, unequip, unequipShip, useItem, dropAt, gearSellPrice } from '../game/inventory';
 import { gearIcon } from './icons';
 import { BOLTS, type BoltId } from '../game/bolts';
+import { openGarderobe, garderobeHere } from './lookUi';
 
 // =====================================================================================
 // App „Ausrüstung“ im Flottenband: links, was der Pilot trägt, in der Mitte der Rucksack, rechts der gewählte Gegenstand.
@@ -72,6 +73,8 @@ export function invApp(): string {
   }
   return `<div class="invwrap">
     <div class="bcard"><div class="itabs"><button data-a="inv:side" data-k="pilot" class="${side === 'pilot' ? 'on' : ''}">Pilot</button><button data-a="inv:side" data-k="schiff" class="${side === 'schiff' ? 'on' : ''}">Schiff</button></div>
+      ${side === 'pilot' ? `<div class="invFigBox"><canvas id="invFig" width="220" height="300" title="Ziehen zum Drehen"></canvas>
+        <button data-a="inv:look" ${garderobeHere() ? '' : 'disabled title="Nur in einer Station"'}>Garderobe</button></div>` : ''}
       <h4>${side === 'pilot' ? 'Ausrüstung' : esc(P.shipName) + ' · ' + SHIPS[P.cls].role}</h4><div class="islots">${slots}</div><h4 style="margin-top:16px">${side === 'pilot' ? 'Werte' : 'Zuschläge der Module'}</h4>${totals}</div>
     <div class="bcard"><h4>Rucksack · ${P.inv.length}/${cap}</h4><div class="igrid">${cells}</div>
       <p class="hint" style="margin-top:12px">Kaufen, verkaufen und einlagern kannst du beim Ausrüster jeder Station. Fundstücke lassen manche Ferrox beim Abschuss zurück.</p></div>
@@ -86,6 +89,7 @@ export function invAct(a: string, k: string): boolean {
   msg = '';
   if (op !== 'drop') dropArm = -1;
   if (op === 'side') { side = k as 'pilot' | 'schiff'; if (sel && sel.w !== 'i') sel = null; return true; }
+  if (op === 'look') { if (garderobeHere()) openGarderobe(); return true; }   // Gesicht und Uniform (Garderobe, nur in Stationen)
   if (op === 'i' || op === 'g' || op === 's') { sel = { w: op, k }; snd(800, 0.05, 'sine', 0.03, 200); return true; }
   if (!sel) return true;
   if (op === 'equip' && sel.w === 'i') {

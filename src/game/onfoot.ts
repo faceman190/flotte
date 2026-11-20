@@ -13,7 +13,7 @@ import { updateFlora, treeNear } from './flora';
 import { gearFactor } from './inventory';
 import { radio } from '../ui/radio';
 import { nearEntrance } from './dungeon';
-import { VIEW, STANCE, ACT, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, type Avatar } from './avatar';
+import { VIEW, STANCE, ACT, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, figGear, type Avatar } from './avatar';
 import { viewModelId } from './mineArt';
 import { basePad, padGround, baseBlocked, nearDoor, surfaceAt, wallBetween } from './basewalk';
 import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
@@ -46,7 +46,7 @@ export function footAt(x: number, z: number, yaw: number) { place(x, z, yaw); }
 export function prewarmFoot() {
   try {
     if (!ROVER.model) ROVER.model = buildRover();
-    if (VIEW.tp && !me) { me = syncAvatar(scene, me, P.gear || {}); if (me) me.s.g.visible = false; }
+    if (VIEW.tp && !me) { me = syncAvatar(scene, me, figGear()); if (me) me.s.g.visible = false; }
     const roots = [ROVER.model.g, me?.s.g].filter(Boolean) as THREE.Object3D[];
     for (const r of roots) {
       r.traverse((o: any) => { for (const m of (Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) as any[]) for (const v of Object.values(m)) if ((v as any)?.isTexture) renderer.initTexture(v as THREE.Texture); });
@@ -173,7 +173,7 @@ export function updateFoot(dt: number) {
   FOOT.act = tgt ? 'story' : door ? 'base' : crate ? 'crate' : footNearShip() ? 'ship' : mine ? 'mine' : footNearRover() ? 'rover' : '';
   FOOT.prompt = FOOT.act === 'story' ? tgt!.label : FOOT.act === 'crate' ? (crate!.big ? 'Tresorkiste öffnen' : 'Kiste öffnen') : FOOT.act === 'base' ? `${door!.st.name} betreten` : FOOT.act === 'ship' ? (settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`) : FOOT.act === 'mine' ? `${mine!.name} betreten` : FOOT.act === 'rover' ? 'In den Rover steigen' : '';
   // eigene Figur
-  if (VIEW.tp) me = syncAvatar(scene, me, P.gear || {});
+  if (VIEW.tp) me = syncAvatar(scene, me, figGear());
   if (me) {
     me.s.g.visible = VIEW.tp;
     if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });
