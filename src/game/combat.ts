@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { crewAngriff } from './crewStimmen';
 import { ZIELE } from './orte';
 import { scene, camera, basicAdd, glowMat, compileFor } from '../core/engine';
 import { rand, ri, pick, d3, clamp, rng, hashStr } from '../core/util';
@@ -207,7 +208,7 @@ export function updateSpawning(dt: number) {
     const st = world.stations[0], who = st ? st.name.toUpperCase() : 'SYSTEM';
     const near = world.gates.reduce((b: any, g) => (!b || d3(g.x, g.y, g.z, c.x, c.y, c.z) < d3(b.x, b.y, b.z, c.x, c.y, c.z) ? g : b), null);
     const txt = `Ferrox-Kontakt${near ? ` beim Tor nach ${near.name}` : ''}: ${nd} Jäger${nb ? ` und ${nb} Bomber` : ''}. Alle Piloten wachsam!`;
-    radio(who, txt); hostEvent(['r', who, txt, '', 'alarm']);
+    radio(who, txt); hostEvent(['r', who, txt, '', 'alarm']); crewAngriff(world.def!.id);   // die Leute in der Station merken es sich (crewStimmen.ts)
     snd(440, 0.25, 'square', 0.04); setTimeout(() => snd(440, 0.25, 'square', 0.04), 350);
   }
 }

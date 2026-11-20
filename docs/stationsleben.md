@@ -67,3 +67,25 @@ bei „Ferrox-Kontakt“. Seit 1.19a sind diese Töne im Inneren stumm: `outside
 solange `IN.active` oder `DUN.active`), und `combat.ts`, `npc.ts` und `world.ts` nutzen die Fassungen `sndOut`, `sfxOut`, `boomOut`,
 `gunSoundOut`. Der Funkspruch selbst (Text mit kurzem Piep) kommt weiter an. Wer einen neuen Ton für etwas im All einbaut, nimmt diese Fassungen.
 Geprüft: 14 Sekunden Gefecht mit Ferrox-Welle neben der Bastion ergeben im Hangar keinen einzigen Ton, im Flug danach wieder alle.
+
+## Stimmen der Crew (seit 2026-11-20, Testserver)
+
+Code: `src/game/crewStimmen.ts` (Gedächtnis, Auswahl), Texte `src/data/crewSprueche.ts`, Anzeige und Auslösen in `interior.ts` (`crewTick`,
+`drawBubble`). Gilt in allen Stationsräumen (Hangar, Promenade, Deck 3, Hüttendeck), nicht in den Städten.
+
+- **Sprüche beim Vorbeigehen:** Kommt der Pilot einer Figur auf gut drei Meter nahe, sagt sie mit 60 % einen Satz: Sprechblase über dem
+  Kopf (3 bis 8 s), Gebärde, ein Läufer bleibt kurz stehen. Danach 6 bis 12 s Ruhe, dieselbe Figur frühestens nach 75 s. Figuren der
+  Geschichte sagen nichts. Gruppen geben einen Gesprächsfetzen preis („… nicht so laut. Da kommt ein Pilot.“). Still, solange die Geschichte
+  spricht (`crewHooks.busy`, main.ts), im eigenen Schiff und während der Landung.
+- **Was sie sagen (in dieser Reihenfolge):** Taten des Piloten seit dem letzten Betreten einer Station (fertiges Kapitel, ab 3 und ab 10
+  Abschüssen, viel Erz, viel Geld, neues Schiff, Rumpf unter 50 %; je Anlass höchstens zweimal je Besuch; Stand in `P.crewMem`), dann ein
+  frischer Ferrox-Angriff im Sektor, sonst Geschichte (Abschnitt `prolog`, `ch1`–`ch5`, `nach1`–`nach5`, nichts wird vorweggenommen), Ort
+  (Bastion, Gilde, Außenposten, Grenze, einzelne Stationen), Gerüchte und Alltag. Die letzten 40 Sätze wiederholen sich nicht.
+- **Gerüchte sind wahr:** Preisgerüchte rechnet das Spiel aus dem Markt (Stationen bis zwei Sprünge weit, Ware mindestens 15 % über dem
+  Grundpreis); feste Hinweise nennen echte Wege (Ferrit aus den Kristallfeldern, Seltene Erden nur auf Planeten, Raffinerie der Eisenkrone).
+- **Durchsage:** einmal je Besuch, 7,5 s nach der Landung, unten in der Mitte mit Gong: Ferrox-Kontakt im Sektor (bis 6 Minuten danach)
+  oder an der Bastion das gerade beendete Kapitel.
+- **Nach einem Angriff** (bis 4 Minuten): Läufer gehen 35 % schneller und bleiben seltener stehen. `combat.ts` meldet den Angriff
+  (`crewAngriff`), Mitspieler erfahren es über das Funkereignis (`npc.ts`).
+- Geprüft im Testfenster: Bastion (Hangar, Taten nach Kapitel 1, Angriff mit Durchsage und Eile) und Eisenkrone; Bild mit Sprechblase.
+  Nicht vertont: Die Sätze sind nur Text. Für Stimmen (ElevenLabs, 1 Credit je Zeichen) die Summe vorher nennen.

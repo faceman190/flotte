@@ -1,4 +1,5 @@
 import './core/boot';   // zuerst: Spieldaten laden (Ladebalken), alles Weitere wartet darauf
+import { crewHooks } from './game/crewStimmen';
 import { dockBark } from './game/barks';
 import * as THREE from 'three';
 import { warm, camera, render, scene, aimShadows, markShadows, gl, compileFor, warmScene } from './core/engine';
@@ -17,7 +18,7 @@ import { initTraffic, updateTraffic, initAllies, updateAllies } from './game/npc
 import { updateMissions } from './game/missions';
 import { playIntro, updateIntro, skipIntro, INTRO } from './game/intro';
 import { updateGroundShade } from './game/groundShade';
-import { updateStory, startPrologue, resumePrologue, skipPrologue, prologActive, sceneNext, storyHooks, noteScan } from './game/story';
+import { updateStory, startPrologue, resumePrologue, skipPrologue, prologActive, sceneNext, storyHooks, noteScan, dialogBusy, sceneActive } from './game/story';
 import { updateChapter1 } from './game/chapter1';
 import { preloadMeshRooms } from './game/meshRoom';
 import { SHIP, placePlayer, updatePlayer, updatePickups, syncShip, nearDock, gateHit, hooks, fwd, setShipModel } from './game/player';
@@ -214,6 +215,7 @@ function resume() { hidePause(); G.mode = pausedFrom; duckMusic(1); document.bod
 
 $('pSkip').onclick = () => { skipPrologue(); resume(); };
 storyHooks.banner = (t, s, c) => showBanner(t, s, c);
+crewHooks.busy = () => dialogBusy() || sceneActive();   // Stimmen der Crew schweigen, solange die Geschichte spricht
 menuHooks.newGame = (name, look) => { const p = newPlayer(NET.account || name); p.look = { ...look }; startGame(p, true); };   // mit Konto heißt der Pilot wie das Konto; Aussehen aus der Charaktererstellung
 menuHooks.continueGame = () => { const p = loadGame(); if (p) startGame(p, false); };
 menuHooks.resume = resume;

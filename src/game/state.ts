@@ -58,6 +58,7 @@ export interface Player {
   legends?: string[];                                       // gefundene legendäre Stücke (feste Fundorte, src/game/salvage.ts): jedes gibt es je Spielstand einmal
   salvage?: Record<string, { t: number; open: number[] }>;   // je Planet: Zeitpunkt, geöffnete Kisten (Wracks und Versorgungskisten, src/game/salvage.ts)
   dungeons?: Record<string, { t: number; open: number[]; sw?: boolean; sws?: number[] }>;
+  crewMem?: { kills: number; mined: number; earned: number; cls: string; done: string[] };   // Stand beim letzten Betreten einer Station (Stimmen der Crew, crewStimmen.ts)
   look?: { kopf: number; farbe: number };                   // Aussehen: Kopf und Uniformfarbe (Charaktererstellung, Garderobe; mineArt.ts LOOK_*)
   smgStart?: boolean;                                       // ältere Spielstände: SMG einmal in den leeren Waffenplatz gelegt (loadGame)
   akademie?: { ring?: number; schuss?: number; med: { ring: number; schuss: number } };   // Übungsgelände Heimstatt: Bestzeiten (s), Abzeichen 0–3 (src/game/akademie.ts)

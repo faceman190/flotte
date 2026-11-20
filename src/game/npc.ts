@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { crewAngriff } from './crewStimmen';
 import { scene, GLOW } from '../core/engine';
 import { rand, pick, d3, clamp } from '../core/util';
 import { sndOut as snd, gunSoundOut as gunSound, sfxOut as sfx, boomOut as boom, outVol } from '../core/audio';   // im Inneren einer Station stumm (siehe audio.ts)
@@ -330,7 +331,7 @@ export function applyNpc(n: any, ev: any[]) {
   const now = performance.now();
   // Ereignisse zuerst (Explosion und Sprung brauchen noch die Lage)
   for (const e of ev || []) {
-    if (e[0] === 'r') { radio(e[1], e[2], e[3] || undefined); if (e[4] === 'alarm') { snd(440, 0.25, 'square', 0.04); setTimeout(() => snd(440, 0.25, 'square', 0.04), 350); } }
+    if (e[0] === 'r') { radio(e[1], e[2], e[3] || undefined); if (e[4] === 'alarm') { crewAngriff(P.sector); snd(440, 0.25, 'square', 0.04); setTimeout(() => snd(440, 0.25, 'square', 0.04), 350); } }
     else if (e[0] === 'x' && e[1] === 't') { const t = world.traffic.find(o => o.nid === e[2]); if (t) { trafficBoom(t.x, t.y, t.z); removeTraffic(world.traffic.indexOf(t)); } }
     else if (e[0] === 'x' && e[1] === 'a') { const a = world.allies.find(o => o.nid === e[2]); if (a && a.alive) { a.alive = false; scene.remove(a.mesh); allyBoom(a); } }
     else if (e[0] === 'g') { const t = world.traffic.find(o => o.nid === e[1]); if (t) { burst(t.x, t.y, t.z, '#ffffff', 50, 70, 0.8); const ng = nearGate(t.x, t.y, t.z); if (ng) gateFlash(ng); snd(200, 0.5, 'sine', 0.02, 400); removeTraffic(world.traffic.indexOf(t)); } }

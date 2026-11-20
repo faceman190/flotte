@@ -28,6 +28,7 @@ import { HANGAR_BLOCKS } from '../data/hangarBlocks';
 import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, figGear, gearFromNet, type Avatar, type NetAct } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
+import { crewBesuch, crewSpruch, crewFetzen, crewDurchsage, crewEile, crewHooks } from './crewStimmen';
 import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, type Deck, type HangarBuild } from './deck';
 
 // =====================================================================================
@@ -745,6 +746,7 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
   const onFoot = mode === true, fromCity = mode === 'city';
   if (IN.active) leaveInterior();
   IN.active = true; IN.station = st;
+  crewBesuch(st, P.sector); bub = null; barkT = 0; paDone = false;
   group = build(st);
   stationGroup = group;
   const Y = st.launch.yaw, fx = -Math.sin(Y), fz = -Math.cos(Y);
@@ -1297,8 +1299,66 @@ function turnStep(p: Person, want: number, dt: number) {
 // Nächste Wegmarke eines Läufers: Haltepunkte nur mit ihrer Wahrscheinlichkeit und wenn dort niemand steht, sonst weiter zur übernächsten
 function nextNode(w: Walker) {
   const n = w.path.length; let j = (w.i + 1) % n;
-  for (let k = 0; k < n; k++) { const s = w.stops[j]; if (!s) break; if (!s.busy && Math.random() < s.p) { s.busy = true; break; } j = (j + 1) % n; }
+  for (let k = 0; k < n; k++) { const s = w.stops[j]; if (!s) break; if (!s.busy && Math.random() < s.p * stopK) { s.busy = true; break; } j = (j + 1) % n; }
   w.to = j;
+}
+// ---------- Stimmen der Crew (seit 2026-11-20, crewStimmen.ts) ----------
+// Geht der Pilot nah an jemandem vorbei, sagt die Figur ab und zu einen Satz (Sprechblase über dem Kopf, Gebärde, Läufer bleiben kurz stehen).
+// Gruppen geben einen Gesprächsfetzen preis. Höchstens eine Blase zugleich, danach 6 bis 12 s Ruhe, dieselbe Figur frühestens nach 75 s.
+// Still, solange die Geschichte spricht, man im eigenen Schiff ist oder der Landeablauf läuft. Einmal je Besuch eine Durchsage.
+let bub: { p: Person; text: string; t: number; dur: number } | null = null, barkT = 0, paDone = false, stopK = 1;
+const barkCool = new WeakMap<Person, number>();
+function crewTick(t: number) {
+  if (bub && (G.time - (bub as any).t0 > bub.dur)) bub = null;
+  if (G.mode !== 'walk' || IN.ship || crewHooks.busy()) return;
+  const since = t - settledT;
+  if (since < 5) return;
+  if (!paDone && since > 7.5) { paDone = true; const d = crewDurchsage(); if (d) { say('DURCHSAGE', d); IN.say.t = 7; snd(784, 0.12, 'sine', 0.035, 300); setTimeout(() => snd(1046, 0.16, 'sine', 0.03, 300), 180); } }
+  if (bub || t < barkT) return;
+  let best: { p: Person; d: number; chat: boolean; w?: Walker } | null = null;
+  const consider = (p: Person, x: number, z: number, chat: boolean, w?: Walker) => {
+    const d = Math.hypot(IN.x - x, IN.z - z);
+    if (d < 3.2 && d > 0.6 && (barkCool.get(p) || 0) < t && (!best || d < best.d)) best = { p, d, chat, w };
+  };
+  for (const w of walkers) consider(w.p, w.x, w.z, false, w);
+  for (const q of persons) if (!q.story) consider(q.p, q.x, q.z, chats.some(c => c.m.includes(q)));
+  const b = best as { p: Person; d: number; chat: boolean; w?: Walker } | null;
+  if (!b) return;
+  barkT = t + 2.5;
+  if (Math.random() > 0.6) { barkCool.set(b.p, t + 20); return; }      // diesmal schweigt sie
+  const text = b.chat ? crewFetzen() : crewSpruch();
+  if (!text) return;
+  const dur = clamp(2.2 + text.length * 0.055, 3.2, 8);
+  bub = { p: b.p, text, t: 0, dur }; (bub as any).t0 = G.time;
+  barkCool.set(b.p, t + 75); barkT = t + dur + 6 + Math.random() * 6;
+  if (b.p.anim) animTalk(b.p.anim, dur * 0.8);
+  if (b.w && !b.w.at) b.w.wait = Math.max(b.w.wait, Math.min(dur, 3.5));      // Läufer bleibt kurz stehen
+}
+// für Tests (Testfenster): wo stehen und gehen die Leute, welche Blase ist offen
+export const crewDebug = () => ({ walkers: walkers.map(w => [w.x, w.z]), persons: persons.filter(q => !q.story).map(q => [q.x, q.z, chats.some(c => c.m.includes(q)) ? 1 : 0]), bub: bub ? bub.text : null, bubAt: bub ? [bub.p.g.position.x, bub.p.g.position.z] : null, barkT, t: G.time, settled: G.time - settledT });
+// Sprechblase zeichnen (drawWalkHUD): über dem Kopf, mit Zeilenumbruch, weich ein- und ausgeblendet
+function drawBubble(W: number, H: number) {
+  if (!bub) return;
+  const age = G.time - (bub as any).t0, p = bub.p.g.position;
+  if (Math.hypot(p.x - IN.x, p.z - IN.z) > 10) return;
+  if (deck && !room && p.z <= HZ0 && !deck.seen(p.x, p.z)) return;
+  headOf(bub.p, _p); _p.y += 0.3; _p.project(camera);
+  if (_p.z > 1 || Math.abs(_p.x) > 1.05 || Math.abs(_p.y) > 1.05) return;
+  const x = (_p.x + 1) / 2 * W, y = (1 - _p.y) / 2 * H;
+  ux.font = '500 14px Rajdhani, "IBM Plex Sans", sans-serif'; ux.textAlign = 'left';
+  const maxW = Math.min(300, W * 0.4), words = bub.text.split(' '), lines: string[] = [];
+  let cur = '';
+  for (const w of words) { const n = cur ? cur + ' ' + w : w; if (ux.measureText(n).width > maxW && cur) { lines.push(cur); cur = w; } else cur = n; }
+  if (cur) lines.push(cur);
+  const lh = 17, bw = Math.max(...lines.map(l => ux.measureText(l).width)) + 22, bh = lines.length * lh + 12;
+  const bx = clamp(x - bw / 2, 8, W - bw - 8), by = Math.max(8, y - bh - 12);
+  ux.globalAlpha = clamp(Math.min(age * 4, (bub.dur - age) * 2), 0, 1);
+  ux.fillStyle = 'rgba(8,18,28,.86)'; ux.strokeStyle = 'rgba(160,200,225,.35)'; ux.lineWidth = 1;
+  ux.beginPath(); ux.rect(bx, by, bw, bh); ux.fill(); ux.stroke();
+  ux.beginPath(); ux.moveTo(clamp(x, bx + 10, bx + bw - 10) - 6, by + bh); ux.lineTo(clamp(x, bx + 10, bx + bw - 10), by + bh + 8); ux.lineTo(clamp(x, bx + 10, bx + bw - 10) + 6, by + bh); ux.closePath(); ux.fill();
+  ux.fillStyle = '#e4eef5';
+  lines.forEach((l, i) => ux.fillText(l, bx + 11, by + 6 + lh * (i + 1) - 4));
+  ux.globalAlpha = 1;
 }
 // Leben im Raum: Figuren atmen, gebärden und schauen, Läufer gehen ihre Wege. Läuft auch, wenn der Pilot gerade nicht selbst läuft
 // (Kinoszene, Stationsmenü, Start und Landung): Bis Alpha 1.07 standen die Figuren dort eingefroren, in den Szenen der Geschichte
@@ -1351,13 +1411,15 @@ export function updateRoomLife(dt: number) {
     });
   }
   updateOthers(dt);
+  crewTick(t);
+  const V = WALK_V * crewEile(); stopK = V > WALK_V ? 0.3 : 1;     // nach einem Angriff im Sektor: schneller, seltener stehen bleiben
   for (const w of walkers) {
     const an = w.p.anim;
     headOf(w.p, w.look);
     if (w.at) {
       // am Haltepunkt: hindrehen, verweilen (am Stand im Wechsel mit dem Personal gebärden), zum nächsten Ziel drehen und weitergehen
       const s = w.at, n = w.path[w.to];
-      if (an) animStep(an, dt, false, WALK_V);
+      if (an) animStep(an, dt, false, V);
       if (!w.leave) {
         turnStep(w.p, s.face, dt);
         w.wait -= dt;
@@ -1389,9 +1451,9 @@ export function updateRoomLife(dt: number) {
     if (w.rest && d < 1.5 && w.wait <= 0) { w.wait = 4 + Math.random() * 6; w.rest = false; }
     if (w.wait > 0) w.wait -= dt;
     const go = !blocked && w.wait <= 0;
-    let sp = go ? WALK_V : 0;
+    let sp = go ? V : 0;
     // mit Skelett: Anlaufen und Abbremsen geben das Tempo vor (die Füße rutschen nicht); ganz nah am Spieler hält die Figur sofort
-    if (w.p.anim) { sp = animStep(w.p.anim, dt, go, WALK_V); if (blocked && pd < 1.2) sp = 0; }
+    if (w.p.anim) { sp = animStep(w.p.anim, dt, go, V); if (blocked && pd < 1.2) sp = 0; }
     w.x += dx / d * sp * dt; w.z += dzz / d * sp * dt;
     w.p.g.position.set(w.x, 0, w.z);
     const ta = Math.atan2(dx, dzz), da = Math.atan2(Math.sin(ta - w.p.g.rotation.y), Math.cos(ta - w.p.g.rotation.y));
@@ -1477,6 +1539,7 @@ export function drawWalkHUD() {
   if (IN.target) drawPrompt(IN.target.label(), pal.css, H * 0.66);
   // Ort oben in der Mitte statt des Kastens oben links (Credits und Fracht stehen an den Terminals und im Flottenband)
   drawPlaceLine(title && IN.area ? `${title} · ${IN.area}` : title || IN.area);
+  drawBubble(W, H);
   // Gesprochenes
   if (IN.say.t > 0) {
     ux.globalAlpha = Math.min(1, IN.say.t);
