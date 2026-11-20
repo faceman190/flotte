@@ -1,6 +1,6 @@
 import { $ } from '../core/util';
 import { LOOK_DEFAULT, type Look } from '../game/mineArt';
-import { lookPicker } from './lookUi';
+import { lookPicker, stageTools } from './lookUi';
 import { showFig, hideFig } from './figPreview';
 import { setQuality } from '../core/engine';
 import { gpuInfo } from '../core/perf';
@@ -44,13 +44,22 @@ function closeSub(id: string) { click(); hide(id); if (returnTo) show(returnTo);
 $('mContinue').onclick = () => { click(); menuHooks.continueGame(); };
 // Neuer Pilot (seit 2026-11-20 mit Charaktererstellung): Rufzeichen, Gesicht, Uniform; drehbare Figur links (figPreview.ts)
 const ngLook: Look = { ...LOOK_DEFAULT };
+const ngReset = stageTools('newGame');
+const ngName = () => $('ngName') as HTMLInputElement;
+const ngSync = () => {   // Namensschild auf der Bühne und Zeichenzähler folgen dem Eingabefeld
+  const v = ngName().value.trim();
+  $('ngTag').textContent = v || 'Falke';
+  $('ngCount').textContent = ngName().value.length + '/16';
+};
+ngName().addEventListener('input', ngSync);
 $('mNew').onclick = () => {
   click();
-  $('ngWarn').textContent = hasSave() ? 'Achtung: Dein bisheriger Spielstand wird überschrieben.' : '';
+  $('ngWarn').textContent = hasSave() ? 'Dein bisheriger Spielstand wird überschrieben.' : '';
   hide('menu'); show('newGame');
-  lookPicker('ngLook', ngLook, () => {});
+  lookPicker('ngLook', ngLook, () => {}, 2);
+  ngReset(); ngSync();
   showFig('ngFig', () => ({ anzug: 'anzug_overall', waffe: 'waffe_smg', look: ngLook }));   // so, wie der neue Pilot startet
-  setTimeout(() => ($('ngName') as HTMLInputElement).select(), 30);
+  setTimeout(() => ngName().select(), 30);
 };
 $('ngBack').onclick = () => { click(); hideFig(); hide('newGame'); show('menu'); };
 const goNew = () => {

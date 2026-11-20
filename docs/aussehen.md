@@ -35,6 +35,11 @@ Ohne Helm sieht man das gewählte Gesicht. Wachen in der Stadt (ohne Aussehen) w
 - `FigGear` = Ausrüstung plus `look`; `figGear()` (avatar.ts) für die eigene Figur, `soldierGearKey` enthält das Aussehen (Figur wird bei
   Änderung neu gebaut).
 - Netz: Feld `g[5]` = „Kopf,Farbe“ (Server reicht jetzt sechs Felder durch); fehlt es, gilt das Standardaussehen.
+- Fenster (seit dem zweiten Testserver-Stand): „Personalakte“ mit Bühne links (Namensschild, Umschalter Ganzkörper/Gesicht, Drehknöpfe,
+  ziehen zum Drehen) und rechts nummerierten Abschnitten: Rufzeichen, Gesicht und Uniform als Kacheln mit Standbildern der echten Figur
+  (`figPortrait`, erst wenn Clips und Bilder geladen sind), Dienstantritt. Garderobe nutzt dasselbe Fenster. Achtung: `canvas` ist in
+  style.css global `position:fixed`; jede Vorschaufläche braucht eine eigene Position (`.figCv`, `.invFigBox canvas`), sonst liegt sie
+  über den Bedienelementen (Fehler des ersten Stands).
 - Vorschau `src/ui/figPreview.ts`: wie die Schiffsansicht der Werft mit dem Renderer des Spiels vor dem Bild (prePass), in eine 2D-Fläche
   kopiert; drehen mit der Maus. Genutzt von „Neuer Pilot“, Garderobe und Ausrüstung im Flottenband.
 - Ich-Sicht: Arme bleiben vorerst die alten Soldatenarme (keine Uniformfarbe).
