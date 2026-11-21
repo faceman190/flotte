@@ -193,3 +193,28 @@ Für Helme genügt: „isolated helmet only, front view, left side view, back vi
   Verformung an Schultern, Hüfte, Knien und Hals.
 - **Offen:** Daumen und Finger an die tatsächliche Handform anpassen, Kopf am Kragen abtrennen, Farbmaske, FBX für Cascadeur, Ausrüstung
   (Overall, Weste, Helm, Handschuh liegen als HD vor), Einbau ins Spiel.
+
+## 10. Ausrüstung am Körper (21.11.2026)
+
+Kette `asset-src/neu/spielfigur/ausruestung.py` (Arbeitsdatei `Figur_m_01.blend`): `laden` → `ausrichten` → `reduzieren` → `gewichte` →
+`anpassen`; Handschuh zusätzlich `deckung` (beste Deckung mit der Hand: acht Startdrehungen, beide Seiten, ICP) und `spiegeln` (links mit
+den Gewichten des rechten, Seiten getauscht); `zonen` und `komplett` für die Gesamtprobe.
+
+| Teil | Dreiecke | Ausrichtung | Bindung |
+|---|---|---|---|
+| Overall | 14.000 | oberer Rand am Kragen, Schritt am Schritt, Tiefe an Brust und Hüfte (+3 cm) | automatische Gewichte vom Skelett |
+| Plattenweste | 12.000 | Breite der Brust +5 cm, Oberkante 6 cm unter dem Kragen | Gewichte vom Körper; liegt über dem Overall |
+| Helm | 8.000 | Kopfbreite +7 cm, Dichtung am Kragen | starr am Knochen `head` |
+| Handschuh (je) | 4.000 | Bündchen 6 cm über dem Handgelenk, ICP (9,5 mm mittlerer Abstand) | automatische Gewichte, links gespiegelt |
+
+- **HD → Spielnetz:** Innenwand des hohlen Ghost-Mannequin-Modells entfernen (Flächen gegen die Körpernormale), verschweißen, alte UV
+  verwerfen, ausdünnen; klemmt das (Helm, Handschuh: viele Einzelteile), vom geschlossenen HD-Modell aus im Raster 2,5–3 mm neu aufbauen und
+  dann ausdünnen. Neue UV, dann Farbe, Rauheit und Normalmap vom innenwandfreien HD-Modell backen (2048).
+- **Körperzonen:** Attribut `zone` je Fläche (stärkster Knochen), `zonen.json`: Overall verdeckt Oberkörper, Ober- und Unterarme, Becken,
+  Oberschenkel (Unterschenkel bleiben, das Hosenbein endet über dem Knöchel); Helm verdeckt Kopf und Hals, Handschuhe die Hände.
+- **Ganze Figur** mit allem: rund 44.000 Dreiecke (sichtbarer Körper nur noch Waden und Füße). Geprüft in Ruhe, Arme waagerecht, Hocke,
+  Schritt, Kopf gedreht (`docs/bilder/alles-*.png`).
+- **Fehlwege (nicht wiederholen):** Ausdünnen mit den Tripo-UV (bleibt bei 40.000 bzw. 32.000 stehen); Backen auf die hohle Fassung mit
+  Innenwand (helle Streifen); Gewichte von der Haut für Ärmel in anderem Winkel (Ärmel lösen sich); Rasterneuaufbau der innenwandfreien Schale
+  (zerbröselt); automatische Gewichte am gespiegelten Handschuh (scheitern).
+- **Offen:** Stiefel (Füße stehen noch in Socken), Rucksack, Gürtel, Finger und Daumen, Farbmasken, FBX für Cascadeur, Einbau ins Spiel.
