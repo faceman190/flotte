@@ -43,17 +43,21 @@ seine Steuerung. Ablauf: Claude bindet in Blender und gibt eine FBX aus, der Spi
 
 ## 3. Budgets (Browser)
 
+Angehoben am 21.11.2026 (Spieler: „Das Spiel läuft sehr flüssig“). Die volle Stufe gilt nur aus der Nähe; Mitspieler, NPCs und Wachen auf
+Entfernung nutzen die einfacheren Stufen.
+
 | Teil | Dreiecke (volle Stufe) | Textur |
 |---|---|---|
-| Körper mit Kopf und Unteranzug | 16.000–20.000 (Kopf davon 5.000–6.000, Hände je 1.500) | 2048 (Kopf 1024 eigen) |
-| Helm | 3.000–5.000 | 1024 |
-| Oberkörper (Overall, Weste) | 5.000–7.000 | 2048 |
-| Beine (falls eigenes Teil) | 4.000–5.000 | 1024 |
-| Handschuhe (Paar) | 2.000–3.000 | 1024 |
-| Stiefel (Paar) | 3.000–4.000 | 1024 |
-| Rucksack, Gürtel | je 2.000–4.000 | 1024 |
+| Körper mit Kopf und Unteranzug | 45.000–55.000 (Smart Mesh von Tripo, rund 51.000) | 4096 → 2048 im Spiel (Kopf eigen 1024–2048) |
+| Helm | 6.000–10.000 | 1024–2048 |
+| Oberkörper (Overall, Weste) | 10.000–15.000 | 2048 |
+| Beine (falls eigenes Teil) | 8.000–10.000 | 2048 |
+| Handschuhe (Paar) | 4.000–6.000 | 1024 |
+| Stiefel (Paar) | 6.000–8.000 | 1024 |
+| Rucksack, Gürtel | je 4.000–8.000 | 1024 |
 
-- Ganze Figur mit Ausrüstung höchstens **40.000 Dreiecke**; Stufe 2 die Hälfte, Stufe 3 ein Fünftel.
+- Ganze Figur mit Ausrüstung in der vollen Stufe höchstens **90.000 Dreiecke** (bis etwa 10 m Abstand), Stufe 2 höchstens 35.000
+  (bis etwa 35 m), Stufe 3 höchstens 10.000. Verdeckter Körper unter der Ausrüstung wird nicht gezeichnet und zählt nicht.
 - Je Teil: Grundfarbe, Normalmap, ORM (Verdeckung, Rauheit, Metall) und eine **Farbmaske** (R/G/B = drei färbbare Zonen, z. B. Stoff,
   Platten, Streifen). So gibt es jede Uniform in jeder Fraktionsfarbe ohne neue Texturen.
 - Höchstens 3–4 Materialien je Figur im Spiel.
@@ -173,3 +177,19 @@ Für Helme genügt: „isolated helmet only, front view, left side view, back vi
 - Gebunden ans Standard-Skelett; Gewichte geprüft in Extremposen (Arme hoch, tiefe Hocke, Kopf 60° gedreht).
 - Ausrüstung: kein Durchstoßen in den Testposen, verdeckte Zonen eingetragen.
 - Drei Detailstufen. Export glTF (Spiel) und FBX (Cascadeur).
+
+---
+
+## 9. Stand Körper m_01 (21.11.2026)
+
+- **Netz:** Smart Mesh von Tripo (Quad, rund 20.400 Vierecke, 50.900 Dreiecke) mit seiner eigenen Farbtextur. Das HD-Modell und das Tripo-Retopo
+  sind verworfen: Das Smart Mesh ist ein eigenständig erzeugtes Modell (im Mittel 2,4 cm neben dem HD-Modell), HD-Details lassen sich darauf
+  nicht backen; Tripos Retopo des HD-Modells war laut Spieler unbrauchbar. QRemeshify (installiert) lieferte zerrissene Netze, QuadriFlow lehnt
+  in Blender 5.3 jedes Netz ab. Normalmap und Rauheit fehlen deshalb vorerst.
+- **Skelett:** `asset-src/neu/spielfigur/skelett.py`: Gelenkpunkte aus dicht abgetasteter Oberfläche (Schritt, Achseln, Handgelenke, Hüfte,
+  Knie, Knöchel, Hals, Wirbelsäule; Finger nach Handvorlage), 88 Knochen (75 verformend) mit Unreal-5-Namen, Drehknochen, IK und
+  Befestigungen. Gebunden mit Blenders automatischen Gewichten: alle Punkte gewichtet; nur `thumb_02` bekommt noch keine Fläche.
+- **Geprüft in Posen:** Arme waagerecht, tiefe Hocke, Schritt mit gebeugten Armen, Kopf 60° gedreht (`docs/bilder/pose-*.png`): saubere
+  Verformung an Schultern, Hüfte, Knien und Hals.
+- **Offen:** Daumen und Finger an die tatsächliche Handform anpassen, Kopf am Kragen abtrennen, Farbmaske, FBX für Cascadeur, Ausrüstung
+  (Overall, Weste, Helm, Handschuh liegen als HD vor), Einbau ins Spiel.
