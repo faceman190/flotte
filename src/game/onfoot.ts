@@ -13,7 +13,7 @@ import { updateFlora, treeNear } from './flora';
 import { gearFactor } from './inventory';
 import { radio } from '../ui/radio';
 import { nearEntrance } from './dungeon';
-import { VIEW, STANCE, ACT, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, figGear, type Avatar } from './avatar';
+import { VIEW, STANCE, ACT, footPace, footBrake, setIntent, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, figGear, type Avatar } from './avatar';
 import { viewModelId } from './mineArt';
 import { basePad, padGround, baseBlocked, nearDoor, surfaceAt, wallBetween } from './basewalk';
 import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
@@ -55,6 +55,8 @@ export function prewarmFoot() {
   } catch (e) { console.warn('Vorwärmen zu Fuß:', e); }
 }
 let me: Avatar | null = null, stepT = 0, grabT = 0;
+// Bodenhöhe unter einem Fuß der eigenen Figur (Gelände, Stege der Basis); nur für Manny (avatar.ts, Drive.ground)
+const footGround = (x: number, z: number) => surfaceAt(x, z, FOOT.y);
 
 const shipR = () => stats().radius * 0.75 + 0.8;
 export const footNearShip = () => FOOT.active && Math.hypot(FOOT.x - ROVER.ship.x, FOOT.z - ROVER.ship.z) < stats().radius + 7;
@@ -144,8 +146,9 @@ export function updateFoot(dt: number) {
   if (keys.ArrowRight) FOOT.yaw -= 2 * dt;
   // Laufen (wie in der Mine): weich anlaufen, an Hindernissen entlanggleiten
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
-  const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run && !STANCE.crouch ? 6.4 : 4.2) * crouchK() * gearFactor('tempo') / Math.hypot(f, s) : 0;
-  const sy = Math.sin(FOOT.yaw), cy = Math.cos(FOOT.yaw), k = Math.min(1, dt * (f || s ? (FOOT.jy > 0 ? 2 : 10) : (FOOT.jy > 0 ? 1 : 13)));
+  const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? footPace(f, s, run, 4.2, 6.4) * gearFactor('tempo') / Math.hypot(f, s) : 0;
+  setIntent(FOOT.yaw, f, s, run);
+  const sy = Math.sin(FOOT.yaw), cy = Math.cos(FOOT.yaw), k = Math.min(1, dt * (f || s ? (FOOT.jy > 0 ? 2 : 10) : (FOOT.jy > 0 ? 1 : footBrake(13))));
   FOOT.vx += ((-sy * f + cy * s) * sp - FOOT.vx) * k; FOOT.vz += ((-cy * f - sy * s) * sp - FOOT.vz) * k;
   const ox = FOOT.x, oz = FOOT.z, dx = FOOT.vx * dt, dzz = FOOT.vz * dt;
   let why = '';
@@ -177,7 +180,7 @@ export function updateFoot(dt: number) {
   if (VIEW.tp) me = syncAvatar(scene, me, figGear());
   if (me) {
     me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });
+    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, ground: footGround, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });
   }
   // Kampf: Schießen (Klick), Drohnen, Geschosse; in der Außensicht kommt der Leuchtstrich aus der Mündung der Figur
   const mz = VIEW.tp && me?.s.weapon ? me.s.weapon.localToWorld(new THREE.Vector3().copy(me.s.muzzle)) : null;

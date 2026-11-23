@@ -12,10 +12,14 @@ import { MannyAnimator } from './manny/MannyAnimator.js';
 // Die Bewegungslogik steckt in src/game/manny/ (MannyAnimator: Starts, Stops, Drehen auf der Stelle, 8 Richtungen,
 // Ducken, Sprung; Auswahl nach Pose, Inertialization, Fuß-IK). Hier wird sie nur an die Spielerfigur angeschlossen:
 //  - Die Spielphysik bewegt die Figur weiter (Position, Sprung); Mannys Root Motion wird nicht zur Bewegung genutzt.
+//    Damit die Füße trotzdem nicht rutschen (seit 2026-11-23, wie in Unreal bei geführter Kapsel):
+//    · Manny bekommt die ABSICHT (Tasten, Sprinten), nicht das gemessene Tempo: richtiger Start, Stopp sofort beim Loslassen.
+//    · Das Spiel läuft mit Manny im Tempo der Bewegungen (mannyPace: vorwärts schneller als seitwärts und rückwärts).
+//    · Start und Stopp werden nach zurückgelegter bzw. verbleibender Strecke abgespielt, Schleifen im echten Tempo.
 //  - Der Körper schaut in Blickrichtung (Strafe-Modus des Animators), wie beim Soldaten.
 //  - Waffen, Anschlag, Schießen, Nachladen und Tod hat Manny nicht; die Soldatenfigur bleibt dafür unsichtbar im Halter.
 // =====================================================================================
-export const MANNY = { on: false, url: '' as string };   // url: nur für Tests, sonst aus der Paketliste
+export const MANNY = { on: false, url: '' as string, alt: false, brake: 8 };   // url: nur für Tests, sonst aus der Paketliste; alt: alter Anschluss (Tempo statt Absicht) zum Vergleich im Prüfskript
 try {
   const q = new URLSearchParams(location.search).get('manny');
   if (q === '1' || q === '0') localStorage.setItem('lf_manny', q);
@@ -30,16 +34,45 @@ function ensure() {
   loading = true;
   new MannyAnimator().load(url).then((a: any) => {
     a.model.traverse((o: any) => { o.userData.sh = false; o.userData.shared = true; });
+    // Die Datei bringt reinweißes Material ohne Textur mit: In der Sonne überstrahlte die Figur (weißer Schein). Mattes Grau in zwei Tönen.
+    a.model.traverse((o: any) => { if (o.isMesh && o.material?.color) { o.material = o.material.clone(); o.material.color.setHex(/_2$/.test(o.name) ? 0x5a6068 : 0x8d9298); o.material.roughness = 0.72; o.material.metalness = 0; } });
     anim = a; loading = false;
     console.info(`Manny geladen: ${Object.keys(a.actions).length} Bewegungen, Analyse ${a.analyseMs} ms`);
   }).catch((e: unknown) => { failed = true; loading = false; console.warn('Manny nicht geladen – es bleibt beim Soldaten:', e); });
 }
 
-export interface MannyDrive { yaw: number; y: number; vx: number; vz: number; crouch?: boolean; air?: boolean }
-const st = { lastY: 0, air: false, first: true };
-const _mv = new THREE.Vector2();
-// Gangart nach Tempo der Spielphysik (Gehen ≈ 2 m/s, Laufen 4,2 m/s, Sprinten 6,4 m/s in onfoot.ts)
-const gaitOf = (spd: number) => (spd < 3 ? 'walk' : spd < 5.4 ? 'run' : 'sprint');
+export interface MannyDrive {
+  x: number; y: number; z: number; yaw: number; vx: number; vz: number; crouch?: boolean; air?: boolean;
+  mx?: number; mz?: number;                          // Absicht: gewünschte Laufrichtung (Tasten) in Raumkoordinaten, 0/0 = stehen
+  sprint?: boolean;                                  // Absicht: Sprinten gedrückt
+  ground?: ((x: number, z: number) => number | null) | null;   // Bodenhöhe im Raum der Figur (Rampen, Stufen, Gelände)
+}
+const st = { lastY: 0, lx: 0, lz: 0, air: false, first: true, blocked: 0 };
+const _mv = new THREE.Vector2(), _vel = new THREE.Vector2();
+// Bremsweg der Spielphysik nach dem Loslassen: Das Tempo fällt in allen drei Laufstellen mit rund 12–13 pro Sekunde
+// (interior.ts 12, onfoot.ts und dungeon.ts 13), der Rest des Wegs ist also Tempo × 0,08 s.
+const STOP_TAU = 0.08;
+/** Bremsrate der Spielphysik nach dem Loslassen (1/s): mit Manny weicher, damit die Stopp-Bewegung Platz für ihren letzten Schritt hat */
+export const mannyBrake = (base: number) => (MANNY.on && !MANNY.alt && anim && MANNY.brake > 0 ? MANNY.brake : base);
+// Ohne Absicht (fremder Aufrufer): Gangart nach Tempo
+const gaitOf = (spd: number) => (spd < 3 ? 'walk' : spd < 5.9 ? 'run' : 'sprint');
+
+/**
+ * Lauftempo mit Manny (m/s, ohne Ausrüstungsfaktor): das Tempo der Bewegungen selbst, je nach Richtung. f = vor (+1) / zurück (−1),
+ * s = rechts (+1) / links (−1). Wie in Unreals Beispiel ist seitwärts und rückwärts langsamer als vorwärts; Sprinten gibt es nur
+ * nach vorn (bis 60° seitlich). Gibt null zurück, solange Manny aus oder noch nicht geladen ist – dann gilt das alte Tempo.
+ */
+export function mannyPace(f: number, s: number, sprint: boolean, crouch: boolean): number | null {
+  if (!MANNY.on || MANNY.alt) return null;
+  ensure();
+  if (!anim) return null;
+  const theta = Math.atan2(s, f) * 180 / Math.PI;
+  const gait = crouch ? 'crouch' : sprint && Math.abs(theta) <= 60 ? 'sprint' : 'run';
+  const v = anim.speedAt(gait, theta);
+  return v > 0.5 ? v : null;
+}
+/** nur für Prüfskripte */
+export const mannyAnim = () => anim;
 
 /**
  * Manny statt des Soldaten zeigen. holder: die Gruppe der Spielerfigur (Position und Drehung body + π setzt avatar.ts),
@@ -49,29 +82,49 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
   if (!MANNY.on) return false;
   ensure();
   if (!anim) return false;
+  const dtc = Math.min(dt, 0.1), spd = Math.hypot(d.vx, d.vz), air = !!d.air, face = d.yaw + Math.PI;
+  // Neu im Halter oder vom Spiel versetzt (Tür, Aufzug, Einstieg): sofort richtig hinstellen, ohne Drehbewegung und ohne Überblenden
+  const fresh = anim.model.parent !== holder || st.first;
+  if (fresh || Math.hypot(d.x - st.lx, d.z - st.lz) > Math.max(1.5, spd * dtc * 4)) { anim.teleport(face); st.lastY = d.y; st.air = air; st.blocked = 0; }
   if (anim.model.parent !== holder) holder.add(anim.model);
   soldier.visible = false; anim.model.visible = true;
-  const spd = Math.hypot(d.vx, d.vz), air = !!d.air;
-  const vy = st.first || dt <= 0 ? 0 : (d.y - st.lastY) / dt;
-  st.lastY = d.y; st.first = false;
+  const vy = fresh || dt <= 0 ? 0 : (d.y - st.lastY) / dt;
+  st.lastY = d.y; st.lx = d.x; st.lz = d.z; st.first = false;
   const jump = air && !st.air && vy > 0.5; st.air = air;
   // Spielwelt: vorwärts = (−sin yaw, −cos yaw). Manny schaut bei rotation.y = F nach (sin F, cos F) → F = yaw + π
-  if (spd > 0.3) _mv.set(d.vx / spd, d.vz / spd); else _mv.set(0, 0);
-  const out = anim.update(Math.min(dt, 0.1), {
-    moveDir: _mv, gait: gaitOf(spd), crouch: !!d.crouch, strafe: true, facing: d.yaw + Math.PI,
+  let gait: string;
+  const led = !MANNY.alt;
+  if (led && d.mx !== undefined && d.mz !== undefined) {
+    // Absicht: Richtung der Tasten. Läuft die Figur gegen eine Wand (Absicht ja, Tempo nein), steht Manny, statt auf der Stelle zu laufen.
+    const l = Math.hypot(d.mx, d.mz), want = l > 0.1;
+    st.blocked = want && spd < 0.6 ? st.blocked + dtc : 0;
+    if (want && st.blocked < 0.3) _mv.set(d.mx / l, d.mz / l); else _mv.set(0, 0);
+    gait = d.sprint ? 'sprint' : 'run';
+  } else {
+    if (spd > 0.3) _mv.set(d.vx / spd, d.vz / spd); else _mv.set(0, 0);
+    gait = gaitOf(spd);
+  }
+  const out = anim.update(dtc, {
+    moveDir: _mv, gait, crouch: !!d.crouch, strafe: true, facing: face,
     jump, grounded: !air, verticalSpeed: vy,
+    vel: led ? _vel.set(d.vx, d.vz) : undefined, stopDist: spd * Math.max(0, (MANNY.brake > 0 ? 1 / MANNY.brake : STOP_TAU + dtc) - dtc),   // Rest des Wegs bei Bremsrate r: Tempo × (1/r − Bilddauer)
   });
   // Animator-Blickrichtung relativ zum Halter, der schon um body + π gedreht ist. yaw, vx, vz und facing gelten im Raum des Halters
   // (Innenräume: Koordinaten des Decks, das selbst gedreht in der Welt liegt), deshalb die lokale Drehung des Halters, nicht die
   // Weltdrehung: Mit der Weltdrehung stand Manny in Stationen und Schiffen um die Drehung des Raums versetzt (lief z. B. 90° seitlich).
   anim.model.position.set(0, 0, 0);
   anim.model.rotation.set(0, out.facing - holder.rotation.y, 0);
-  anim.model.updateMatrixWorld(true);
-  anim.finalize(dt);
+  // Weltlage dieses Bildes für die Füße: nur die Kette nach oben und der Halter selbst (nicht die ganze Szene)
+  const room = holder.parent;
+  if (room) room.updateWorldMatrix(true, false);
+  holder.updateMatrixWorld(true);
+  // Füße: im Raum der Figur festhalten (ein fliegendes Schiff nimmt sie mit) und dem Boden unter ihnen folgen
+  anim.finalize(dtc, { space: room ? room.matrixWorld : null, ground: d.ground || null, baseY: d.y });
   return true;
 }
 /** Manny aus dem Halter nehmen (Schalter aus oder Figur neu gebaut) */
 export function releaseManny(soldier?: THREE.Object3D) {
+  st.first = true;
   if (anim?.model.parent) anim.model.removeFromParent();
   if (soldier) soldier.visible = true;
 }

@@ -25,7 +25,7 @@ import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom, interiorEnv } 
 import { stationTemplate } from '../models/stationModels';
 import { applyKit, kitMeta } from '../models/kit';
 import { HANGAR_BLOCKS } from '../data/hangarBlocks';
-import { VIEW, STANCE, crouchK, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, figGear, gearFromNet, type Avatar, type NetAct } from './avatar';
+import { VIEW, STANCE, footPace, footBrake, setIntent, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, figGear, gearFromNet, type Avatar, type NetAct } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
 import { crewBesuch, crewSpruch, crewFetzen, crewDurchsage, crewEile, crewHooks } from './crewStimmen';
@@ -1161,6 +1161,9 @@ function rampTransit() {
 export const walkFree = (x: number, z: number) => free(x, z);      // für Prüfskripte (scripts/decktest.js)
 let stepT = 0;
 const walkV = { x: 0, z: 0 };   // Laufgeschwindigkeit (m/s) in Raumkoordinaten
+// Bodenhöhe unter einem Fuß der eigenen Figur (Schiffsräume mit Laufkarte: Rampen, Stufen); nur für Manny (avatar.ts, Drive.ground).
+// Erst nach der Kopfhöhen-Abfrage des Bildes aufgerufen (floorAt merkt sich die Kopfhöhe der letzten Abfrage).
+const footGround = (x: number, z: number) => (mesh ? mesh.floorAt(x, z, IN.fy) : null);
 // Springen (Leertaste): nur vom Boden aus
 export function jump() { if (!IN.active || IN.jy > 0 || IN.jv !== 0) return; IN.jv = 4.6; snd(95, 0.05, 'triangle', 0.02, 40); }
 export function updateWalk(dt: number) {
@@ -1186,8 +1189,9 @@ export function updateWalk(dt: number) {
   // Bewegung: weich anlaufen und abbremsen (Geschwindigkeit folgt der Eingabe), an Wänden entlanggleiten
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   {
-    const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? (run && !STANCE.crouch ? 6.8 : 6) * crouchK() * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
-    const k = Math.min(1, dt * (f || s ? 9 : 12));
+    const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? footPace(f, s, run, 6, 6.8) * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
+    setIntent(IN.yaw, f, s, run);
+    const k = Math.min(1, dt * (f || s ? 9 : footBrake(12)));
     walkV.x += ((-sy * f + cy * s) * sp - walkV.x) * k; walkV.z += ((-cy * f - sy * s) * sp - walkV.z) * k;
     if (Math.hypot(walkV.x, walkV.z) < 0.05) walkV.x = walkV.z = 0;
     const dx = walkV.x * dt, dzz = walkV.z * dt, ox = IN.x, oz = IN.z;
@@ -1263,7 +1267,7 @@ export function updateWalk(dt: number) {
   meHolder.visible = tpOn && !!me;
   if (me && tpOn) {
     meHolder.matrix.copy(group.matrixWorld); meHolder.matrixWorldNeedsUpdate = true;
-    driveAvatar(me, dt, { x: IN.x, y: IN.fy + IN.jy, z: IN.z, yaw: IN.yaw, pitch: IN.pitch, vx: walkV.x, vz: walkV.z, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: IN.jy > 0.05 });
+    driveAvatar(me, dt, { x: IN.x, y: IN.fy + IN.jy, z: IN.z, yaw: IN.yaw, pitch: IN.pitch, vx: walkV.x, vz: walkV.z, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: IN.jy > 0.05, ground: mesh ? footGround : null });
   }
   if (IN.panel && Math.hypot(IN.x - IN.panel.x, IN.z - IN.panel.z) > 2.5) IN.panel = null;
   // Was liegt vor mir?

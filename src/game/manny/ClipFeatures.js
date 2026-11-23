@@ -116,7 +116,24 @@ export class ClipFeatureExtractor {
       else if (contactR[i - 1] && !contactR[i]) firstLift = 'R';
     }
     const total = rootPos[n - 1];
+    // cumulative planar path length of the root (distance matching: play a start / stop by distance travelled)
+    const cum = new Float32Array(n);
+    for (let i = 1; i < n; i++) cum[i] = cum[i - 1] + Math.hypot(rootPos[i].x - rootPos[i - 1].x, rootPos[i].z - rootPos[i - 1].z);
     return {
+      cum,
+      /** clip time at which the root has travelled d metres (from t = 0); clamped to the clip */
+      timeAtCum(d) {
+        if (d <= 0) return 0;
+        if (d >= cum[n - 1]) return dur;
+        let lo = 0, hi = n - 1;
+        while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= d) lo = m; else hi = m; }
+        const span = cum[hi] - cum[lo];
+        return ts[lo] + (span > 1e-6 ? (d - cum[lo]) / span : 0) * (ts[hi] - ts[lo]);
+      },
+      cumAt(t) {
+        const x = Math.min(Math.max(t / dur, 0), 1) * (n - 1), i = Math.floor(x), a = x - i;
+        return i >= n - 1 ? cum[n - 1] : cum[i] * (1 - a) + cum[i + 1] * a;
+      },
       name: clip.name, duration: dur, n, ts, yaw, rootPos, speed, footL, footR, velL, velR, contactL, contactR,
       dist: Math.hypot(total.x, total.z),
       dirDeg: Math.hypot(total.x, total.z) > 0.05 ? Math.atan2(-total.x, total.z) * 180 / Math.PI : 0,

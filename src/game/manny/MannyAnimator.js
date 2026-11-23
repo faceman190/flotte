@@ -11,6 +11,18 @@
 //        (true: body faces `facing`, 8-way movement) · facing (yaw rad) · jump · grounded · verticalSpeed
 // Output: { delta: planar world displacement, facing: yaw, jumpImpulse }
 //
+// Capsule-led mode (the game moves the character, not the root motion) – optional inputs:
+//   vel       THREE.Vector2, the REAL planar velocity (same frame as moveDir). Then:
+//             * loops play at real speed / clip speed (0.6..1.3)
+//             * starts are played by DISTANCE: clip time = time at which the clip has travelled as far as the capsule
+//             * stops are entered and played by REMAINING distance (stopDist), see below
+//             * all speed decisions (tap, jump, landing, pose cost) use the real speed
+//   stopDist  metres the capsule will still travel after the input was released (prediction of the game)
+// moveDir is then the INTENT (keys), not the velocity: releasing the keys starts the stop at once.
+//   anim.teleport(facing)       after spawning / being moved: no turn clip, no blend, foot locks dropped
+//   anim.finalize(dt, env)      env = { space: Matrix4 world matrix of the room the character stands in (foot locks live there),
+//                                       ground: (x, z) => height in room space | null, baseY: room-space height of the feet }
+//
 // v2 ("motion matching light"):
 //  * every clip is analysed at load (ClipFeatures): root motion, turn angle, foot contacts, foot pose/velocity
 //  * starts / stops / turns / pivots / moving turns are chosen from candidate groups by angle, speed and
@@ -24,7 +36,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { CLIP_MAP, DIR_PRIORITY, TUNING } from './clipMap.js';
 import { ClipFeatureExtractor, poseCost } from './ClipFeatures.js';
 import { Inertializer } from './Inertializer.js';
-import { FootLocker } from './FootIK.js';
+import { FootLocker, GroundAdapt } from './FootIK.js';
 
 const DEG = 180 / Math.PI, RAD = Math.PI / 180;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -54,7 +66,10 @@ export class MannyAnimator {
     const fx = new ClipFeatureExtractor(this.model);
     this.mixer = new THREE.AnimationMixer(this.model);
     this.feat = {}; this.actions = {};
+    let slice = performance.now(), work = 0;
     for (const clip of gltf.animations) {
+      // analysing 300+ clips takes a while: yield to the browser every few ms (no long freeze of the running game)
+      if (performance.now() - slice > 6) { work += performance.now() - slice; await new Promise((r) => setTimeout(r, 0)); slice = performance.now(); }
       this.feat[clip.name] = fx.analyse(clip);
       const inPlace = clip.clone();
       inPlace.tracks = inPlace.tracks.filter((t) => !t.name.startsWith('root.'));
@@ -62,10 +77,11 @@ export class MannyAnimator {
       a.enabled = true; a.setEffectiveWeight(0); a.play();
       this.actions[clip.name] = a;
     }
-    this.analyseMs = Math.round(performance.now() - t0);
+    this.analyseMs = Math.round(work + performance.now() - slice); this.loadMs = Math.round(performance.now() - t0);
     this._buildSets();
     this.inertializer = new Inertializer(this.model);
     this.footLock = new FootLocker(this.model);
+    this.groundAdapt = new GroundAdapt(this.model);
     this._slots = new Map();
     this.state = 'idle'; this.stateTime = 0;
     this.facing = 0; this.gait = 'run'; this.crouch = false; this.crouchW = 0;
@@ -111,6 +127,8 @@ export class MannyAnimator {
     for (const v of Object.values(CLIP_MAP.jump.land)) Object.values(v).forEach((n) => this._has(n));
   }
 
+  /** loop speed (m/s) of a gait for a travel direction relative to the body (deg, 0 = forward, + = right) */
+  speedAt(gait, thetaDeg) { let v = 0; for (const [s, w] of this._dirWeights(gait, thetaDeg)) v += s.speed * w; return v; }
   speedOf(gait) { const s = (this.loopSets[gait] || []).find((l) => l.key === 'F'); return s ? s.speed : 0; }
   groupSizes() { return Object.fromEntries(Object.entries(this.groups).map(([g, v]) => [g, Object.fromEntries(Object.entries(v).map(([k, l]) => [k, l.length]))])); }
 
@@ -147,7 +165,20 @@ export class MannyAnimator {
     this._osRate = rate;
     a.time = startTime; a.play();
     this._playOnly(name, blend);
-    this.oneShot = name; this._osPrevT = startTime; this._yawScale = yawScale;
+    this.oneShot = name; this._osPrevT = startTime; this._osStart = startTime; this._yawScale = yawScale;
+  }
+  /** clip seconds played since the running one-shot was entered (equals stateTime at rate 1) */
+  _osElapsed() { return this.oneShot ? this._osPrevT - (this._osStart ?? 0) : this.stateTime; }
+
+  /** after spawning / being moved by the game: face `facing` at once (no turn clip), drop blends and foot locks */
+  teleport(facing) {
+    this.facing = facing; this._sYaw = undefined; this._targetYaw = undefined; this._lastMoveYaw = undefined;
+    this.planarVel.set(0, 0, 0); this._travel = 0; this._blocked = 0;
+    for (const k of [...this._slots.keys()]) this._slots.delete(k);
+    this._slots.set('idle', { w: 1 }); this.oneShot = null;
+    this.state = 'idle'; this.stateTime = 0;
+    this.inertializer.active = false; this.inertializer.pending = false;
+    this.footLock.reset(); this.groundAdapt.reset();
   }
   _applyWeights() {
     for (const a of Object.values(this.actions)) a.setEffectiveWeight(0);
@@ -186,7 +217,10 @@ export class MannyAnimator {
       if (gw <= 1e-3) continue;
       for (const [s, w] of this._dirWeights(g, this.locoTheta)) { list.push([s, w * gw]); dur += s.duration * w * gw; speed += s.speed * w * gw; }
     }
-    if (dur > 0) this.phase = (this.phase + dt / dur) % 1;
+    // capsule-led: the loop plays as fast as the character really moves (feet do not slide when the game is slower / faster)
+    const want = this._realSpeed !== undefined && this.state === 'loop' && speed > 0.3 ? clamp(this._realSpeed / speed, 0.6, 1.3) : 1;
+    this._locoRate = approach(this._locoRate ?? 1, want, 3 * dt);
+    if (dur > 0) this.phase = (this.phase + dt * this._locoRate / dur) % 1;
     const m = new Map();
     for (const [s, w] of list) {
       const a = this.actions[s.name];
@@ -219,6 +253,7 @@ export class MannyAnimator {
         let c = extra + poseCost(f, i, this.curPose, opts.w);
         if (opts.maxSpeed !== undefined && f.speed[i] > opts.maxSpeed) c += 5;
         if (opts.footPref && f.firstLift && f.firstLift !== opts.footPref) c += opts.footPenalty ?? 0.3;
+        if (opts.rem !== undefined) c += (opts.remW ?? 2) * ((f.cum[f.n - 1] - f.cum[i]) - opts.rem) ** 2;   // remaining root distance (stop by distance)
         if (opts.contacts) c += 0.4 * ((!!f.contactL[i] !== opts.contacts.l) + (!!f.contactR[i] !== opts.contacts.r));   // foot phase
         if (!best || c < best.cost) best = { name, t: f.ts[i], cost: c, i };
       }
@@ -262,6 +297,10 @@ export class MannyAnimator {
     if (!this.mixer) return { delta: new THREE.Vector3(), facing: 0, jumpImpulse: false };
     const T = this.tuning;
     this.time += dt; this.stateTime += dt; this._dtNow = dt;
+    const vel = input.vel || null;                 // capsule-led: real planar velocity
+    this._realSpeed = vel ? vel.length() : undefined;
+    this._stopDist = vel ? input.stopDist : undefined;
+    if (vel) this.planarVel.set(vel.x, 0, vel.y);
     const rawMv = input.moveDir || new THREE.Vector2();
     const moving = rawMv.length() > 0.1;          // pressing / releasing reacts immediately
     // direction smoothing (~0.05 s) so camera/key jitter does not trigger new turn clips all the time
@@ -295,7 +334,8 @@ export class MannyAnimator {
     this._strafe = strafe;
 
     if (!grounded && (input.verticalSpeed ?? 0) < -2 && !['jumpStart', 'fall'].includes(this.state)) this._enterFall(0.25);
-    if (input.jump && grounded && !this.crouch && !['jumpStart', 'fall', 'land'].includes(this.state)) this._enterJump();
+    // capsule-led: the game has already jumped when it reports the jump (first frame in the air) - start the clip at its take-off
+    if (input.jump && (grounded || vel) && !this.crouch && !['jumpStart', 'fall', 'land'].includes(this.state)) this._enterJump(!!vel);
 
     // v3: every state can be interrupted. Turning clips are re-targeted every frame (root rotation scaled
     // to the CURRENT target), and re-selected (pose matching) when the target jumps by > reselectAngle.
@@ -336,7 +376,8 @@ export class MannyAnimator {
         if (!strafe && turning) this._retargetYaw(wrapDeg((moveYaw - this.facing) * DEG));
         else if (!strafe) this.facing = approachAngle(this.facing, targetFacing, T.proceduralTurnRate * RAD * dt);
         const dirChanged = canReselect && (strafe ? Math.abs(wrapDeg(thetaIn - this._startTheta)) > T.reselectAngle : jumpTarget);
-        if (this.stateTime >= this._exitT || dirChanged || gk !== this._startGait) {
+        const upToSpeed = vel && this.stateTime > 0.2 && this._realSpeed >= 0.92 * this.speedOf(gk) && this._osElapsed() > 0.25;
+        if (this._osElapsed() >= this._exitT || upToSpeed || dirChanged || gk !== this._startGait) {
           if (!strafe && dirChanged && Math.abs(wrapDeg((moveYaw - this.facing) * DEG)) > T.movingTurnThreshold && this._enterMovingTurn(wrapDeg((moveYaw - this.facing) * DEG))) break;
           this.locoTheta = strafe ? thetaIn : wrapDeg((this.facing - moveYaw) * DEG); this._startLoco(T.blend);
         }
@@ -391,7 +432,7 @@ export class MannyAnimator {
           else this._enterStart(thetaIn, strafe, moveYaw);
           break;
         }
-        if (this.stateTime >= this._exitT) this._startIdle(0.3);
+        if (this._osElapsed() >= this._exitT) this._startIdle(0.3);
         break;
       }
       case 'settle': {
@@ -416,12 +457,32 @@ export class MannyAnimator {
     }
     if (input.verticalSpeed !== undefined && !grounded) this._lastVy = input.verticalSpeed;
 
-    // ---- movement
+    // ---- capsule-led: starts and stops are played by distance (the clip is where the capsule is)
     const st = this.state;
+    if (vel && this.oneShot && (st === 'start' || st === 'stop') && dt > 0) {
+      const f = this.feat[this.oneShot], a = this.actions[this.oneShot], t0 = this._osPrevT;
+      let t1 = t0 + dt;
+      if (st === 'start') {
+        this._travel = (this._travel ?? 0) + this._realSpeed * dt;
+        t1 = f.timeAtCum(this._travelFrom + this._travel);
+        // the first steps of a start hardly travel: never slower than real time there, never more than 3x
+        t1 = clamp(t1, t0 + dt * (f.speed[f.index(t0)] < 1 ? 1 : 0.6), t0 + dt * 3);
+      } else if (this._stopDist !== undefined) {
+        // remaining clip distance = remaining capsule distance; once the capsule stands the clip settles in real time
+        const total = f.cum[f.n - 1];
+        t1 = this._realSpeed < 0.15 ? t0 + dt * 1.15 : f.timeAtCum(total - Math.min(total, this._stopDist));
+        t1 = clamp(t1, t0 + dt * 0.5, t0 + dt * 3);
+      }
+      t1 = Math.min(t1, f.duration);
+      this._osRate = (t1 - t0) / dt;
+      a.setEffectiveTimeScale(this._osRate);
+    }
+
+    // ---- movement
     if (st === 'loop') {
       this._updateLoco(dt);
       const yaw = this.facing - this.locoTheta * RAD;
-      out.delta.set(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(this.locoSpeed * dt);
+      out.delta.set(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(this.locoSpeed * (this._locoRate ?? 1) * dt);
     } else if (['start', 'stop', 'pivot', 'turn', 'settle', 'movingTurn'].includes(st) && this.oneShot) {
       const a = this.actions[this.oneShot], f = this.feat[this.oneShot];
       const t0 = this._osPrevT, t1 = Math.min(t0 + dt * (this._osRate || 1), f.duration);
@@ -443,9 +504,11 @@ export class MannyAnimator {
       out.delta.copy(this.planarVel).multiplyScalar(dt);
     }
     if (st !== 'loop' && this._slots.has('loco')) this._updateLoco(dt);
-    if (!['jumpStart', 'fall', 'land'].includes(st) && dt > 0) this.planarVel.copy(out.delta).multiplyScalar(1 / dt);
+    if (vel) this.planarVel.set(vel.x, 0, vel.y);
+    else if (!['jumpStart', 'fall', 'land'].includes(st) && dt > 0) this.planarVel.copy(out.delta).multiplyScalar(1 / dt);
     this.facing = wrapRad(this.facing);
     out.facing = this.facing;
+    (this.rootDelta || (this.rootDelta = new THREE.Vector3())).copy(out.delta);   // what the clips moved this frame (tests: compare with the capsule)
     this._applyWeights();
     this.inertializer.restorePure();      // drop last frame's offsets/IK before the mixer writes (see Inertializer)
     this.mixer.update(dt);
@@ -456,12 +519,15 @@ export class MannyAnimator {
   }
 
   /** call after the model's world transform for this frame is set: pose features + foot locking */
-  finalize(dt = this._dt || 0) {
+  finalize(dt = this._dt || 0, env = null) {
     this._capturePose(dt);
+    const air = ['fall'].includes(this.state) || (this.state === 'jumpStart' && this._impulseDone);
+    // feet follow the ground under them (slopes, steps) – before locking, so a locked foot keeps its adapted height
+    if (env && env.ground) this.groundAdapt.update(dt, env.ground, env.baseY ?? 0, env.space || null, !air);
+    else this.groundAdapt.reset();
     if (this.tuning.footLock) {
-      const air = ['fall'].includes(this.state) || (this.state === 'jumpStart' && this._impulseDone);
       const hard = ['idle', 'turn', 'settle'].includes(this.state);   // hard lock while standing/turning, soft while moving
-      this.footLock.update(dt, this._contactsNow(), !air, hard ? 0 : 3, hard ? 0.3 : 0.15);
+      this.footLock.update(dt, this._contactsNow(), !air, hard ? 0 : 3, hard ? 0.3 : 0.15, env ? env.space || null : null);
     }
   }
 
@@ -535,6 +601,7 @@ export class MannyAnimator {
     const minT = Math.max(best.t + 0.3, turning ? this._yawSettle(f, best.t) : 0);
     this._exitT = Math.min(this._speedReached(f, 0.9, minT, gk) ?? f.duration * 0.6, f.duration - 0.3) - best.t;
     this._startTheta = want; this._startGait = gk; this._startYaw = moveYaw;
+    this._travel = 0; this._travelFrom = f.cumAt(best.t);
     this._targetYaw = strafe ? this.facing : moveYaw;
     this._enter('start', best.name + (best.t > 0 ? ` @${best.t.toFixed(2)}` : '') + (turning ? ` yaw x${this._yawScale.toFixed(2)}` : ''));
   }
@@ -549,7 +616,9 @@ export class MannyAnimator {
       return { name, extra: Math.abs(wrapDeg(d - theta)) / 40, f };
     }).filter((c) => c.extra < 1.5);
     // entry by FOOT PHASE (which foot is planted, where the feet are) first, speed second
-    const best = this._search(cands, 0, 1.5, { w: { pos: 1.5, speed: 0.15 }, maxSpeed: cur + 0.8, contacts: this._supportContacts() });
+    // entry by FOOT PHASE; capsule-led also by remaining distance (the clip must end where the capsule will stand)
+    const led = this._stopDist !== undefined;
+    const best = this._search(cands, 0, led ? 9 : 1.5, { w: { pos: 1.5, speed: 0.15 }, maxSpeed: cur + 0.8, contacts: this._supportContacts(), rem: led ? this._stopDist : undefined });
     if (!best) { this._startIdle(0.3); return; }
     const f = this.feat[best.name];
     const settle = this._settleTime(f, best.t);
@@ -621,13 +690,13 @@ export class MannyAnimator {
     const a = this.actions[n]; a.reset(); a.setLoop(THREE.LoopRepeat, Infinity); a.setEffectiveTimeScale(1); a.play();
     this._playOnly(n, blend); this.oneShot = null; this._enter('fall', n);
   }
-  _enterJump() {
+  _enterJump(airborne = false) {
     const sp = this.planarVel.length();
     const key = (!this._movingNow || sp < 0.5) ? 'stand' : sp < 3 ? 'walk' : sp < 6.2 ? 'run' : 'sprint';
     const name = CLIP_MAP.jump.start[key];
     if (!this._has(name)) return;
     const f = this.feat[name];
-    const start = Math.max(0, f.takeoff - 0.18);
+    const start = airborne ? f.takeoff : Math.max(0, f.takeoff - 0.18);
     this._playOneShot(name, 0.12, start, 0);
     this.oneShot = null;                       // no root motion: physics owns the jump
     this._jumpClip = name;

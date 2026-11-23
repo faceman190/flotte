@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { clamp } from '../core/util';
 import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, viewModelId, normLook, type SoldierVis, type FigGear } from './mineArt';
-import { driveManny, releaseManny } from './mannyAvatar';
+import { driveManny, releaseManny, mannyPace, mannyBrake } from './mannyAvatar';
+export const footBrake = mannyBrake;   // Bremsrate nach dem Loslassen der Lauftasten (1/s)
 import { P } from './state';
 // Eigene Figur: angelegte Ausrüstung plus das gewählte Aussehen (seit 2026-11-20)
 export const figGear = (): FigGear => ({ ...(P.gear || {}), look: normLook(P.look) });
@@ -24,6 +25,18 @@ try { VIEW.tp = localStorage.getItem('lf_tp') === '1'; } catch (e) { /* ohne Spe
 // Haltung zu Fuß: geduckt (Taste C) – langsamer, niedrigere Augenhöhe, eigene Clips
 export const STANCE = { crouch: false };
 export const crouchK = () => (STANCE.crouch ? 0.45 : 1);
+// Lauftempo zu Fuß (m/s, ohne Ausrüstungsfaktor) für die Tasten f (vor/zurück) und s (rechts/links). Ohne Manny das Tempo der Laufstelle
+// (normal bzw. sprint, geduckt × 0,45). Mit Manny (?manny=1) das Tempo seiner Bewegungen, damit die Füße nicht rutschen (mannyAvatar.ts).
+export function footPace(f: number, s: number, run: boolean, normal: number, sprint: number) {
+  return mannyPace(f, s, run && !STANCE.crouch, STANCE.crouch) ?? (run && !STANCE.crouch ? sprint : normal) * crouchK();
+}
+// Absicht der eigenen Figur in diesem Bild: gewünschte Laufrichtung (Raumkoordinaten) und Sprinten. Die Laufstelle setzt sie in jedem Bild
+// vor driveAvatar; driveAvatar verbraucht sie (ohne neue Angabe gilt: stehen). Manny startet und stoppt damit sofort mit den Tasten.
+const INTENT = { mx: 0, mz: 0, sprint: false };
+export function setIntent(yaw: number, f: number, s: number, run: boolean) {
+  const sy = Math.sin(yaw), cy = Math.cos(yaw);
+  INTENT.mx = -sy * f + cy * s; INTENT.mz = -cy * f - sy * s; INTENT.sprint = run && !STANCE.crouch && (f !== 0 || s !== 0);
+}
 export const eyeH = () => (STANCE.crouch ? 1.12 : 1.7);
 export function toggleCrouch() { STANCE.crouch = !STANCE.crouch; }
 export function toggleView() { VIEW.tp = !VIEW.tp; try { localStorage.setItem('lf_tp', VIEW.tp ? '1' : '0'); } catch (e) { /* egal */ } }
@@ -61,7 +74,7 @@ export interface Avatar {
   hitN: number; hitT: number; hitS: number; armL: THREE.Object3D[] | null;
   player?: boolean;                                            // eigene Spielerfigur: darf die Testfigur Manny zeigen (mannyAvatar.ts, ?manny=1)
 }
-export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number }   // reload: Fortschritt 0..1, sonst −1
+export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null }   // reload: Fortschritt 0..1, sonst −1
 
 export function makeAvatar(gear: FigGear, player = false): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
@@ -134,7 +147,8 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   s.g.rotation.y = a.body + Math.PI;
   // Testfigur Manny (?manny=1): eigene Bewegungslogik, der Soldat bleibt unsichtbar im Halter
   if (a.player) {
-    if (!d.dead && driveManny(s.g, s.root, dt, { yaw: d.yaw, y: d.y, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air })) return;
+    const mx = INTENT.mx, mz = INTENT.mz, sprint = INTENT.sprint; INTENT.mx = INTENT.mz = 0; INTENT.sprint = false;
+    if (!d.dead && driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground })) return;
     if (!s.root.visible) releaseManny(s.root);   // tot oder Schalter aus: wieder der Soldat
   }
   if (a.ready) {
