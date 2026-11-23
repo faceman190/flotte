@@ -707,6 +707,16 @@ function beginSeq(dir: number, dur: number, done: null | (() => void)) {
   for (const g2 of SHIP.glows) g2.visible = true;
   sfx('launch', dir > 0 ? 0.7 : 0.45, dir > 0 ? 1 : 0.85, () => snd(300, 0.6, 'sawtooth', 0.05, dir > 0 ? 500 : -300));
 }
+// Spielstand zu Fuß geladen (main.ts, resumeAt): Das Schiff steht schon auf dem Platz, kein Landeablauf. at: Standpunkt beim Speichern,
+// gilt nur, wenn dort frei ist (sonst bleibt es beim Platz neben dem Schiff).
+let noSeq = false;
+export function enterStanding(st: Station, mode: boolean | 'city', at?: { x?: number; z?: number; yaw?: number }) {
+  noSeq = true;
+  try { enterInterior(st, mode); } finally { noSeq = false; }
+  if (!IN.active) return;
+  for (const g2 of SHIP.glows) g2.visible = false;      // Triebwerke aus, wie nach dem Aufsetzen
+  if (at && at.x !== undefined && at.z !== undefined && isFinite(at.x) && isFinite(at.z) && free(at.x, at.z)) { IN.x = at.x; IN.z = at.z; IN.yaw = at.yaw || 0; }
+}
 export function startLaunch(done: () => void) {
   if (!IN.active || !IN.station || SEQ.t >= 0) return false;
   if (room) leaveShip();
@@ -792,7 +802,7 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
     IN.x = 0; IN.z = PZ0 + 2.6; IN.yaw = Math.PI;   // hinter der Tür am Ende der Promenade, Blick zum Hangar
     say('SYSTEM', `Promenade von ${st.name}. Dein Schiff steht im Hangar.`);
   } else {
-    beginSeq(-1, 4.5, null);   // Landung: das Schiff kommt durchs Tor herein und setzt auf
+    if (!noSeq) beginSeq(-1, 4.5, null);   // Landung: das Schiff kommt durchs Tor herein und setzt auf
     say('SYSTEM', deck ? `Willkommen auf ${st.name}. Durch die Schleuse an der Rückwand geht es auf ${deck.name === 'Deck 3' ? 'Deck 3' : 'das ' + deck.name}.` : `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
   }
   // Stadt: Tür am Ende der Promenade hinaus auf den Marktplatz

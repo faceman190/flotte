@@ -197,7 +197,7 @@ window.__bot = async (opts) => {
     const key = ch.key + ':' + ch.n;
     if (opts.until && key === opts.until) { B.done = true; say('HALT vor', key); return; }
     if (opts.stop && opts.stop(st(), B)) { B.done = true; say('HALT (Prüfziel erreicht) bei', key); return; }
-    if (key !== B.key) { if (B.key) say('   -> Schritt ' + B.key + ' fertig nach ' + (G.time - B.t0).toFixed(0) + ' s'); B.key = key; B.t0 = G.time; B.f = {}; B.snap[key] = JSON.stringify(P()); tick(0.25); say('SCHRITT ' + key + ' [' + G.mode + '] ' + obj() + ' · Marken: ' + (mk().map(m => m.label).join(', ') || '–')); }
+    if (key !== B.key) { if (B.key) say('   -> Schritt ' + B.key + ' fertig nach ' + (G.time - B.t0).toFixed(0) + ' s'); B.key = key; B.t0 = G.time; B.f = {}; { const a = T.ST.saveHooks.where(); if (a) P().at = a; else if (a === null) delete P().at; } B.snap[key] = JSON.stringify(P()); tick(0.25); say('SCHRITT ' + key + ' [' + G.mode + '] ' + obj() + ' · Marken: ' + (mk().map(m => m.label).join(', ') || '–')); }
     if (S.sceneActive()) { S.sceneNext(); tick(0.05); return; }
     if (S.dialogBusy()) { tick(0.5); return; }
     if (G.dead) { if (!B.f.dead) { B.f.dead = 1; say('HINWEIS: Schiff zerstört in', key); } tick(1); return; }

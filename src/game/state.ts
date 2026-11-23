@@ -64,7 +64,15 @@ export interface Player {
   akademie?: { ring?: number; schuss?: number; med: { ring: number; schuss: number } };   // Übungsgelände Heimstatt: Bestzeiten (s), Abzeichen 0–3 (src/game/akademie.ts)
   werft?: Record<string, number>;                           // Alte Werft: Bergungsgut → Zeitpunkt der Bergung (ms), kommt nach einer Weile wieder (src/game/altewerft.ts)   // je Mine: Zeitpunkt des letzten frischen Besuchs, geöffnete Kisten, Schalter
   gedenk?: number;                                          // Gedenkboje im Sonnenfeld schon besucht (src/game/gedenkboje.ts)
+  at?: PlayerAt;                                            // wo der Pilot beim Speichern zu Fuß war (fehlt: im Schiff); main.ts, whereAmI und resumeAt
 }
+// Standort zu Fuß im Spielstand (seit 2026-11-23): „Weiterspielen“ setzt den Piloten dort wieder ab statt ins Cockpit vor der Station.
+//   st:   in einer Station oder Basis (id). base: Planetenbasis zu Fuß (das Schiff steht draußen auf dem Landefeld); city: draußen in der Stadt
+//         (weiter geht es an der Promenadentür); x, z, yaw: Standpunkt im Innenraum (fehlt an Bord des eigenen Schiffs im Hangar)
+//   land: auf einem Planeten gelandet. ship: Lage des Schiffs, rover: Lage des Rovers, foot: Standpunkt zu Fuß (fehlt: im Rover; 'ship': an Bord)
+export type PlayerAt =
+  | { k: 'st'; id: string; base?: boolean; city?: boolean; x?: number; z?: number; yaw?: number }
+  | { k: 'land'; ship: { x: number; y: number; z: number; yaw: number }; rover: { x: number; z: number; yaw: number }; foot?: { x: number; z: number; yaw: number } | 'ship' };
 export type Tool = 'guns' | 'laser' | 'charge';
 export interface Contract { id: string; station: string; sector: string; stName: string; item: ItemId; amount: number; reward: number; trust?: boolean }
 export interface ShipRec {
@@ -100,13 +108,15 @@ export const cargoUsed = () => ITEM_IDS.reduce((a, k) => a + P.cargo[k], 0);
 // Ohne Konto ein lokaler Speicherplatz; mit Pilotenkonto ein eigener Platz je Konto, der zusätzlich auf den Server geht
 const SAVE_KEY = 'lf_save_v2';
 let saveKey = SAVE_KEY;
-export const saveHooks = { saved: (_p: Player) => {} };
+// where: Standort zu Fuß im Augenblick des Speicherns (main.ts); null = im Schiff, undefined = unverändert lassen (Hauptmenü)
+export const saveHooks = { saved: (_p: Player) => {}, where: (): PlayerAt | null | undefined => undefined };
 export function setSaveSlot(account: string | null) { saveKey = account ? SAVE_KEY + '@' + account.toLowerCase() : SAVE_KEY; }
 export const onAccountSlot = () => saveKey !== SAVE_KEY;
 export function hasSave() { try { return !!localStorage.getItem(saveKey); } catch (e) { return false; } }
 export function saveGame() {
   if (!P.name) return;
   P.savedAt = Date.now();
+  try { const at = saveHooks.where(); if (at) P.at = at; else if (at === null) delete P.at; } catch (e) { /* Standort bleibt, wie er war */ }
   try { localStorage.setItem(saveKey, JSON.stringify(P)); } catch (e) { /* ignorieren */ }
   saveHooks.saved(P);
 }

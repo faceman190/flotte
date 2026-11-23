@@ -84,17 +84,17 @@ export function leaveShipOnFoot() {
   place(S.x + bx * (r * 0.7 + 3), S.z + bz * (r * 0.7 + 3), S.yaw + Math.PI);
 }
 // Planetenbasis: auf dem Landefeld landen und gleich zu Fuß aussteigen
-export function landAtBase(st: Station) {
+export function landAtBase(st: Station, quiet = false) {      // quiet: beim Laden eines Spielstands (main.ts, resumeAt)
   const p = basePad(st); if (!p) return false;
   const px = P.x, pz = P.z; P.x = p.x; P.z = p.z;
-  if (!landShip()) { P.x = px; P.z = pz; return false; }
+  if (!landShip(quiet)) { P.x = px; P.z = pz; return false; }
   const r = stats().radius;
   let ax = p.x - st.x, az = p.z - st.z; const L = Math.hypot(ax, az) || 1; ax /= L; az /= L;   // vom Gebäude weg
   ROVER.ship = { x: p.x, y: p.y + r * 0.55, z: p.z, yaw: Math.atan2(-ax, -az) };
   const off = Math.max(p.hu, p.hv) + 6;
   ROVER.x = p.x + ax * off; ROVER.z = p.z + az * off; ROVER.y = terrainAt(ROVER.x, ROVER.z); ROVER.yaw = ROVER.ship.yaw;
   place(p.x - ax * (r * 0.8 + 2.5), p.z - az * (r * 0.8 + 2.5), Math.atan2(ax, az));   // zwischen Schiff und Tür, Blick zur Basis
-  radio('SYSTEM', `Auf dem Landefeld von ${st.name} gelandet. Zu Fuß zum Eingang.`);
+  if (!quiet) radio('SYSTEM', `Auf dem Landefeld von ${st.name} gelandet. Zu Fuß zum Eingang.`);
   return true;
 }
 // aus der Basis hinaus: vor der Tür, Blick nach draußen

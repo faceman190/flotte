@@ -534,9 +534,10 @@ export const ROVER = {
 };
 export const roverLoad = () => ITEM_IDS.reduce((a, k) => a + (P.rover?.[k] || 0), 0);
 
-export function landShip() {
-  const li = landInfo();
-  if (!li || !li.ok) { if (li) radio('SYSTEM', li.text + '.'); return false; }
+// quiet: beim Laden eines Spielstands (main.ts, resumeAt) – ohne Prüfung der Fluglage, ohne Staub, Ton und Funk
+export function landShip(quiet = false) {
+  const li = quiet ? null : landInfo();
+  if (!quiet && (!li || !li.ok)) { if (li) radio('SYSTEM', li.text + '.'); return false; }
   const r = stats().radius;
   ROVER.ship = { x: P.x, y: heightAt(P.x, P.z) + r * 0.55, z: P.z, yaw: P.yaw };
   P.vx = P.vy = P.vz = 0; P.pitch = 0;
@@ -549,10 +550,21 @@ export function landShip() {
   ROVER.y = heightAt(ROVER.x, ROVER.z);
   ROVER.active = true;
   m.head.intensity = 0;
+  if (quiet) return true;
   burst(ROVER.x, ROVER.y + 1, ROVER.z, '#4a4238', 30, 14, 1.0);
   snd(180, 0.6, 'sawtooth', 0.04, -80);
   radio('SYSTEM', 'Gelandet. Rover ausgesetzt: WASD fahren, Klick halten zum Bohren, [E] am Schiff einsteigen.');
   return true;
+}
+
+// Spielstand auf dem Planeten geladen (main.ts, resumeAt): Schiff und Rover stehen wieder, wo sie beim Speichern standen
+export function relandShip(ship: { x: number; y: number; z: number; yaw: number }, rover: { x: number; z: number; yaw: number }) {
+  P.x = ship.x; P.y = ship.y; P.z = ship.z; P.yaw = ship.yaw;
+  landShip(true);
+  ROVER.ship = { ...ship };
+  if (isFinite(rover.x) && isFinite(rover.z) && Math.abs(rover.x) < SURF.limit && Math.abs(rover.z) < SURF.limit && !liquidAt(rover.x, rover.z)) {
+    ROVER.x = rover.x; ROVER.z = rover.z; ROVER.yaw = rover.yaw || 0; ROVER.y = heightAt(ROVER.x, ROVER.z);
+  }
 }
 
 // Roverladung in den Frachtraum umladen (beim Abheben und beim Betreten des Schiffs zu Fuß)

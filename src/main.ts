@@ -12,7 +12,7 @@ import { perfFrameStart, perfFrameEnd, perfHooks } from './core/perf';
 import { onKey, centerMouse, releaseAll, keys, look, steer } from './core/input';
 import { ambience, preloadSfx, outside, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode, sfx, sfxHeld, loopVol, powerUp } from './core/audio';
 import { rand, clamp, $ } from './core/util';
-import { P, G, settings, loadSettings, saveSettings, newPlayer, setPlayer, loadGame, saveGame, stats, retireNote, type Player, type Tool } from './game/state';
+import { P, G, settings, loadSettings, saveSettings, newPlayer, setPlayer, loadGame, saveGame, saveHooks, stats, retireNote, type Player, type PlayerAt, type Tool } from './game/state';
 import { world, buildSector, stationById, gateTo, updateAsteroids } from './game/world';
 import { initFerrox, updateSpawning, updateEnemies, updateProjectiles, updateStationDefense } from './game/combat';
 import { initTraffic, updateTraffic, initAllies, updateAllies } from './game/npc';
@@ -31,10 +31,10 @@ import { START, leaveToBlack, startBusy, bootLog, bootReady, openCover, settled,
 import type { IntroEnd } from './game/intro';
 import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
-import { startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
+import { startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
-import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, ROVER, SURF } from './game/surface';
+import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, ROVER, SURF } from './game/surface';
 import { PLANETS, PTYPE } from './data/planets';
 import { d3 } from './core/util';
 import { openBand, closeBand, drawBand, bandHooks } from './ui/band';
@@ -164,13 +164,80 @@ function introScene(id: string) {
   initWeltLeben();
   SHIP.g.visible = false;
 }
+// ---------- Standort zu Fuß im Spielstand (seit 2026-11-23) ----------
+// Vorher begann „Weiterspielen“ immer im Cockpit: vor der Station, in der man zu Fuß war, oder über dem Landeplatz. Jetzt merkt sich jeder
+// Spielstand, wo der Pilot zu Fuß war (P.at, state.ts PlayerAt), und setzt ihn dort wieder ab: in der Station oder Basis am selben Standpunkt,
+// auf dem Planeten neben Schiff und Rover. Wer im All flog, beginnt vor der nächsten Station des Sektors (ohne Station: am gespeicherten Ort).
+let pendingAt: PlayerAt | null = null;      // solange ein Spielstand geladen wird: sein Standort (ein Speichern mittendrin soll ihn nicht löschen)
+const r2 = (n: number) => Math.round(n * 100) / 100;
+function whereAmI(): PlayerAt | null | undefined {
+  if (pendingAt) return pendingAt;
+  if (G.mode === 'menu' || G.mode === 'intro') return undefined;
+  if (IN.active && IN.station) return { k: 'st', id: IN.station.id, ...(G.baseWalk ? { base: true } : {}), ...(IN.ship ? {} : { x: r2(IN.x), z: r2(IN.z), yaw: r2(IN.yaw) }) };
+  if (G.cityWalk && G.dockedAt) return { k: 'st', id: G.dockedAt.id, city: true };
+  if (world.surface && (ROVER.active || FOOT.active || IN.active)) return {
+    k: 'land', ship: { x: r2(ROVER.ship.x), y: r2(ROVER.ship.y), z: r2(ROVER.ship.z), yaw: r2(ROVER.ship.yaw) }, rover: { x: r2(ROVER.x), z: r2(ROVER.z), yaw: r2(ROVER.yaw) },
+    ...(IN.active ? { foot: 'ship' as const } : FOOT.active ? { foot: { x: r2(FOOT.x), z: r2(FOOT.z), yaw: r2(FOOT.yaw) } } : {}),
+  };
+  return null;
+}
+saveHooks.where = whereAmI;
+// In der Station oder Basis absetzen. false: geht dort nicht (kein Landefeld) – dann bleibt es beim Flug.
+function resumeStation(st: Station, at: Extract<PlayerAt, { k: 'st' }>) {
+  const base = !!at.base && !!world.surface;
+  if (base && !landAtBase(st, true)) return false;
+  P.vx = P.vy = P.vz = 0; G.heat = 0; G.overheat = false;
+  footOff(); if (base) ROVER.active = false;
+  G.dockedAt = st; G.baseWalk = base;
+  $('hud').classList.add('hidden'); releaseAll();
+  enterStanding(st, base ? true : at.city && (st.def as any).city ? 'city' : false, at);
+  return IN.active;
+}
+// Auf dem Planeten neben dem gelandeten Schiff absetzen: zu Fuß, im Rover oder (wer an Bord war) hinter der Rampe
+function resumeLanded(land: Extract<PlayerAt, { k: 'land' }>) {
+  relandShip(land.ship, land.rover);
+  const f = land.foot;
+  if (f === 'ship') leaveShipOnFoot();
+  else if (f && isFinite(f.x) && isFinite(f.z) && Math.abs(f.x) < SURF.limit && Math.abs(f.z) < SURF.limit) footAt(f.x, f.z, f.yaw || 0);
+  else footOff();
+  G.mode = 'rover'; resetRoverCamera(); releaseAll();
+}
+// Im All: vor der nächsten Station des Sektors, mit stehendem Schiff
+function resumeNearStation() {
+  let best: Station | null = null, bd = Infinity;
+  for (const s of world.stations) { const d = Math.hypot(s.x - P.x, s.y - P.y, s.z - P.z); if (d < bd) { bd = d; best = s; } }
+  if (!best) return;
+  const L = best.launch, r = stats().radius;
+  placePlayer(L.x - Math.sin(L.yaw) * r * 2, L.y, L.z - Math.cos(L.yaw) * r * 2, L.yaw, 0);
+}
+function resumeAt(at: PlayerAt | null) {
+  const find = (id: string) => world.stations.find(s => s.id === id) || null;
+  const ok = isFinite(P.x) && isFinite(P.y) && isFinite(P.z) && SECTOR[P.sector];
+  if (!ok) { P.sector = P.home.sector; enterSector(P.sector, { station: P.home.station }); return false; }
+  if (P.surface && PLANETS[P.sector]) {
+    const land = at?.k === 'land' && [at.ship.x, at.ship.y, at.ship.z, at.ship.yaw].every(isFinite) ? at : null;
+    enterSurface(P.sector, land ? { ...land.ship } : { x: P.x, y: P.y + 30, z: P.z, yaw: P.yaw });
+    if (land) { resumeLanded(land); return false; }
+    const st = at?.k === 'st' ? find(at.id) : null;
+    return !!st && resumeStation(st, at as Extract<PlayerAt, { k: 'st' }>);
+  }
+  const want = at?.k === 'st' && SECTOR[P.sector].stations.some(s => s.id === at.id) ? at : null;
+  enterSector(P.sector, want ? { station: want.id } : {});
+  const st = want ? find(want.id) : null;
+  if (st && resumeStation(st, want!)) return true;
+  resumeNearStation();
+  warmScene('Spiel wird geladen');      // erster Blick in den Sektor hinter der Abdeckung (continueGame)
+  return false;
+}
 function startGame(p: Player, fresh: boolean) {
   setMusicMode(fresh ? 'menu' : 'game');
   setPlayer(p);
   setShipModel(P.cls, (P.paint || 'Orange') as Paint, true);
   hideMainMenu();
   clearRadio();
-  Object.assign(G, { mode: 'play', dead: 0, shake: 0, hitMark: 0, sinceHit: 99, thrust: 0, jumpT: 0, lockT: null, dockedAt: null, saveT: 20 });
+  Object.assign(G, { mode: 'play', dead: 0, shake: 0, hitMark: 0, sinceHit: 99, thrust: 0, jumpT: 0, lockT: null, dockedAt: null, saveT: 20, baseWalk: false, cityWalk: false });
+  CITY.walk = false; footOff();
+  let inside = false;
   if (fresh) {
     // Neues Spiel: Intro, danach beginnt der Prolog zu Fuß im Hangar der Bastion
     $('hud').classList.add('hidden');
@@ -181,15 +248,13 @@ function startGame(p: Player, fresh: boolean) {
     else void openCover();
     return;
   } else {
-    const ok = isFinite(P.x) && isFinite(P.y) && isFinite(P.z) && SECTOR[P.sector];
-    if (!ok) { P.sector = P.home.sector; enterSector(P.sector, { station: P.home.station }); }
-    else if (P.surface && PLANETS[P.sector]) enterSurface(P.sector, { x: P.x, y: P.y + 30, z: P.z, yaw: P.yaw });
-    else { enterSector(P.sector, {}); warmScene('Spiel wird geladen'); }      // erster Blick in den Sektor hinter der Abdeckung (continueGame)
+    pendingAt = P.at || null;
+    try { inside = resumeAt(pendingAt); } finally { pendingAt = null; }
     if (!START.on) setTimeout(() => radio('SYSTEM', `Willkommen zurück, ${P.name}.`), 1000);      // sonst steht es im Systemstart
     if (retireNote) setTimeout(() => radio('SYSTEM', retireNote), 5500);
     resumePrologue();
   }
-  $('hud').classList.remove('hidden');
+  if (!inside) $('hud').classList.remove('hidden');      // in der Station bleibt die Fluganzeige aus (wie nach dem Andocken)
   document.body.classList.add('playing');
   centerMouse();
 }
@@ -222,14 +287,21 @@ async function continueGame() {
   if (START.on) { setMusicMode('game'); powerUp(); }
   if (!(await leaveToBlack('menu'))) return;
   const t0 = performance.now();
+  let foot = false;      // zu Fuß: die ganze Anzeige blendet weich ein, statt sich Teil für Teil einzuschalten
   try {
     const pl = p.surface ? PLANETS[p.sector] : null, sec = SECTOR[p.sector] || SECTOR[p.home?.sector] || SECTOR.heimstatt;
     const ship = (SHIPS as any)[p.cls]?.n || 'Schiff';
-    bootLog('Bordsystem', p.shipName && p.shipName.toLowerCase() !== ship.toLowerCase() ? `${ship} · ${p.shipName}` : ship, ['Reaktor', 'Lageregelung', 'Schild', 'Sensoren'],
+    // zu Fuß gespeichert (P.at): Es meldet sich der Anzug, die letzte Zeile nennt die Station oder den Planeten
+    const at = p.at && (p.at.k === 'st' || pl) ? p.at : null;
+    foot = !!at;
+    const stName = at?.k === 'st' ? (pl ? pl.base : sec.stations.find(s => s.id === at.id)?.name) || '' : '';
+    if (at) bootLog('Anzugsystem', stName || (pl ? pl.name : sec.name), ['Lebenserhaltung', 'Funk', 'Helmanzeige', 'Ortung'],
+      stName ? (pl ? `${pl.city ? 'Stadt' : 'Basis'} ${stName}` : `Station ${stName}`) : `Oberfläche ${pl!.name}`, `Willkommen zurück, ${p.name}.`);
+    else bootLog('Bordsystem', p.shipName && p.shipName.toLowerCase() !== ship.toLowerCase() ? `${ship} · ${p.shipName}` : ship, ['Reaktor', 'Lageregelung', 'Schild', 'Sensoren'],
       pl ? `Oberfläche ${pl.name}` : `Sektor ${sec.name}`, `Willkommen zurück, ${p.name}.`);
     await frames();      // die erste Zeile steht, bevor der Aufbau des Sektors das Bild kurz anhält
     warm.cover = true;
-    hudOff();
+    hudOff(foot);
     startGame(p, false);
     await settled();
     if (START.on) {
@@ -241,8 +313,8 @@ async function continueGame() {
     }
   } finally {
     warm.wait = false; warm.cover = false;
-    if (START.on) { reBanner(); hudBootStart(); }
-    hudIn(START.on ? 1750 : 0);
+    if (START.on) { reBanner(); if (!foot) hudBootStart(); }
+    hudIn(START.on ? (foot ? 1300 : 1750) : 0);
     void openCover();
   }
 }
