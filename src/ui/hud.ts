@@ -63,9 +63,22 @@ export function nextHop(): string | null {
 }
 
 // =============== Zeichnen pro Bild ===============
+// Systemstart nach „Weiterspielen“ (ui/startfx.ts): Die Teile der Anzeige schalten sich nacheinander ein – erst das Schiffsfeld, dann Radar,
+// Kompass, Fadenkreuz, zuletzt die Marken in der Welt. Gezeichnet wird wie immer; zwischen den Teilen wird das bisher Gezeichnete so weit
+// ausgedünnt (destination-out), dass am Ende jedes Teil seine eigene Deckkraft hat. Das geht auf, weil später Gezeichnetes früher einschaltet.
+let bootT0 = -1e9;
+export function hudBootStart() { bootT0 = performance.now(); }
+const BOOT = [1.75, 1.35, 0.95, 0.55, 0.2];      // Beginn in s: Marken, Fadenkreuz, Kompass, Radar, Schiffsfeld
+const bootA = (i: number) => { const k = clamp(((performance.now() - bootT0) / 1000 - BOOT[i]) / 0.45, 0, 1); return k * k * (3 - 2 * k); };
+function bootCut(i: number) {      // nach Teil i: auf das Verhältnis zur Deckkraft des nächsten Teils ausdünnen
+  const a = bootA(i), b = i + 1 < BOOT.length ? bootA(i + 1) : 1, f = b > 0 ? Math.min(1, a / b) : 0;
+  if (f >= 1) return;
+  ux.save(); ux.globalCompositeOperation = 'destination-out'; ux.globalAlpha = 1 - f; ux.fillStyle = '#000'; ux.fillRect(0, 0, view.W, view.H); ux.restore();
+}
 export function drawHUD() {
   const W = view.W, H = view.H;
   ux.clearRect(0, 0, W, H);
+  const booting = performance.now() - bootT0 < 2600;
   labelSlots = [];
   if (!world.def || (G.mode !== 'play' && G.mode !== 'jump')) return;
   ux.textAlign = 'center';
@@ -203,6 +216,7 @@ export function drawHUD() {
     }
     ux.globalAlpha = 1; ux.textAlign = 'center';
   }
+  if (booting) bootCut(0);
   // Fadenkreuz
   if (!G.dead && G.mode === 'play') {
     const f = fwd(), a = proj(P.x + f.x * 500, P.y + f.y * 500, P.z + f.z * 500);
@@ -247,9 +261,13 @@ export function drawHUD() {
       ux.fillStyle = 'rgba(255,255,255,.85)'; ux.save(); ux.translate(mouse.x, mouse.y); ux.rotate(Math.PI / 4); ux.fillRect(-3.5, -3.5, 7, 7); ux.restore();
     }
   }
+  if (booting) bootCut(1);
   drawCompass();
+  if (booting) bootCut(2);
   drawRadar();
+  if (booting) bootCut(3);
   drawShipPanel();
+  if (booting) bootCut(4);
   if (G.dead > 0) {
     ux.fillStyle = 'rgba(0,0,0,.35)'; ux.fillRect(0, 0, W, H);
     ux.textAlign = 'center'; ux.fillStyle = '#ff6b5b'; ux.font = '700 30px "Share Tech Mono",Consolas,monospace'; ux.fillText('JÄGER ZERSTÖRT', W / 2, H / 2 - 10);
@@ -630,9 +648,12 @@ function updateObjectives() {
   $('objL').innerHTML = lines.map(([t, done, sub]) => `<div class="obj${done ? ' done' : ''}${sub ? ' sub' : ''}">${sub ? '' : '<i></i>'}<span>${t}</span></div>`).join('');
 }
 
-let bannerTimer = 0;
+let bannerTimer = 0, bannerLast: [string, string, string] | null = null;
+/** den letzten Schriftzug noch einmal zeigen (er lief hinter der Abdeckung des Spielstarts ab, ui/startfx.ts) */
+export function reBanner() { if (bannerLast) showBanner(...bannerLast); }
 export function showBanner(title: string, sub: string, col = '#ffb347') {
   const b = $('banner');
+  bannerLast = [title, sub, col];
   $('bannerT').textContent = title;
   $('bannerT').style.color = col;
   $('bannerS').textContent = sub;

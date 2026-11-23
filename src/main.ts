@@ -10,7 +10,7 @@ import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience'
 import { ux } from './core/engine';
 import { perfFrameStart, perfFrameEnd, perfHooks } from './core/perf';
 import { onKey, centerMouse, releaseAll, keys, look, steer } from './core/input';
-import { ambience, preloadSfx, outside, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode, sfx, sfxHeld, loopVol } from './core/audio';
+import { ambience, preloadSfx, outside, snd, laserSound, boosterSound, duckMusic, audioDebug, setMusicMode, sfx, sfxHeld, loopVol, powerUp } from './core/audio';
 import { rand, clamp, $ } from './core/util';
 import { P, G, settings, loadSettings, saveSettings, newPlayer, setPlayer, loadGame, saveGame, stats, retireNote, type Player, type Tool } from './game/state';
 import { world, buildSector, stationById, gateTo, updateAsteroids } from './game/world';
@@ -26,7 +26,9 @@ import { SHIP, placePlayer, updatePlayer, updatePickups, syncShip, nearDock, gat
 import { updateParticles, syncParticles, puff } from './game/fx';
 import { syncBolts } from './game/bolts';
 import { scan, updateScan, hideMiningFx, resetDrones } from './game/mining';
-import { drawHUD, updatePanels, showBanner, nextHop } from './ui/hud';
+import { drawHUD, updatePanels, showBanner, nextHop, hudBootStart, reBanner } from './ui/hud';
+import { START, leaveToBlack, startBusy, bootLog, bootReady, openCover, settled, hudOff, hudIn, wait, frames } from './ui/startfx';
+import type { IntroEnd } from './game/intro';
 import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
 import { startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
@@ -45,7 +47,7 @@ const openMap = () => openBand('karte'), closeMap = closeBand;
 import { menuHooks, showMainMenu, hideMainMenu, showPause, hidePause, applySettings, pauseSubOpen, closePauseSub } from './ui/menus';
 import { SECTOR, FACTION } from './data/galaxy';
 import { loadShipModels, setGear, setDoors, RAMP, type Paint } from './models/gltfShips';
-import { hasInterior } from './data/ships';
+import { hasInterior, SHIPS } from './data/ships';
 import { loadRockModel } from './game/world';
 import { updateFarView } from './game/farview';
 import { orteKey } from './game/orte';
@@ -173,28 +175,76 @@ function startGame(p: Player, fresh: boolean) {
     // Neues Spiel: Intro, danach beginnt der Prolog zu Fuß im Hangar der Bastion
     $('hud').classList.add('hidden');
     document.body.classList.remove('playing');
-    playIntro(introScene, () => {
-      setMusicMode('game');
-      enterSector('heimstatt', { station: 'bastion' });
-      const b = stationById('bastion');
-      if (b) openDock(b);
-      startPrologue();
-      saveGame();
-    });
+    playIntro(introScene, end => { void introDone(end); });
+    // Die erste Einstellung hinter der Abdeckung vorwärmen (sonst stockt ihr erstes Bild), dann geht das Bild aus Schwarz auf
+    if (START.on) { warm.cover = true; warmScene('', null, 6000, true).then(() => { if (G.mode === 'intro') warm.cover = false; void openCover(); }); }
+    else void openCover();
     return;
   } else {
     const ok = isFinite(P.x) && isFinite(P.y) && isFinite(P.z) && SECTOR[P.sector];
     if (!ok) { P.sector = P.home.sector; enterSector(P.sector, { station: P.home.station }); }
     else if (P.surface && PLANETS[P.sector]) enterSurface(P.sector, { x: P.x, y: P.y + 30, z: P.z, yaw: P.yaw });
-    else { enterSector(P.sector, {}); warmScene('Spiel wird geladen'); }      // erster Blick in den Sektor hinter einer kurzen Blende
-    setTimeout(() => radio('SYSTEM', `Willkommen zurück, ${P.name}.`), 1000);
-    if (retireNote) setTimeout(() => radio('SYSTEM', retireNote), 3500);
+    else { enterSector(P.sector, {}); warmScene('Spiel wird geladen'); }      // erster Blick in den Sektor hinter der Abdeckung (continueGame)
+    if (!START.on) setTimeout(() => radio('SYSTEM', `Willkommen zurück, ${P.name}.`), 1000);      // sonst steht es im Systemstart
+    if (retireNote) setTimeout(() => radio('SYSTEM', retireNote), 5500);
     resumePrologue();
   }
   $('hud').classList.remove('hidden');
   document.body.classList.add('playing');
   centerMouse();
-  snd(300, 0.6, 'sawtooth', 0.05, 500);
+}
+// Ende des Intros: Der Hangar lädt hinter dem Schwarz, auf dem die letzte Tafel steht. Erst dann beginnt der Prolog, die Tafel verschwindet
+// und das Bild geht langsam auf; die Anzeige kommt kurz danach. Vorher: Schnitt, schwarzes Ladebild mit dem Wort „Andocken“, Schnitt.
+async function introDone(end: IntroEnd) {
+  warm.cover = true;
+  hudOff(true);
+  try {
+    setMusicMode('game');
+    enterSector('heimstatt', { station: 'bastion' });
+    const b = stationById('bastion');
+    if (b) openDock(b);
+    await settled();
+    warm.wait = START.on;      // das Spiel steht, bis das Bild aufgeht
+    startPrologue();
+    saveGame();
+    if (START.on) await wait(end.card());
+  } finally {
+    warm.wait = false; warm.cover = false;
+    end.open(START.on ? 2400 : 0);
+    hudIn(START.on ? 1500 : 0);
+  }
+}
+// Weiterspielen: Menü gleitet weg, Schwarz, Systemstart. Die letzte Zeile wartet wirklich auf das Laden des Sektors; dann geht das Bild auf
+// und die Anzeige schaltet sich Teil für Teil ein. Vorher: Schnitt, „Spiel wird geladen“, alles auf einmal da.
+async function continueGame() {
+  const p = loadGame();
+  if (!p || startBusy()) return;
+  if (START.on) { setMusicMode('game'); powerUp(); }
+  if (!(await leaveToBlack('menu'))) return;
+  const t0 = performance.now();
+  try {
+    const pl = p.surface ? PLANETS[p.sector] : null, sec = SECTOR[p.sector] || SECTOR[p.home?.sector] || SECTOR.heimstatt;
+    const ship = (SHIPS as any)[p.cls]?.n || 'Schiff';
+    bootLog('Bordsystem', p.shipName && p.shipName.toLowerCase() !== ship.toLowerCase() ? `${ship} · ${p.shipName}` : ship, ['Reaktor', 'Lageregelung', 'Schild', 'Sensoren'],
+      pl ? `Oberfläche ${pl.name}` : `Sektor ${sec.name}`, `Willkommen zurück, ${p.name}.`);
+    await frames();      // die erste Zeile steht, bevor der Aufbau des Sektors das Bild kurz anhält
+    warm.cover = true;
+    hudOff();
+    startGame(p, false);
+    await settled();
+    if (START.on) {
+      warm.wait = true;      // das Spiel steht, bis das Bild aufgeht
+      const rest = 1400 - (performance.now() - t0);
+      if (rest > 0) await wait(rest);
+      bootReady();
+      await wait(380);
+    }
+  } finally {
+    warm.wait = false; warm.cover = false;
+    if (START.on) { reBanner(); hudBootStart(); }
+    hudIn(START.on ? 1750 : 0);
+    void openCover();
+  }
 }
 function toMenu() {
   setMusicMode('menu');
@@ -222,7 +272,8 @@ $('pSkip').onclick = () => { skipPrologue(); resume(); };
 storyHooks.banner = (t, s, c) => showBanner(t, s, c);
 crewHooks.busy = () => dialogBusy() || sceneActive();   // Stimmen der Crew schweigen, solange die Geschichte spricht
 menuHooks.newGame = (name, look) => { const p = newPlayer(NET.account || name); p.look = { ...look }; startGame(p, true); };   // mit Konto heißt der Pilot wie das Konto; Aussehen aus der Charaktererstellung
-menuHooks.continueGame = () => { const p = loadGame(); if (p) startGame(p, false); };
+// ohne Übergänge (Prüfskripte, START.on = false): im selben Augenblick wie früher, nichts wird abgewartet
+menuHooks.continueGame = () => { if (!START.on) { const p = loadGame(); if (p) startGame(p, false); return; } void continueGame(); };
 menuHooks.resume = resume;
 menuHooks.quit = () => { saveGame(); toMenu(); };
 menuHooks.openMap = openMap;
@@ -656,7 +707,7 @@ function loop(now: number, manual = false) {
   last = now;
   perfFrameStart();
   // Vorwärmen (engine.ts, warmScene): Solange die Shader eines neuen Innenraums übersetzt werden, steht das Spiel hinter der Blende
-  if (warm.hold && (!manual || warm.strict)) { perfFrameEnd(); return; }
+  if ((warm.hold || warm.wait) && (!manual || warm.strict)) { perfFrameEnd(); return; }
   simulate(dt);
   if (G.mode === 'scene' && IN.active) updateRoomLife(dt);   // in Kinoszenen steht die Welt, die Figuren im Raum sprechen aber weiter
   hook('Vorspann', () => updateIntro(dt));
@@ -758,7 +809,7 @@ perfHooks.where = () => {
 };
 
 // Nur im Entwicklungsmodus: Zugriff für Tests über die Browser-Konsole
-if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterShip, SHIP, enterSector, startJump, openDock, undock, openMap, closeMap, gateTo, stationById, placePlayer, audioDebug, sunDir, IN, showMenu, closeMenu, interact, enterSurface, startEntry, ROVER, sim: (sec: number) => { for (let i = 0; i < sec * 60; i++) simulate(1 / 60); },
+if ((import.meta as any).env?.DEV) (window as any).__lf = { START, P, G, world, enterShip, SHIP, enterSector, startJump, openDock, undock, openMap, closeMap, gateTo, stationById, placePlayer, audioDebug, sunDir, IN, showMenu, closeMenu, interact, enterSurface, startEntry, ROVER, sim: (sec: number) => { for (let i = 0; i < sec * 60; i++) simulate(1 / 60); },
   // ganze Bilder von Hand laufen lassen (wenn der Browser die Seite im Hintergrund anhält)
   tick: (sec: number, ms = 50) => { for (let i = 0, n = Math.round(sec * 1000 / ms); i < n; i++) loop(last + ms, true); } };   // ms: Bilddauer (Prüfskripte messen auch mit 60 Bildern je Sekunde)
 

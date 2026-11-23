@@ -233,7 +233,7 @@ window.__orch = async (tests) => {
       if (t.snap) { const get = w.Storage.prototype.getItem; w.Storage.prototype.getItem = function (k) { return /save/i.test(k) ? t.snap : get.call(this, k); }; }
       w.name = window.name; w.eval('(0, eval)(window.name)');
       await w.__setup(); await w.__bot({ choice: t.choice, stop: t.stop ? new w.Function('s', 'B', t.stop) : null });
-      if (t.snap) { w.document.getElementById('mContinue').click(); w.T.stub(0.3); out.log.push('LADEN: ' + JSON.stringify(w.T.ST.P.story).slice(0, 160) + ' · mode ' + w.__lf.G.mode + ' · Sektor ' + w.T.ST.P.sector + (w.__lf.world.surface ? ' (Oberfläche)' : '')); }
+      if (t.snap) { w.__lf.START.on = false; w.document.getElementById('mContinue').click(); w.T.stub(0.3); out.log.push('LADEN: ' + JSON.stringify(w.T.ST.P.story).slice(0, 160) + ' · mode ' + w.__lf.G.mode + ' · Sektor ' + w.T.ST.P.sector + (w.__lf.world.surface ? ' (Oberfläche)' : '')); }
       else w.B.start();
       const t0 = performance.now();
       while (!w.B.done && performance.now() - t0 < (t.ms || 60000)) { const l = await w.B.run(1500); out.log.push(...l); await pause(); }

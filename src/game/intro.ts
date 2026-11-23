@@ -31,7 +31,7 @@ const SHOTS: Shot[] = [
     path: () => { const h = world.enemies.find((e: any) => e.type === 'mother') || { x: 0, y: 0, z: 0 }; const c = V(h.x, h.y, h.z); return k => { const a = 2 + k * 0.5, d = 1100 - 350 * k; return { p: V(c.x + Math.cos(a) * d, c.y + 220 - 120 * k, c.z + Math.sin(a) * d), l: c }; }; } },
   { sector: 'heimstatt', dur: 9, text: 'Jahr 38 nach dem Riss. Ein neuer Jahrgang Piloten wird vereidigt.',
     path: () => { const b = world.stations.find(s => s.id === 'bastion') || world.stations[0], L = b.launch, fx = -Math.sin(L.yaw), fz = -Math.cos(L.yaw); return k => { const d = 900 - 700 * ease(k); return { p: V(L.x + fx * d + 40, L.y + 30 + 20 * (1 - k), L.z + fz * d), l: V(L.x - fx * 200, L.y - 10, L.z - fz * 200) }; }; } },
-  { sector: null, dur: 4.5, text: 'Du bist einer von ihnen.' },
+  { sector: null, dur: 3.6, text: 'Du bist einer von ihnen.' },      // bleibt danach stehen, bis der Hangar geladen ist (finish)
 ];
 
 // Das Halden-Tor: steht in der ersten Einstellung unversehrt mitten im späteren Trümmerfeld und zerbricht in der zweiten
@@ -76,12 +76,17 @@ function breakGate() {
   for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2, o = V(Math.cos(a), Math.sin(a), 0).applyQuaternion(q).multiplyScalar(R); burst(c.x + o.x, c.y + o.y, c.z + o.z, i % 2 ? '#ffffff' : '#ffb347', 140, 260, 2.8); }
   burst(c.x, c.y, c.z, '#ffffff', 220, 420, 3);
 }
-let shot = -1, t = 0, flashed = false, path: Path | null = null, build: (id: string) => void = () => {}, onDone: () => void = () => {};
+// Ende des Intros (seit 2026-11-23): Das Schwarz bleibt stehen, der Aufrufer lädt dahinter den Hangar und lässt dann erst die letzte Tafel
+// (card, gibt die Wartezeit in ms zurück) und danach das Schwarz (open) weich verschwinden. Kein Schnitt, kein Ladebild.
+export interface IntroEnd { card: () => number; open: (ms: number) => void }
+let shot = -1, t = 0, flashed = false, path: Path | null = null, build: (id: string) => void = () => {}, onDone: (end: IntroEnd) => void = () => {};
+let ended = false;
 export const introActive = () => G.mode === 'intro';
-export function playIntro(buildSector: (id: string) => void, done: () => void) {
-  build = buildSector; onDone = done; shot = -1; flashed = false;
+export function playIntro(buildSector: (id: string) => void, done: (end: IntroEnd) => void) {
+  build = buildSector; onDone = done; shot = -1; flashed = false; ended = false;
   G.mode = 'intro';
-  $('intro').classList.remove('hidden');
+  $('intro').classList.remove('hidden', 'end');
+  ($('introBlack') as HTMLElement).style.transition = '';
   $('introBlack').style.opacity = '1';
   nextShot();
 }
@@ -96,7 +101,7 @@ function nextShot() {
   const c = $('introCard');
   c.classList.remove('show'); void (c as HTMLElement).offsetWidth;
   c.textContent = s.text; c.classList.toggle('last', !s.path);
-  setTimeout(() => c.classList.add('show'), 600);
+  { const n = shot; setTimeout(() => { if (shot === n && G.mode === 'intro') c.classList.add('show'); }, 600); }      // nicht mehr nach dem Überspringen (die Tafel stünde sonst auf dem Schwarz)
   // Erzähler (falls die Aufnahme vorhanden ist): setzt ein, wenn der Text eingeblendet ist
   { const n = shot; setTimeout(() => { if (shot === n && G.mode === 'intro') voice('intro_0' + (n + 1)); }, 700); }
 }
@@ -118,15 +123,27 @@ export function updateIntro(dt: number) {
   if (path) { const q = path(k); INTRO.pos.copy(q.p); INTRO.look.copy(q.l); }
   for (const d of debris) { d.m.position.addScaledVector(d.v, dt); d.m.rotation.x += d.r.x * dt; d.m.rotation.y += d.r.y * dt; d.m.rotation.z += d.r.z * dt; }
   s.at?.(t);
-  if (t > s.dur - 1.1) $('introCard').classList.remove('show');
+  if (t > s.dur - 1.1 && shot < SHOTS.length - 1) $('introCard').classList.remove('show');      // die letzte Tafel bleibt stehen (finish)
   if (t >= s.dur) nextShot();
 }
-export function skipIntro() { if (G.mode === 'intro') finish(); }
-function finish() {
+export function skipIntro() { if (G.mode === 'intro') finish(true); }
+function finish(skipped = false) {
+  if (ended) return;
+  ended = true;
   shot = SHOTS.length;
   stopVoice();
   clearGate();
-  $('intro').classList.add('hidden');
-  $('introCard').classList.remove('show');
-  onDone();
+  const el = $('intro'), black = $('introBlack') as HTMLElement, card = $('introCard');
+  black.style.transition = 'none'; black.style.opacity = '1';      // sofort schwarz (beim Überspringen mitten aus einer Fahrt)
+  el.classList.add('end');                                         // Balken und Hinweis weg, Klicks gehen durch
+  const shown = !skipped && card.classList.contains('show');
+  if (!shown) { card.classList.remove('show'); card.textContent = ''; }
+  onDone({
+    card: () => { card.classList.remove('show'); return shown ? 950 : 150; },
+    open: (ms) => {
+      void black.offsetWidth;
+      black.style.transition = `opacity ${ms}ms ease-out`; black.style.opacity = '0';
+      setTimeout(() => { if (G.mode !== 'intro') { el.classList.add('hidden'); el.classList.remove('end'); black.style.transition = ''; } }, ms + 80);
+    },
+  });
 }

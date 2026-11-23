@@ -185,7 +185,9 @@ export function compileFor(root: THREE.Object3D, target: THREE.Scene | null = nu
 // liegt eine schwarze Blende, die nach dem ersten fertigen Bild wieder aufgeht; dauert es länger als eine halbe Sekunde, zeigt sie ein Wort.
 // Sind die Shader fertig, lädt ein Bild ohne Sichtkegelprüfung noch alle Netze und Bilder hoch (primeFrame), ebenfalls hinter der Blende.
 // Von Hand gerechnete Bilder (Tests, lf.tick) laufen weiter, außer warm.strict ist gesetzt.
-export const warm = { hold: false, strict: false, ms: 0, count: 0, parts: [0, 0, 0] };      // parts: Vorarbeit, Übersetzen, erstes Bild (ms, zuletzt)
+// cover: Das Bild ist schon abgedeckt (Übergang aus dem Hauptmenü, ui/startfx.ts) – dann ohne eigene Blende und ohne Ladewort.
+// wait: Das Spiel steht weiter (wie hold), bis die Abdeckung aufgeht. last: das zuletzt begonnene Vorwärmen.
+export const warm = { hold: false, strict: false, ms: 0, count: 0, parts: [0, 0, 0], cover: false, wait: false, last: null as Promise<void> | null };      // parts: Vorarbeit, Übersetzen, erstes Bild (ms, zuletzt)
 let warmEl: HTMLElement | null = null, warmN = 0;
 // Ein Bild ohne Sichtkegelprüfung zeichnen: lädt die Netze und Bilder von allem, was sichtbar geschaltet ist, in den Grafikspeicher.
 // Sonst geschähe das in dem Bild, in dem ein Teil zum ersten Mal vor die Kamera kommt (am Ende der Landung: das ganze Deck, 0,6 s).
@@ -198,9 +200,9 @@ function primeFrame() {
 export function warmScene(label: string, prime: null | (() => void) = null, maxMs = 9000, quiet = false): Promise<void> {
   const n = ++warmN, t0 = performance.now();
   if (!warmEl) { warmEl = document.createElement('div'); warmEl.id = 'warm'; warmEl.appendChild(document.createElement('span')); document.body.appendChild(warmEl); }
-  warmEl.firstElementChild!.textContent = label; if (!quiet) warmEl.classList.add('on');
+  warmEl.firstElementChild!.textContent = label; if (!quiet && !warm.cover) warmEl.classList.add('on');
   warm.hold = true;
-  return new Promise<void>(res => {
+  return (warm.last = new Promise<void>(res => {
     let begun = false, fin = false, tb = t0, t1 = t0;
     const done = () => {
       if (fin) return; fin = true;
@@ -226,7 +228,7 @@ export function warmScene(label: string, prime: null | (() => void) = null, maxM
       compileFor(scene).then(done); setTimeout(done, maxMs);
     };
     requestAnimationFrame(() => requestAnimationFrame(begin)); setTimeout(begin, 150);
-  });
+  }));
 }
 export function render() {
   if (prePass.fn) prePass.fn();

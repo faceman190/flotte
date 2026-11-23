@@ -1,4 +1,5 @@
 import { $ } from '../core/util';
+import { leaveToBlack, startBusy } from './startfx';
 import { LOOK_DEFAULT, type Look } from '../game/mineArt';
 import { lookPicker, stageTools } from './lookUi';
 import { showFig, hideFig } from './figPreview';
@@ -41,7 +42,7 @@ export function refreshContinue() { ($('mContinue') as HTMLButtonElement).disabl
 function openSub(id: string, from: string) { click(); returnTo = from; hide(from); show(id); }
 function closeSub(id: string) { click(); hide(id); if (returnTo) show(returnTo); returnTo = null; }
 
-$('mContinue').onclick = () => { click(); menuHooks.continueGame(); };
+$('mContinue').onclick = () => { if (startBusy()) return; click(); menuHooks.continueGame(); };
 // Neuer Pilot (seit 2026-11-20 mit Charaktererstellung): Rufzeichen, Gesicht, Uniform; drehbare Figur links (figPreview.ts)
 const ngLook: Look = { ...LOOK_DEFAULT };
 const ngReset = stageTools('newGame');
@@ -64,8 +65,10 @@ $('mNew').onclick = () => {
 $('ngBack').onclick = () => { click(); hideFig(); hide('newGame'); show('menu'); };
 const goNew = () => {
   const name = (($('ngName') as HTMLInputElement).value || '').trim().slice(0, 16) || 'Falke';
-  hideFig(); hide('newGame');
-  menuHooks.newGame(name, { ...ngLook });
+  if (startBusy()) return;
+  sfx('ui_confirm', 0.5, 1, () => snd(600, 0.05, 'sine', 0.03, 100));
+  // Personalakte blendet aus, das Bild wird schwarz, dann beginnt das Intro (ui/startfx.ts)
+  leaveToBlack('newGame').then(ok => { if (!ok) return; hideFig(); menuHooks.newGame(name, { ...ngLook }); });
 };
 $('ngGo').onclick = goNew;
 $('ngName').addEventListener('keydown', e => { if ((e as KeyboardEvent).key === 'Enter') goNew(); });

@@ -18,6 +18,27 @@ export function snd(f: number, d: number, type: OscillatorType = 'square', v = 0
   } catch (e) { /* Audio nicht verfügbar */ }
 }
 
+// Tiefer Anlaufton beim Weiterspielen (Übergang aus dem Hauptmenü, ui/startfx.ts): zwei leicht verstimmte Sägezähne und ein Sinus, die
+// eine Oktave steigen, hinter einem Tiefpass, der sich öffnet. Schwillt an und klingt aus.
+export function powerUp(d = 2.6, v = 0.05) {
+  if (audio.volume <= 0) return;
+  try {
+    const ac = ctx(), t = ac.currentTime, out = ac.createGain(), lp = ac.createBiquadFilter();
+    lp.type = 'lowpass'; lp.Q.value = 0.7;
+    lp.frequency.setValueAtTime(80, t); lp.frequency.exponentialRampToValueAtTime(700, t + d * 0.85);
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(v * audio.volume * 1.4, t + d * 0.6);
+    out.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    const parts: [OscillatorType, number, number, number][] = [['sawtooth', 38, 76, 0.5], ['sawtooth', 38.5, 77.4, 0.5], ['sine', 42, 63, 1]];
+    for (const [type, f0, f1, g] of parts) {
+      const o = ac.createOscillator(), gg = ac.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + d);
+      gg.gain.value = g; o.connect(gg).connect(lp); o.start(t); o.stop(t + d + 0.05);
+    }
+    lp.connect(out).connect(ac.destination);
+  } catch (e) { /* Audio nicht verfügbar */ }
+}
+
 // ---------------- Hintergrundmusik ----------------
 // Eigene Dateien in music/ (werden gestreamt, nicht vorab geladen). Im Hauptmenü läuft das Menüstück in Schleife,
 // im Spiel wechseln sich die beiden Ambient-Stücke ab. Beim Wechsel wird weich übergeblendet.
@@ -51,7 +72,7 @@ export function setMusicMode(m: MusicMode) {
   const start = () => (m === 'menu' ? playTrack(TRACKS.menu[0], true) : playTrack(TRACKS.game[gameIdx], false));
   if (!music || music.paused) { start(); return; }
   clearInterval(fadeTimer);
-  fadeTimer = window.setInterval(() => { fade = Math.max(0, fade - 0.08); applyMusicVolume(); if (fade <= 0) { clearInterval(fadeTimer); start(); } }, 60);   // ca. 0,8 s ausblenden
+  fadeTimer = window.setInterval(() => { fade = Math.max(0, fade - 0.045); applyMusicVolume(); if (fade <= 0) { clearInterval(fadeTimer); start(); } }, 60);   // ca. 1,3 s ausblenden
 }
 function startMusic() {
   if (audio.music <= 0) return;

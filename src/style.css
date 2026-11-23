@@ -93,6 +93,35 @@ kbd{display:inline-block;min-width:22px;text-align:center;background:rgba(95,208
 @keyframes pulse{0%,100%{box-shadow:0 0 0 rgba(95,208,255,0),0 10px 30px rgba(0,0,0,.45)}50%{box-shadow:0 0 18px rgba(95,208,255,.35),0 10px 30px rgba(0,0,0,.45)}}
 #speed{position:fixed;bottom:8px;left:50%;transform:translateX(-50%);font-size:13px;color:var(--mut);pointer-events:none;font-family:var(--mono)}
 #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none}
+/* Übergang vom Hauptmenü ins Spiel (ui/startfx.ts): Menü gleitet weg, Abdeckung auf Schwarz, beim Weiterspielen mit Systemstart */
+#menu.leaving{pointer-events:none;opacity:0;transition:opacity .3s ease-in .2s}
+#menu.leaving .mbtn{transform:translateX(-52px);opacity:0;transition:transform .3s ease-in,opacity .3s ease-in}
+#menu.leaving .mbtn:nth-child(2){transition-delay:.035s}#menu.leaving .mbtn:nth-child(3){transition-delay:.07s}#menu.leaving .mbtn:nth-child(4){transition-delay:.105s}
+#menu.leaving .mbtn:nth-child(5){transition-delay:.14s}#menu.leaving .mbtn:nth-child(6){transition-delay:.175s}
+#menu.leaving .hint,#menu.leaving .ver,#menu.leaving .gpuHint{opacity:0;transition:opacity .25s}
+.ccOv.leaving{pointer-events:none;opacity:0;transition:opacity .42s ease-in}
+.ccOv.leaving .ccWin{transform:scale(.985);transition:transform .42s ease-in}
+#cover{position:fixed;inset:0;z-index:155;background:#000;opacity:0;pointer-events:none;transition:opacity .52s ease-in;display:flex;align-items:center;padding:0 7vw}
+#cover.on{opacity:1;pointer-events:auto}
+#cover.open{transition:opacity 1.1s ease-out}
+#coverLog{width:min(clamp(440px,34vw,620px),86vw);font:500 clamp(13px,1.05vw,17px)/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:#7f93a3;transition:opacity .3s}
+#cover.open #coverLog{opacity:0}
+#coverLog .h{font:700 clamp(15px,1.25vw,21px)/1 var(--ui);letter-spacing:.34em;color:#ffb347;margin-bottom:8px}
+#coverLog .s{color:#c9d6df;letter-spacing:.2em;padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid rgba(143,163,179,.25)}
+#coverLog .r{display:flex;justify-content:space-between;gap:24px;padding:6px 0;opacity:0;animation:bootRow .28s ease-out both}
+#coverLog .r b{font-weight:500;color:#8fd18f;opacity:0;animation:bootRow .2s ease-out both}
+#coverLog .r b.busy{color:#ffb347;animation:bootBusy .9s ease-in-out infinite alternate}
+#coverLog .w{margin-top:12px;padding-top:12px;border-top:1px solid rgba(143,163,179,.25);color:#e4eef5;letter-spacing:.12em;text-transform:none;opacity:0;animation:bootRow .4s ease-out both}
+@keyframes bootRow{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+@keyframes bootBusy{from{opacity:.35}to{opacity:1}}
+/* Anzeige erst nach dem Bild: hudoff blendet die Teile aus, hudin holt sie weich herein; uioff dasselbe für die gezeichnete Anzeige */
+body.hudoff #objP,body.hudoff #ctrlP,body.hudoff #storyObj,body.hudoff #prompt,body.hudoff #dlg,body.hudoff #crPop{opacity:0!important}
+body.hudin #objP,body.hudin #ctrlP,body.hudin #storyObj,body.hudin #dlg{animation:hudIn .7s ease-out both}
+@keyframes hudIn{from{opacity:0}to{opacity:1}}
+#ui{transition:opacity .8s ease-out}
+body.uioff #ui{opacity:0;transition:none}
+#intro.end{pointer-events:none}
+#intro.end .ibar,#intro.end .sHint{display:none}
 /* Blende beim Vorwärmen eines Innenraums (engine.ts, warmScene) */
 #warm{position:fixed;inset:0;z-index:150;background:#000;opacity:0;pointer-events:none;transition:opacity .4s ease-out;display:flex;align-items:flex-end;justify-content:center;padding-bottom:13vh}
 #warm.on{opacity:1;transition:none}
