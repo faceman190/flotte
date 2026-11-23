@@ -63,6 +63,7 @@ export interface Player {
   smgStart?: boolean;                                       // ältere Spielstände: SMG einmal in den leeren Waffenplatz gelegt (loadGame)
   akademie?: { ring?: number; schuss?: number; med: { ring: number; schuss: number } };   // Übungsgelände Heimstatt: Bestzeiten (s), Abzeichen 0–3 (src/game/akademie.ts)
   werft?: Record<string, number>;                           // Alte Werft: Bergungsgut → Zeitpunkt der Bergung (ms), kommt nach einer Weile wieder (src/game/altewerft.ts)   // je Mine: Zeitpunkt des letzten frischen Besuchs, geöffnete Kisten, Schalter
+  gedenk?: number;                                          // Gedenkboje im Sonnenfeld schon besucht (src/game/gedenkboje.ts)
 }
 export type Tool = 'guns' | 'laser' | 'charge';
 export interface Contract { id: string; station: string; sector: string; stName: string; item: ItemId; amount: number; reward: number; trust?: boolean }

@@ -5,19 +5,26 @@ import { world, sectorHooks } from './world';
 import { ORTE } from './orte';
 import { G } from './state';
 import { mergeGeos } from './akademie';
+import { bojeTeile } from '../models/bojen';
 
 // =====================================================================================
-// Leitbojen in Heimstatt (Phase 2, docs/heimstatt.md): kleine Bojen alle 2 km entlang der Verkehrswege von der Bastion zu den Stationen,
+// Leitbojen in Heimstatt (Phase 2, docs/heimstatt.md): Bojen alle 2 km entlang der Verkehrswege von der Bastion zu den Stationen,
 // den Toren und den Orten (Übungsgelände, Werft), jeweils 220 m rechts neben der Strecke. Ein Lichtpuls läuft von der Bastion nach außen
 // (zeigt die Richtung „weg von zu Hause“). Ferne Bojen werden dunkler, damit der Himmel nicht voller Punkte ist.
-// Aufbau beim ersten Bild im Sektor (dann stehen auch die Orte schon), ohne Kollision.
+// Seit 23.11.2026 ist jede Boje die Navigationsboje TB-317 aus Blender (6 m, models/bojen.ts): die nächsten drei als Nahmodell,
+// weitere bis 4,5 km als Fernmodell (eine Instanzliste), dahinter nur noch das Leuchtfeuer als Lichtpunkt. Fehlt das Modell, bleibt die
+// alte, einfache Boje. Aufbau beim ersten Bild im Sektor (dann stehen auch die Orte schon), ohne Kollision.
 // =====================================================================================
 
 const STEP = 2000, SIDE = 220, PULSE_V = 1800, PULSE_L = 9000;
-const B = { built: false, pts: null as THREE.Points | null, col: null as Float32Array | null, pos: [] as number[], along: [] as number[] };
+const NEAR_D = 600, FAR_D = 4500, CAP = 40, POOL = 3, PICK_S = 0.2;
+const B = {
+  built: false, pts: null as THREE.Points | null, col: null as Float32Array | null, pos: [] as number[], along: [] as number[],
+  mats: [] as THREE.Matrix4[], far: [] as THREE.InstancedMesh[], near: [] as THREE.Group[], dist: new Float32Array(0), last: -1,
+};
 
 function bojeGeo() {
-  // Schwimmkörper, Kragen, Mast mit Lampe, kleines Sonnensegel: zusammen gut 9 m. Kragen und Lampenkasten getrennt (Signalfarbe).
+  // alte, einfache Boje (nur ohne Blender-Modell): Schwimmkörper, Kragen, Mast mit Lampe, kleines Sonnensegel, gut 9 m
   const parts: THREE.BufferGeometry[] = [], band: THREE.BufferGeometry[] = [];
   const body = new THREE.CylinderGeometry(0.8, 0.9, 4.6, 10); parts.push(body);
   const collar = new THREE.CylinderGeometry(1.25, 1.25, 0.6, 12); collar.translate(0, 1.2, 0); band.push(collar);
@@ -31,28 +38,43 @@ function bojeGeo() {
 }
 
 function build() {
-  B.built = true; B.pos = []; B.along = [];
+  B.built = true; B.pos = []; B.along = []; B.mats = []; B.far = []; B.near = []; B.last = -1;
   const targets: { x: number; y: number; z: number; R: number }[] = [];
   for (const s of world.stations) if (s.kind !== 'carrier') targets.push({ x: s.x, y: s.y, z: s.z, R: s.R + 800 });
   for (const g of world.gates) targets.push({ x: g.x, y: g.y, z: g.z, R: 1200 });
   for (const o of ORTE) targets.push({ x: o.x, y: o.y, z: o.z, R: o.R + 600 });
-  const mats: THREE.Matrix4[] = [], q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1);
+  const nearT = bojeTeile('Navigationsboje'), farT = bojeTeile('NavigationsbojeFern'), model = !!(nearT && farT);
+  const base = model ? -3 : 0, lampY = model ? 5.96 : 6.7;      // TB-317: Fuß im Ursprung, Leuchtfeuer bei 5,86 m; Mitte der Boje auf alter Höhe
+  const q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
   for (const t of targets) {
     const L = Math.hypot(t.x, t.y, t.z), dx = t.x / L, dy = t.y / L, dz = t.z / L, rx = -dz, rz = dx, rl = Math.hypot(rx, rz) || 1;
     for (let s = STEP; s < L - t.R; s += STEP) {
-      const x = dx * s + rx / rl * SIDE, y = dy * s - 15, z = dz * s + rz / rl * SIDE;
+      const x = dx * s + rx / rl * SIDE, y = dy * s - 15 + base, z = dz * s + rz / rl * SIDE;
       if (world.fields.some(f => d3(x, y, z, f.x, f.y, f.z) < f.r + 150)) continue;   // nicht mitten in ein Asteroidenfeld
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), s * 0.001);
-      mats.push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q, one));
-      B.pos.push(x, y + 6.7, z); B.along.push(s);
+      q.setFromAxisAngle(up, s * 0.001);
+      B.mats.push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q, one));
+      B.pos.push(x, y + lampY, z); B.along.push(s);
     }
   }
-  if (!mats.length) return;
-  const bg = bojeGeo();
-  for (const [geo, mat] of [[bg.body, new THREE.MeshStandardMaterial({ color: 0x80868c, metalness: 0.55, roughness: 0.6 })], [bg.band, new THREE.MeshStandardMaterial({ color: 0xa8582a, metalness: 0.3, roughness: 0.62 })]] as const) {
-    const im = new THREE.InstancedMesh(geo, mat, mats.length);
-    mats.forEach((m, i) => im.setMatrixAt(i, m)); im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
-    scene.add(im); world.extras.push(im);
+  const n = B.mats.length;
+  if (!n) return;
+  B.dist = new Float32Array(n);
+  if (model) {
+    for (const p of farT!) {
+      const im = new THREE.InstancedMesh(p.geo, p.mat, Math.min(CAP, n));
+      im.count = 0; im.frustumCulled = false; scene.add(im); world.extras.push(im); B.far.push(im);
+    }
+    for (let i = 0; i < Math.min(POOL, n); i++) {
+      const g = new THREE.Group(); for (const p of nearT!) g.add(new THREE.Mesh(p.geo, p.mat));
+      g.matrixAutoUpdate = false; g.visible = false; scene.add(g); world.extras.push(g); B.near.push(g);
+    }
+  } else {
+    const bg = bojeGeo();
+    for (const [geo, mat] of [[bg.body, new THREE.MeshStandardMaterial({ color: 0x80868c, metalness: 0.55, roughness: 0.6 })], [bg.band, new THREE.MeshStandardMaterial({ color: 0xa8582a, metalness: 0.3, roughness: 0.62 })]] as const) {
+      const im = new THREE.InstancedMesh(geo, mat, n);
+      B.mats.forEach((m, i) => im.setMatrixAt(i, m)); im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
+      scene.add(im); world.extras.push(im);
+    }
   }
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(B.pos, 3));
   B.col = new Float32Array(B.pos.length); geo.setAttribute('color', new THREE.BufferAttribute(B.col, 3));
@@ -60,6 +82,24 @@ function build() {
   B.pts.frustumCulled = false; scene.add(B.pts); world.extras.push(B.pts);
 }
 
+// Modelle verteilen: die nächsten Bojen bekommen das Nahmodell, die übrigen in Reichweite das Fernmodell
+const _ord: number[] = [];
+function pick() {
+  _ord.length = 0;
+  for (let i = 0; i < B.dist.length; i++) if (B.dist[i] < FAR_D) _ord.push(i);
+  _ord.sort((a, b) => B.dist[a] - B.dist[b]);
+  let k = 0, f = 0;
+  for (const g of B.near) g.visible = false;
+  for (const i of _ord) {
+    if (k < B.near.length && B.dist[i] < NEAR_D) { const g = B.near[k++]; g.matrix.copy(B.mats[i]); g.matrixWorldNeedsUpdate = true; g.visible = true; continue; }
+    if (f >= CAP) break;
+    for (const im of B.far) im.setMatrixAt(f, B.mats[i]);
+    f++;
+  }
+  for (const im of B.far) { im.count = f; im.instanceMatrix.needsUpdate = true; }
+}
+
+export const LEITBOJEN = B;
 export function updateLeitbojen(cam: THREE.Vector3) {
   if (world.def?.id !== 'heimstatt' || world.surface) return;
   if (!B.built) build();
@@ -67,12 +107,14 @@ export function updateLeitbojen(cam: THREE.Vector3) {
   const col = B.col!, t = G.time, head = t * PULSE_V;
   for (let i = 0, n = B.along.length; i < n; i++) {
     const d = d3(cam.x, cam.y, cam.z, B.pos[i * 3], B.pos[i * 3 + 1], B.pos[i * 3 + 2]);
+    B.dist[i] = d;
     const fade = d < 3000 ? 1 : Math.max(0, 1 - (d - 3000) / 9000);
     const ph = (((head - B.along[i]) % PULSE_L) + PULSE_L) % PULSE_L, pulse = ph < 700 ? 1 - ph / 700 : 0;
     const k = fade * (0.28 + 0.72 * pulse);
     col[i * 3] = k; col[i * 3 + 1] = k * 0.66; col[i * 3 + 2] = k * 0.3;
   }
   (B.pts.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+  if (B.far.length && (t - B.last > PICK_S || t < B.last)) { B.last = t; pick(); }
 }
 
-sectorHooks.push({ build: () => {}, clear: () => { B.built = false; B.pts = null; B.col = null; B.pos = []; B.along = []; } });
+sectorHooks.push({ build: () => {}, clear: () => { B.built = false; B.pts = null; B.col = null; B.pos = []; B.along = []; B.mats = []; B.far = []; B.near = []; } });

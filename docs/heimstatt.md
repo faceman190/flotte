@@ -80,7 +80,9 @@ Alles aus vorhandenen Teilen (Außenposten-Modell, Schiffsmodelle, Geometrie aus
   als 165 m Abstand): 4–9 Schrott in den Frachtraum, 22 % ein Ausrüstungsstück (gewöhnlich oder ungewöhnlich) in den Rucksack, 2 % ein altes
   Flottensiegel. Jeder Container kommt nach 40 Minuten wieder (`P.werft`). Funkspruch der Bastion beim ersten Besuch.
 - **Leitbojen** (`src/game/leitbojen.ts`): alle 2 km, 220 m rechts neben den Strecken von der Bastion zu Ring, Eisenkrone, den drei Toren und den
-  beiden Orten (nicht in Asteroidenfeldern), gut 9 m hoch mit Signalband. Ein Lichtpuls läuft von der Bastion nach außen; ferne Bojen dunkler.
+  beiden Orten (nicht in Asteroidenfeldern). Ein Lichtpuls läuft von der Bastion nach außen; ferne Bojen dunkler. Seit 23.11.2026 ist jede Leitboje
+  die Navigationsboje TB-317 aus Blender (6 m, `docs/navigationsboje.md`): die nächsten drei im Umkreis von 600 m als Nahmodell, weitere bis 4,5 km
+  als Fernmodell (eine Instanzliste, höchstens 40), dahinter nur der Lichtpunkt. 117 Bojen.
 - **Sichtbare Frachtersprünge** (`src/game/npc.ts`): Beim Sprung leuchtet das Tor kurz auf (Blitz am Tormodell, rückt mit der Fernansicht heran),
   der Frachter streckt sich ins Tor; bei der Ankunft schießt er gestreckt heraus und zieht sich zusammen. Schiffe der Geschichte springen wie bisher.
 - Geprüft (Entwicklungsserver): Ringparcours ganz durchflogen (Silber, 750 Credits), Vorbeiflug neben dem Ring zählt nicht, Schießübung mit echten
@@ -93,7 +95,7 @@ Alles aus vorhandenen Teilen (Außenposten-Modell, Schiffsmodelle, Geometrie aus
 
 - ~~Phase 2~~ siehe oben.
 - **Phase 3**, neue Modelle: Pumpwerk am Reifschleier, Torwachen, Horchposten „Fernohr“ (55 km O).
-- **Gedenkboje: nicht in Heimstatt, sondern im Sonnenfeld** an den Trümmern des Halden-Tors (Wunsch des Spielers). Dort kam die Bastion durch,
+- **Gedenkboje (im Spiel seit 23.11.2026, `src/game/gedenkboje.ts`, `docs/gedenkboje.md`): nicht in Heimstatt, sondern im Sonnenfeld** an den Trümmern des Halden-Tors (Wunsch des Spielers). Dort kam die Bastion durch,
   dort brach das Tor zusammen. Sie trägt die Namen der elf Schiffe, die nicht ankamen: Weitsicht, Anna, Kranich, Sirius, Ida, Bussard, Wega, Emma,
   Reiher, Atair, Klara. Nach Kapitel 5 werden die geretteten markiert. Dazu ein Archiv mit Funksprüchen aus Jahr 0 und Sätzen aus dem Eid.
   Ein Ort ohne Kampf und ohne Auftrag.

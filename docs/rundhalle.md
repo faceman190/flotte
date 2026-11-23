@@ -1,6 +1,6 @@
 # Bastion: Rundhalle (neues Deck 3)
 
-Stand 19.11.2026: im Spiel eingebaut, noch nicht veröffentlicht. Ersetzt das verwinkelte Deck 3 nach Plan D (`docs/bastion-deck.md`).
+Stand 19.11.2026: im Spiel seit Alpha 1.52. Ersetzt das verwinkelte Deck 3 nach Plan D (`docs/bastion-deck.md`).
 
 Auftrag des Nutzers (Skizze vom 18.11.2026): Das alte Deck ist zu verschachtelt, eng und unübersichtlich. Vom Hangar führt ein breiter
 Korridor in einen offenen Bereich mit dem Treffpunkt in der Mitte. Ringsum liegen Einbuchtungen mit den Läden der einzelnen Dienste.
@@ -95,7 +95,7 @@ Jede Bucht hat ihre Leuchtfarbe (`SIG`): Aufträge petrol, Handel bernstein, Wer
 ![Treffpunkt](bilder/rundhalle-treffpunkt.jpg)
 ![Kuppel](bilder/rundhalle-kuppel.jpg)
 
-## Im Spiel (seit 19.11.2026, noch nicht veröffentlicht)
+## Im Spiel (Alpha 1.52, 19.11.2026)
 
 Die Bastion hat statt Deck 3 nach Plan D die Rundhalle. Andere Stationen sind nicht berührt.
 
