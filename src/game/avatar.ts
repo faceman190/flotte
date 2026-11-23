@@ -149,8 +149,8 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   // Testfigur Manny (?manny=1): eigene Bewegungslogik, der Soldat bleibt unsichtbar im Halter
   if (a.player) {
     const mx = INTENT.mx, mz = INTENT.mz, sprint = INTENT.sprint; INTENT.mx = INTENT.mz = 0; INTENT.sprint = false;
-    if (!d.dead && driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground })) return;
-    if (!s.root.visible) releaseManny(s.root);   // tot oder Schalter aus: wieder der Soldat
+    if (driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground, dead: !!d.dead })) return;
+    if (!s.root.visible) releaseManny(s.root);   // Schalter aus oder Figur nicht geladen: wieder der Soldat
   }
   if (a.ready) {
     // Laufen: Tempo relativ zum Körper (vor/rechts) → zwei benachbarte Richtungsclips

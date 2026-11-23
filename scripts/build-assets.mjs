@@ -140,6 +140,10 @@ if (fs.existsSync(LAZY)) for (const n of fs.readdirSync(LAZY).filter(x => x.toLo
   const name = path.basename(n, path.extname(n));
   put('lazy/' + name, 'glb', await packLazy(src, LAZY_OPTS[name]), 'lazy', src.length);
 }
+// Fertig gepackte Dateien für das Paket „lazy“ (asset-src/lazy/<Name>.lca → lazy/<Name>): der Bewegungssatz der Spielerfigur,
+// geschrieben von scripts/build-clips.mjs
+const LCA = path.join(ROOT, 'asset-src', 'lazy');
+if (fs.existsSync(LCA)) for (const n of fs.readdirSync(LCA).filter(x => x.endsWith('.lca'))) { const b = fs.readFileSync(path.join(LCA, n)); put('lazy/' + path.basename(n, '.lca'), 'bin', b, 'lazy', b.length); }
 // ---- Begehbare Schiffsinnenräume: Innenmodell (asset-src/glb/interior/<Name>.glb) und Laufkarte (asset-src/walk/<Name>.json) ----
 // Beides im Hintergrund-Paket: wird erst beim Betreten des Schiffs gebraucht.
 const INT = path.join(ROOT, 'asset-src', 'glb', 'interior'), WALK = path.join(ROOT, 'asset-src', 'walk');

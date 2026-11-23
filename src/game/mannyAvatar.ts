@@ -21,8 +21,8 @@ import { MannyAnimator } from './manny/MannyAnimator.js';
 //    · Das Spiel läuft mit Manny im Tempo der Bewegungen (mannyPace: vorwärts schneller als seitwärts und rückwärts).
 //    · Start und Stopp werden nach zurückgelegter bzw. verbleibender Strecke abgespielt, Schleifen im echten Tempo.
 //  - Der Körper schaut in Blickrichtung (Strafe-Modus des Animators), wie beim Soldaten.
-//  - Waffen, Anschlag, Schießen, Nachladen und Tod hat der Bewegungssatz nicht; die Soldatenfigur bleibt dafür unsichtbar im Halter
-//    (beim Tod wird sie wieder gezeigt).
+//  - Waffen, Anschlag, Schießen und Nachladen hat der Bewegungssatz nicht; die Soldatenfigur bleibt unsichtbar im Halter.
+//  - Tod: Die Figur fällt mit einem der Sturz-Clips um und bleibt liegen (seit 2026-11-23, vorher wechselte das Bild zum Soldaten).
 // =====================================================================================
 // brake / accel: Brems- und Anlaufrate der Spielphysik mit der Figur (1/s, 0 = Wert der Laufstelle) · url, body: nur für Tests
 // (Bewegungssatz, Figur), sonst aus der Paketliste · alt: alter Anschluss (Tempo statt Absicht) zum Vergleich im Prüfskript
@@ -38,8 +38,8 @@ whenIdle(() => { if (MANNY.on) ensure(); });   // schon ab dem Hauptmenü laden:
 let anim: any = null, loading = false, failed = false;
 function ensure() {
   if (anim || loading || failed) return;
-  const url = MANNY.url || MANIFEST?.files['lazy/Manny']?.url, body = MANNY.body || MANIFEST?.files['lazy/Spieler']?.url;
-  if (!url || !body) { failed = true; console.warn('Spielerfigur: lazy/Manny oder lazy/Spieler fehlt in der Paketliste – es bleibt beim Soldaten'); return; }
+  const url = MANNY.url || MANIFEST?.files['lazy/Bewegungen']?.url, body = MANNY.body || MANIFEST?.files['lazy/Spieler']?.url;
+  if (!url || !body) { failed = true; console.warn('Spielerfigur: lazy/Bewegungen oder lazy/Spieler fehlt in der Paketliste – es bleibt beim Soldaten'); return; }
   loading = true;
   new MannyAnimator().load(url, undefined, body).then((a: any) => {
     a.model.traverse((o: any) => {
@@ -50,12 +50,14 @@ function ensure() {
       for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) if (o.material[k]) o.material[k].anisotropy = 8;
     });
     anim = a; loading = false;
-    console.info(`Spielerfigur geladen: ${Object.keys(a.actions).length} Bewegungen, Analyse ${a.analyseMs} ms`);
+    console.info(`Spielerfigur geladen: ${a.clips.names.length} Bewegungen, Analyse ${a.analyseMs} ms`);
   }).catch((e: unknown) => { failed = true; loading = false; console.warn('Spielerfigur nicht geladen – es bleibt beim Soldaten:', e); });
 }
 
 export interface MannyDrive {
   x: number; y: number; z: number; yaw: number; vx: number; vz: number; crouch?: boolean; air?: boolean;
+  pitch?: number;                                    // Blick nach oben (+) / unten (−), rad: Kopf und Brust folgen (PoseLayers.js)
+  dead?: boolean;                                    // gefallen: Sturz-Clip, bleibt liegen
   mx?: number; mz?: number;                          // Absicht: gewünschte Laufrichtung (Tasten) in Raumkoordinaten, 0/0 = stehen
   sprint?: boolean;                                  // Absicht: Sprinten gedrückt
   ground?: ((x: number, z: number) => number | null) | null;   // Bodenhöhe im Raum der Figur (Rampen, Stufen, Gelände)
@@ -121,7 +123,7 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
   }
   const out = anim.update(dtc, {
     moveDir: _mv, gait, crouch: !!d.crouch, strafe: true, facing: face,
-    jump, grounded: !air, verticalSpeed: vy,
+    jump, grounded: !air, verticalSpeed: vy, look: { pitch: d.pitch || 0 }, dead: !!d.dead,
     vel: led ? _vel.set(d.vx, d.vz) : undefined, stopDist: spd * Math.max(0, (MANNY.brake > 0 ? 1 / MANNY.brake : STOP_TAU + dtc) - dtc),   // Rest des Wegs bei Bremsrate r: Tempo × (1/r − Bilddauer)
   });
   // Animator-Blickrichtung relativ zum Halter, der schon um body + π gedreht ist. yaw, vx, vz und facing gelten im Raum des Halters

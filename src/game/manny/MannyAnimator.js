@@ -41,6 +41,8 @@ import { ClipFeatureExtractor, poseCost } from './ClipFeatures.js';
 import { Inertializer } from './Inertializer.js';
 import { FootLocker, GroundAdapt } from './FootIK.js';
 import { findCycle } from './GaitCycle.js';
+import { ClipStore } from './ClipStore.js';
+import { PoseLayers } from './PoseLayers.js';
 
 const DEG = 180 / Math.PI, RAD = Math.PI / 180;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -49,6 +51,7 @@ const wrapRad = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const approach = (cur, target, maxStep) => cur + Math.max(-maxStep, Math.min(maxStep, target - cur));
 const approachAngle = (cur, target, maxStep) => cur + Math.max(-maxStep, Math.min(maxStep, wrapRad(target - cur)));
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const ROOT_ONLY = new Set(['root']);
 
 export class MannyAnimator {
   constructor(opts = {}) {
@@ -61,31 +64,49 @@ export class MannyAnimator {
   }
 
   // ------------------------------------------------------------------ loading
-  // modelUrl: the figure comes from its own file (same skeleton: the clips find their bones by name); url then only supplies the clips
+  // url: the clip set – a compact LCA1 file (ClipStore.js; needs modelUrl) or a GLB with clips.
+  // modelUrl: the figure comes from its own file (same skeleton: the clips find their bones by name).
   async load(url, onProgress, modelUrl) {
     const get = (u, p) => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(u, p);
-    const [gltf, body] = await Promise.all([get(url, onProgress), modelUrl ? get(modelUrl) : null]);
-    this.gltf = gltf;
+    const glb = /\.gl(b|tf)(\?|$)/i.test(url);
+    const [gltf, body] = await Promise.all([glb ? get(url, onProgress) : null, modelUrl ? get(modelUrl) : null]);
     this.model = (body || gltf).scene;
     this.model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    if (glb) {
+      // clips of a GLB behind the same three calls as the ClipStore
+      const by = new Map(gltf.animations.map((c) => [c.name, c]));
+      this.clips = {
+        names: [...by.keys()], has: (n) => by.has(n), duration: (n) => (by.get(n) ? by.get(n).duration : 0),
+        clip: (n, o = {}) => { const c = by.get(n).clone(); c.tracks = c.tracks.filter((t) => { const b = t.name.slice(0, t.name.lastIndexOf('.')); return (!o.only || o.only.has(b)) && !(o.skip && o.skip.has(b)); }); return c; },
+      };
+    } else {
+      const rest = new Map();
+      this.model.traverse((o) => { if (o.isBone) rest.set(o.name, { q: o.quaternion.clone(), p: o.position.clone() }); });
+      this.clips = await ClipStore.load(url, rest, onProgress);
+    }
     const t0 = performance.now();
     const fx = new ClipFeatureExtractor(this.model);
     this.mixer = new THREE.AnimationMixer(this.model);
-    this.feat = {}; this.actions = {};
+    // Actions are created when a clip is first needed and dropped again when it has not been used for a while (_act, _trim):
+    // with several hundred clips, one action each would mean a hundred thousand bound tracks.
+    this._acts = new Map();
+    this.actions = new Proxy({}, {
+      get: (_, n) => (typeof n === 'string' ? this._act(n) : undefined), has: (_, n) => this.clips.has(n),
+      ownKeys: () => this.clips.names, getOwnPropertyDescriptor: (_, n) => (this.clips.has(n) ? { enumerable: true, configurable: true } : undefined),
+    });
+    this.feat = {};
+    const legs = new Set(fx.restLocal.keys());
     let slice = performance.now(), work = 0;
-    for (const clip of gltf.animations) {
-      // analysing 300+ clips takes a while: yield to the browser every few ms (no long freeze of the running game)
+    for (const name of this.clips.names) {
+      // analysing several hundred clips takes a while: yield to the browser every few ms (no long freeze of the running game)
       if (performance.now() - slice > 6) { work += performance.now() - slice; await new Promise((r) => setTimeout(r, 0)); slice = performance.now(); }
-      this.feat[clip.name] = fx.analyse(clip);
-      const inPlace = clip.clone();
-      inPlace.tracks = inPlace.tracks.filter((t) => !t.name.startsWith('root.'));
-      const a = this.mixer.clipAction(inPlace);
-      a.enabled = true; a.setEffectiveWeight(0); a.play();
-      this.actions[clip.name] = a;
+      this.feat[name] = fx.analyse(this.clips.clip(name, { only: legs }));
     }
     this.analyseMs = Math.round(work + performance.now() - slice); this.loadMs = Math.round(performance.now() - t0);
     this._buildSets();
     this._buildCycles();
+    this.layers = this.clips.pose ? new PoseLayers(this.model, this.clips) : null;
+    this._look = { yaw: 0, pitch: 0, w: 0 }; this._lean = 0;
     this.inertializer = new Inertializer(this.model);
     this.footLock = new FootLocker(this.model);
     this.groundAdapt = new GroundAdapt(this.model);
@@ -104,14 +125,36 @@ export class MannyAnimator {
     return this;
   }
 
+  /** the action of a clip, created on first use (in place: without the root track) */
+  _act(name) {
+    let e = this._acts.get(name);
+    if (!e) {
+      if (!this.clips || !this.clips.has(name)) return undefined;
+      const a = this.mixer.clipAction(this.clips.clip(name, { skip: ROOT_ONLY }));
+      a.enabled = true; a.setEffectiveWeight(0); a.play();
+      e = { a, used: this.time }; this._acts.set(name, e);
+    }
+    return e.a;
+  }
+  /** drop actions that have not carried weight for a while (their clip is rebuilt from the store when needed again) */
+  _trim(keep = 96, age = 20) {
+    if (this._acts.size <= keep) return;
+    for (const [name, e] of this._acts) {
+      if (this.time - e.used < age || e.a.getEffectiveWeight() > 0 || name === this.oneShot) continue;
+      const clip = e.a.getClip();
+      e.a.stop(); this.mixer.uncacheAction(clip); this.mixer.uncacheClip(clip);
+      this._acts.delete(name);
+    }
+  }
+
   _has(name) {
-    if (name && this.actions[name]) return true;
+    if (name && this.clips.has(name)) return true;
     if (name && !this.missing.includes(name)) this.missing.push(name);
     return false;
   }
 
   _buildSets() {
-    const names = Object.keys(this.actions);
+    const names = this.clips.names;
     this.loopSets = {};
     for (const [gait, dirs] of Object.entries(CLIP_MAP.loops)) {
       const set = [];
@@ -128,8 +171,17 @@ export class MannyAnimator {
     const group = (map) => Object.fromEntries(Object.entries(map).map(([k, re]) => [k, names.filter((n) => re.test(n))]));
     this.groups = {
       starts: group(CLIP_MAP.starts), stops: group(CLIP_MAP.stops), turnInPlace: group(CLIP_MAP.turnInPlace),
-      movingTurns: group(CLIP_MAP.movingTurns), pivots: group(CLIP_MAP.pivots),
+      movingTurns: group(CLIP_MAP.movingTurns), pivots: group(CLIP_MAP.pivots), idleBreaks: group(CLIP_MAP.idleBreaks || {}),
     };
+    this.deathClips = CLIP_MAP.death ? names.filter((n) => CLIP_MAP.death.test(n)) : [];
+    // lying pose for each death clip: the one whose pelvis lies most like the clip's last frame
+    this.deathLie = new Map();
+    const lying = CLIP_MAP.lying && this.clips.pose ? names.filter((n) => CLIP_MAP.lying.test(n)) : [];
+    for (const d of this.deathClips) {
+      const end = this.clips.pose(d, this.clips.frames(d) - 1).get('pelvis'); let best = null, bd = Infinity;
+      for (const l of lying) { const q = this.clips.pose(l, 0).get('pelvis'), x = end && q ? 1 - Math.abs(end.dot(q)) : 1; if (x < bd) { bd = x; best = l; } }
+      if (best) this.deathLie.set(d, best);
+    }
     [CLIP_MAP.idle.stand, CLIP_MAP.idle.crouch, CLIP_MAP.jump.fall, ...Object.values(CLIP_MAP.jump.start)].forEach((n) => this._has(n));
     for (const v of Object.values(CLIP_MAP.jump.land)) Object.values(v).forEach((n) => this._has(n));
   }
@@ -140,10 +192,10 @@ export class MannyAnimator {
   _buildCycles() {
     const T = this.tuning;
     // whole-body difference of a clip between two times (mean rotation of all bones, deg)
-    const clips = new Map(this.gltf.animations.map((c) => [c.name, c])), ips = new Map(), qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
+    const ips = new Map(), qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
     const poseDist = (name, ta, tb) => {
       let ip = ips.get(name);
-      if (!ip) { ip = clips.get(name).tracks.filter((t) => t.name.endsWith('.quaternion') && !t.name.startsWith('root.')).map((t) => t.createInterpolant()); ips.set(name, ip); }
+      if (!ip) { ip = this.clips.clip(name).tracks.filter((t) => t.name.endsWith('.quaternion') && !t.name.startsWith('root.')).map((t) => t.createInterpolant()); ips.set(name, ip); }
       let sum = 0;
       for (const it of ip) { qa.fromArray(it.evaluate(ta)); qb.fromArray(it.evaluate(tb)); sum += 2 * Math.acos(Math.min(1, Math.abs(qa.dot(qb)))); }
       return ip.length ? sum / ip.length * DEG : 0;
@@ -207,10 +259,11 @@ export class MannyAnimator {
     this.state = 'idle'; this.stateTime = 0;
     this.inertializer.active = false; this.inertializer.pending = false;
     this.footLock.reset(); this.groundAdapt.reset();
+    this._lean = 0; this._crouchPrev = undefined;
   }
   _applyWeights() {
-    for (const a of Object.values(this.actions)) a.setEffectiveWeight(0);
-    const add = (n, w) => { if (w > 1e-4 && this.actions[n]) this.actions[n].setEffectiveWeight(this.actions[n].getEffectiveWeight() + w); };
+    for (const e of this._acts.values()) e.a.setEffectiveWeight(0);
+    const add = (n, w) => { if (w <= 1e-4) return; const a = this._act(n); if (a) { a.setEffectiveWeight(a.getEffectiveWeight() + w); this._acts.get(n).used = this.time; } };
     let total = 0; for (const s of this._slots.values()) total += s.w;
     const norm = total > 0 ? 1 / total : 0;
     for (const [k, s] of this._slots) {
@@ -219,7 +272,8 @@ export class MannyAnimator {
       else if (k === 'loco') for (const [n, lw] of this._locoWeights) add(n, w * lw);
       else add(k, w);
     }
-    this.debugWeights = Object.entries(this.actions).map(([n, a]) => [n, a.getEffectiveWeight()]).filter(([, w]) => w > 0.01).sort((a, b) => b[1] - a[1]);
+    this.debugWeights = [...this._acts].map(([n, e]) => [n, e.a.getEffectiveWeight()]).filter(([, w]) => w > 0.01).sort((a, b) => b[1] - a[1]);
+    if ((this._trimT = (this._trimT || 0) + (this._dtNow || 0)) > 2) { this._trimT = 0; this._trim(); }
   }
 
   _dirWeights(gait, theta) {
@@ -343,6 +397,7 @@ export class MannyAnimator {
   _enter(state, clip = '') {
     this.log.push({ t: +this.time.toFixed(2), from: this.state, to: state, clip });
     this.state = state; this.stateTime = 0; this._coast = false;
+    if (state === 'idle') { this._idleT = 0; this._nextBreak = undefined; }
   }
   /** calm start / rolling out: the slower gait whose loop is mixed in by real speed, or null */
   _calmNow() {
@@ -394,14 +449,32 @@ export class MannyAnimator {
     const gk = this._gaitKey();
     const out = { delta: new THREE.Vector3(), facing: this.facing, jumpImpulse: false };
     const targetFacing = strafe ? (input.facing ?? this.facing) : (moving ? moveYaw : this.facing);
+    const facing0 = this.facing;
+    this._thetaNow = moving ? thetaIn : null;                  // travel direction relative to the body (jumps), null = standing
     const grounded = input.grounded !== false;
     this.crouchW = approach(this.crouchW, this.crouch ? 1 : 0, dt / 0.3);
     for (const g of Object.keys(this.gaitW)) this.gaitW[g] = approach(this.gaitW[g], g === gk ? 1 : 0, dt / 0.25);
     this._strafe = strafe;
 
-    if (!grounded && (input.verticalSpeed ?? 0) < -2 && !['jumpStart', 'fall'].includes(this.state)) this._enterFall(0.25);
+    // dead: fall over and stay down until the game says otherwise (then stand up at once, like after being moved)
+    const dead = !!input.dead && this.deathClips.length > 0;
+    if (dead && this.state !== 'dead') {
+      const name = this.deathClips[Math.floor(Math.random() * this.deathClips.length)];
+      const from = Math.min(T.deathStart, this.feat[name].duration - 0.3);
+      this._playOneShot(name, 0.15, from, 0);
+      this._deadFall = this.feat[name].duration - from - 0.05; this._deadLie = this.deathLie.get(name) || null;
+      this._enter('dead', name);
+    } else if (!dead && this.state === 'dead') this.teleport(this.facing);
+    else if (dead && this._deadLie && this.stateTime >= this._deadFall) {
+      // the fall is over: come to rest in the lying pose (held at its first frame)
+      const a = this._act(this._deadLie);
+      a.reset(); a.setEffectiveTimeScale(0); a.time = 0; a.play();
+      this._playOnly(this._deadLie, T.deathSettle); this.oneShot = null; this._deadLie = null;
+    }
+
+    if (!dead && !grounded && (input.verticalSpeed ?? 0) < -2 && !['jumpStart', 'fall'].includes(this.state)) this._enterFall(0.25);
     // capsule-led: the game has already jumped when it reports the jump (first frame in the air) - start the clip at its take-off
-    if (input.jump && (grounded || vel) && !this.crouch && !['jumpStart', 'fall', 'land'].includes(this.state)) this._enterJump(!!vel);
+    if (!dead && input.jump && (grounded || vel) && !this.crouch && !['jumpStart', 'fall', 'land'].includes(this.state)) this._enterJump(!!vel);
 
     // v3: every state can be interrupted. Turning clips are re-targeted every frame (root rotation scaled
     // to the CURRENT target), and re-selected (pose matching) when the target jumps by > reselectAngle.
@@ -415,10 +488,27 @@ export class MannyAnimator {
     switch (this.state) {
       case 'idle': {
         if (moving) { startMove(); break; }
+        if (this._crouchPrev !== undefined && this.crouch !== this._crouchPrev && this._enterStance()) break;
         const diff = wrapDeg((targetFacing - this.facing) * DEG);
         if (strafe && Math.abs(diff) > T.turnThreshold) {
           if (!this._enterTurn(diff, false)) this.facing = approachAngle(this.facing, targetFacing, T.proceduralTurnRate * RAD * dt);
+          break;
         }
+        this._idleT = (this._idleT || 0) + dt;
+        if (this._nextBreak === undefined) this._nextBreak = T.idleBreakEvery[0] + Math.random() * (T.idleBreakEvery[1] - T.idleBreakEvery[0]);
+        if (T.idleBreaks && this._idleT > this._nextBreak && this.crouchW === (this.crouch ? 1 : 0)) this._enterBreak();
+        break;
+      }
+      case 'break': case 'stance': {
+        // both stand on the spot and give way to anything else at once
+        if (moving) { startMove(); break; }
+        if (this.crouch !== this._crouchPrev) { if (!this._enterStance()) this._startIdle(0.3); break; }
+        const diff = wrapDeg((targetFacing - this.facing) * DEG);
+        if (strafe && Math.abs(diff) > T.turnThreshold) {
+          if (!this._enterTurn(diff, false)) { this.facing = approachAngle(this.facing, targetFacing, T.proceduralTurnRate * RAD * dt); this._startIdle(0.3); }
+          break;
+        }
+        if (this.stateTime >= this._exitT) this._startIdle(this.state === 'stance' ? 0.3 : 0.45);
         break;
       }
       case 'turn': {
@@ -587,20 +677,49 @@ export class MannyAnimator {
     this.inertializer.restorePure();      // drop last frame's offsets/IK before the mixer writes (see Inertializer)
     this.mixer.update(dt);
     this.inertializer.savePure();
+    this._applyLayers(dt, input, strafe ? wrapDeg((targetFacing - this.facing) * DEG) : 0, dt > 0 ? wrapRad(this.facing - facing0) / dt : 0);
     this.inertializer.apply(dt);
+    this._crouchPrev = this.crouch;
     this._dt = dt;
     return out;
+  }
+
+  /**
+   * poses on top of the animation (PoseLayers.js): head and chest follow the view, the body leans into the curve.
+   * yawOff: how far the view is to the LEFT of the body (deg) · turnRate: rad/s the body turned this frame (+ = left)
+   */
+  _applyLayers(dt, input, yawOff, turnRate) {
+    const L = this.layers, T = this.tuning;
+    if (!L || !L.ready) return;
+    const st = this.state, air = st === 'fall' || st === 'jumpStart' || st === 'land';
+    const k = (tau) => (dt > 0 ? 1 - Math.exp(-dt / tau) : 0);
+    if (st === 'dead') input = {};                             // no look, no lean
+    // look: the view angles are low-passed; in the air and in a sprint the layer is weaker
+    const lk = this._look, pitch = ((input.look && input.look.pitch) || 0) * DEG * T.lookPitch;
+    const wantW = T.lookLayer && input.look ? (air ? 0.4 : 1 - (1 - T.lookSprint) * (this.gaitW.sprint || 0)) : 0;
+    lk.yaw += (clamp(-yawOff, -135, 135) - lk.yaw) * k(T.lookSmooth);
+    lk.pitch += (clamp(pitch, -90, 90) - lk.pitch) * k(T.lookSmooth);
+    lk.w += (wantW - lk.w) * k(0.2);
+    // lean: sideways acceleration of the path = speed × turn rate, only while running forwards in the loop
+    let want = 0;
+    if (T.leanLayer && st === 'loop' && !this.crouch && this._realSpeed !== undefined) {
+      const fwd = Math.max(0, Math.cos(this.locoTheta * RAD));
+      want = clamp(this._realSpeed * turnRate / T.leanAccel, -1, 1) * T.leanMax * fwd * clamp((this._realSpeed - 2) / 2, 0, 1);
+    }
+    this._lean += (want - this._lean) * k(T.leanSmooth);
+    L.apply({ yaw: lk.yaw, pitch: lk.pitch, lookW: lk.w, crouchW: this.crouchW, lean: this._lean, sprintW: this.gaitW.sprint || 0 });
   }
 
   /** call after the model's world transform for this frame is set: pose features + foot locking */
   finalize(dt = this._dt || 0, env = null) {
     this._capturePose(dt);
+    if (this.state === 'dead') { this.groundAdapt.reset(); this.footLock.reset(); return; }   // lying: no foot IK
     const air = ['fall'].includes(this.state) || (this.state === 'jumpStart' && this._impulseDone);
     // feet follow the ground under them (slopes, steps) – before locking, so a locked foot keeps its adapted height
     if (env && env.ground) this.groundAdapt.update(dt, env.ground, env.baseY ?? 0, env.space || null, !air);
     else this.groundAdapt.reset();
     if (this.tuning.footLock) {
-      const hard = ['idle', 'turn', 'settle'].includes(this.state);   // hard lock while standing/turning, soft while moving
+      const hard = ['idle', 'turn', 'settle', 'break', 'stance'].includes(this.state);   // hard lock while standing/turning, soft while moving
       this.footLock.update(dt, this._contactsNow(), !air, hard ? 0 : 3, hard ? 0.3 : 0.15, env ? env.space || null : null);
     }
   }
@@ -625,7 +744,7 @@ export class MannyAnimator {
 
   _contactsNow() {
     const st = this.state;
-    if (st === 'idle') return { l: true, r: true };
+    if (st === 'idle' || st === 'break' || st === 'stance') return { l: true, r: true };
     // loops: feet are already planted by the speed-matched movement; locking there fights the
     // procedural turning, so only one-shots (start/stop/turn/pivot/settle) and idle are locked
     if (st === 'loop') return { l: false, r: false };
@@ -771,6 +890,48 @@ export class MannyAnimator {
     return true;
   }
 
+  /** an idle break: one of the break clips of the stance, never the same twice in a row */
+  _enterBreak() {
+    const list = (this.groups.idleBreaks[this.crouch ? 'crouch' : 'stand'] || []).filter((n) => n !== this._lastBreak);
+    if (!list.length) { this._idleT = 0; this._nextBreak = undefined; return false; }
+    const name = list[Math.floor(Math.random() * list.length)];
+    this._lastBreak = name;
+    this._playOneShot(name, 0.45, 0, 0);
+    this._exitT = this.feat[name].duration - 0.5;
+    this._enter('break', name);
+    return true;
+  }
+  /** crouch down / get up on the spot with the transition clip */
+  _enterStance() {
+    const name = this.tuning.stanceClips ? CLIP_MAP.stance && CLIP_MAP.stance[this.crouch ? 'crouch' : 'stand'] : null;
+    if (!name || !this._has(name)) return false;
+    // turned round halfway: start as far into the clip as the other one had come
+    const back = this.state === 'stance' ? clamp(this.tuning.stanceExit - this.stateTime, 0, this.tuning.stanceExit - 0.2) : 0;
+    this._playOneShot(name, 0.2, back, 0);
+    this._exitT = this.tuning.stanceExit - back;
+    this._enter('stance', name);
+    return true;
+  }
+
+  /** direction of a jump / landing for a travel direction relative to the body (deg, + = right): F, B, LL (left), RL (right) */
+  _jumpDir(theta) {
+    if (!this.tuning.dirJumps || !this._strafe || theta === null || theta === undefined || Math.abs(theta) <= 50) return 'F';
+    return Math.abs(theta) >= 130 ? 'B' : theta > 0 ? 'RL' : 'LL';
+  }
+  /** of the clips `names` the one whose feet fit the current pose at its time at(f) – foot variants (Lfoot / Rfoot) of one jump */
+  _bestByPose(names, at, agree) {
+    let best = null, ref = null;
+    for (const name of names) {
+      if (!this._has(name)) continue;
+      const f = this.feat[name], t = at(f);
+      if (ref === null) ref = agree(f);
+      else if (Math.abs(agree(f) - ref) > 0.12) continue;      // the measured take-off / landing of this variant is off: leave it out
+      const c = poseCost(f, f.index(t), this.curPose, { speed: 0 });
+      if (!best || c < best.c) best = { name, c };
+    }
+    return best ? best.name : null;
+  }
+
   _enterFall(blend) {
     const n = CLIP_MAP.jump.fall;
     const a = this.actions[n]; a.reset(); a.setLoop(THREE.LoopRepeat, Infinity); a.setEffectiveTimeScale(1); a.play();
@@ -779,10 +940,12 @@ export class MannyAnimator {
   _enterJump(airborne = false) {
     const sp = this.planarVel.length();
     const key = (!this._movingNow || sp < 0.5) ? 'stand' : sp < 3 ? 'walk' : sp < 6.2 ? 'run' : 'sprint';
-    const name = CLIP_MAP.jump.start[key];
+    const dir = key === 'stand' ? 'F' : this._jumpDir(this._thetaNow), P = CLIP_MAP.jump.prefix, K = key[0].toUpperCase() + key.slice(1);
+    const at = (f) => (airborne ? f.takeoff : Math.max(0, f.takeoff - 0.18));
+    const name = (P && this._bestByPose(dir === 'F' ? [`${P}F_Start_${K}_Lfoot`, `${P}F_Start_${K}_Rfoot`] : [`${P}${dir}_Start_Lfoot`, `${P}${dir}_Start_Rfoot`], at, (f) => f.takeoff)) || CLIP_MAP.jump.start[key];
     if (!this._has(name)) return;
     const f = this.feat[name];
-    const start = airborne ? f.takeoff : Math.max(0, f.takeoff - 0.18);
+    const start = at(f);
     this._playOneShot(name, 0.12, start, 0);
     this.oneShot = null;                       // no root motion: physics owns the jump
     this._jumpClip = name;
@@ -794,7 +957,12 @@ export class MannyAnimator {
     const key = sp < 0.8 ? 'stand' : sp < 3 ? 'walk' : sp < 6.2 ? 'run' : 'sprint';
     const set = CLIP_MAP.jump.land[key];
     const heavy = impact > this.heavyLandingSpeed && set.heavy && this._has(set.heavy);
-    const name = heavy ? set.heavy : set.light;
+    // direction of the landing: where the character is travelling relative to its body
+    const v = this.planarVel, dir = sp < 0.8 ? 'F' : this._jumpDir(wrapDeg((this.facing - Math.atan2(v.x, v.z)) * DEG));
+    const P = CLIP_MAP.jump.prefix, K = key[0].toUpperCase() + key.slice(1), W = heavy ? 'Heavy' : 'Light';
+    const cands = !P ? [] : dir === 'F' ? [`${P}F_Land_${K}_${W}_Lfoot`, `${P}F_Land_${K}_${W}_Rfoot`]
+      : key === 'stand' ? [`${P}${dir}_Land_Stand_${W}_Lfoot`, `${P}${dir}_Land_Stand_${W}_Rfoot`] : [`${P}${dir}_Land_${key === 'walk' ? 'Walk' : 'Run'}_${W}`];
+    const name = this._bestByPose(cands, (f) => Math.max(0, f.landing - 0.05), (f) => f.landing) || (heavy ? set.heavy : set.light);
     if (!this._has(name)) { this._startIdle(0.2); return; }
     const f = this.feat[name];
     this._playOneShot(name, 0.1, Math.max(0, f.landing - 0.05), 0);

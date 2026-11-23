@@ -1,4 +1,6 @@
-// Packen einer Figur mit vielen Animationen (Paket „lazy“): Geometrie und Animationen mit Meshopt, Texturen WebP.
+// Packen einer Figur für das Paket „lazy“: Geometrie (und Animationen, falls vorhanden) mit Meshopt, Texturen WebP.
+// Der Bewegungssatz der Spielerfigur ist seit dem 23.11.2026 keine GLB-Datei mehr: scripts/build-clips.mjs schreibt
+// asset-src/lazy/Bewegungen.lca (eigenes kompaktes Format), die Bauskripte kopieren sie nur in die Paketliste.
 // Gemeinsam genutzt von build-assets.mjs und build-manny.mjs.
 //  - resample(): entfernt Schlüsselbilder, die sich linear aus ihren Nachbarn ergeben (verlustarm, Toleranz 1e-4)
 //  - meshopt(): komprimiert auch die Animationsdaten (EXT_meshopt_compression)
@@ -13,9 +15,6 @@ import { dedup, prune, resample, textureCompress, meshopt } from '@gltf-transfor
 import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
 
 export const LAZY_OPTS = {
-  // Bewegungssatz (UE5-Skelett, 321 Clips): ohne das Netz der Testfigur. Stufe high = Drehungen mit 16 Bit je Wert, Verschiebungen mit
-  // 12 Bit Mantisse: 40 statt 58 MB, Messreihe unverändert (docs/manny.md). Der Packlauf dauert rund 25 Minuten.
-  Manny: { clipsOnly: true, level: 'high' },
   Spieler: { tex: 2048 },          // Spielerfigur auf demselben Skelett, ohne eigene Bewegungen
 };
 

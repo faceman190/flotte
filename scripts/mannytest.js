@@ -95,6 +95,6 @@ window.__manny = async () => {
     for (const g of Object.values(sum)) for (const k of Object.keys(g)) g[k] = +g[k].toFixed(1);
     return sum;
   };
-  return { clips: Object.keys(anim.actions).length, analyseMs: anim.analyseMs, loadMs: anim.loadMs, run: +anim.speedOf('run').toFixed(2), sprint: +anim.speedOf('sprint').toFixed(2), crouch: +anim.speedOf('crouch').toFixed(2), walk: +anim.speedOf('walk').toFixed(2),
+  return { clips: anim.clips.names.length, analyseMs: anim.analyseMs, loadMs: anim.loadMs, run: +anim.speedOf('run').toFixed(2), sprint: +anim.speedOf('sprint').toFixed(2), crouch: +anim.speedOf('crouch').toFixed(2), walk: +anim.speedOf('walk').toFixed(2),
     rechts: +anim.speedAt('run', 90).toFixed(2), zurueck: +anim.speedAt('run', 180).toFixed(2) };
 };

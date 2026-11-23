@@ -6,10 +6,15 @@ const N = 'M_Neutral_';
 
 export const CLIP_MAP = {
   idle: { stand: N + 'Stand_Idle_Loop', crouch: N + 'Crouch_Idle_Loop' },
-  idleBreaks: {
-    stand: [N + 'Stand_Idle_Break_v01', N + 'Stand_Idle_Break_v02'],
-    crouch: [N + 'Crouch_Idle_Break_v01', N + 'Crouch_Idle_Break_v02'],
-  },
+  // played now and then while standing (candidate groups, see TUNING.idleBreakEvery)
+  idleBreaks: { stand: /^M_Neutral_Stand_Idle_Break_v\d+$/, crouch: /^M_Neutral_Crouch_Idle_Break_v\d+$/ },
+  // death: thrown over and left lying (the "victim" halves of the shove clips; the first half second is still standing)
+  death: /^M_relaxed_ragdoll_shove_stand_[BFLR]_V$/,
+  // lying poses: the first frame of the get-up clips (on the back, on the front, on either side). The death clips end in mid-air
+  // (in Unreal physics takes over there); the animator lets each one come to rest in the lying pose that fits its end best.
+  lying: /^M_ragdoll_getup_stand_[BFLR]$/,
+  // crouching down / getting up while standing (the first part of the clip moves, the rest holds the pose)
+  stance: { crouch: N + 'Transition_Stand_to_Crouch', stand: N + 'Transition_Crouch_to_Stand' },
   // looping locomotion per gait and direction (direction keys: UE naming; real direction is measured)
   loops: {
     walk:   { F: N + 'Walk_Loop_F', B: N + 'Walk_Loop_B', LL: N + 'Walk_Loop_LL', RR: N + 'Walk_Loop_RR',
@@ -20,7 +25,8 @@ export const CLIP_MAP = {
               LR: N + 'Run_Loop_LR', RL: N + 'Run_Loop_RL' },
     sprint: { F: N + 'Sprint_Loop_F', FL: N + 'Sprint_Loop_FL', FR: N + 'Sprint_Loop_FR' },
     crouch: { F: N + 'Crouch_Loop_F', B: N + 'Crouch_Loop_B', LL: N + 'Crouch_Loop_LL', RR: N + 'Crouch_Loop_RR',
-              FL: N + 'Crouch_Loop_FL', FR: N + 'Crouch_Loop_FR' },
+              FL: N + 'Crouch_Loop_FL', FR: N + 'Crouch_Loop_FR', BL: N + 'Crouch_Loop_BL', BR: N + 'Crouch_Loop_BR',
+              LR: N + 'Crouch_Loop_LR', RL: N + 'Crouch_Loop_RL' },
   },
   // candidate groups (RegExp over clip names)
   starts: {   // incl. "Reface" starts (start + turn towards the movement direction)
@@ -46,6 +52,12 @@ export const CLIP_MAP = {
       run:    { light: N + 'Jump_F_Land_Run_Light_Lfoot',   heavy: N + 'Jump_F_Land_Run_Heavy_Lfoot' },
       sprint: { light: N + 'Jump_F_Land_Sprint_Light_Lfoot' },
     },
+    // jumps by direction (strafe): F forward, B backward, LL to the left, RL to the right. Names:
+    //   Jump_F_Start_<Stand|Walk|Run|Sprint>_<L|R>foot · Jump_<B|LL|RL>_Start_<L|R>foot
+    //   Jump_F_Land_<Stand|Walk|Run|Sprint>_<Light|Heavy>_<L|R>foot · Jump_<B|LL|RL>_Land_Stand_<Light|Heavy>_<L|R>foot ·
+    //   Jump_<B|LL|RL>_Land_<Walk|Run>_<Light|Heavy>
+    // The animator takes the foot variant that fits the pose; without these clips it falls back to the list above.
+    prefix: N + 'Jump_',
   },
 };
 
@@ -87,4 +99,21 @@ export const TUNING = {
   softStopBlend: 0.2,     // s – loop -> stop of the slower gait
   coastSpeed: 1.5,        // m/s – below this the stop clip takes over
   coastMix: false,        // true = mix the gaits by speed while rolling out too (measured worse: the stride shrinks within 0.1 s)
+  // layers on top of the played pose (PoseLayers.js, 2026-11-23)
+  lookLayer: true,        // head and chest follow the view (aim offset poses)
+  lookPitch: 0.9,         // share of the camera pitch the body shows
+  lookSmooth: 0.12,       // s – low-pass of the view angles
+  lookSprint: 0.5,        // weight of the look layer at a full sprint
+  leanLayer: true,        // the body tips into the curve while running (lean poses)
+  leanAccel: 9,           // m/s² sideways (speed × turn rate) for the full lean pose
+  leanMax: 0.8,           // largest weight of the lean pose
+  leanSmooth: 0.22,       // s – low-pass of the lean
+  // standing
+  idleBreaks: true,       // play an idle break now and then
+  idleBreakEvery: [9, 20],// s – standing time until the next break (random in this range)
+  stanceClips: true,      // crouch down / get up with the transition clips instead of a pose blend (standing only)
+  stanceExit: 0.8,        // s – the transition clips move for about this long
+  dirJumps: true,         // jumps to the side and backwards with their own clips (strafe)
+  deathStart: 0.5,        // s – where the death clips begin to fall (before that the figure just stands)
+  deathSettle: 0.45,      // s – blend from the end of the fall into the lying pose
 };

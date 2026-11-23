@@ -7,8 +7,8 @@ mit den Bewegungen des Manny-Satzes. Mannys Netz wird nicht mehr gezeigt und nic
 ## Figur und Bewegungssatz sind zwei Dateien
 - `lazy/Spieler` – die Figur: `asset-src/glb/lazy/Spieler.glb` (Kopie von OneDrive `Blender/Spielfigur/Final/spieler_03.glb`,
   ein Netz, 60.000 Dreiecke, 161 Knochen, drei Texturen; gepackt 1,3 MB, Texturen auf 2048 begrenzt – die Quelle hat 4096).
-- `lazy/Manny` – der Bewegungssatz: Skelett und 321 Clips aus `asset-src/glb/lazy/Manny.glb`; das Netz der Testfigur entfernt
-  der Packer (`scripts/lazy-pack.mjs`, `LAZY_OPTS.Manny.clipsOnly`). Gepackt 40,0 MB (vorher mit Netz 58 MB).
+- `lazy/Bewegungen` – der Bewegungssatz: 449 Clips (1.447 s) in einem eigenen kompakten Format, 12,5 MB
+  (siehe „Vollständiger Bewegungssatz“ unten). Bis zum Nachmittag des 23.11.2026 war es `lazy/Manny`, eine GLB mit 321 Clips und 40 MB.
 - Die Clips finden ihre Knochen über den **Namen**. Jede Figur mit genau diesem Skelett (gleiche Knochennamen, gleiche Ruhelage)
   kann den Satz nutzen: Datei nach `asset-src/glb/lazy/` legen, `node scripts/build-manny.mjs <Name>`, in `mannyAvatar.ts`
   als `lazy/<Name>` eintragen. Geprüft für `spieler_03`: Ruhelage aller 161 Knochen gleich Manny (Abweichung unter 0,001 mm
@@ -24,17 +24,61 @@ mit den Bewegungen des Manny-Satzes. Mannys Netz wird nicht mehr gezeigt und nic
   bis sie da sind, zeigt das Spiel die Soldatenfigur mit dem alten Lauftempo.
 - Fehlt eine Datei oder schlägt das Laden fehl, bleibt es beim Soldaten (Hinweis in der Konsole).
 
+## Vollständiger Bewegungssatz (23.11.2026, abends)
+
+Seit dem 23.11.2026 liegt der ganze Satz aus Epics Game Animation Sample auf Mannys Skelett vor: 19 GLB-Dateien, **1.879 Clips,
+gut zwei Stunden Bewegung** (OneDrive `Blender/Spielfigur/Animationen`, lokale Kopie `asset-src/neu/spielfigur/animationen`,
+400 MB, nicht im Repository). Davon sind 926 Clips (3.276 s) der Stil „Neutral“, 893 (3.916 s) der Stil „Relaxed“, der Rest
+Interaktionen, Ragdoll und Tests.
+
+### Eigenes Format statt GLB
+Als GLB braucht jeder Clip 483 Kanäle mit eigenem Eintrag: Von den 40 MB für 321 Clips waren 28 MB reine Verwaltung.
+`scripts/build-clips.mjs` schreibt deshalb `asset-src/lazy/Bewegungen.lca` (Format LCA1, im Kopf des Skripts beschrieben):
+je Clip eine Zeile, Drehungen mit 16 Bit in fester Bildfolge (30 je Sekunde), mit Meshopt verdichtet. Spuren, die sich im Clip
+nicht ändern, kosten einen Wert, Spuren in Ruhelage nichts. Nur 78 der 161 Knochen haben überhaupt eine Drehspur, 2 eine
+Verschiebespur.
+- **449 Clips (1.447 s) brauchen 12,5 MB** – vorher 321 Clips 40 MB. Hochgerechnet passt der ganze neutrale Stil in rund 28 MB.
+- `src/game/manny/ClipStore.js` liest die Datei. Beim Laden wird nichts ausgepackt; ein Clip entsteht erst, wenn er gebraucht
+  wird, und der Animator hält höchstens rund hundert Aktionen (`_act`, `_trim`). Die Analyse aller Clips liest nur die Beine: 270 ms.
+- Die Messreihe ist mit dem neuen Format unverändert: 1.825 cm Gleiten, 549° Haltungssprünge.
+- Auswahl: `scripts/clipset.mjs` (`BASE` = die 321 Clips der ersten Fassung, `EXTRA` = Muster für das, was dazukam).
+  Neu packen dauert Sekunden: `node scripts/build-clips.mjs` (`--liste` zeigt nur die Auswahl). Fehlt der Quellordner, bleibt
+  die `.lca`-Datei im Repository die Quelle; `npm run assets` kopiert sie in die Paketliste.
+
+### Was aus dem neuen Satz genutzt wird
+| Was | Clips | Wie |
+|---|---|---|
+| Blick | 42 Blickposen (`AO_Stand`, `AO_Crouch`) | Kopf und Brust folgen der Kamera nach oben und unten; im Stand dreht sich der Oberkörper mit, bis die Füße nachsetzen (`PoseLayers.js`) |
+| Neigung | 6 Neigeposen (Laufen, Sprinten) | Der Körper legt sich beim Laufen in die Kurve, der Kopf führt; Gewicht aus Tempo × Drehrate |
+| Standpausen | 6 im Stand, 5 geduckt | nach 9 bis 20 s Stehen spielt eine Pause; jede Eingabe bricht sie ab |
+| Hinhocken, Aufstehen | 2 | im Stand als Bewegung statt als Überblendung |
+| Geduckt laufen | +4 Richtungen | schräg rückwärts fehlte bisher |
+| Sprung | 54 neue (vier Richtungen, beide Füße, leicht/schwer) | seitwärts und rückwärts eigene Absprünge und Landungen; die Fußvariante wählt der Animator nach der Haltung |
+| Tod | 4 Stürze + 4 Liegeposen | die Figur wird umgeworfen und kommt in der passenden Liegepose zur Ruhe |
+
+Die Schichten für Blick und Neigung liegen auf der gespielten Bewegung: je Knochen die Drehung von der Grundpose zur Pose, im
+Raum des Elternknochens, nach dem Mixer und vor dem Überblenden aufgerechnet. Die Neigung verschiebt die Füße mit (wie in der
+Pose): In der Kurve gleiten sie dadurch etwas mehr (Messlauf „kurve“: 86 statt 69 cm), geradeaus ändert sich nichts.
+
+### Noch nicht genutzt (Stand 23.11.2026)
+- **Richtungswechsel beim seitlichen Laufen** (`Box`, `Diamond`, `Hourglass`, `Prism`, `Shuffle`: rund 330 Clips, 1.100 s für
+  Gehen, Laufen, Geduckt): echte Setzschritte von jeder Richtung in jede. Das ist die Datenbasis für Motion Matching. Passt erst,
+  wenn die Spielphysik weicher beschleunigt (heute volle Geschwindigkeit nach 0,25 s; die Clips brauchen 0,6 bis 1 s).
+- **Übergänge der Gangarten** (`Transition_Walk_to_Run`, `Run_to_Sprint` …, 12 Clips).
+- **Stil „Relaxed“** (893 Clips): lockere Haltung, z. B. für Stationen. Würde den Download etwa verdoppeln.
+- **Rutschen, Klettern und Überspringen** (`Slide`, `Traversal`): brauchen neue Spielmechanik (Hindernisse erkennen).
+- **Aufstehen nach einem Sturz, Hinsetzen auf eine Bank, Gesten, Angriffe** (`getup`, `bench`, `gesture`, `takedown`).
+
 ## Was mit der neuen Figur noch fehlt
-- **Waffe, Anschlag, Schießen, Nachladen, Treffer-Zucken**: Der Bewegungssatz hat dafür keine Clips. In der Außensicht hält die
-  Figur keine Waffe (die Ich-Sicht ist nicht betroffen).
-- **Tod**: Die Darstellung wechselt zum Soldaten, der umfällt.
+- **Waffe, Anschlag, Schießen, Nachladen, Treffer-Zucken**: Auch der vollständige Satz hat dafür keine Clips. In der Außensicht
+  hält die Figur keine Waffe (die Ich-Sicht ist nicht betroffen).
 - **Ausrüstung** (Helm, Anzug, Rucksack) zeigt die Figur nicht; sie ist der Grundkörper.
 - **Charakterfenster, andere Spieler:innen, Wachen** zeigen weiter die Soldatenfigur.
 
 ## Was Manny kann und was nicht
 - Kann: Stehen, Drehen auf der Stelle (45/90/135/180°), Gehen, Laufen, Sprinten, Starts und Stops passend zum Fuß, 8 Richtungen,
   Ducken, Sprung mit leichter oder schwerer Landung. Kurzes Tippen = kleiner Schritt.
-- Kann nicht: Waffen halten, Anschlag, Schießen, Nachladen, Treffer-Zucken. Beim Tod wechselt die Darstellung zurück zum Soldaten.
+- Kann nicht: Waffen halten, Anschlag, Schießen, Nachladen, Treffer-Zucken. (Stand der ersten Fassung; der Tod ist seit dem Abend des 23.11.2026 ein eigener Sturz, siehe oben.)
 - Die Spielphysik bewegt die Figur; Mannys eigene Fortbewegung in den Clips (Root Motion) wird nur für die Darstellung genutzt.
 - Behoben (23.11.2026): In Stationen und Schiffen lief Manny um die Drehung des Raums versetzt (oft 90° seitlich statt geradeaus).
   Ursache: Die Blickrichtung wurde gegen die Weltdrehung des Halters gerechnet, Richtung und Tempo kommen aber in Raumkoordinaten.
@@ -174,9 +218,10 @@ diese Bewegungslogik als Grundlage. Die Lizenzfrage (Epic-Inhalte außerhalb von
   `ClipFeatures.js` (misst jeden Clip beim Laden), `GaitCycle.js` (saubere Schrittzyklen der Schleifen),
   `Inertializer.js` (weiche Übergänge), `FootIK.js` (Füße am Boden halten, Boden folgen),
   `clipMap.js` (alle Clipnamen und Einstellwerte an einer Stelle).
-- Dateien: `asset-src/glb/lazy/Manny.glb` (Bewegungssatz, 321 Clips) und `asset-src/glb/lazy/Spieler.glb` (Figur). Paket **lazy**:
+- Dateien: `asset-src/lazy/Bewegungen.lca` (Bewegungssatz) und `asset-src/glb/lazy/Spieler.glb` (Figur). Paket **lazy**:
   nicht vor dem Menü geladen; die Spielerfigur fordert ihre beiden Dateien an, sobald das Menü steht.
-  Einzeln neu packen: `node scripts/build-manny.mjs Spieler` (Sekunden) bzw. `… Manny` (rund 25 Minuten); `npm run assets` packt beide.
+  Einzeln neu packen: `node scripts/build-manny.mjs Spieler` (Figur) bzw. `node scripts/build-clips.mjs` (Bewegungssatz); `npm run assets` nimmt beide mit.
+- `ClipStore.js` (liest den Bewegungssatz), `PoseLayers.js` (Blick und Neigung).
 
 ## Herkunft und Lizenz
 Figur (UE5-Mannequin „Manny“) und Bewegungen stammen aus Epics **Game Animation Sample** (UE 5.8), wurden in Unreal auf Manny übertragen,

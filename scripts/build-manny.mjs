@@ -1,10 +1,10 @@
 // =====================================================================================
-// Testfigur Manny (asset-src/glb/lazy/Manny.glb) einzeln packen und in die Paketliste eintragen, ohne alle Spieldaten neu
+// Figuren des Pakets „lazy“ (asset-src/glb/lazy/*.glb, z. B. Spieler.glb) einzeln packen und in die Paketliste eintragen, ohne alle Spieldaten neu
 // zu erzeugen (npm run assets löscht public/assets und baut alles neu; dafür fehlen hier einige große Rohdateien).
 // Gleiche Umwandlung wie build-assets.mjs für das Paket „lazy“: Geometrie und Animationen mit Meshopt, Texturen WebP.
 // Paket „lazy“ wird weder vor dem Menü noch im Hintergrund geladen, nur wenn das Spiel die Datei anfordert (?manny=1).
-// Aufruf: node scripts/build-manny.mjs [Name …]   (ohne Namen alle Dateien; „Spieler“ packt nur die Figur, „Manny“ nur den
-// Bewegungssatz – der dauert rund 10 Minuten)
+// Aufruf: node scripts/build-manny.mjs [Name …]   (ohne Namen alle Dateien; „Spieler“ packt nur die Spielerfigur)
+// Der Bewegungssatz hat sein eigenes Skript: node scripts/build-clips.mjs
 // =====================================================================================
 import fs from 'fs';
 import path from 'path';
