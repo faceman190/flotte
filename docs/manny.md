@@ -60,10 +60,13 @@ Planet und Mine zeigen dieselben Werte wie die Station.
 - Der Fuß kippt am Hang nicht mit (er bleibt waagerecht).
 - Stufe 2: Oberkörper (Waffe, Zielen, Schießen, Nachladen, Treffer, Tod). Stufe 4: MetaHuman.
 
-## Stufe 3: Motion Matching (23.11.2026) – gebaut, gemessen, als Schalter
-`?mm=1` schaltet es ein (bleibt gespeichert, `?mm=0` wieder aus). Standard ist weiter die abgestimmte Zustandslogik, weil sie in der Messung besser ist.
+## Stufe 3: Motion Matching (23.11.2026) – gebaut, gemessen, wieder ausgebaut
+**Stand:** Der Schalter `?mm=1` und die Suche sind am selben Tag wieder entfernt worden. Im Test auf dem Testserver war zwischen beiden Wegen
+kein Unterschied zu sehen oder zu spüren, und die Messung spricht für die abgestimmte Zustandslogik. Der Code steht in Commit `ecc2187`
+(`src/game/manny/MotionMatcher.js`, Zustand `mm` im Animator), falls ein größerer Bewegungssatz die Suche später lohnt. Geblieben sind die drei
+Korrekturen weiter unten und die sauberen Schrittzyklen der Schleifen (jetzt `GaitCycle.js`). Der Rest dieses Abschnitts beschreibt den Versuch.
 
-**Was es ist** (`MotionMatcher.js`, Zustand `mm` im Animator): eine Datenbank aus allen Einzelbildern der Starts, Schleifen, Stopps und
+**Was es war** (`MotionMatcher.js`, Zustand `mm` im Animator): eine Datenbank aus allen Einzelbildern der Starts, Schleifen, Stopps und
 Richtungswechsel (201 Clips, 23.178 Bilder, je 20 Werte: Fußlage, Fußtempo, Körpertempo und der Weg der nächsten 0,15 / 0,35 / 0,6 s).
 Alle 0,1 s und sofort bei neuer Absicht wird das Bild gesucht, das zur gezeigten Haltung und zum vorausberechneten Weg der Figur passt
 (Modell der Spielphysik: das Tempo folgt dem Ziel mit Anlauf- bzw. Bremsrate). Eine Suche dauert 0,2 ms. Gespielt wird nach Strecke wie in Stufe 1.
@@ -95,10 +98,10 @@ passt zu Tempo UND Weg der Figur. Mehr Bewegungsmaterial oder eine weichere Anla
   fror für ein Bild ein, während das Spiel sie weiterschob, beide Füße rutschten. Jetzt wird die alte Haltung mit dem Tempo jedes Knochens um ein Bild
   weitergeführt (Lauf vorwärts mit Nahtstellen: 351 → 88 cm).
 - **Schleifen schließen nicht.** In der GLB liegt das letzte Bild jeder Schleife 0,3–0,9 m (Füße) neben dem ersten, das gab alle 2,5 s einen Ruck.
-  `MotionMatcher._cycle` sucht in jedem Clip den saubersten Schrittzyklus (0,5–1 s, Naht 4–15 cm); Schleifen spielen nur ihn, die Naht wird in 0,12 s
+  `findCycle` (`GaitCycle.js`) sucht in jedem Clip den saubersten Schrittzyklus (0,5–1 s, Naht 4–15 cm); Schleifen spielen nur ihn, die Naht wird in 0,12 s
   überblendet. Phase 0 ist überall „linker Fuß setzt auf“, damit Richtungen im selben Schritt gemischt werden. Daraus stammt auch das echte Lauftempo
   (5,17 statt 5,10 m/s: Der ganze Clip hat ein doppeltes letztes Bild).
-- Die Sprint-Naht bleibt mit rund 7° die gröbste. Die Naht nach dem ganzen Körper zu wählen (`mmWeights.cycleBody`) macht sie glatter (4°),
+- Die Sprint-Naht bleibt mit rund 7° die gröbste. Die Naht nach dem ganzen Körper zu wählen (`TUNING.cycleBody`) macht sie glatter (4°),
   lässt aber die Füße insgesamt mehr gleiten (450 statt 356 cm) und ist deshalb aus.
 - „Messdaten beim Packen statt beim Laden“ ist nicht nötig: Vermessen 0,35 s in Scheiben, Datenbank bauen 0,09 s.
 
@@ -122,7 +125,6 @@ wieder aufrichten. Fürs Joggen gilt jetzt (`TUNING.calmGait = { run: 'walk' }`,
   Stopp aus dem Gehen ein (aufrecht, zweiter Fuß setzt nach). Der Standfuß wird dabei festgehalten. Hüfte bleibt über 82 cm.
 - Sprint und Ducken behalten ihre eigenen Starts und Stopps. Ein Sprint stoppt als Sprint, auch wenn Shift zusammen mit der Richtung losgelassen
   wird (`_shownGait`: Es zählt die Gangart, die gerade zu sehen ist).
-- Mit Motion Matching (`?mm=1`) gilt das nicht – dort sucht die Datenbank weiter in den Run-Starts und -Stopps.
 
 Preis: Die Füße gleiten bei Anlauf und Stopp etwas mehr, weil kein Clip mehr genau diese Bewegung liefert (Messreihe `MT.bench()`):
 
@@ -135,7 +137,7 @@ Preis: Die Füße gleiten bei Anlauf und Stopp etwas mehr, weil kein Clip mehr g
 Dabei gefunden:
 - **Naht der Schleifen:** Der Rest zwischen den beiden Enden eines Schrittzyklus (bis 15 cm) wird in 0,12 s überblendet. Lag die Naht auf dem
   Aufsetzen eines Fußes, glitt dieser Fuß bei jedem Schritt bis 18 cm – je nachdem, wie die Phase zum Bildtakt lag, schwankte „Lauf“ zwischen 10 und
-  68 cm je Sekunde. Die Naht liegt jetzt bevorzugt in der Flugphase (`mmWeights.cycleAir`), dort sieht man die Überblendung nicht (10–21 cm).
+  68 cm je Sekunde. Die Naht liegt jetzt bevorzugt in der Flugphase (`TUNING.cycleAir`), dort sieht man die Überblendung nicht (10–21 cm).
   Die älteren Einzelvergleiche von Lauf-Abschnitten in diesem Dokument sind mit dieser Schwankung zu lesen.
 - **Gangart beim Ausrollen nicht mischen** (`coastMix`): In 0,1 s schrumpft der Schritt vom Laufen aufs Gehen, die Füße wandern dabei 20–40 cm je Bild.
 
@@ -146,7 +148,7 @@ diese Bewegungslogik als Grundlage. Die Lizenzfrage (Epic-Inhalte außerhalb von
 ## Aufbau
 - `src/game/mannyAvatar.ts`: Schalter, Laden, Anbindung an `driveAvatar` (avatar.ts; nur Figuren mit `player`, also die eigene).
 - `src/game/manny/`: Bewegungslogik (JavaScript, aus der Manny-Demo übernommen). `MannyAnimator.js` (Zustände, Auswahl der Clips nach Pose),
-  `ClipFeatures.js` (misst jeden Clip beim Laden), `MotionMatcher.js` (Datenbank, Suche, saubere Schrittzyklen der Schleifen),
+  `ClipFeatures.js` (misst jeden Clip beim Laden), `GaitCycle.js` (saubere Schrittzyklen der Schleifen),
   `Inertializer.js` (weiche Übergänge), `FootIK.js` (Füße am Boden halten, Boden folgen),
   `clipMap.js` (alle Clipnamen und Einstellwerte an einer Stelle).
 - Datei: `asset-src/glb/lazy/Manny.glb` (321 Clips). Paket **lazy**: weder vor dem Menü noch im Hintergrund geladen, nur auf Anforderung.

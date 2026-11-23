@@ -20,11 +20,8 @@
 //   stopDist  metres the capsule will still travel after the input was released (prediction of the game)
 // moveDir is then the INTENT (keys), not the velocity: releasing the keys starts the stop at once.
 //
-// v4 (capsule-led + strafe, tuning.motionMatching): locomotion is MOTION MATCHED. Instead of the states start / loop /
-// stop / pivot there is one state 'mm': every tuning.mmInterval seconds (and at once when the intent changes) the best
-// frame of all starts, loops, stops and pivots is searched (MotionMatcher.js) for the current pose and the path the
-// capsule will take in the next 0.6 s; the animator jumps there with an inertialization blend and plays on, by distance.
-// Idle, turn in place and jumps stay as they are.
+// (v4, a motion matching search over all starts / loops / stops / pivots, was built on 2026-11-23, measured worse than these
+//  states with this clip set and removed again – docs/manny.md. What stayed: the clean gait cycles of the loops, GaitCycle.js.)
 //   anim.teleport(facing)       after spawning / being moved: no turn clip, no blend, foot locks dropped
 //   anim.finalize(dt, env)      env = { space: Matrix4 world matrix of the room the character stands in (foot locks live there),
 //                                       ground: (x, z) => height in room space | null, baseY: room-space height of the feet }
@@ -43,7 +40,7 @@ import { CLIP_MAP, DIR_PRIORITY, TUNING } from './clipMap.js';
 import { ClipFeatureExtractor, poseCost } from './ClipFeatures.js';
 import { Inertializer } from './Inertializer.js';
 import { FootLocker, GroundAdapt } from './FootIK.js';
-import { MotionMatcher, KIND, GAITS, DIM, TRAJ_T } from './MotionMatcher.js';
+import { findCycle } from './GaitCycle.js';
 
 const DEG = 180 / Math.PI, RAD = Math.PI / 180;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -86,7 +83,7 @@ export class MannyAnimator {
     }
     this.analyseMs = Math.round(work + performance.now() - slice); this.loadMs = Math.round(performance.now() - t0);
     this._buildSets();
-    this._buildMM();
+    this._buildCycles();
     this.inertializer = new Inertializer(this.model);
     this.footLock = new FootLocker(this.model);
     this.groundAdapt = new GroundAdapt(this.model);
@@ -137,15 +134,9 @@ export class MannyAnimator {
 
   /** loop speed (m/s) of a gait for a travel direction relative to the body (deg, 0 = forward, + = right) */
   speedAt(gait, thetaDeg) { let v = 0; for (const [s, w] of this._dirWeights(gait, thetaDeg)) v += s.speed * w; return v; }
-  /** motion matching database: all starts, loops, stops and pivots that do not turn the body (strafe mode) */
-  _buildMM() {
-    const entries = [];
-    for (const [gait, dirs] of Object.entries(CLIP_MAP.loops)) for (const name of Object.values(dirs)) if (this.actions[name]) entries.push({ name, kind: 'loop', gait });
-    for (const [group, kind] of [['starts', 'start'], ['stops', 'stop'], ['pivots', 'pivot']]) {
-      for (const [gait, names] of Object.entries(this.groups[group])) {
-        for (const name of names) if (Math.abs(this.feat[name].yawTotalDeg) <= 20) entries.push({ name, kind, gait });
-      }
-    }
+  /** clean gait cycle of every loop clip (GaitCycle.js): the loops play only that, phase 0 = left foot comes down */
+  _buildCycles() {
+    const T = this.tuning;
     // whole-body difference of a clip between two times (mean rotation of all bones, deg)
     const clips = new Map(this.gltf.animations.map((c) => [c.name, c])), ips = new Map(), qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
     const poseDist = (name, ta, tb) => {
@@ -155,14 +146,13 @@ export class MannyAnimator {
       for (const it of ip) { qa.fromArray(it.evaluate(ta)); qb.fromArray(it.evaluate(tb)); sum += 2 * Math.acos(Math.min(1, Math.abs(qa.dot(qb)))); }
       return ip.length ? sum / ip.length * DEG : 0;
     };
-    this.mm = new MotionMatcher(this.feat, entries, this.tuning.mmWeights || {}, poseDist);
     // travel speed of a loop = speed over its clean cycle (the whole clip has a held last frame and reads ~1 % slow)
-    // The blended loops (state loop) use the same clean cycle: phase 0 = left foot comes down, one phase = one gait cycle.
+    this.cycles = new Map();
     for (const set of Object.values(this.loopSets)) for (const l of set) {
-      const c = this.mm.byName.get(l.name);
-      if (c && c.speed > 0.2) { l.speed = c.speed; if (this.tuning.loopCycles !== false) { l.cyc = c; l.duration = c.b - c.a; } }
+      let c = this.cycles.get(l.name);
+      if (!c) { c = findCycle(this.feat[l.name], { air: T.cycleAir, body: T.cycleBody, poseDist: (ta, tb) => poseDist(l.name, ta, tb) }); this.cycles.set(l.name, c); }
+      if (c.speed > 0.2) { l.speed = c.speed; if (T.loopCycles !== false) { l.cyc = c; l.duration = c.b - c.a; } }
     }
-    this._mmQ = new Float32Array(DIM);
   }
 
   speedOf(gait) { const s = (this.loopSets[gait] || []).find((l) => l.key === 'F'); return s ? s.speed : 0; }
@@ -279,7 +269,7 @@ export class MannyAnimator {
     // the seam of the dominant clip's cycle: its two ends fit to a few cm, the rest is blended away
     if (bs && bs.cyc && this.state === 'loop') {
       const u = (this.phase + bs.cyc.phi0) % 1;
-      if (this._seamClip === best && u < this._seamU - 0.5) this._blend(this.tuning.mmLoopBlend);
+      if (this._seamClip === best && u < this._seamU - 0.5) this._blend(this.tuning.seamBlend);
       this._seamU = u; this._seamClip = best;
     }
   }
@@ -418,18 +408,9 @@ export class MannyAnimator {
     const jumpTarget = this._targetYaw !== undefined && Math.abs(wrapDeg((desiredYaw - this._targetYaw) * DEG)) > T.reselectAngle;
 
     // v4: capsule-led strafe locomotion is motion matched
-    const useMM = !!(T.motionMatching && vel && strafe && this.mm && this.mm.rows);
-    const ctx = { moving, mv, gk, thetaIn, vel };
-    const startMove = () => { if (useMM) this._mmEnter(ctx, T.blend); else this._enterStart(thetaIn, strafe, moveYaw); };
-    if (this.state === 'mm' && !useMM) this._startLoco(T.blend);      // switched off while running
+    const startMove = () => this._enterStart(thetaIn, strafe, moveYaw);
 
     switch (this.state) {
-      case 'mm': {
-        this.facing = approachAngle(this.facing, targetFacing, T.proceduralTurnRate * RAD * dt);
-        this._targetYaw = desiredYaw;
-        this._mmUpdate(dt, ctx);
-        break;
-      }
       case 'idle': {
         if (moving) { startMove(); break; }
         const diff = wrapDeg((targetFacing - this.facing) * DEG);
@@ -519,8 +500,7 @@ export class MannyAnimator {
       }
       case 'stop': {
         if (moving) {
-          if (useMM) startMove();
-          else if (this.planarVel.length() > T.resumeLoopSpeed) { this.locoTheta = strafe ? thetaIn : wrapDeg((this.facing - moveYaw) * DEG); this._startLoco(T.blend); }
+          if (this.planarVel.length() > T.resumeLoopSpeed) { this.locoTheta = strafe ? thetaIn : wrapDeg((this.facing - moveYaw) * DEG); this._startLoco(T.blend); }
           else this._enterStart(thetaIn, strafe, moveYaw);
           break;
         }
@@ -542,8 +522,7 @@ export class MannyAnimator {
       case 'fall': { if (grounded) this._enterLand(); break; }
       case 'land': {
         if (this.stateTime >= this._exitT || (moving && this.stateTime > 0.12)) {
-          if (moving && useMM) this._mmEnter(ctx, 0.3);
-          else if (moving) { this.locoTheta = strafe ? thetaIn : 0; this._startLoco(0.3); } else this._startIdle(0.3);
+          if (moving) { this.locoTheta = strafe ? thetaIn : 0; this._startLoco(0.3); } else this._startIdle(0.3);
         }
         break;
       }
@@ -587,8 +566,6 @@ export class MannyAnimator {
       if (st !== 'settle' || true) this.facing += dYaw;
       out.delta.copy(d).applyAxisAngle(UP, this.facing);
       this._osPrevT = t1;
-    } else if (st === 'mm' && this._mm && this._mm.name) {
-      out.delta.copy(this._mm.delta).applyAxisAngle(UP, this.facing);
     } else if (st === 'settle') {
       out.delta.copy(this._settleVel).multiplyScalar(dt * Math.max(0, 1 - this.stateTime / T.tapBlend));
     } else if (st === 'jumpStart' || st === 'fall' || st === 'land') {
@@ -650,13 +627,6 @@ export class MannyAnimator {
     // loops: feet are already planted by the speed-matched movement; locking there fights the
     // procedural turning, so only one-shots (start/stop/turn/pivot/settle) and idle are locked
     if (st === 'loop') return { l: false, r: false };
-    if (st === 'mm') {
-      const m = this._mm;
-      if (!m || !m.name || m.kind === KIND.loop) return { l: false, r: false };
-      const f = this.feat[m.name], i = f.index(m.t), c = { l: !!f.contactL[i], r: !!f.contactR[i] };
-      if (c.l && c.r) { const s = this._supportContacts(); if (s.l && !s.r) c.r = false; else if (s.r && !s.l) c.l = false; }
-      return c;
-    }
     // a calm stop (stop of the slower gait) locks its support foot: it comes out of a wider stride than the clip's own
     if (!this.tuning.footLockStates.includes(st) && !(st === 'stop' && this._calmStop)) return { l: false, r: false };
     if (this.oneShot && this.feat[this.oneShot]) {
@@ -669,109 +639,6 @@ export class MannyAnimator {
       return c;
     }
     return { l: false, r: false };
-  }
-
-  // ------------------------------------------------------------------ motion matching (state 'mm')
-  _mmEnter(ctx, blend) {
-    this._mm = { name: null, t: 0, kind: 0, loop: false, since: 0, wait: 1e9, intent: '', gait: ctx.gk, still: 0, settle: 0, delta: new THREE.Vector3(), blend };
-    this.oneShot = null;
-    this._enter('mm');
-    this._mmUpdate(0, ctx);
-  }
-
-  /** query: the pose shown right now and the path the capsule is going to take (all in the body frame) */
-  _mmQuery(ctx) {
-    const q = this._mmQ, c = this.curPose, T = this.tuning, gk = ctx.gk;
-    q[0] = c.footL.x; q[1] = c.footL.y; q[2] = c.footL.z; q[3] = c.footR.x; q[4] = c.footR.y; q[5] = c.footR.z;
-    q[6] = c.velL.x; q[7] = c.velL.y; q[8] = c.velL.z; q[9] = c.velR.x; q[10] = c.velR.y; q[11] = c.velR.z;
-    // world (room) -> body frame: rotation about Y by -facing
-    const cy = Math.cos(-this.facing), sy = Math.sin(-this.facing);
-    const v0x = ctx.vel.x, v0z = ctx.vel.y;
-    q[12] = v0x * cy + v0z * sy; q[13] = -v0x * sy + v0z * cy;
-    // capsule model of the game: the velocity follows the target velocity with rate k (accelerating / braking)
-    const sp = ctx.moving ? this.speedAt(gk === 'sprint' && Math.abs(ctx.thetaIn) > 60 ? 'run' : gk, ctx.thetaIn) : 0;
-    const tx = ctx.moving ? ctx.mv.x * sp : 0, tz = ctx.moving ? ctx.mv.y * sp : 0;
-    const k = ctx.moving ? T.capsuleAccel : T.capsuleBrake;
-    for (let i = 0; i < TRAJ_T.length; i++) {
-      const t = TRAJ_T[i], e = (1 - Math.exp(-k * t)) / k;
-      const px = tx * t + (v0x - tx) * e, pz = tz * t + (v0z - tz) * e;
-      q[14 + i * 2] = px * cy + pz * sy; q[15 + i * 2] = -px * sy + pz * cy;
-    }
-    return q;
-  }
-
-  _mmPlay(hit, blend) {
-    const m = this._mm, a = this.actions[hit.name], f = this.feat[hit.name];
-    a.reset(); a.setLoop(hit.loop ? THREE.LoopRepeat : THREE.LoopOnce, hit.loop ? Infinity : 1); a.clampWhenFinished = true;
-    a.setEffectiveTimeScale(0); a.time = hit.t; a.play();
-    this._playOnly(hit.name, blend);
-    this.log.push({ t: +this.time.toFixed(2), from: 'mm', to: 'mm', clip: `${hit.name} @${hit.t.toFixed(2)} c${hit.cost.toFixed(1)}` });
-    m.name = hit.name; m.t = hit.t; m.kind = hit.kind; m.loop = hit.loop; m.since = 0;
-    m.settle = hit.kind === KIND.stop ? this._stopExit(f, hit.t) : 0;
-    this.mmSwitches = (this.mmSwitches || 0) + 1;
-  }
-
-  _mmUpdate(dt, ctx) {
-    const m = this._mm, T = this.tuning, moving = ctx.moving, gk = ctx.gk;
-    m.since += dt; m.wait += dt;
-    if (moving) m.gait = gk;
-    const gait = GAITS.indexOf(moving ? gk : m.gait);
-    // sprint and crouch have no pivots of their own (and sprint only forward loops): the search falls back to run rows there
-    const kinds = moving ? (KIND.start | KIND.loop | KIND.pivot) : KIND.stop;
-    const intent = (moving ? 'm' : 's') + gait + '|' + (moving ? Math.round(ctx.thetaIn / 30) : 0);
-    const changed = intent !== m.intent; m.intent = intent;
-    let f = m.name ? this.feat[m.name] : null;
-    const atEnd = !!f && !m.loop && m.t >= f.duration - 0.02;
-
-    // ---- stand: nothing to match any more
-    const real = this._realSpeed ?? 0;
-    m.still = !moving && real < 0.15 ? m.still + dt : 0;
-    if (!moving && (m.kind === KIND.stop ? (m.t >= m.settle || atEnd) && real < 0.15 : m.still > 0.12)) { this._startIdle(0.3); return; }
-
-    // ---- search
-    // a running stop is not searched again (its end is fixed by the remaining distance), everything else periodically
-    // ... but not right after a jump to a new frame: until the blend has settled the shown pose still belongs to the old clip
-    if (changed || !m.name || (m.kind !== KIND.stop && m.wait >= T.mmInterval && m.since >= T.mmHold) || (atEnd && moving)) {
-      m.wait = 0;
-      const q = this._mmQuery(ctx);
-      const stay = m.name && !atEnd ? this.mm.costAt(q, m.name, m.t, kinds, gait) : Infinity;
-      const hit = this.mm.search(q, kinds, gait, m.name ? { name: m.name, t: m.t, window: 0.3 } : null);
-      m.lastStay = stay; m.lastBest = hit ? hit.cost : -1;
-      // hysteresis: a new frame must be clearly cheaper, relatively AND absolutely (similar frames of other clips are no reason to jump)
-      if (hit && (stay === Infinity || hit.cost + Math.max(T.mmGain, stay * T.mmBias) < stay)) this._mmPlay(hit, m.name ? (hit.kind === KIND.stop ? T.stopBlend : T.mmBlend) : m.blend);
-      else if (!hit && stay === Infinity) {
-        if (!moving) { this._startIdle(0.3); return; }
-        if (!m.name) { this.locoTheta = ctx.thetaIn; this._startLoco(T.blend); return; }      // no rows for this gait: old loop blend
-      }
-      f = m.name ? this.feat[m.name] : null;
-    }
-    if (!f || dt <= 0) { m.delta.set(0, 0, 0); return; }
-
-    // ---- play on by distance: the clip advances as far as the capsule moved
-    const t0 = m.t, dur = f.duration, total = f.cum[f.n - 1];
-    let t1 = t0 + dt;
-    const cs = f.speed[f.index(t0)];
-    if (m.kind === KIND.stop) {
-      // remaining clip distance = remaining capsule distance; once the capsule stands the clip settles in real time
-      if (real < 0.15 || this._stopDist === undefined) t1 = t0 + dt * 1.15;
-      else t1 = clamp(f.timeAtCum(total - Math.min(total, this._stopDist)), t0 + dt * 0.5, t0 + dt * 3);
-    } else if (cs > 0.6 && real > 0.3) {
-      const lo = m.kind === KIND.loop ? 0.7 : 0.6, hi = m.kind === KIND.loop ? 1.35 : 2.5;
-      t1 = clamp(f.timeAtCum(f.cumAt(t0) + real * dt), t0 + dt * lo, t0 + dt * hi);
-    }
-    // root motion of the clip between t0 and t1, in the body frame
-    const p0 = f.posAt(t0), y1 = f.yawAt(Math.min(t1, dur));
-    const cyc = m.loop ? this.mm.byName.get(m.name) : null;
-    if (cyc && t1 >= cyc.b) {
-      // round the clean cycle (MotionMatcher._cycle); the small rest between its two ends is blended away
-      t1 = Math.min(cyc.a + (t1 - cyc.b), cyc.b - 1e-3);
-      m.delta.copy(f.posAt(cyc.b)).sub(p0).add(f.posAt(t1)).sub(f.posAt(cyc.a));
-      this._blend(T.mmLoopBlend);
-      m.since = 0;                      // the shown pose is in a blend again: no search until it has settled
-    } else { t1 = Math.min(t1, dur); m.delta.copy(f.posAt(t1)).sub(p0); }
-    m.delta.y = 0; m.delta.applyAxisAngle(UP, -y1);
-    m.t = t1;
-    this.actions[m.name].time = t1;
   }
 
   // ------------------------------------------------------------------ transitions into states

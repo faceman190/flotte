@@ -19,15 +19,12 @@ import { MannyAnimator } from './manny/MannyAnimator.js';
 //  - Der Körper schaut in Blickrichtung (Strafe-Modus des Animators), wie beim Soldaten.
 //  - Waffen, Anschlag, Schießen, Nachladen und Tod hat Manny nicht; die Soldatenfigur bleibt dafür unsichtbar im Halter.
 // =====================================================================================
-export const MANNY = { on: false, url: '' as string, alt: false, brake: 8, accel: 0, mm: false };   // brake / accel: Brems- und Anlaufrate der Spielphysik mit Manny (1/s, 0 = Wert der Laufstelle)   // url: nur für Tests, sonst aus der Paketliste; alt: alter Anschluss (Tempo statt Absicht) zum Vergleich im Prüfskript
+export const MANNY = { on: false, url: '' as string, alt: false, brake: 8, accel: 0 };   // brake / accel: Brems- und Anlaufrate der Spielphysik mit Manny (1/s, 0 = Wert der Laufstelle)   // url: nur für Tests, sonst aus der Paketliste; alt: alter Anschluss (Tempo statt Absicht) zum Vergleich im Prüfskript
 try {
   const q = new URLSearchParams(location.search).get('manny');
   if (q === '1' || q === '0') localStorage.setItem('lf_manny', q);
   MANNY.on = (q ?? localStorage.getItem('lf_manny')) === '1';
-  // ?mm=1: Motion Matching statt der abgestimmten Zustände (Stufe 3, zum Vergleichen; bleibt gespeichert), ?mm=0 wieder aus
-  const m = new URLSearchParams(location.search).get('mm');
-  if (m === '1' || m === '0') localStorage.setItem('lf_manny_mm', m);
-  MANNY.mm = (m ?? localStorage.getItem('lf_manny_mm')) === '1';
+  localStorage.removeItem('lf_manny_mm');      // Schalter für Motion Matching (23.11.2026 wieder ausgebaut)
 } catch (e) { /* ohne Speicher: aus */ }
 
 let anim: any = null, loading = false, failed = false;
@@ -110,8 +107,6 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
     if (spd > 0.3) _mv.set(d.vx / spd, d.vz / spd); else _mv.set(0, 0);
     gait = gaitOf(spd);
   }
-  anim.tuning.motionMatching = MANNY.mm;
-  anim.tuning.capsuleBrake = MANNY.brake > 0 ? MANNY.brake : 12.5; anim.tuning.capsuleAccel = MANNY.accel > 0 ? MANNY.accel : 9.5;   // für den vorausberechneten Weg
   const out = anim.update(dtc, {
     moveDir: _mv, gait, crouch: !!d.crouch, strafe: true, facing: face,
     jump, grounded: !air, verticalSpeed: vy,

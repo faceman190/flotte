@@ -74,17 +74,11 @@ export const TUNING = {
   turnThreshold: 45,      // deg – turn in place when the desired facing differs more than this (strafe / idle)
   movingTurnThreshold: 60,// deg – orient mode: use a Walk/Run_Turn clip above this direction change
   yawScaleRange: [0.5, 1.8],
-  // motion matching (v4, capsule-led strafe locomotion)
-  // Measured 2026-11-23 (scripts/mannytest.js, MT.bench): with this clip set the tuned states of v3 slide less (1568 cm against
-  // 1914 cm) and need smaller blends (541 against 847 deg) than the search, so it is off by default. Switch: ?mm=1.
-  motionMatching: false,  // true = one state mm instead of start / loop / stop / pivot
-  loopCycles: true,       // blended loops play the clean gait cycle of each clip (MotionMatcher._cycle) instead of the whole clip
-  mmInterval: 0.1,        // s – search again this often (and at once when the intent changes)
-  mmBias: 0.3,            // going on with the running clip is preferred: a new frame must be this much cheaper (share of the cost) ...
-  mmGain: 0.25,           // ... and at least this much in absolute cost (group weights sum to about 7)
-  mmBlend: 0.2,           // s – inertialization time when the search jumps to another frame
-  mmLoopBlend: 0.12,      // s – blend when a loop goes round its cycle (its two ends fit to 4 – 15 cm, not exactly)
-  mmHold: 0.25,           // s – no new search this long after a jump (unless the intent changes)
+  // loops (GaitCycle.js)
+  loopCycles: true,       // blended loops play the clean gait cycle of each clip instead of the whole clip (which does not close)
+  seamBlend: 0.12,        // s – blend when a loop goes round its cycle (its two ends fit to 4 – 15 cm, not exactly)
+  cycleAir: 0.06,         // m – a seam with a foot on the ground costs this much more than one in the flight phase
+  cycleBody: 0,           // > 0: choose the seam by the whole body too (smoother sprint seam, but the feet slide more: 450 against 356 cm)
   // calm start and stop for jogging (capsule-led, 2026-11-23): the Run starts / stops look like sprinting
   // Instead: straight from standing into the loop, the gait mixed by real speed (walk <-> run); on release the loop rolls out
   // the same way and the stop of the slower gait steps in once the character is slow. {} = old behaviour.
@@ -93,6 +87,4 @@ export const TUNING = {
   softStopBlend: 0.2,     // s – loop -> stop of the slower gait
   coastSpeed: 1.5,        // m/s – below this the stop clip takes over
   coastMix: false,        // true = mix the gaits by speed while rolling out too (measured worse: the stride shrinks within 0.1 s)
-  capsuleAccel: 9.5,      // 1/s – how fast the game's velocity follows the keys (for the predicted path)
-  capsuleBrake: 8,        // 1/s – the same after releasing the keys
 };
