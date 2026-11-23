@@ -74,4 +74,17 @@ export const TUNING = {
   turnThreshold: 45,      // deg – turn in place when the desired facing differs more than this (strafe / idle)
   movingTurnThreshold: 60,// deg – orient mode: use a Walk/Run_Turn clip above this direction change
   yawScaleRange: [0.5, 1.8],
+  // motion matching (v4, capsule-led strafe locomotion)
+  // Measured 2026-11-23 (scripts/mannytest.js, MT.bench): with this clip set the tuned states of v3 slide less (1568 cm against
+  // 1914 cm) and need smaller blends (541 against 847 deg) than the search, so it is off by default. Switch: ?mm=1.
+  motionMatching: false,  // true = one state mm instead of start / loop / stop / pivot
+  loopCycles: true,       // blended loops play the clean gait cycle of each clip (MotionMatcher._cycle) instead of the whole clip
+  mmInterval: 0.1,        // s – search again this often (and at once when the intent changes)
+  mmBias: 0.3,            // going on with the running clip is preferred: a new frame must be this much cheaper (share of the cost) ...
+  mmGain: 0.25,           // ... and at least this much in absolute cost (group weights sum to about 7)
+  mmBlend: 0.2,           // s – inertialization time when the search jumps to another frame
+  mmLoopBlend: 0.12,      // s – blend when a loop goes round its cycle (its two ends fit to 4 – 15 cm, not exactly)
+  mmHold: 0.25,           // s – no new search this long after a jump (unless the intent changes)
+  capsuleAccel: 9.5,      // 1/s – how fast the game's velocity follows the keys (for the predicted path)
+  capsuleBrake: 8,        // 1/s – the same after releasing the keys
 };

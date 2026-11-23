@@ -19,7 +19,7 @@ import { kitMaterials } from '../models/kit';
 import { onCoop, coopSend, coopNow, pack, CoopGroup } from './coop';
 import { gunReady, gunFired, gunUpdate, GUN } from './footgun';
 import { drawFootRing, drawPrompt } from '../ui/footHud';
-import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, footPace, footBrake, setIntent, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, figGear, type Avatar, type RemoteFig } from './avatar';
+import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, footPace, footBrake, footAccel, setIntent, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, figGear, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
 // Dungeons auf Planeten: verlassene Minen als Labyrinth.
@@ -981,7 +981,7 @@ export function updateDungeon(dt: number) {
   }
   // Laufen
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
-  const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? footPace(f, s, run, 4.2, 6.4) * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(DUN.yaw), cy = Math.cos(DUN.yaw), k = Math.min(1, dt * (f || s ? 10 : footBrake(13)));
+  const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? footPace(f, s, run, 4.2, 6.4) * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(DUN.yaw), cy = Math.cos(DUN.yaw), k = Math.min(1, dt * (f || s ? footAccel(10) : footBrake(13)));
   setIntent(DUN.yaw, f, s, run);
   DUN.vx += ((-sy * f + cy * s) * sp - DUN.vx) * k; DUN.vz += ((-cy * f - sy * s) * sp - DUN.vz) * k;
   const dx = DUN.vx * dt, dzz = DUN.vz * dt, ox = DUN.x, oz = DUN.z;

@@ -14,11 +14,15 @@ export class Inertializer {
     this.snapP = this.bones.map(() => new THREE.Vector3());
     this.offQ = this.bones.map(() => new THREE.Quaternion());
     this.offP = this.bones.map(() => new THREE.Vector3());
+    // the pose shown in the last two frames (after the offsets, before IK): gives every bone its velocity at a transition
+    this.shownQ = this.bones.map(() => new THREE.Quaternion()); this.shownP = this.bones.map(() => new THREE.Vector3());
+    this.prevQ = this.bones.map(() => new THREE.Quaternion()); this.prevP = this.bones.map(() => new THREE.Vector3());
+    this.shownDt = 0; this.frames = 0; this.velocity = true;
     this.active = false;
     this.pending = false;
     this.t = 0;
     this.duration = 0.2;
-    this._q = new THREE.Quaternion();
+    this._q = new THREE.Quaternion(); this._d = new THREE.Quaternion(); this._v = new THREE.Vector3();
     this.count = 0;
   }
 
@@ -49,13 +53,33 @@ export class Inertializer {
 
   /** call AFTER mixer.update(dt) */
   apply(dt) {
+    this._apply(dt);
+    // remember what is shown (for the velocity at the next transition)
+    for (let i = 0; i < this.bones.length; i++) { const b = this.bones[i]; this.prevQ[i].copy(this.shownQ[i]); this.prevP[i].copy(this.shownP[i]); this.shownQ[i].copy(b.quaternion); this.shownP[i].copy(b.position); }
+    this.shownDt = dt; this.frames++;
+  }
+  _apply(dt) {
     if (this.pending) {
+      // The snapshot is the pose of the LAST frame, the new animation is already one frame further. Comparing the two directly
+      // would repeat the old pose for one frame (the character freezes while the game moves it on: both feet slide). So the
+      // snapshot is first moved on by one frame with the velocity each bone had.
+      const r = this.velocity && this.frames >= 2 && this.shownDt > 1e-4 ? Math.min(2, dt / this.shownDt) : 0;
       for (let i = 0; i < this.bones.length; i++) {
         const b = this.bones[i];
+        if (r > 0) {
+          this._d.copy(this.shownQ[i]).multiply(this._q.copy(this.prevQ[i]).invert());      // rotation of the last frame
+          if (this._d.w < 0) this._d.set(-this._d.x, -this._d.y, -this._d.z, -this._d.w);
+          this._q.copy(IDENT).slerp(this._d, r);
+          this.snapQ[i].premultiply(this._q);
+          this.snapP[i].addScaledVector(this._v.copy(this.shownP[i]).sub(this.prevP[i]), r);
+        }
         this.offQ[i].copy(this.snapQ[i]).multiply(this._q.copy(b.quaternion).invert());   // snap * new^-1
         if (this.offQ[i].w < 0) { const q = this.offQ[i]; q.set(-q.x, -q.y, -q.z, -q.w); }
         this.offP[i].copy(this.snapP[i]).sub(b.position);
       }
+      // size of this transition: mean rotation offset over all bones (deg) - how far apart the two poses were (tests)
+      let sum = 0; for (let i = 0; i < this.bones.length; i++) sum += 2 * Math.acos(Math.min(1, Math.abs(this.offQ[i].w)));
+      this.lastJump = sum / (this.bones.length || 1) * 180 / Math.PI; this.jumpSum = (this.jumpSum || 0) + this.lastJump; this.jumpMax = Math.max(this.jumpMax || 0, this.lastJump);
       this.pending = false; this.active = true; this.t = 0;
     } else if (this.active) {
       this.t += dt;

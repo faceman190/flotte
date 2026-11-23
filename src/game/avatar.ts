@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { clamp } from '../core/util';
 import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, viewModelId, normLook, type SoldierVis, type FigGear } from './mineArt';
-import { driveManny, releaseManny, mannyPace, mannyBrake } from './mannyAvatar';
+import { driveManny, releaseManny, mannyPace, mannyBrake, mannyAccel } from './mannyAvatar';
+export const footAccel = mannyAccel;   // Anlaufrate beim Drücken der Lauftasten (1/s)
 export const footBrake = mannyBrake;   // Bremsrate nach dem Loslassen der Lauftasten (1/s)
 import { P } from './state';
 // Eigene Figur: angelegte Ausrüstung plus das gewählte Aussehen (seit 2026-11-20)

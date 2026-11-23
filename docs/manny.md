@@ -23,7 +23,7 @@ Wie in Unreals Beispiel bewegt die Spielphysik die Figur, und die Animation rich
 - **Absicht statt Tempo.** Die Laufstellen (interior.ts, onfoot.ts, dungeon.ts) melden mit `setIntent` die Tastenrichtung und das Sprinten.
   Manny wählt damit sofort den richtigen Start (vorher: Geh-Start, weil das Tempo beim Anlaufen noch klein war) und beginnt den Stopp beim Loslassen.
   Läuft die Figur gegen eine Wand (Absicht ja, Tempo nein), bleibt Manny nach 0,3 s stehen.
-- **Tempo der Bewegungen.** Mit Manny läuft das Spiel so schnell wie die Clips (`footPace` → `mannyPace`): Laufen 5,1 m/s, Sprinten 7,1,
+- **Tempo der Bewegungen.** Mit Manny läuft das Spiel so schnell wie die Clips (`footPace` → `mannyPace`): Laufen 5,2 m/s, Sprinten 7,2,
   seitwärts 3,6, rückwärts 3,1, geduckt 2,3. Sprinten gibt es nur nach vorn (bis 60° seitlich). Ohne Manny bleibt alles beim alten Tempo
   (Station 6 / 6,8, Planet und Mine 4,2 / 6,4). In Stationen ist Manny vorher dauernd gesprintet, weil 6 m/s über der Sprintgrenze lag.
 - **Start und Stopp nach Strecke** (Distance Matching, `vel` und `stopDist` im Animator): Der Start-Clip steht immer an der Stelle, die so weit
@@ -57,9 +57,50 @@ Planet und Mine zeigen dieselben Werte wie die Station.
 
 ### Offen
 - Nicht geprüft: Kormoran und Wisent zu Fuß (Rampen, Stufen der Laufkarte), ein Schiff im Flug, ein schwacher Rechner.
-- Der Fuß kippt am Hang nicht mit (er bleibt waagerecht). Sprint-Schleife und Stopps haben in den Clips selbst noch Gleiten (Tabelle).
-- Stufe 2: Oberkörper (Waffe, Zielen, Schießen, Nachladen, Treffer, Tod). Stufe 3: echtes Motion Matching mit vorausberechnetem Weg,
-  Messdaten beim Packen statt beim Laden. Stufe 4: MetaHuman.
+- Der Fuß kippt am Hang nicht mit (er bleibt waagerecht).
+- Stufe 2: Oberkörper (Waffe, Zielen, Schießen, Nachladen, Treffer, Tod). Stufe 4: MetaHuman.
+
+## Stufe 3: Motion Matching (23.11.2026) – gebaut, gemessen, als Schalter
+`?mm=1` schaltet es ein (bleibt gespeichert, `?mm=0` wieder aus). Standard ist weiter die abgestimmte Zustandslogik, weil sie in der Messung besser ist.
+
+**Was es ist** (`MotionMatcher.js`, Zustand `mm` im Animator): eine Datenbank aus allen Einzelbildern der Starts, Schleifen, Stopps und
+Richtungswechsel (201 Clips, 23.178 Bilder, je 20 Werte: Fußlage, Fußtempo, Körpertempo und der Weg der nächsten 0,15 / 0,35 / 0,6 s).
+Alle 0,1 s und sofort bei neuer Absicht wird das Bild gesucht, das zur gezeigten Haltung und zum vorausberechneten Weg der Figur passt
+(Modell der Spielphysik: das Tempo folgt dem Ziel mit Anlauf- bzw. Bremsrate). Eine Suche dauert 0,2 ms. Gespielt wird nach Strecke wie in Stufe 1.
+Stehen, Drehen auf der Stelle und Sprünge bleiben Zustände.
+
+**Abstimmung:** Gruppen zählen als Ganzes (Körpertempo und Weg entscheiden Clip und Richtung, die Füße den Zeitpunkt; mit der ersten Gewichtung
+gewann beim Seitwärts-Stopp ein stehendes Bild aus der falschen Richtung). Ein neues Bild muss deutlich billiger sein (`mmBias`, `mmGain`),
+nach einem Sprung ruht die Suche 0,25 s (`mmHold`). Starts sind nur in ihrer Beschleunigung spielbar, Richtungswechsel nur um die Wende,
+ein laufender Stopp wird nicht neu gesucht.
+
+**Messung** (`MT.bench()`: 28 Durchgänge im Hangar der Bastion, alle Richtungen, acht Loslass-Zeitpunkte, Sprint, Richtungswechsel; 50-ms-Bilder).
+Gleiten = Weg aufgesetzter Füße über den Boden, Sprung = mittlere Verdrehung aller Knochen an einer Überblendung:
+
+| Fassung | Gleiten | Überblendungen | Sprung gesamt |
+|---|---|---|---|
+| Stufe 1 wie am Morgen | 2.215 cm | – | – |
+| Zustandslogik mit den Korrekturen unten (Standard) | 1.568 cm | 131 | 541° |
+| Motion Matching (`?mm=1`) | 1.914 cm | 180 | 847° |
+
+Im gleichmäßigen Lauf (fünf Richtungen, je 4 s): Zustandslogik 302 cm, Motion Matching 356 cm, die alte Fassung mit ganzen Schleifen 467 cm.
+Warum die Suche hier nicht gewinnt: Es gibt je Richtung nur einen Start, einen Stopp und eine Schleife, die Zustandslogik trifft also schon fast immer
+dieselbe Wahl, und die Suche wechselt öfter. Dazu beschleunigt die Spielphysik in 0,25 s, die Starts brauchen 0,67 s – kein Bild der Datenbank
+passt zu Tempo UND Weg der Figur. Mehr Bewegungsmaterial oder eine weichere Anlaufrate (`MANNY.accel`, noch nicht ausprobiert) würden das ändern.
+
+### Fehler, die dabei gefunden wurden (gelten für beide Wege)
+- **Stopp zu früh beendet.** Der Stopp ging in die Ruhehaltung über, sobald der Körper stand; der zweite Fuß war noch im Nachsetzen und sprang dann
+  um 13–20 cm. Jetzt läuft der Stopp, bis beide Füße stehen (`_stopExit`). 24 Stopps: 1.148 → 701 cm.
+- **Überblendung wiederholte ein Bild.** `Inertializer` verglich die Haltung des letzten Bildes mit der neuen Bewegung eines Bild später: Die Figur
+  fror für ein Bild ein, während das Spiel sie weiterschob, beide Füße rutschten. Jetzt wird die alte Haltung mit dem Tempo jedes Knochens um ein Bild
+  weitergeführt (Lauf vorwärts mit Nahtstellen: 351 → 88 cm).
+- **Schleifen schließen nicht.** In der GLB liegt das letzte Bild jeder Schleife 0,3–0,9 m (Füße) neben dem ersten, das gab alle 2,5 s einen Ruck.
+  `MotionMatcher._cycle` sucht in jedem Clip den saubersten Schrittzyklus (0,5–1 s, Naht 4–15 cm); Schleifen spielen nur ihn, die Naht wird in 0,12 s
+  überblendet. Phase 0 ist überall „linker Fuß setzt auf“, damit Richtungen im selben Schritt gemischt werden. Daraus stammt auch das echte Lauftempo
+  (5,17 statt 5,10 m/s: Der ganze Clip hat ein doppeltes letztes Bild).
+- Die Sprint-Naht bleibt mit rund 7° die gröbste. Die Naht nach dem ganzen Körper zu wählen (`mmWeights.cycleBody`) macht sie glatter (4°),
+  lässt aber die Füße insgesamt mehr gleiten (450 statt 356 cm) und ist deshalb aus.
+- „Messdaten beim Packen statt beim Laden“ ist nicht nötig: Vermessen 0,35 s in Scheiben, Datenbank bauen 0,09 s.
 
 ## Richtung (Entscheidung 23.11.2026)
 Wir bauen künftig auf dem Unreal-System auf: Skelett nach UE5/MetaHuman-Namen, Bewegungen aus Unreal (Game Animation Sample und eigene),
@@ -68,7 +109,8 @@ diese Bewegungslogik als Grundlage. Die Lizenzfrage (Epic-Inhalte außerhalb von
 ## Aufbau
 - `src/game/mannyAvatar.ts`: Schalter, Laden, Anbindung an `driveAvatar` (avatar.ts; nur Figuren mit `player`, also die eigene).
 - `src/game/manny/`: Bewegungslogik (JavaScript, aus der Manny-Demo übernommen). `MannyAnimator.js` (Zustände, Auswahl der Clips nach Pose),
-  `ClipFeatures.js` (misst jeden Clip beim Laden), `Inertializer.js` (weiche Übergänge), `FootIK.js` (Füße am Boden halten),
+  `ClipFeatures.js` (misst jeden Clip beim Laden), `MotionMatcher.js` (Datenbank, Suche, saubere Schrittzyklen der Schleifen),
+  `Inertializer.js` (weiche Übergänge), `FootIK.js` (Füße am Boden halten, Boden folgen),
   `clipMap.js` (alle Clipnamen und Einstellwerte an einer Stelle).
 - Datei: `asset-src/glb/lazy/Manny.glb` (321 Clips). Paket **lazy**: weder vor dem Menü noch im Hintergrund geladen, nur auf Anforderung.
   Einzeln neu packen: `node scripts/build-manny.mjs` (dauert rund 10 Minuten); `npm run assets` packt sie ebenfalls.

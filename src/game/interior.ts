@@ -25,7 +25,7 @@ import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom, interiorEnv } 
 import { stationTemplate } from '../models/stationModels';
 import { applyKit, kitMeta } from '../models/kit';
 import { HANGAR_BLOCKS } from '../data/hangarBlocks';
-import { VIEW, STANCE, footPace, footBrake, setIntent, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, figGear, gearFromNet, type Avatar, type NetAct } from './avatar';
+import { VIEW, STANCE, footPace, footBrake, footAccel, setIntent, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, figGear, gearFromNet, type Avatar, type NetAct } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
 import { crewBesuch, crewSpruch, crewFetzen, crewDurchsage, crewEile, crewHooks } from './crewStimmen';
@@ -1191,7 +1191,7 @@ export function updateWalk(dt: number) {
   {
     const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? footPace(f, s, run, 6, 6.8) * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
     setIntent(IN.yaw, f, s, run);
-    const k = Math.min(1, dt * (f || s ? 9 : footBrake(12)));
+    const k = Math.min(1, dt * (f || s ? footAccel(9) : footBrake(12)));
     walkV.x += ((-sy * f + cy * s) * sp - walkV.x) * k; walkV.z += ((-cy * f - sy * s) * sp - walkV.z) * k;
     if (Math.hypot(walkV.x, walkV.z) < 0.05) walkV.x = walkV.z = 0;
     const dx = walkV.x * dt, dzz = walkV.z * dt, ox = IN.x, oz = IN.z;
