@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MANIFEST, whenIdle } from '../core/assets';
 // @ts-ignore – reines JavaScript (aus der Manny-Demo übernommen), ohne Typen
 import { MannyAnimator } from './manny/MannyAnimator.js';
+import { buildHandWeapon } from './mineArt';
 
 // =====================================================================================
 // Eigene Spielerfigur in der Außensicht: Figur „Spieler“ auf dem UE5-Skelett mit den Bewegungen des Manny-Satzes.
@@ -21,13 +22,18 @@ import { MannyAnimator } from './manny/MannyAnimator.js';
 //    · Das Spiel läuft mit Manny im Tempo der Bewegungen (mannyPace: vorwärts schneller als seitwärts und rückwärts).
 //    · Start und Stopp werden nach zurückgelegter bzw. verbleibender Strecke abgespielt, Schleifen im echten Tempo.
 //  - Der Körper schaut in Blickrichtung (Strafe-Modus des Animators), wie beim Soldaten.
-//  - Waffen, Anschlag, Schießen und Nachladen hat der Bewegungssatz nicht; die Soldatenfigur bleibt unsichtbar im Halter.
+//  - Waffe (seit 2026-11-23): Wo geschossen werden kann (Planet, Mine), trägt die Figur die angelegte Waffe. Haltung, Anschlag, Zielen
+//    nach oben und unten, Rückstoß, Nachladen und Treffer kommen aus den Clips des Lyra-Pakets (manny/WeaponLayer.js: nur der
+//    Oberkörper, die Beine laufen weiter wie ohne Waffe). In Stationen und Schiffen bleibt die Figur unbewaffnet.
+//    Die Soldatenfigur bleibt unsichtbar im Halter.
 //  - Tod: Die Figur fällt mit einem der Sturz-Clips um und bleibt liegen (seit 2026-11-23, vorher wechselte das Bild zum Soldaten).
 // =====================================================================================
 // brake / accel: Brems- und Anlaufrate der Spielphysik mit der Figur (1/s, 0 = Wert der Laufstelle) · url, body: nur für Tests
 // (Bewegungssatz, Figur), sonst aus der Paketliste · alt: alter Anschluss (Tempo statt Absicht) zum Vergleich im Prüfskript
 // turnRamp / turnMin: nach einem Richtungswechsel im Lauf steigt die Anlaufrate in turnRamp Sekunden von turnMin (Anteil) auf voll
-export const MANNY = { on: true, url: '' as string, body: '' as string, alt: false, brake: 8, accel: 0, turnRamp: 0.25, turnMin: 0.15 };
+// test: nur für Prüfskripte – Waffe überall tragen (id wie in mineArt WDEFS), auch im Innenraum
+export const MANNY = { on: true, url: '' as string, body: '' as string, alt: false, brake: 8, accel: 0, turnRamp: 0.25, turnMin: 0.15,
+  test: null as null | { id: string; aim: boolean; shots: number; hits: number; reload: number } };
 try {
   const q = new URLSearchParams(location.search).get('manny');
   if (q === '1' || q === '0') localStorage.setItem('lf_manny', q);
@@ -62,6 +68,39 @@ export interface MannyDrive {
   mx?: number; mz?: number;                          // Absicht: gewünschte Laufrichtung (Tasten) in Raumkoordinaten, 0/0 = stehen
   sprint?: boolean;                                  // Absicht: Sprinten gedrückt
   ground?: ((x: number, z: number) => number | null) | null;   // Bodenhöhe im Raum der Figur (Rampen, Stufen, Gelände)
+  // Waffe in der Hand (null / fehlt = unbewaffnet): id = Modell (mineArt WDEFS), aim = im Anschlag, shots / hits = Zähler (eine Änderung
+  // löst Rückstoß bzw. Zucken aus), reload = Fortschritt des Nachladens 0..1, sonst −1
+  weapon?: { id: string; aim: boolean; shots: number; hits: number; reload: number } | null;
+}
+// Welche Haltung zu welcher Waffe gehört und wo die linke Hand greift (grip): Anteil der Strecke Griff → Mündung und Höhe unter der
+// Laufachse in Metern. Pistolen: beide Hände am Griff, wie der Clip sie hält. Gemessen am 23.11.2026 im Testfenster an der Figur.
+// Die Waffen des Spiels haben ihren Nullpunkt am Griff, aber verschieden hoch (Lauf 3 bis 11 cm darüber). Lyras Haltungen gehen von
+// einer Waffe aus, deren Lauf rund 9 cm über der Handfläche liegt (BORE): Jede Waffe wird so weit verschoben, dass ihr Lauf dort liegt
+// (Pistolen nur zu 70 %, ihr Griff ist kürzer) – dann sitzt der Griff in der Hand und das Visier vor dem Auge.
+type Kind = 'rifle' | 'pistol' | 'shotgun';
+const HOLD: Record<string, { kind: Kind; grip?: [number, number] }> = {
+  ar39: { kind: 'rifle', grip: [0.42, -0.058] }, k12: { kind: 'rifle', grip: [0.5, -0.05] }, ig3: { kind: 'rifle', grip: [0.42, -0.05] },
+  smg: { kind: 'rifle', grip: [0.45, -0.05] }, ef2: { kind: 'shotgun', grip: [0.6, -0.045] }, p9: { kind: 'pistol' }, sw: { kind: 'pistol' },
+};
+const BORE: Record<Kind, number> = { rifle: 0.0893, pistol: 0.0837, shotgun: 0.0995 };      // Höhe der Mündung über dem Waffenknochen (lyra.json, sockets.Muzzle)
+const GRIP_LEFT = 0.07;                                         // die linke Hand (Handgelenk) liegt so weit links neben der Laufachse
+const gun = { id: '', g: null as THREE.Object3D | null, muzzle: new THREE.Vector3(), shown: false };
+function setGun(id: string) {
+  if (gun.id === id || !anim?.weapon) return;
+  const w = buildHandWeapon(id); if (!w) return;               // Vorlage noch nicht geladen: im nächsten Bild wieder
+  gun.g?.removeFromParent();
+  gun.id = id; gun.g = w.g; gun.muzzle.copy(w.muzzle);
+  anim.weapon.socket.add(w.g);
+  const h = HOLD[id] || HOLD.k12, L = -w.muzzle.z, up = (BORE[h.kind] - w.muzzle.y) * (h.kind === 'pistol' ? 0.7 : 1);
+  w.g.position.set(0, up, 0);
+  anim.weapon.grip = h.grip ? new THREE.Vector3(-GRIP_LEFT, w.muzzle.y + h.grip[1] + up, -L * h.grip[0]) : null;
+}
+/** Mündung der Waffe in der Hand der Figur (Weltkoordinaten); false, solange die Figur keine Waffe zeigt */
+export function mannyMuzzle(out: THREE.Vector3): boolean {
+  if (!gun.shown || !gun.g || !anim?.weapon?.socket.visible) return false;
+  gun.g.updateWorldMatrix(true, false);
+  gun.g.localToWorld(out.copy(gun.muzzle));
+  return true;
 }
 const st = { lastY: 0, lx: 0, lz: 0, air: false, first: true, blocked: 0 };
 const _mv = new THREE.Vector2(), _vel = new THREE.Vector2();
@@ -124,9 +163,13 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
     if (spd > 0.3) _mv.set(d.vx / spd, d.vz / spd); else _mv.set(0, 0);
     gait = gaitOf(spd);
   }
+  const wp = d.dead ? null : d.weapon || MANNY.test;
+  if (wp) setGun(wp.id);
+  gun.shown = !!wp && gun.id === wp.id;
   const out = anim.update(dtc, {
     moveDir: _mv, gait, crouch: !!d.crouch, strafe: true, facing: face,
     jump, grounded: !air, verticalSpeed: vy, look: { pitch: d.pitch || 0 }, dead: !!d.dead,
+    weapon: wp ? { kind: (HOLD[wp.id] || HOLD.k12).kind, aim: wp.aim, shots: wp.shots, hits: wp.hits, reload: wp.reload } : null,
     vel: led ? _vel.set(d.vx, d.vz) : undefined, stopDist: spd * Math.max(0, (MANNY.brake > 0 ? 1 / MANNY.brake : STOP_TAU + dtc) - dtc),   // Rest des Wegs bei Bremsrate r: Tempo × (1/r − Bilddauer)
   });
   // Animator-Blickrichtung relativ zum Halter, der schon um body + π gedreht ist. yaw, vx, vz und facing gelten im Raum des Halters
@@ -144,7 +187,7 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
 }
 /** Manny aus dem Halter nehmen (Schalter aus oder Figur neu gebaut) */
 export function releaseManny(soldier?: THREE.Object3D) {
-  st.first = true;
+  st.first = true; gun.shown = false;
   if (anim?.model.parent) anim.model.removeFromParent();
   if (soldier) soldier.visible = true;
 }

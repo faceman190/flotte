@@ -104,3 +104,19 @@ export const EXTRA = [
 
 // Knochen, deren Spuren nie gebraucht werden (keine Haut, keine Kinder mit Haut): Hilfsknochen für Unreals eigene IK
 export const DROP_BONES = [/^ik_/, /^center_of_mass$/, /^interaction$/];
+
+// ---------- Waffenhaltung: Clips aus Epics Lyra Starter Game (seit 2026-11-23) ----------
+// Quelle: OneDrive Blender/lyra_paket.zip, entpackt nach asset-src/neu/lyra (nicht im Repository). Dasselbe Skelett wie der Satz oben.
+// Diese Clips spielt nicht der Mixer, sondern die Waffenschicht (src/game/manny/WeaponLayer.js): Sie legt nur den Oberkörper über das
+// Laufen. Deshalb bleiben von ihnen nur die Drehspuren des Oberkörpers (und des Beckens als Bezug) und die Lage des Waffenknochens.
+export const LYRA = [
+  /^MM_(Rifle|Pistol|Shotgun)_Idle_(Hipfire|ADS)$/,          // Grundhaltung: Waffe gesenkt und im Anschlag
+  /^MM_(Rifle|Pistol)_Crouch_Idle$/,                         // geduckt
+  /^MM_Rifle_(Idle_Hipfire|Idle_ADS|Crouch_Idle)_AO_/,       // Zielposen: Oberkörper und Waffe folgen dem Blick
+  /^MM_Pistol_Idle_ADS_AO_/,
+  /^MM_(Rifle|Pistol|Shotgun)_(Fire|Reload)$/,               // Rückstoß (Aufschlag auf die Zielpose) und Nachladen
+  /^MM_(Rifle|Pistol)_Equip$/,                               // Waffe ziehen
+  /^MM_HitReact_/,                                           // Treffer (Aufschlag)
+];
+export const LYRA_BONES = /^(pelvis|spine_0\d|neck_0\d|head|clavicle_[lr]|upperarm_[lr]|lowerarm_[lr]|hand_[lr]|(index|middle|ring|pinky|thumb)_.*|weapon_[lr]|(upperarm|lowerarm)_twist_0\d_[lr])$/;
+export const LYRA_MOVE = /^weapon_[lr]$/;                    // nur diese Knochen behalten ihre Verschiebespur

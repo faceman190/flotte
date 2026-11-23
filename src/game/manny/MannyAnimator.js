@@ -43,6 +43,7 @@ import { FootLocker, GroundAdapt } from './FootIK.js';
 import { findCycle } from './GaitCycle.js';
 import { ClipStore } from './ClipStore.js';
 import { PoseLayers } from './PoseLayers.js';
+import { WeaponLayer } from './WeaponLayer.js';
 
 const DEG = 180 / Math.PI, RAD = Math.PI / 180;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -107,6 +108,8 @@ export class MannyAnimator {
     this._buildCycles();
     this.layers = this.clips.pose ? new PoseLayers(this.model, this.clips) : null;
     this._look = { yaw: 0, pitch: 0, w: 0 }; this._lean = 0;
+    this.weapon = this.clips._decode ? new WeaponLayer(this.model, this.clips) : null;      // upper body with a weapon in hand (Lyra clips)
+    this._ms = 1; this._wSnap = true;
     this.inertializer = new Inertializer(this.model);
     this.footLock = new FootLocker(this.model);
     this.groundAdapt = new GroundAdapt(this.model);
@@ -298,6 +301,7 @@ export class MannyAnimator {
     this.inertializer.active = false; this.inertializer.pending = false;
     this.footLock.reset(); this.groundAdapt.reset();
     this._lean = 0; this._crouchPrev = undefined; this.alt = false;
+    this._wSnap = true;                                        // weapon stance: there at once, no equip clip
   }
   _applyWeights() {
     for (const e of this._acts.values()) e.a.setEffectiveWeight(0);
@@ -754,16 +758,25 @@ export class MannyAnimator {
    */
   _applyLayers(dt, input, yawOff, turnRate) {
     const L = this.layers, T = this.tuning;
-    if (!L || !L.ready) return;
     const st = this.state, air = st === 'fall' || st === 'jumpStart' || st === 'land';
     const k = (tau) => (dt > 0 ? 1 - Math.exp(-dt / tau) : 0);
-    if (st === 'dead') input = {};                             // no look, no lean
+    if (st === 'dead') input = {};                             // no look, no lean, no weapon stance
     // look: the view angles are low-passed; in the air and in a sprint the layer is weaker
     const lk = this._look, pitch = ((input.look && input.look.pitch) || 0) * DEG * T.lookPitch;
     const wantW = T.lookLayer && input.look ? (air ? 0.4 : 1 - (1 - T.lookSprint) * (this.gaitW.sprint || 0)) : 0;
     lk.yaw += (clamp(-yawOff, -135, 135) - lk.yaw) * k(T.lookSmooth);
     lk.pitch += (clamp(pitch, -90, 90) - lk.pitch) * k(T.lookSmooth);
     lk.w += (wantW - lk.w) * k(0.2);
+    // weapon in hand: the upper body comes from the weapon stances (WeaponLayer.js), applied after the look layer and replacing it
+    // there. Standing, the chest keeps the stance whatever the hips do (mesh space); running it follows them a little, in a sprint
+    // and in the air mostly – the weapon moves with the body instead of floating in front of it.
+    const Wp = this.weapon && this.weapon.ready ? this.weapon : null, wi = input.weapon || null;
+    if (Wp) {
+      const still = st === 'idle' || st === 'turn' || st === 'break' || st === 'stance' || st === 'settle';
+      const want = air ? 0.45 : still ? 1 : 0.8 - 0.55 * (this.gaitW.sprint || 0);
+      this._ms = this._wSnap ? want : this._ms + (want - this._ms) * k(0.15);
+    }
+    if (!L || !L.ready) { if (Wp) this._applyWeapon(dt, wi, lk); return; }
     // lean: sideways acceleration of the path = speed × turn rate, only while running forwards in the loop
     let want = 0;
     if (T.leanLayer && st === 'loop' && !this.crouch && this._realSpeed !== undefined) {
@@ -772,6 +785,17 @@ export class MannyAnimator {
     }
     this._lean += (want - this._lean) * k(T.leanSmooth);
     L.apply({ yaw: lk.yaw, pitch: lk.pitch, lookW: lk.w, crouchW: this.crouchW, lean: this._lean, sprintW: this.gaitW.sprint || 0 });
+    if (Wp) this._applyWeapon(dt, wi, lk);
+  }
+
+  /** wi: { kind, aim, shots, hits, reload } or null (no weapon in hand) */
+  _applyWeapon(dt, wi, lk) {
+    const sprint = this.gaitW.sprint || 0, T = this.tuning;
+    this.weapon.apply(dt, {
+      armed: !!wi, kind: wi ? wi.kind : undefined, aim: !!(wi && wi.aim) && sprint < 0.5, shots: wi ? wi.shots : undefined, hits: wi ? wi.hits : undefined,
+      reload: wi && wi.reload !== undefined ? wi.reload : -1, crouchW: this.crouchW, yaw: lk.yaw, pitch: lk.pitch / (T.lookPitch || 1), ms: this._ms, snap: this._wSnap,
+    });
+    this._wSnap = false;
   }
 
   /** call after the model's world transform for this frame is set: pose features + foot locking */
@@ -786,6 +810,7 @@ export class MannyAnimator {
       const hard = ['idle', 'turn', 'settle', 'break', 'stance'].includes(this.state);   // hard lock while standing/turning, soft while moving
       this.footLock.update(dt, this._contactsNow(), !air, hard ? 0 : 3, hard ? 0.3 : 0.15, env ? env.space || null : null);
     }
+    if (this.weapon) this.weapon.finalize();                   // left hand onto the weapon
   }
 
   /** re-target the running turning clip: scale its remaining root rotation to wantDeg (relative to now);

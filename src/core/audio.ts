@@ -103,7 +103,7 @@ async function loadBuf(key: string) {
 const pending: Record<string, boolean> = {};
 function want(key: string) { if (!BUF[key] && !pending[key]) { pending[key] = true; loadBuf(key); } return BUF[key]; }
 // alle einzelnen Aufnahmen vorab laden (alles außer den drei Schleifen für Laser, Triebwerk, Kanone)
-export function preloadSfx() { for (const k of Object.keys(window.SOUNDDATA || {})) if (!['laser', 'booster', 'gun'].includes(k) && !k.startsWith('v_')) want(k); }   // Stimmen (v_…) erst bei Bedarf
+export function preloadSfx() { for (const k of Object.keys(window.SOUNDDATA || {})) if (!['laser', 'booster', 'gun'].includes(k) && !k.startsWith('v_') && !k.startsWith('w_')) want(k); }   // Stimmen (v_…) und Handwaffen (w_…) erst bei Bedarf
 export function sfx(key: string, vol = 1, rate = 1, fallback?: () => void) {
   const b = want(key);
   if (!b || !AC) { fallback?.(); return false; }
@@ -123,18 +123,34 @@ export function sfxHeld(key: string, vol = 1): null | (() => void) {
 }
 // Schuss für Schnellfeuer (seit 2026-11-19, SMG): jeder Schuss startet die Aufnahme neu, der vorige wird in rund 40 ms ausgeblendet.
 // So überlagern sich nicht 13 Schüsse je Sekunde mit vollem Nachhall, und am Ende einer Salve klingt der letzte Schuss ganz aus.
+// group: Aufnahmen derselben Gruppe lösen einander ab (mehrere Fassungen eines Nachhalls)
 const lastShotSrc: Record<string, { g: GainNode; s: AudioBufferSourceNode } | undefined> = {};
-export function shotSfx(key: string, vol = 1, rate = 1, fallback?: () => void) {
+export function shotSfx(key: string, vol = 1, rate = 1, fallback?: () => void, group = key) {
   const b = want(key);
   if (!b || !AC) { fallback?.(); return false; }
-  const ac = AC, t = ac.currentTime, prev = lastShotSrc[key];
+  const ac = AC, t = ac.currentTime, prev = lastShotSrc[group];
   if (prev) { prev.g.gain.setTargetAtTime(0, t, 0.014); const p = prev; setTimeout(() => { try { p.s.stop(); } catch (e) { /* schon aus */ } }, 200); }
   const s = ac.createBufferSource(), g = ac.createGain();
   s.buffer = b; s.playbackRate.value = rate; g.gain.value = vol * audio.volume;
   s.connect(g).connect(ac.destination); s.start(t, TRIM[key]?.[0] || 0);
-  lastShotSrc[key] = { g, s };
+  lastShotSrc[group] = { g, s };
   return true;
 }
+// Handwaffen zu Fuß mit Patronen (seit 2026-11-23): Aufnahmen aus Epics Lyra Starter Game (asset-src/sound-lazy, Schlüssel w_<Art>_…;
+// Paket „world“, geladen erst, wenn die Waffe angelegt ist: gunSounds). Ein Schuss besteht wie dort aus zwei Schichten: dem kurzen Knall
+// (p, eine von mehreren Fassungen) und dem Nachhall (n). Der Nachhall des vorigen Schusses wird ausgeblendet, damit sich Dauerfeuer nicht
+// aufschaukelt. Nachladen: Magazin heraus (out), Magazin hinein (in), Verschluss (end; die Flinte hat keinen).
+export type GunKind = 'rifle' | 'pistol' | 'shotgun';
+const GUN_N: Record<GunKind, [number, number]> = { rifle: [6, 3], pistol: [4, 3], shotgun: [3, 3] };
+export function gunSounds(kind: GunKind) { for (const k of Object.keys(window.SOUNDDATA || {})) if (k.startsWith('w_' + kind + '_')) want(k); }
+export function gunShot(kind: GunKind, vol = 1, rate = 1, fallback?: () => void) {
+  const [np, nn] = GUN_N[kind], p = 'w_' + kind + '_p' + Math.floor(Math.random() * np), n = 'w_' + kind + '_n' + Math.floor(Math.random() * nn);
+  want(n);
+  if (!sfx(p, vol, rate, fallback)) return false;
+  shotSfx(n, vol * 0.7, rate, undefined, 'w_' + kind);
+  return true;
+}
+export const gunPart = (kind: GunKind, part: 'out' | 'in' | 'end', vol = 0.5, fallback?: () => void) => sfx('w_' + kind + '_' + part, vol, 1, fallback);
 // Explosion: eine von drei Aufnahmen, Tonhöhe leicht gestreut (rate < 1 = größer, tiefer)
 export function boom(vol = 0.8, rate = 1, fallback?: () => void) { return sfx('explosion' + Math.floor(Math.random() * 3), vol, rate * (0.92 + Math.random() * 0.16), fallback); }
 // Zusätzliche Schleifen neben dem Grundgeräusch (Rover, Bohrer, Drohnen, Mutterschiff, Torpedo): Lautstärke je Bild setzen, 0 blendet aus

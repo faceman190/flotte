@@ -177,6 +177,11 @@ if (fs.existsSync(TEXW)) for (const n of fs.readdirSync(TEXW).filter(x => /\.(pn
 const SND = path.join(ROOT, 'asset-src', 'sound');
 if (fs.existsSync(SND)) for (const n of fs.readdirSync(SND).filter(x => /.(ogg|mp3)$/i.test(x))) { const b = fs.readFileSync(path.join(SND, n)); put('sound/' + path.basename(n, path.extname(n)), path.extname(n).slice(1).toLowerCase(), b, 'core', b.length); }
 
+// ---- Aufnahmen, die erst bei Bedarf geladen werden (asset-src/sound-lazy/<name>.ogg|mp3): Paket world, im Spiel wie die anderen Klänge.
+//      Handwaffen w_… (audio.ts gunShot). Einzeln nachtragen ohne ganzen Lauf: node scripts/add-lazy-sounds.mjs ----
+const SNDL = path.join(ROOT, 'asset-src', 'sound-lazy');
+if (fs.existsSync(SNDL)) for (const n of fs.readdirSync(SNDL).filter(x => /\.(ogg|mp3)$/i.test(x))) { const b = fs.readFileSync(path.join(SNDL, n)); put('sound/' + path.basename(n, path.extname(n)), path.extname(n).slice(1).toLowerCase(), b, 'world', b.length); }
+
 // ---- Stimmen (asset-src/voice/<Ordner>/<Kennung>.mp3|ogg): im Hintergrund-Paket, im Spiel als Klang v_<Kennung> ----
 const VOX = path.join(ROOT, 'asset-src', 'voice');
 if (fs.existsSync(VOX)) for (const dir of fs.readdirSync(VOX)) { const d = path.join(VOX, dir); if (!fs.statSync(d).isDirectory()) continue; for (const n of fs.readdirSync(d).filter(x => /\.(ogg|mp3)$/i.test(x))) { const b = fs.readFileSync(path.join(d, n)); put('sound/v_' + path.basename(n, path.extname(n)), path.extname(n).slice(1).toLowerCase(), b, 'world', b.length); } }

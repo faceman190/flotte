@@ -109,15 +109,15 @@ Nicht aufgenommen: `Prism` (45°-Wechsel, der Körper bremst dabei kaum), die We
 - **Aufstehen nach einem Sturz, Hinsetzen auf eine Bank, Gesten, Angriffe** (`getup`, `bench`, `gesture`, `takedown`).
 
 ## Was mit der neuen Figur noch fehlt
-- **Waffe, Anschlag, Schießen, Nachladen, Treffer-Zucken**: Auch der vollständige Satz hat dafür keine Clips. In der Außensicht
-  hält die Figur keine Waffe (die Ich-Sicht ist nicht betroffen).
+- **Waffe, Anschlag, Schießen, Nachladen, Treffer-Zucken**: seit dem 23.11.2026 (nachts) aus dem Lyra-Paket, siehe [lyra.md](lyra.md).
+  Auf Planeten und in Minen trägt die Figur die angelegte Waffe; in Stationen bleibt sie unbewaffnet.
 - **Ausrüstung** (Helm, Anzug, Rucksack) zeigt die Figur nicht; sie ist der Grundkörper.
 - **Charakterfenster, andere Spieler:innen, Wachen** zeigen weiter die Soldatenfigur.
 
 ## Was Manny kann und was nicht
 - Kann: Stehen, Drehen auf der Stelle (45/90/135/180°), Gehen, Laufen, Sprinten, Starts und Stops passend zum Fuß, 8 Richtungen,
   Ducken, Sprung mit leichter oder schwerer Landung. Kurzes Tippen = kleiner Schritt.
-- Kann nicht: Waffen halten, Anschlag, Schießen, Nachladen, Treffer-Zucken. (Stand der ersten Fassung; der Tod ist seit dem Abend des 23.11.2026 ein eigener Sturz, siehe oben.)
+- Kann nicht: Waffen halten, Anschlag, Schießen, Nachladen, Treffer-Zucken. (Stand der ersten Fassung; der Tod ist seit dem Abend des 23.11.2026 ein eigener Sturz, siehe oben, die Waffe kommt seit derselben Nacht aus dem Lyra-Paket: [lyra.md](lyra.md).)
 - Die Spielphysik bewegt die Figur; Mannys eigene Fortbewegung in den Clips (Root Motion) wird nur für die Darstellung genutzt.
 - Behoben (23.11.2026): In Stationen und Schiffen lief Manny um die Drehung des Raums versetzt (oft 90° seitlich statt geradeaus).
   Ursache: Die Blickrichtung wurde gegen die Weltdrehung des Halters gerechnet, Richtung und Tempo kommen aber in Raumkoordinaten.
@@ -260,7 +260,7 @@ diese Bewegungslogik als Grundlage. Die Lizenzfrage (Epic-Inhalte außerhalb von
 - Dateien: `asset-src/lazy/Bewegungen.lca` (Bewegungssatz) und `asset-src/glb/lazy/Spieler.glb` (Figur). Paket **lazy**:
   nicht vor dem Menü geladen; die Spielerfigur fordert ihre beiden Dateien an, sobald das Menü steht.
   Einzeln neu packen: `node scripts/build-manny.mjs Spieler` (Figur) bzw. `node scripts/build-clips.mjs` (Bewegungssatz); `npm run assets` nimmt beide mit.
-- `ClipStore.js` (liest den Bewegungssatz), `PoseLayers.js` (Blick und Neigung).
+- `ClipStore.js` (liest den Bewegungssatz), `PoseLayers.js` (Blick und Neigung), `WeaponLayer.js` (Oberkörper mit Waffe, [lyra.md](lyra.md)).
 
 ## Herkunft und Lizenz
 Figur (UE5-Mannequin „Manny“) und Bewegungen stammen aus Epics **Game Animation Sample** (UE 5.8), wurden in Unreal auf Manny übertragen,

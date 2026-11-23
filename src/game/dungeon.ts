@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { scene, camera, ambient, rim, sun, view, ux, gl, overlay } from '../core/engine';
 import { keys, mouse, releaseAll } from '../core/input';
 import { clamp, rng, hashStr } from '../core/util';
-import { snd, sfx, shotSfx } from '../core/audio';
+import { snd, sfx, shotSfx, gunShot, type GunKind } from '../core/audio';
 import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, clearFootFx, SHELL_PORT } from './footfx';
 import { texMat, std } from '../core/textures';
 import { P, G, settings, saveGame } from './state';
@@ -19,7 +19,7 @@ import { kitMaterials } from '../models/kit';
 import { onCoop, coopSend, coopNow, pack, CoopGroup } from './coop';
 import { gunReady, gunFired, gunUpdate, GUN } from './footgun';
 import { drawFootRing, drawPrompt } from '../ui/footHud';
-import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, footPace, footBrake, footAccel, setIntent, makeAvatar, driveAvatar, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, figGear, type Avatar, type RemoteFig } from './avatar';
+import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, footPace, footBrake, footAccel, setIntent, makeAvatar, driveAvatar, avatarMuzzle, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, figGear, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
 // Dungeons auf Planeten: verlassene Minen als Labyrinth.
@@ -585,16 +585,25 @@ function buildFoe(tx: number, tz: number, boss: boolean): Foe {
 }
 
 // ---------- Waffe des Piloten ----------
-const WEAP: Record<string, { iv: number; n: number; spread: number; auto: boolean; col: string; snd: number; sfx?: string }> = {   // sfx: eigene Schussaufnahme (Schnellfeuer, audio.ts shotSfx)
-  waffe_pistole: { iv: 0.3, n: 1, spread: 0.008, auto: false, col: '#ffd9a0', snd: 1.5 }, waffe_karabiner: { iv: 0.13, n: 1, spread: 0.018, auto: true, col: '#ffd9a0', snd: 1.25 },
+// sfx: eigene Schussaufnahme (Schnellfeuer, audio.ts shotSfx) · kind: Patronenwaffe mit den Aufnahmen des Lyra-Pakets (audio.ts gunShot);
+// die Energiewaffen (Impuls, Splitter) und der Schneidbrenner behalten den Laserton, die SMG ihre eigene Aufnahme.
+const WEAP: Record<string, { iv: number; n: number; spread: number; auto: boolean; col: string; snd: number; sfx?: string; kind?: GunKind }> = {
+  waffe_pistole: { iv: 0.3, n: 1, spread: 0.008, auto: false, col: '#ffd9a0', snd: 1.5, kind: 'pistol' }, waffe_karabiner: { iv: 0.13, n: 1, spread: 0.018, auto: true, col: '#ffd9a0', snd: 1.25, kind: 'rifle' },
   waffe_smg: { iv: 0.075, n: 1, spread: 0.024, auto: true, col: '#ffd9a0', snd: 1.05, sfx: 'smg_shot' },
-  waffe_flinte: { iv: 0.85, n: 7, spread: 0.075, auto: false, col: '#ffc080', snd: 0.8 }, waffe_impuls: { iv: 0.2, n: 1, spread: 0.006, auto: true, col: '#b090ff', snd: 1.9 },
+  waffe_flinte: { iv: 0.85, n: 7, spread: 0.075, auto: false, col: '#ffc080', snd: 0.8, kind: 'shotgun' }, waffe_impuls: { iv: 0.2, n: 1, spread: 0.006, auto: true, col: '#b090ff', snd: 1.9 },
   waffe_splitter: { iv: 0.24, n: 2, spread: 0.03, auto: true, col: '#c070ff', snd: 2.2 },
 };
 export const weapon = () => {
   const id = P.gear?.waffe || '', d = gearDef(id), w = WEAP[id];
-  return w && d ? { ...w, dmg: (d.st?.schaden || 6) / (w.n > 1 ? w.n * 0.45 : 1), name: d.n } : { iv: 0.42, n: 1, spread: 0.012, auto: false, col: '#ffb060', snd: 2.6, dmg: 5, name: 'Schneidbrenner', sfx: undefined as string | undefined };
+  return w && d ? { ...w, dmg: (d.st?.schaden || 6) / (w.n > 1 ? w.n * 0.45 : 1), name: d.n } : { iv: 0.42, n: 1, spread: 0.012, auto: false, col: '#ffb060', snd: 2.6, dmg: 5, name: 'Schneidbrenner', sfx: undefined as string | undefined, kind: undefined as GunKind | undefined };
 };
+/** Schussgeräusch der Handwaffe (Mine und Planet) */
+export function shotSound(w: { snd: number; sfx?: string; kind?: GunKind }) {
+  const laser = () => sfx('gun', 0.32, w.snd, () => snd(900, 0.06, 'square', 0.04, -500));
+  if (w.kind) gunShot(w.kind, 0.55, 0.97 + Math.random() * 0.06, laser);      // bis die Aufnahmen geladen sind: der alte Ton
+  else if (w.sfx) shotSfx(w.sfx, 0.5, 0.96 + Math.random() * 0.08, () => sfx('gun', 0.32, w.snd));   // SMG: eigene Aufnahme, Schnellfeuer
+  else laser();
+}
 function buildGun() {
   const g = new THREE.Group(), c1 = new THREE.MeshBasicMaterial({ color: 0x1b1d21 }), c2 = new THREE.MeshBasicMaterial({ color: 0x2c3036 }), c3 = new THREE.MeshBasicMaterial({ color: 0x0e0f11 }), c4 = new THREE.MeshBasicMaterial({ color: 0x4a4f57 });
   const long = !!P.gear?.waffe && P.gear.waffe !== 'waffe_pistole', L = long ? 0.42 : 0.2;
@@ -927,10 +936,9 @@ function hurtPlayer(d: number) {
 function shoot() {
   const w = weapon();
   DUN.cool = w.iv; DUN.kick = 1; DUN.flash = 0.06; shotsN++; noteShot();
-  if (w.sfx) shotSfx(w.sfx, 0.5, 0.96 + Math.random() * 0.08, () => sfx('gun', 0.32, w.snd));   // SMG: eigene Aufnahme, Schnellfeuer
-  else sfx('gun', 0.32, w.snd, () => snd(900, 0.06, 'square', 0.04, -500));
+  shotSound(w);
   const cp = camera.getWorldPosition(_v).clone();
-  const tpm = VIEW.tp && me?.s.weapon ? me.s.weapon.localToWorld(_w.copy(me.s.muzzle)).clone() : null;
+  const tpm = VIEW.tp ? avatarMuzzle(me) : null;
   const a = tpm || (vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : gun ? gun.localToWorld(_w.set(0, 0.008, -0.6)).clone() : cp.clone());
   if (tpm) flash(tpm.x, tpm.y, tpm.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);
   let end: THREE.Vector3 | null = null;
@@ -1141,7 +1149,7 @@ export function updateDungeon(dt: number) {
   // eigene Figur (Außensicht): Laufen nach Richtung, Anschlag nach Schüssen, Neigung mit dem Blick
   if (me) {
     me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });
+    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true });
   }
   for (const m of DUN.msg) m.life -= dt;
   DUN.msg = DUN.msg.filter(m => m.life > 0);

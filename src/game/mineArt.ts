@@ -288,6 +288,16 @@ export function soldierWeapon(s: SoldierVis, id: string) {
   s.hand.add(w); s.weapon = w; s.wid = id; s.muzzle.set(...W.muzzle);
 }
 
+// Waffe für die Hand der neuen Spielerfigur (mannyAvatar.ts, seit 2026-11-23): das Modell wie in der Ich-Sicht – Lauf nach −z, Oberseite +y,
+// Nullpunkt am Griff. Die Lage in der Hand bestimmt der Waffenknochen der Figur (weapon_r, manny/WeaponLayer.js), keine Tabelle je Waffe.
+export function buildHandWeapon(id: string): { g: THREE.Group; muzzle: THREE.Vector3; id: string } | null {
+  const W = WDEFS[id] || WDEFS.k12, node = stationTemplate(W.tpl)?.getObjectByName(W.body); if (!node) return null;
+  const g = new THREE.Group(), c = node.clone(true); g.add(c);
+  const gm = wMat(W);
+  c.traverse((o: any) => { if (o.isMesh) { o.material = gm; o.frustumCulled = false; o.castShadow = true; } o.userData.sh = false; o.userData.shared = true; });
+  return { g, muzzle: new THREE.Vector3(...W.muzzle), id };
+}
+
 // Haltung der Waffe in der Ich-Sicht je Bild (seit Alpha 1.55, Planet und Mine gemeinsam). Vorher wippte sie nur um Millimeter, der Rückstoß
 // war kaum zu sehen und beim Nachladen geschah nichts. Jetzt: Achterbewegung beim Gehen (rennend stärker), deutlicher Rückstoß, Pendeln bei
 // schnellen Drehungen (sx/sy vom Aufrufer) und eine Nachladebewegung (Waffe kippt nach unten innen und kommt zurück), alles ohne Clips.

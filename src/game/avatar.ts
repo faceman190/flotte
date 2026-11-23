@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { clamp } from '../core/util';
 import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, viewModelId, normLook, type SoldierVis, type FigGear } from './mineArt';
-import { driveManny, releaseManny, mannyPace, mannyBrake, mannyAccel, mannyTurn } from './mannyAvatar';
+import { driveManny, releaseManny, mannyPace, mannyBrake, mannyAccel, mannyTurn, mannyMuzzle } from './mannyAvatar';
 // Richtungswechsel im Lauf: Zeit seit dem letzten Wechsel der gewünschten Laufrichtung um mehr als 50° (setIntent zählt mit).
 // Mit der neuen Spielerfigur setzt die Beschleunigung danach weich ein (mannyTurn): Ein Mensch muss erst einen Fuß aufsetzen,
 // bevor sein Körper die Richtung ändert – so passt der Setzschritt der Figur zur Bewegung des Spiels.
@@ -86,7 +86,7 @@ export interface Avatar {
   hitN: number; hitT: number; hitS: number; armL: THREE.Object3D[] | null;
   player?: boolean;                                            // eigene Spielerfigur: darf die Testfigur Manny zeigen (mannyAvatar.ts, ?manny=1)
 }
-export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null }   // reload: Fortschritt 0..1, sonst −1
+export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null; armed?: boolean }   // reload: Fortschritt 0..1, sonst −1 · armed: hier kann geschossen werden (Planet, Mine) – die neue Spielerfigur trägt dann die Waffe wid
 
 export function makeAvatar(gear: FigGear, player = false): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
@@ -160,7 +160,8 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   // Testfigur Manny (?manny=1): eigene Bewegungslogik, der Soldat bleibt unsichtbar im Halter
   if (a.player) {
     const mx = INTENT.mx, mz = INTENT.mz, sprint = INTENT.sprint; INTENT.mx = INTENT.mz = 0; INTENT.sprint = false;
-    if (driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground, dead: !!d.dead })) return;
+    const weapon = d.armed && d.wid ? { id: d.wid, aim: combat, shots: ACT.shot, hits: ACT.hit, reload: d.reload ?? -1 } : null;
+    if (driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground, dead: !!d.dead, weapon })) return;
     if (!s.root.visible) releaseManny(s.root);   // Schalter aus oder Figur nicht geladen: wieder der Soldat
   }
   if (a.ready) {
@@ -236,6 +237,13 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   if (!d.dead && a.ready) gripWeapon(a, d);
 }
 
+/** Mündung der Waffe der eigenen Figur in der Außensicht (Weltkoordinaten) für Leuchtspur und Mündungsfeuer; null ohne sichtbare Waffe */
+export function avatarMuzzle(a: Avatar | null): THREE.Vector3 | null {
+  if (!a) return null;
+  const out = new THREE.Vector3();
+  if (a.player && !a.s.root.visible) return mannyMuzzle(out) ? out : null;      // die neue Figur führt (der Soldat steht unsichtbar still)
+  return a.s.weapon ? a.s.weapon.localToWorld(out.copy(a.s.muzzle)) : null;
+}
 // Stärke des Treffer-Zuckens 0..1 (schnell hin, langsam zurück)
 const flinchK = (a: Avatar) => { if (a.hitT <= 0) return 0; const u = 1 - a.hitT / 0.5; return u < 0.2 ? u / 0.2 : (1 - u) / 0.8; };
 // Waffe im Anschlag auf die Blickrichtung drehen (am rechten Handgelenk) und die linke Hand an den Vorderschaft legen

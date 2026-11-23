@@ -10,7 +10,8 @@
 // Aufruf:  node scripts/build-clips.mjs            packt nach asset-src/lazy/Bewegungen.lca und trägt lazy/Bewegungen in die
 //                                                   Paketliste ein (public/assets)
 //          node scripts/build-clips.mjs --liste    nur zeigen, was gewählt ist
-// Quelle:  asset-src/neu/spielfigur/animationen/*.glb (nicht im Repository; Kopie von OneDrive Blender/Spielfigur/Animationen).
+// Quelle:  asset-src/neu/spielfigur/animationen/*.glb (nicht im Repository; Kopie von OneDrive Blender/Spielfigur/Animationen)
+//          und asset-src/neu/lyra/anims/*.glb (Waffenhaltung aus dem Lyra-Paket, nur Oberkörper; OneDrive Blender/lyra_paket.zip).
 //          Fehlt der Ordner, bleibt asset-src/lazy/Bewegungen.lca die Quelle – sie liegt im Repository.
 //
 // Format LCA1 (alles Little Endian):
@@ -29,10 +30,11 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { MeshoptEncoder } from 'meshoptimizer';
-import { BASE, EXTRA, DROP_BONES } from './clipset.mjs';
+import { BASE, EXTRA, DROP_BONES, LYRA, LYRA_BONES, LYRA_MOVE } from './clipset.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'asset-src', 'neu', 'spielfigur', 'animationen');
+const SRC_LYRA = path.join(ROOT, 'asset-src', 'neu', 'lyra', 'anims');      // Waffenhaltung (Lyra Starter Game), siehe clipset.mjs
 const LCA = path.join(ROOT, 'asset-src', 'lazy', 'Bewegungen.lca');
 const OUT = path.join(ROOT, 'public', 'assets'), MAN = path.join(OUT, 'manifest.json');
 const FPS = 30, TSCALE = 50000;
@@ -80,11 +82,13 @@ function grid(times, vals, n, frames, step) {
 // ---------- Auswahl ----------
 const want = n => BASE.includes(n) || EXTRA.some(re => re.test(n));
 if (!fs.existsSync(SRC)) { console.log('Quellordner fehlt (' + SRC + ') – asset-src/lazy/Bewegungen.lca bleibt, wie sie ist.'); install(); process.exit(0); }
-const files = fs.readdirSync(SRC).filter(x => x.toLowerCase().endsWith('.glb')).sort();
+if (!fs.existsSync(SRC_LYRA)) throw new Error('Quellordner der Waffenhaltung fehlt: ' + SRC_LYRA + ' (lyra_paket.zip dorthin entpacken)');
+const glbs = d => fs.readdirSync(d).filter(x => x.toLowerCase().endsWith('.glb')).sort().map(x => path.join(d, x));
+const files = [...glbs(SRC).map(p => ({ p, lyra: false })), ...glbs(SRC_LYRA).map(p => ({ p, lyra: true }))];
 let bones = null, rest = null, parents = null;
 const clips = [], seen = new Set(), stats = { quellClips: 0, scaleMax: 0, resampled: 0, fremd: 0 };
-for (const fn of files) {
-  const g = readGlb(path.join(SRC, fn)), J = g.j;
+for (const { p: fp, lyra } of files) {
+  const fn = path.basename(fp), g = readGlb(fp), J = g.j;
   // Knochen: alle Knoten unter dem obersten (Manny), in der Reihenfolge der ersten Datei
   const names = J.nodes.map(n => n.name), isBone = J.nodes.map(() => false);
   const walk = i => { isBone[i] = true; for (const c of J.nodes[i].children || []) walk(c); };
@@ -97,7 +101,7 @@ for (const fn of files) {
   const bi = new Map(); names.forEach((n, i) => { const k = bones.indexOf(n); if (isBone[i] && k >= 0) bi.set(i, k); });
   for (const an of J.animations || []) {
     stats.quellClips++;
-    if (!want(an.name)) continue;
+    if (lyra ? !LYRA.some(re => re.test(an.name)) : !want(an.name)) continue;
     if (seen.has(an.name)) { console.warn('doppelt, übersprungen:', an.name, fn); continue; }
     seen.add(an.name);
     if (onlyList) { clips.push({ n: an.name }); continue; }
@@ -105,6 +109,7 @@ for (const fn of files) {
     const tr = [];
     for (const ch of an.channels) {
       const b = bi.get(ch.target.node); if (b === undefined) { stats.fremd++; continue; }
+      if (lyra && (!LYRA_BONES.test(bones[b]) || (ch.target.path === 'translation' && !LYRA_MOVE.test(bones[b])))) continue;   // Waffenhaltung: nur Oberkörper
       const s = an.samplers[ch.sampler], times = acc(g, s.input);
       if (s.interpolation && s.interpolation !== 'LINEAR' && s.interpolation !== 'STEP') throw new Error(an.name + ': Interpolation ' + s.interpolation);
       dur = Math.max(dur, times[times.length - 1]);

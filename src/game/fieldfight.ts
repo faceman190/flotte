@@ -8,7 +8,7 @@ import { P, saveGame } from './state';
 import { world } from './world';
 import { terrainAt } from './surface';
 import { buildDrone, buildViewModel, viewModelId, poseViewModel, type DroneVis, type ViewModel } from './mineArt';
-import { weapon } from './dungeon';
+import { weapon, shotSound } from './dungeon';
 import { gunReady, gunFired, gunUpdate, GUN } from './footgun';
 import { drawFootRing } from '../ui/footHud';
 import { flinch, noteShot } from './avatar';
@@ -141,8 +141,7 @@ const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _v = new THREE.Vector3(), _w = new T
 function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, muzzle: THREE.Vector3 | null) {
   const w = weapon();
   FIGHT.cool = w.iv; FIGHT.kick = 1; FIGHT.flash = 0.06; FIGHT.lastShot = performance.now(); FIGHT.shots++; noteShot();
-  if (w.sfx) shotSfx(w.sfx, 0.5, 0.96 + Math.random() * 0.08, () => sfx('gun', 0.32, w.snd));   // SMG: eigene Aufnahme, Schnellfeuer
-  else sfx('gun', 0.32, w.snd, () => snd(900, 0.06, 'square', 0.04, -500));
+  shotSound(w);
   const a = muzzle ? muzzle.clone() : vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : new THREE.Vector3(px, py - 0.15, pz);
   if (muzzle) flash(muzzle.x, muzzle.y, muzzle.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);   // Außensicht: kleines Mündungsfeuer (SMG gedämpft)
   let end: THREE.Vector3 | null = null;

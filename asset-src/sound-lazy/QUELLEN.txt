@@ -1,0 +1,8 @@
+Aufnahmen, die das Spiel erst bei Bedarf lädt (Paket world; scripts/build-assets.mjs, einzeln: scripts/add-lazy-sounds.mjs).
+
+w_rifle_*, w_pistol_*, w_shotgun_* = Epics Lyra Starter Game (Fab), aus OneDrive Blender/lyra_paket.zip (audio/weapons_rifle, weapons_pistol,
+weapons_shotgun), am 23.11.2026 ausgewählt:
+  p0…  = Punch-Close (Pistole, Gewehr) bzw. Punch (Flinte): der Knall
+  n0…  = Noise-Exterior-Close (Gewehr, Flinte) bzw. Noise-Interior-Close (Pistole): der Nachhall
+  out, in = ClipOut, ClipIn · end = Bolt (Gewehr) bzw. Slide (Pistole)
+LIZENZ: Epic-Inhalt, nach unserem Verständnis nur für Unreal-Engine-Produkte freigegeben (docs/lyra.md). Vor einer Veröffentlichung klären.
