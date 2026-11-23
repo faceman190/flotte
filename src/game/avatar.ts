@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clamp } from '../core/util';
 import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, viewModelId, type SoldierVis } from './mineArt';
+import { driveManny, releaseManny } from './mannyAvatar';
 
 // =====================================================================================
 // Eigene Spielerfigur in der Außensicht – gemeinsam für Mine, Station, Hangar, Schiffe und den Planetenboden.
@@ -55,20 +56,21 @@ export interface Avatar {
   s: SoldierVis; ready: boolean; gaits: Gait[]; cgait: Gait | null; idle?: A; aim?: A; saim?: A; upSAim?: A; sW: number; cidle?: A; caim?: A; jump?: A; upAim?: A; upFire?: A; upReload?: A; reloadW: number; relL?: THREE.Vector3; death: A[]; cdeath?: A; dying: A | null; cw: number; airW: number;
   body: number; phase: number; aimW: number; fireW: number; fireT: number; aimT: number; turning: number; first: boolean;
   hitN: number; hitT: number; hitS: number; armL: THREE.Object3D[] | null;
+  player?: boolean;                                            // eigene Spielerfigur: darf die Testfigur Manny zeigen (mannyAvatar.ts, ?manny=1)
 }
 export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number }   // reload: Fortschritt 0..1, sonst −1
 
-export function makeAvatar(gear: { helm?: string; anzug?: string; rucksack?: string }): Avatar | null {
+export function makeAvatar(gear: { helm?: string; anzug?: string; rucksack?: string }, player = false): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
   const arm = ['upperarm_l', 'lowerarm_l', 'hand_l'].map(n => s.root.getObjectByName(n));
   return { s, ready: false, sW: 0, reloadW: 0, gaits: [], cgait: null, death: [], dying: null, cw: 0, airW: 0, body: 0, phase: 0, aimW: 0, fireW: 0, fireT: 0, aimT: 0, turning: 0, first: true,
-    hitN: -1, hitT: 0, hitS: 1, armL: arm.every(Boolean) ? arm as THREE.Object3D[] : null };
+    hitN: -1, hitT: 0, hitS: 1, armL: arm.every(Boolean) ? arm as THREE.Object3D[] : null, player };
 }
 // Figur im Halter halten; bei geänderter Ausrüstung (Helm, Anzug, Rucksack) neu bauen
 export function syncAvatar(holder: THREE.Object3D, a: Avatar | null, gear: { helm?: string; anzug?: string; rucksack?: string }) {
   if (a && a.s.gearKey === soldierGearKey(gear)) { if (a.s.g.parent !== holder) holder.add(a.s.g); return a; }
-  const n = makeAvatar(gear); if (!n) return a;
-  if (a) { a.s.g.removeFromParent(); n.body = a.body; n.first = false; }
+  const n = makeAvatar(gear, true); if (!n) return a;
+  if (a) { releaseManny(); a.s.g.removeFromParent(); n.body = a.body; n.first = false; }
   holder.add(n.s.g);
   return n;
 }
@@ -127,6 +129,11 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   }
   a.body = wrap(a.body);
   s.g.rotation.y = a.body + Math.PI;
+  // Testfigur Manny (?manny=1): eigene Bewegungslogik, der Soldat bleibt unsichtbar im Halter
+  if (a.player) {
+    if (!d.dead && driveManny(s.g, s.root, dt, { yaw: d.yaw, y: d.y, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air })) return;
+    if (!s.root.visible) releaseManny(s.root);   // tot oder Schalter aus: wieder der Soldat
+  }
   if (a.ready) {
     // Laufen: Tempo relativ zum Körper (vor/rechts) → zwei benachbarte Richtungsclips
     const sy = Math.sin(a.body), cy = Math.cos(a.body);
