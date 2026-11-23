@@ -1,0 +1,660 @@
+// MannyAnimator v2 – reusable animation brain for the UE5 Manny GLB (Three.js r170).
+//
+//   const anim = await new MannyAnimator().load('manny_test_v2.glb');   scene.add(anim.model);
+//   each frame:
+//     const out = anim.update(dt, { moveDir, gait, crouch, strafe, facing, jump, grounded, verticalSpeed });
+//     controller.update(dt, out.delta, out.jumpImpulse);
+//     anim.model.position.copy(controller.pos); anim.model.rotation.y = out.facing;
+//     anim.finalize(dt);            // foot locking IK (needs the final world transform of this frame)
+//
+// Input: moveDir THREE.Vector2 (world x,z, length 0..1) · gait 'walk'|'run'|'sprint' · crouch · strafe
+//        (true: body faces `facing`, 8-way movement) · facing (yaw rad) · jump · grounded · verticalSpeed
+// Output: { delta: planar world displacement, facing: yaw, jumpImpulse }
+//
+// v2 ("motion matching light"):
+//  * every clip is analysed at load (ClipFeatures): root motion, turn angle, foot contacts, foot pose/velocity
+//  * starts / stops / turns / pivots / moving turns are chosen from candidate groups by angle, speed and
+//    POSE (where the feet are and how they move right now) – including the start offset inside the clip
+//  * transitions use inertialization instead of crossfades
+//  * feet with ground contact are locked with a two-bone IK while the body turns / transitions
+//  * turn-in-place: 45/90/135/180 clips, root rotation scaled to the exact angle, chained when turning on
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { CLIP_MAP, DIR_PRIORITY, TUNING } from './clipMap.js';
+import { ClipFeatureExtractor, poseCost } from './ClipFeatures.js';
+import { Inertializer } from './Inertializer.js';
+import { FootLocker } from './FootIK.js';
+
+const DEG = 180 / Math.PI, RAD = Math.PI / 180;
+const UP = new THREE.Vector3(0, 1, 0);
+const wrapDeg = (a) => ((a + 180) % 360 + 360) % 360 - 180;
+const wrapRad = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+const approach = (cur, target, maxStep) => cur + Math.max(-maxStep, Math.min(maxStep, target - cur));
+const approachAngle = (cur, target, maxStep) => cur + Math.max(-maxStep, Math.min(maxStep, wrapRad(target - cur)));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+export class MannyAnimator {
+  constructor(opts = {}) {
+    this.tuning = Object.assign({}, TUNING, opts.tuning || {});
+    this.turnRate = opts.turnRate ?? { walk: 300, run: 360, sprint: 220, crouch: 240 };   // deg/s procedural
+    this.heavyLandingSpeed = opts.heavyLandingSpeed ?? 7.5;
+    this.log = [];
+    this.missing = [];
+    this.time = 0;
+  }
+
+  // ------------------------------------------------------------------ loading
+  async load(url, onProgress) {
+    const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url, onProgress);
+    this.gltf = gltf;
+    this.model = gltf.scene;
+    this.model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    const t0 = performance.now();
+    const fx = new ClipFeatureExtractor(this.model);
+    this.mixer = new THREE.AnimationMixer(this.model);
+    this.feat = {}; this.actions = {};
+    for (const clip of gltf.animations) {
+      this.feat[clip.name] = fx.analyse(clip);
+      const inPlace = clip.clone();
+      inPlace.tracks = inPlace.tracks.filter((t) => !t.name.startsWith('root.'));
+      const a = this.mixer.clipAction(inPlace);
+      a.enabled = true; a.setEffectiveWeight(0); a.play();
+      this.actions[clip.name] = a;
+    }
+    this.analyseMs = Math.round(performance.now() - t0);
+    this._buildSets();
+    this.inertializer = new Inertializer(this.model);
+    this.footLock = new FootLocker(this.model);
+    this._slots = new Map();
+    this.state = 'idle'; this.stateTime = 0;
+    this.facing = 0; this.gait = 'run'; this.crouch = false; this.crouchW = 0;
+    this.locoTheta = 0; this.gaitW = { walk: 0, run: 1, sprint: 0, crouch: 0 }; this.phase = 0;
+    this.planarVel = new THREE.Vector3();
+    this._locoWeights = new Map(); this.locoSpeed = 0;
+    this.oneShot = null; this._yawScale = 1;
+    this.curPose = { footL: new THREE.Vector3(), footR: new THREE.Vector3(), velL: new THREE.Vector3(), velR: new THREE.Vector3(), speed: 0 };
+    this._slots.set('idle', { w: 1 });
+    this._applyWeights();
+    this.mixer.update(0);
+    this._capturePose(0);
+    return this;
+  }
+
+  _has(name) {
+    if (name && this.actions[name]) return true;
+    if (name && !this.missing.includes(name)) this.missing.push(name);
+    return false;
+  }
+
+  _buildSets() {
+    const names = Object.keys(this.actions);
+    this.loopSets = {};
+    for (const [gait, dirs] of Object.entries(CLIP_MAP.loops)) {
+      const set = [];
+      for (const key of DIR_PRIORITY) {
+        const name = dirs[key];
+        if (!name || !this._has(name)) continue;
+        const f = this.feat[name];
+        if (set.some((s) => Math.abs(wrapDeg(s.angle - f.dirDeg)) < 20)) continue;   // same direction twice -> skip
+        set.push({ key, name, angle: f.dirDeg, speed: f.dist / f.duration, duration: f.duration });
+      }
+      set.sort((a, b) => a.angle - b.angle);
+      this.loopSets[gait] = set;
+    }
+    const group = (map) => Object.fromEntries(Object.entries(map).map(([k, re]) => [k, names.filter((n) => re.test(n))]));
+    this.groups = {
+      starts: group(CLIP_MAP.starts), stops: group(CLIP_MAP.stops), turnInPlace: group(CLIP_MAP.turnInPlace),
+      movingTurns: group(CLIP_MAP.movingTurns), pivots: group(CLIP_MAP.pivots),
+    };
+    [CLIP_MAP.idle.stand, CLIP_MAP.idle.crouch, CLIP_MAP.jump.fall, ...Object.values(CLIP_MAP.jump.start)].forEach((n) => this._has(n));
+    for (const v of Object.values(CLIP_MAP.jump.land)) Object.values(v).forEach((n) => this._has(n));
+  }
+
+  speedOf(gait) { const s = (this.loopSets[gait] || []).find((l) => l.key === 'F'); return s ? s.speed : 0; }
+  groupSizes() { return Object.fromEntries(Object.entries(this.groups).map(([g, v]) => [g, Object.fromEntries(Object.entries(v).map(([k, l]) => [k, l.length]))])); }
+
+  // ------------------------------------------------------------------ pose features of the live character
+  _capturePose(dt) {
+    const m = this.model;
+    m.updateMatrixWorld(true);
+    const inv = m.matrixWorld.clone().invert();
+    const get = (n) => { const b = m.getObjectByName(n); return b ? b.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv) : new THREE.Vector3(); };
+    const l = get('foot_l'), r = get('foot_r');
+    const c = this.curPose;
+    if (dt > 0) {
+      c.velL.copy(l).sub(c.footL).multiplyScalar(1 / dt);
+      c.velR.copy(r).sub(c.footR).multiplyScalar(1 / dt);
+      // add the character's own motion (features are root-relative + root motion)
+    }
+    c.footL.copy(l); c.footR.copy(r);
+    c.speed = this.planarVel.length();
+  }
+
+  // ------------------------------------------------------------------ weights / transitions
+  _blend(dur) {                       // start a transition
+    if (this.tuning.inertialization) this.inertializer.request(dur ?? this.tuning.blend);
+  }
+  _playOnly(name, blend) {
+    this._blend(blend);
+    for (const [k, s] of this._slots) s.w = 0;
+    this._slots.set(name, { w: 1 });
+    for (const [k, s] of [...this._slots]) if (s.w === 0 && k !== 'idle' && k !== 'loco') this._slots.delete(k);
+  }
+  _playOneShot(name, blend, startTime = 0, yawScale = 1, rate = 1) {
+    const a = this.actions[name];
+    a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.setEffectiveTimeScale(rate);
+    this._osRate = rate;
+    a.time = startTime; a.play();
+    this._playOnly(name, blend);
+    this.oneShot = name; this._osPrevT = startTime; this._yawScale = yawScale;
+  }
+  _applyWeights() {
+    for (const a of Object.values(this.actions)) a.setEffectiveWeight(0);
+    const add = (n, w) => { if (w > 1e-4 && this.actions[n]) this.actions[n].setEffectiveWeight(this.actions[n].getEffectiveWeight() + w); };
+    let total = 0; for (const s of this._slots.values()) total += s.w;
+    const norm = total > 0 ? 1 / total : 0;
+    for (const [k, s] of this._slots) {
+      const w = s.w * norm; if (w <= 0) continue;
+      if (k === 'idle') { add(CLIP_MAP.idle.stand, w * (1 - this.crouchW)); add(CLIP_MAP.idle.crouch, w * this.crouchW); }
+      else if (k === 'loco') for (const [n, lw] of this._locoWeights) add(n, w * lw);
+      else add(k, w);
+    }
+    this.debugWeights = Object.entries(this.actions).map(([n, a]) => [n, a.getEffectiveWeight()]).filter(([, w]) => w > 0.01).sort((a, b) => b[1] - a[1]);
+  }
+
+  _dirWeights(gait, theta) {
+    const set = this.loopSets[gait];
+    if (!set || !set.length) return [];
+    if (set.length === 1) return [[set[0], 1]];
+    let lo = null, hi = null, dLo = -Infinity, dHi = Infinity;
+    for (const s of set) {
+      const d = wrapDeg(s.angle - theta);
+      if (d <= 0 && d > dLo) { dLo = d; lo = s; }
+      if (d >= 0 && d < dHi) { dHi = d; hi = s; }
+    }
+    if (!lo || !hi) return [[(lo || hi), 1]];
+    const span = dHi - dLo;
+    if (lo === hi || span <= 0) return [[lo, 1]];
+    if (span > 180) return [[Math.abs(dLo) < Math.abs(dHi) ? lo : hi, 1]];
+    const k = -dLo / span;
+    return [[lo, 1 - k], [hi, k]];
+  }
+  _updateLoco(dt) {
+    const list = []; let dur = 0, speed = 0;
+    for (const [g, gw] of Object.entries(this.gaitW)) {
+      if (gw <= 1e-3) continue;
+      for (const [s, w] of this._dirWeights(g, this.locoTheta)) { list.push([s, w * gw]); dur += s.duration * w * gw; speed += s.speed * w * gw; }
+    }
+    if (dur > 0) this.phase = (this.phase + dt / dur) % 1;
+    const m = new Map();
+    for (const [s, w] of list) {
+      const a = this.actions[s.name];
+      a.setLoop(THREE.LoopRepeat, Infinity); a.setEffectiveTimeScale(0); a.time = this.phase * s.duration;
+      m.set(s.name, (m.get(s.name) || 0) + w);
+    }
+    this._locoWeights = m; this.locoSpeed = speed;
+    let best = null, bw = 0; for (const [n, w] of m) if (w > bw) { bw = w; best = n; }
+    this._dominantLoop = best;
+  }
+  /** loop phase whose foot pose matches the current pose best */
+  _matchLoopPhase(gait, theta) {
+    const ws = this._dirWeights(gait, theta);
+    if (!ws.length) return 0;
+    const s = ws.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+    const f = this.feat[s.name];
+    let bi = 0, bc = Infinity;
+    for (let i = 0; i < f.n; i++) { const c = poseCost(f, i, this.curPose, { speed: 0 }); if (c < bc) { bc = c; bi = i; } }
+    return f.ts[bi] / f.duration;
+  }
+
+  // ------------------------------------------------------------------ candidate search ("motion matching light")
+  /** candidates: [{name, extra}] ; window [t0,t1] (s) inside each clip ; returns {name, t, cost} */
+  _search(cands, t0, t1, opts = {}) {
+    let best = null;
+    for (const { name, extra = 0 } of cands) {
+      const f = this.feat[name]; if (!f) continue;
+      const a = f.index(t0), b = f.index(Math.min(t1, f.duration));
+      for (let i = a; i <= b; i++) {
+        let c = extra + poseCost(f, i, this.curPose, opts.w);
+        if (opts.maxSpeed !== undefined && f.speed[i] > opts.maxSpeed) c += 5;
+        if (opts.footPref && f.firstLift && f.firstLift !== opts.footPref) c += opts.footPenalty ?? 0.3;
+        if (opts.contacts) c += 0.4 * ((!!f.contactL[i] !== opts.contacts.l) + (!!f.contactR[i] !== opts.contacts.r));   // foot phase
+        if (!best || c < best.cost) best = { name, t: f.ts[i], cost: c, i };
+      }
+    }
+    return best;
+  }
+  _settleTime(f, from = 0, thr = 0.12) {
+    let last = from;
+    for (let i = f.index(from); i < f.n; i++) if (f.speed[i] > thr) last = f.ts[i];
+    return Math.min(f.duration, last + 0.2);
+  }
+  _yawSettle(f, from = 0) {
+    let last = from;
+    for (let i = Math.max(1, f.index(from)); i < f.n; i++) if (Math.abs(f.yaw[i] - f.yaw[i - 1]) * 30 * DEG > 8) last = f.ts[i];
+    return Math.min(f.duration, last + 0.15);
+  }
+  _speedReached(f, frac, minT, gait) {
+    const target = frac * this.speedOf(gait);
+    for (let i = f.index(minT); i < f.n; i++) if (f.speed[i] >= target) return f.ts[i];
+    return null;
+  }
+  _yawScaleFor(f, offset, wantDeg) {
+    const remain = f.yawTotalDeg - f.yawAt(offset) * DEG;
+    if (Math.abs(remain) < 5) return 1;
+    return clamp(wantDeg / remain, ...this.tuning.yawScaleRange);
+  }
+
+  // ------------------------------------------------------------------ state machine
+  _enter(state, clip = '') {
+    this.log.push({ t: +this.time.toFixed(2), from: this.state, to: state, clip });
+    this.state = state; this.stateTime = 0;
+  }
+  _gaitKey() { return this.crouch ? 'crouch' : this.gait; }
+  _startLoco(blend, fromIdle = false, matchPhase = true) {
+    if (matchPhase) this.phase = this._matchLoopPhase(this._gaitKey(), this.locoTheta);
+    this._playOnly('loco', blend); this.oneShot = null; this._loopFromIdle = fromIdle; this._enter('loop');
+  }
+  _startIdle(blend = 0.3) { this._playOnly('idle', blend); this.oneShot = null; this._enter('idle'); }
+
+  update(dt, input = {}) {
+    if (!this.mixer) return { delta: new THREE.Vector3(), facing: 0, jumpImpulse: false };
+    const T = this.tuning;
+    this.time += dt; this.stateTime += dt; this._dtNow = dt;
+    const rawMv = input.moveDir || new THREE.Vector2();
+    const moving = rawMv.length() > 0.1;          // pressing / releasing reacts immediately
+    // direction smoothing (~0.05 s) so camera/key jitter does not trigger new turn clips all the time
+    // (smoothed on the ANGLE - lerping vectors would never flip on a 180° reversal)
+    if (!this._smv) this._smv = new THREE.Vector2();
+    if (moving) {
+      const rawYaw = Math.atan2(rawMv.x, rawMv.y);
+      if (this._sYaw === undefined || this._smv.lengthSq() < 1e-6) this._sYaw = rawYaw;
+      else this._sYaw = approachAngle(this._sYaw, rawYaw, Math.abs(wrapRad(rawYaw - this._sYaw)) * (1 - Math.exp(-dt / T.inputSmoothing)));
+      this._smv.set(Math.sin(this._sYaw), Math.cos(this._sYaw));
+    } else this._smv.set(0, 0);
+    // camera facing is NOT low-passed: a smoothed target creeps over the 45° threshold and first picks a
+    // too small turn clip, then re-selects (measured: more foot sliding). Jitter is handled by the
+    // re-select hysteresis (reselectAngle) instead.
+    const mv = moving ? this._smv : rawMv;
+    const moveYaw = moving ? Math.atan2(mv.x, mv.y) : this.facing;
+    if (moving) this._lastMoveYaw = moveYaw;
+    this._movingNow = moving;
+    this.crouch = !!input.crouch;
+    const strafe = !!input.strafe;
+    let gait = input.gait || 'run';
+    const thetaIn = moving ? wrapDeg((this.facing - moveYaw) * DEG) : this.locoTheta;
+    if (gait === 'sprint' && strafe && Math.abs(thetaIn) > 60) gait = 'run';
+    this.gait = gait;
+    const gk = this._gaitKey();
+    const out = { delta: new THREE.Vector3(), facing: this.facing, jumpImpulse: false };
+    const targetFacing = strafe ? (input.facing ?? this.facing) : (moving ? moveYaw : this.facing);
+    const grounded = input.grounded !== false;
+    this.crouchW = approach(this.crouchW, this.crouch ? 1 : 0, dt / 0.3);
+    for (const g of Object.keys(this.gaitW)) this.gaitW[g] = approach(this.gaitW[g], g === gk ? 1 : 0, dt / 0.25);
+    this._strafe = strafe;
+
+    if (!grounded && (input.verticalSpeed ?? 0) < -2 && !['jumpStart', 'fall'].includes(this.state)) this._enterFall(0.25);
+    if (input.jump && grounded && !this.crouch && !['jumpStart', 'fall', 'land'].includes(this.state)) this._enterJump();
+
+    // v3: every state can be interrupted. Turning clips are re-targeted every frame (root rotation scaled
+    // to the CURRENT target), and re-selected (pose matching) when the target jumps by > reselectAngle.
+    const desiredYaw = strafe ? targetFacing : moveYaw;        // where body / movement should go now
+    const canReselect = this.stateTime >= T.minClipTime;
+    const jumpTarget = this._targetYaw !== undefined && Math.abs(wrapDeg((desiredYaw - this._targetYaw) * DEG)) > T.reselectAngle;
+
+    switch (this.state) {
+      case 'idle': {
+        if (moving) { this._enterStart(thetaIn, strafe, moveYaw); break; }
+        const diff = wrapDeg((targetFacing - this.facing) * DEG);
+        if (strafe && Math.abs(diff) > T.turnThreshold) {
+          if (!this._enterTurn(diff, false)) this.facing = approachAngle(this.facing, targetFacing, T.proceduralTurnRate * RAD * dt);
+        }
+        break;
+      }
+      case 'turn': {
+        if (moving) { this._enterStart(thetaIn, strafe, moveYaw); break; }
+        const want = strafe ? wrapDeg((targetFacing - this.facing) * DEG) : 0;
+        if (strafe && canReselect && jumpTarget) {                 // target jumped: new turn clip from the current pose
+          if (Math.abs(want) > T.turnThreshold && this._enterTurn(want, true)) break;
+          this._startIdle(T.blend); break;
+        }
+        // small target changes: re-scale the remaining clip rotation (only when the target really moved,
+        // a constant per-frame re-scale made the feet slide)
+        if (strafe && Math.abs(wrapDeg((desiredYaw - this._targetYaw) * DEG)) > 3) { this._retargetYaw(want, false); this._targetYaw = desiredYaw; }
+        // let the clip finish its steps (feet) - new input interrupts it at any time anyway
+        if (this.stateTime >= this._exitT) this._startIdle(0.25);
+        break;
+      }
+      case 'start': {
+        const f = this.feat[this.oneShot];
+        const turning = Math.abs(f.yawTotalDeg) > 20;
+        if (!moving) {
+          if (this.stateTime < T.tapTime || this.planarVel.length() < T.tapSpeed) this._enterSettle(); else this._enterStop();
+          break;
+        }
+        if (!strafe && turning) this._retargetYaw(wrapDeg((moveYaw - this.facing) * DEG));
+        else if (!strafe) this.facing = approachAngle(this.facing, targetFacing, T.proceduralTurnRate * RAD * dt);
+        const dirChanged = canReselect && (strafe ? Math.abs(wrapDeg(thetaIn - this._startTheta)) > T.reselectAngle : jumpTarget);
+        if (this.stateTime >= this._exitT || dirChanged || gk !== this._startGait) {
+          if (!strafe && dirChanged && Math.abs(wrapDeg((moveYaw - this.facing) * DEG)) > T.movingTurnThreshold && this._enterMovingTurn(wrapDeg((moveYaw - this.facing) * DEG))) break;
+          this.locoTheta = strafe ? thetaIn : wrapDeg((this.facing - moveYaw) * DEG); this._startLoco(T.blend);
+        }
+        break;
+      }
+      case 'loop': {
+        if (!moving) {
+          if (this._loopFromIdle && this.stateTime < T.tapTime) this._enterSettle(); else this._enterStop();
+          break;
+        }
+        if (!strafe) {
+          const need = wrapDeg((moveYaw - this.facing) * DEG);
+          if (Math.abs(need) > T.movingTurnThreshold && canReselect && this._enterMovingTurn(need)) break;
+          // no fitting clip / small change: fast procedural rotation (feet keep up via the loop blend)
+          const rate = Math.abs(need) > 30 ? T.proceduralTurnRate : this.turnRate[gk];
+          this.facing = approachAngle(this.facing, targetFacing, rate * RAD * dt);
+          // body turns fast; movement may deviate at most 45° from the body (tight arc instead of moonwalking backwards)
+          this.locoTheta = approach(this.locoTheta, clamp(wrapDeg((this.facing - moveYaw) * DEG), -45, 45), 540 * dt);
+        } else {
+          this.facing = approachAngle(this.facing, targetFacing, T.proceduralTurnRate * RAD * dt);
+          const d = wrapDeg(thetaIn - this.locoTheta);
+          if (Math.abs(d) > 120 && canReselect && this._enterPivot(thetaIn)) break;
+          this.locoTheta = wrapDeg(this.locoTheta + clamp(d, -720 * dt, 720 * dt));
+        }
+        this._targetYaw = desiredYaw;
+        break;
+      }
+      case 'movingTurn': {
+        if (!moving) { this._enterStop(); break; }
+        const need = wrapDeg((moveYaw - this.facing) * DEG);
+        if (canReselect && jumpTarget) {                           // direction changed again mid-turn
+          if (Math.abs(need) > T.movingTurnThreshold && this._enterMovingTurn(need)) break;
+          this.locoTheta = wrapDeg((this.facing - moveYaw) * DEG); this._startLoco(T.blend); break;
+        }
+        this._retargetYaw(need);
+        // done as soon as the body points (almost) the right way - don't wait for the clip's end
+        if (this.stateTime >= this._exitT || (canReselect && Math.abs(need) < 15)) { this.locoTheta = wrapDeg((this.facing - moveYaw) * DEG); this._startLoco(T.blend); }
+        break;
+      }
+      case 'pivot': {
+        if (!moving) { this._enterStop(); break; }
+        if (canReselect && Math.abs(wrapDeg(thetaIn - this._pivotTheta)) > T.reselectAngle) {   // changed mind during the pivot
+          this.locoTheta = thetaIn; this._startLoco(T.blend); break;
+        }
+        if (strafe) this.facing = approachAngle(this.facing, targetFacing, T.proceduralTurnRate * RAD * dt);
+        if (this.stateTime >= this._exitT) { this.locoTheta = thetaIn; this._startLoco(T.blend); }
+        break;
+      }
+      case 'stop': {
+        if (moving) {
+          if (this.planarVel.length() > T.resumeLoopSpeed) { this.locoTheta = strafe ? thetaIn : wrapDeg((this.facing - moveYaw) * DEG); this._startLoco(T.blend); }
+          else this._enterStart(thetaIn, strafe, moveYaw);
+          break;
+        }
+        if (this.stateTime >= this._exitT) this._startIdle(0.3);
+        break;
+      }
+      case 'settle': {
+        if (moving) { this._enterStart(thetaIn, strafe, moveYaw); break; }
+        if (!strafe && this._lastMoveYaw !== undefined) this.facing = approachAngle(this.facing, this._lastMoveYaw, this.turnRate[gk] * 1.5 * RAD * dt);
+        if (this.stateTime >= T.tapBlend) { this.oneShot = null; this._enter('idle'); }
+        break;
+      }
+      case 'jumpStart': {
+        if (!this._impulseDone && this.stateTime >= this._takeoffIn) { out.jumpImpulse = true; this._impulseDone = true; }
+        if (this._impulseDone && this.stateTime > this._takeoffIn + 0.15 && (input.verticalSpeed ?? 0) < -0.5) this._enterFall(0.3);
+        else if (this._impulseDone && this.stateTime > this._takeoffIn + 0.15 && grounded) this._enterLand();
+        break;
+      }
+      case 'fall': { if (grounded) this._enterLand(); break; }
+      case 'land': {
+        if (this.stateTime >= this._exitT || (moving && this.stateTime > 0.12)) {
+          if (moving) { this.locoTheta = strafe ? thetaIn : 0; this._startLoco(0.3); } else this._startIdle(0.3);
+        }
+        break;
+      }
+    }
+    if (input.verticalSpeed !== undefined && !grounded) this._lastVy = input.verticalSpeed;
+
+    // ---- movement
+    const st = this.state;
+    if (st === 'loop') {
+      this._updateLoco(dt);
+      const yaw = this.facing - this.locoTheta * RAD;
+      out.delta.set(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(this.locoSpeed * dt);
+    } else if (['start', 'stop', 'pivot', 'turn', 'settle', 'movingTurn'].includes(st) && this.oneShot) {
+      const a = this.actions[this.oneShot], f = this.feat[this.oneShot];
+      const t0 = this._osPrevT, t1 = Math.min(t0 + dt * (this._osRate || 1), f.duration);
+      // root motion delta of the clip, in the clip's current root frame, applied with the current facing
+      const d = f.posAt(t1).sub(f.posAt(t0)); d.y = 0;
+      d.applyAxisAngle(UP, -f.yawAt(t1));
+      if (st === 'settle') d.multiplyScalar(Math.max(0, 1 - this.stateTime / T.tapBlend));
+      const dYaw = (f.yawAt(t1) - f.yawAt(t0)) * this._yawScale;
+      if (st !== 'settle' || true) this.facing += dYaw;
+      out.delta.copy(d).applyAxisAngle(UP, this.facing);
+      this._osPrevT = t1;
+    } else if (st === 'settle') {
+      out.delta.copy(this._settleVel).multiplyScalar(dt * Math.max(0, 1 - this.stateTime / T.tapBlend));
+    } else if (st === 'jumpStart' || st === 'fall' || st === 'land') {
+      const steer = moving ? new THREE.Vector3(mv.x, 0, mv.y).normalize().multiplyScalar(Math.max(this.planarVel.length(), 1.5)) : this.planarVel.clone();
+      this.planarVel.lerp(steer, Math.min(1, dt * (st === 'land' ? 4 : 1.2)));
+      if ((st === 'land' || (st === 'jumpStart' && !this._impulseDone)) && !moving) this.planarVel.multiplyScalar(Math.max(0, 1 - dt * 8));
+      if (moving) this.facing = approachAngle(this.facing, strafe ? targetFacing : moveYaw, 200 * RAD * dt);
+      out.delta.copy(this.planarVel).multiplyScalar(dt);
+    }
+    if (st !== 'loop' && this._slots.has('loco')) this._updateLoco(dt);
+    if (!['jumpStart', 'fall', 'land'].includes(st) && dt > 0) this.planarVel.copy(out.delta).multiplyScalar(1 / dt);
+    this.facing = wrapRad(this.facing);
+    out.facing = this.facing;
+    this._applyWeights();
+    this.inertializer.restorePure();      // drop last frame's offsets/IK before the mixer writes (see Inertializer)
+    this.mixer.update(dt);
+    this.inertializer.savePure();
+    this.inertializer.apply(dt);
+    this._dt = dt;
+    return out;
+  }
+
+  /** call after the model's world transform for this frame is set: pose features + foot locking */
+  finalize(dt = this._dt || 0) {
+    this._capturePose(dt);
+    if (this.tuning.footLock) {
+      const air = ['fall'].includes(this.state) || (this.state === 'jumpStart' && this._impulseDone);
+      const hard = ['idle', 'turn', 'settle'].includes(this.state);   // hard lock while standing/turning, soft while moving
+      this.footLock.update(dt, this._contactsNow(), !air, hard ? 0 : 3, hard ? 0.3 : 0.15);
+    }
+  }
+
+  /** re-target the running turning clip: scale its remaining root rotation to wantDeg (relative to now);
+   *  when the clip has no rotation left, turn procedurally */
+  _retargetYaw(wantDeg, procedural = true) {
+    const f = this.feat[this.oneShot]; if (!f) return;
+    const remain = f.yawTotalDeg - f.yawAt(this._osPrevT) * DEG;
+    if (Math.abs(remain) > 8 && Math.sign(remain) === Math.sign(wantDeg)) {
+      this._yawScale = clamp(wantDeg / remain, 0.3, 2.5);
+    } else if (procedural) {
+      this._yawScale = 0;
+      this.facing += clamp(wantDeg * RAD, -this.tuning.proceduralTurnRate * RAD * this._dtNow, this.tuning.proceduralTurnRate * RAD * this._dtNow);
+    }
+  }
+  /** which foot carries the weight right now (model space: the lower one) */
+  _supportContacts() {
+    const c = this.curPose;
+    return { l: c.footL.y <= c.footR.y + 0.03, r: c.footR.y <= c.footL.y + 0.03 };
+  }
+
+  _contactsNow() {
+    const st = this.state;
+    if (st === 'idle') return { l: true, r: true };
+    // loops: feet are already planted by the speed-matched movement; locking there fights the
+    // procedural turning, so only one-shots (start/stop/turn/pivot/settle) and idle are locked
+    if (st === 'loop') return { l: false, r: false };
+    if (!this.tuning.footLockStates.includes(st)) return { l: false, r: false };
+    if (this.oneShot && this.feat[this.oneShot]) {
+      const f = this.feat[this.oneShot], i = f.index(this.actions[this.oneShot].time);
+      const c = { l: !!f.contactL[i], r: !!f.contactR[i] };
+      // while moving (start/stop/pivot/moving turn) only the support foot is locked
+      if (c.l && c.r && ['start', 'stop', 'pivot', 'movingTurn'].includes(st)) {
+        const s = this._supportContacts(); if (s.l && !s.r) c.r = false; else if (s.r && !s.l) c.l = false;
+      }
+      return c;
+    }
+    return { l: false, r: false };
+  }
+
+  // ------------------------------------------------------------------ transitions into states
+  _footPref(theta) {
+    if (Math.abs(theta) > 60) return theta < 0 ? 'L' : 'R';               // sideways: leading foot first
+    const c = this.curPose, fwd = Math.abs(theta) < 90 ? 1 : -1;          // forward/back: rear foot first
+    return (c.footL.z * fwd < c.footR.z * fwd) ? 'L' : 'R';
+  }
+
+  _enterStart(theta, strafe, moveYaw) {
+    const gk = this._gaitKey(), T = this.tuning;
+    const need = strafe ? 0 : wrapDeg((moveYaw - this.facing) * DEG);   // + = turn left
+    const want = strafe ? theta : 0;                                      // travel dir relative to (final) facing
+    const cands = [];
+    for (const name of this.groups.starts[gk] || []) {
+      const f = this.feat[name];
+      const yawErr = Math.abs(wrapDeg(f.yawTotalDeg - need));
+      const turning = Math.abs(f.yawTotalDeg) > 20;
+      const dir = turning ? (f.endDirDeg ?? f.dirDeg) : (f.startDirDeg ?? f.dirDeg);
+      const dirErr = Math.abs(wrapDeg(dir - want));
+      if (strafe && turning) continue;
+      if (!strafe && !turning && Math.abs(need) > 45) {     // non-turning start: body must rotate procedurally
+        cands.push({ name, extra: Math.abs(need) / 45 + dirErr / 30 }); continue;
+      }
+      if (yawErr > 50 || dirErr > 40) continue;
+      cands.push({ name, extra: yawErr / 30 + dirErr / 30 });
+    }
+    const best = this._search(cands, 0, 0.15, { footPref: this._footPref(theta), w: { speed: 0.05 } });
+    if (!best) { this.locoTheta = strafe ? theta : 0; this._startLoco(0.2, true); return; }
+    const f = this.feat[best.name];
+    const turning = Math.abs(f.yawTotalDeg) > 20;
+    this._playOneShot(best.name, T.blend, best.t, turning ? this._yawScaleFor(f, best.t, need) : 0);
+    const minT = Math.max(best.t + 0.3, turning ? this._yawSettle(f, best.t) : 0);
+    this._exitT = Math.min(this._speedReached(f, 0.9, minT, gk) ?? f.duration * 0.6, f.duration - 0.3) - best.t;
+    this._startTheta = want; this._startGait = gk; this._startYaw = moveYaw;
+    this._targetYaw = strafe ? this.facing : moveYaw;
+    this._enter('start', best.name + (best.t > 0 ? ` @${best.t.toFixed(2)}` : '') + (turning ? ` yaw x${this._yawScale.toFixed(2)}` : ''));
+  }
+
+  _enterStop() {
+    const gk = this._gaitKey();
+    const theta = this.state === 'loop' ? this.locoTheta : (this._startTheta ?? 0);
+    const cur = this.planarVel.length();
+    if (cur < 0.5) { this._enterSettle(); return; }
+    const cands = (this.groups.stops[gk] || this.groups.stops.run).map((name) => {
+      const f = this.feat[name]; const d = f.startDirDeg ?? f.dirDeg;
+      return { name, extra: Math.abs(wrapDeg(d - theta)) / 40, f };
+    }).filter((c) => c.extra < 1.5);
+    // entry by FOOT PHASE (which foot is planted, where the feet are) first, speed second
+    const best = this._search(cands, 0, 1.5, { w: { pos: 1.5, speed: 0.15 }, maxSpeed: cur + 0.8, contacts: this._supportContacts() });
+    if (!best) { this._startIdle(0.3); return; }
+    const f = this.feat[best.name];
+    const settle = this._settleTime(f, best.t);
+    if (settle - best.t < 0.15) { this._enterSettle(); return; }
+    this._playOneShot(best.name, this.tuning.stopBlend, best.t, 1);
+    this._exitT = settle - best.t;
+    this._enter('stop', `${best.name} @${best.t.toFixed(2)}`);
+  }
+
+  _enterSettle() {
+    this._settleVel = this.planarVel.clone();
+    if (this.state === 'loop') this.oneShot = null;
+    const keep = this.oneShot;
+    this._playOnly('idle', this.tuning.tapBlend);
+    if (keep) { this._slots.set(keep, { w: 0.0001 }); this.oneShot = keep; }   // keep its time running for root motion
+    this._enter('settle', keep || '');
+  }
+
+  _enterTurn(diffDeg, chained) {
+    const set = this.groups.turnInPlace[this.crouch ? 'crouch' : 'stand'] || [];
+    const cands = set.filter((n) => Math.sign(this.feat[n].yawTotalDeg) === Math.sign(diffDeg))
+      .map((name) => ({ name, extra: Math.abs(this.feat[name].yawTotalDeg - diffDeg) / 30 }));
+    const best = this._search(cands, 0, chained ? 1.0 : 0.1, { w: { speed: 0 } });
+    if (!best || best.cost > this.tuning.maxCost) return false;
+    const f = this.feat[best.name];
+    this._playOneShot(best.name, chained ? 0.15 : this.tuning.blend, best.t, this._yawScaleFor(f, best.t, diffDeg), this.tuning.turnPlaybackRate);
+    this._exitT = (this._yawSettle(f, best.t) - best.t) / this.tuning.turnPlaybackRate;
+    this._targetYaw = this.facing + diffDeg * RAD;
+    this._enter('turn', `${best.name}${best.t > 0 ? ' @' + best.t.toFixed(2) : ''} target ${diffDeg.toFixed(0)}deg x${this._yawScale.toFixed(2)}`);
+    return true;
+  }
+
+  _enterMovingTurn(needDeg) {
+    const gk = this._gaitKey();
+    const cands = (this.groups.movingTurns[gk] || []).filter((n) => Math.sign(this.feat[n].yawTotalDeg) === Math.sign(needDeg))
+      .map((name) => ({ name, extra: Math.abs(this.feat[name].yawTotalDeg - needDeg) / 30 }));
+    const best = this._search(cands, 0, 0.4, { w: { speed: 0.3 }, contacts: this._supportContacts() });
+    if (!best || best.cost > this.tuning.maxCost) return false;
+    const f = this.feat[best.name];
+    this._playOneShot(best.name, this.tuning.moveBlend, best.t, this._yawScaleFor(f, best.t, needDeg), this.tuning.turnPlaybackRate);
+    const yawDone = this._yawSettle(f, best.t);
+    this._exitT = Math.min(Math.max(yawDone, this._speedReached(f, 0.85, yawDone, gk) ?? yawDone), f.duration - 0.25) - best.t; this._exitT /= this.tuning.turnPlaybackRate;
+    this._targetYaw = this.facing + needDeg * RAD;
+    this._enter('movingTurn', `${best.name} @${best.t.toFixed(2)} need ${needDeg.toFixed(0)}deg x${this._yawScale.toFixed(2)}`);
+    return true;
+  }
+
+  _enterPivot(theta) {
+    const gk = this._gaitKey();
+    const cands = [];
+    for (const name of this.groups.pivots[gk] || []) {
+      const f = this.feat[name];
+      const e0 = Math.abs(wrapDeg((f.startDirDeg ?? 0) - this.locoTheta)), e1 = Math.abs(wrapDeg((f.endDirDeg ?? 0) - theta));
+      if (e0 < 60 && e1 < 60) cands.push({ name, extra: (e0 + e1) / 40 });
+    }
+    const best = this._search(cands, 0, 0.6, { w: { speed: 0.3 } });
+    if (!best) { this.locoTheta = theta; return false; }
+    const f = this.feat[best.name];
+    let iMin = best.i; for (let i = best.i; i < f.n && f.ts[i] < f.duration * 0.7; i++) if (f.speed[i] < f.speed[iMin]) iMin = i;
+    this._playOneShot(best.name, this.tuning.moveBlend, best.t, 1, this.tuning.turnPlaybackRate);
+    this._exitT = (Math.min(this._speedReached(f, 0.8, f.ts[iMin], gk) ?? f.duration * 0.6, f.duration - 0.3) - best.t) / this.tuning.turnPlaybackRate;
+    this._pivotTheta = theta; this._targetYaw = this._strafeTarget ?? this.facing;
+    this._enter('pivot', `${best.name} @${best.t.toFixed(2)}`);
+    return true;
+  }
+
+  _enterFall(blend) {
+    const n = CLIP_MAP.jump.fall;
+    const a = this.actions[n]; a.reset(); a.setLoop(THREE.LoopRepeat, Infinity); a.setEffectiveTimeScale(1); a.play();
+    this._playOnly(n, blend); this.oneShot = null; this._enter('fall', n);
+  }
+  _enterJump() {
+    const sp = this.planarVel.length();
+    const key = (!this._movingNow || sp < 0.5) ? 'stand' : sp < 3 ? 'walk' : sp < 6.2 ? 'run' : 'sprint';
+    const name = CLIP_MAP.jump.start[key];
+    if (!this._has(name)) return;
+    const f = this.feat[name];
+    const start = Math.max(0, f.takeoff - 0.18);
+    this._playOneShot(name, 0.12, start, 0);
+    this.oneShot = null;                       // no root motion: physics owns the jump
+    this._jumpClip = name;
+    this._takeoffIn = f.takeoff - start; this._impulseDone = false;
+    this._enter('jumpStart', name);
+  }
+  _enterLand() {
+    const impact = Math.abs(this._lastVy ?? 0), sp = this.planarVel.length();
+    const key = sp < 0.8 ? 'stand' : sp < 3 ? 'walk' : sp < 6.2 ? 'run' : 'sprint';
+    const set = CLIP_MAP.jump.land[key];
+    const heavy = impact > this.heavyLandingSpeed && set.heavy && this._has(set.heavy);
+    const name = heavy ? set.heavy : set.light;
+    if (!this._has(name)) { this._startIdle(0.2); return; }
+    const f = this.feat[name];
+    this._playOneShot(name, 0.1, Math.max(0, f.landing - 0.05), 0);
+    this.oneShot = null;
+    this._landClip = name;
+    this._exitT = heavy ? 0.9 : (key === 'stand' ? 0.55 : 0.35);
+    this._enter('land', `${name} (${heavy ? 'heavy' : 'light'}) impact=${impact.toFixed(1)}m/s`);
+  }
+
+  getDebug() {
+    return {
+      state: this.state, gait: this._gaitKey(), facingDeg: +(this.facing * DEG).toFixed(1),
+      theta: +this.locoTheta.toFixed(1), locoSpeed: +(this.locoSpeed || 0).toFixed(2),
+      clips: (this.debugWeights || []).map(([n, w]) => [n.replace('M_Neutral_', ''), +w.toFixed(2)]),
+      inertial: this.inertializer?.active, locks: this.footLock?.legs.map((l) => (l.locked ? l.side.toUpperCase() : l.w > 0 ? l.side : '-')).join(''),
+    };
+  }
+}

@@ -19,6 +19,7 @@ import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
 import { dedup, prune, textureCompress, meshopt, reorder, quantize, getBounds } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
+import { packLazy } from './lazy-pack.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'asset-src', 'legacy'), OUT = path.join(ROOT, 'public', 'assets');
@@ -129,6 +130,14 @@ for (const kind of ['ship', 'station', 'char', 'deco', 'city', 'base']) {   // c
   for (const n of fs.readdirSync(dir).filter(x => x.toLowerCase().endsWith('.glb'))) {
     await model(`${kind}/${path.basename(n, path.extname(n))}`, fs.readFileSync(path.join(dir, n)), kind === 'deco' || kind === 'city' || kind === 'base' ? 'world' : 'core');
   }
+}
+// ---- Figuren mit vielen Bewegungen, nur auf Anforderung (asset-src/glb/lazy/<Name>.glb → lazy/<Name>, Paket „lazy“) ----
+// Weder vor dem Menü noch im Hintergrund geladen; das Spiel holt die Datei erst, wenn es sie braucht (Manny: ?manny=1, src/game/mannyAvatar.ts).
+// Einzeln neu packen ohne den Rest: node scripts/build-manny.mjs
+const LAZY = path.join(GLB, 'lazy');
+if (fs.existsSync(LAZY)) for (const n of fs.readdirSync(LAZY).filter(x => x.toLowerCase().endsWith('.glb'))) {
+  const src = fs.readFileSync(path.join(LAZY, n));
+  put('lazy/' + path.basename(n, path.extname(n)), 'glb', await packLazy(src), 'lazy', src.length);
 }
 // ---- Begehbare Schiffsinnenräume: Innenmodell (asset-src/glb/interior/<Name>.glb) und Laufkarte (asset-src/walk/<Name>.json) ----
 // Beides im Hintergrund-Paket: wird erst beim Betreten des Schiffs gebraucht.

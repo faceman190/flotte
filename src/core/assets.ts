@@ -3,6 +3,7 @@
 // Die Paketliste public/assets/manifest.json nennt jede Datei mit Prüfsumme im Namen und ihrem Paket:
 //  - core:  vor dem Hauptmenü nötig (mit Ladebalken)
 //  - world: weitere Nebel und Planeten, werden danach still im Hintergrund geholt
+//  - lazy:  nur auf Anforderung (Testfigur Manny, src/game/mannyAvatar.ts)
 // Ein Service Worker (public/sw.js) legt die Dateien dauerhaft im Browser ab; beim nächsten Start kommen sie
 // von der Festplatte. Ohne Service Worker (Entwicklung, claude.ai) hilft der normale Browser-Zwischenspeicher.
 // Für den Spielcode werden daraus die bekannten Verzeichnisse gebaut (window.TEXDATA, SHIPDATA …) – mit
@@ -127,7 +128,8 @@ export async function loadAssets() {
   addEventListener('pointerdown', askPersist, { once: true });
 }
 async function prefetchWorld(m: Manifest, have: Set<string>) {
-  const rest = Object.values(m.files).filter(f => f.pack !== 'core' && !f.url.startsWith('blob:') && !have.has(abs(f.url)));
+  // Paket „lazy“ (z. B. die Testfigur Manny) nur auf Anforderung, nicht im Hintergrund
+  const rest = Object.values(m.files).filter(f => f.pack !== 'core' && f.pack !== 'lazy' && !f.url.startsWith('blob:') && !have.has(abs(f.url)));
   await pool(rest, 2, async f => { try { await fetchFile(f, () => {}); } catch { /* später erneut */ } });
   ASSET_STATE.worldDone = true;
   storageInfo();
