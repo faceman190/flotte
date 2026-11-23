@@ -317,6 +317,7 @@ def portal_sign(title, sub, sig, ow, oh, x0=-0.12):
 # =====================================================================================
 # Decke der Halle (polar): Keil von 30°, zwölfmal gesetzt
 # =====================================================================================
+M['e_panel_h'] = mk('Lichtfeld Halle', (1, 1, 1), 0, 0.3, var=0, rvar=0, emit=(0.88, 0.92, 1.0), es=1.8, grime=False)      # Lichtleisten der Hallendecke, gedimmt seit 23.11.2026 (mehr Kontrast)
 def b_deckenkeil():
     a = RAD(15); h = RH_HW; R = RH_R; r = RH_RD
     arc_mesh('Ringbalken', R - 0.7, R + 0.2, -a, a, h, h + 0.7, M['frame'], 0.012)
@@ -338,7 +339,7 @@ def b_deckenkeil():
             m0 = 0.35 / ((r0 + r1) / 2)
             arc_mesh('Kassette', r0 + 0.35, r1 - 0.35, a0 + m0, a1 - m0, h + 0.86, h + 0.88, M['wall4'], 0)
             tm = (a0 + a1) / 2; wl = 0.12 / ((r0 + r1) / 2)
-            arc_mesh('Lichtleiste', r0 + 0.5, r1 - 0.5, tm - wl, tm + wl, h + 0.8, h + 0.83, M['e_panel'], 0)
+            arc_mesh('Lichtleiste', r0 + 0.5, r1 - 0.5, tm - wl, tm + wl, h + 0.8, h + 0.83, M['e_panel_h'], 0)
             for rr in (r0 + 0.35 + (r1 - r0 - 0.7) * q / 4 for q in range(1, 4)):
                 arc_mesh('Lichtsteg', rr - 0.02, rr + 0.02, a0 + m0, a1 - m0, h + 0.79, h + 0.8, M['frame'], 0)
     # Lüftung und Sprinkler

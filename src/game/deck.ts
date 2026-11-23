@@ -203,7 +203,7 @@ async function lmMaterials(prefix: string) {
 // selbst, nach der Lage der Fläche und beliebig scharf. Aus Blender kommen nur noch: das Modell mit dem Materialnamen je Fläche, eine grobe
 // Lichtkarte für die großen Flächen, Licht je Eckpunkt für die kleinen (ihre Abwicklung liegt bei x = −1) und im Alphakanal der Eckfarben
 // die Marke „schmaler Streifen“ (Fase an einer Kante: dort sitzt der Kantenabrieb).
-interface L2Mat { kind: string; col?: number[]; metal?: number; rough?: number; var?: number; rvar?: number; scale?: number; emit?: number[] | null; es?: number; grime?: boolean; wear?: number; bump?: number; bscale?: number; streak?: number; studs?: boolean; stripes?: boolean; a?: number[]; c?: number[]; duty?: number; dir?: string }
+interface L2Mat { kind: string; col?: number[]; metal?: number; rough?: number; var?: number; rvar?: number; scale?: number; emit?: number[] | null; es?: number; grime?: boolean; wear?: number; bump?: number; bscale?: number; streak?: number; studs?: boolean; stripes?: boolean; a?: number[]; c?: number[]; duty?: number; dir?: string; k?: number; spot?: boolean }
 interface L2Json { raeume: { name: string; zellen: number[][]; lit: string }[]; mats: Record<string, L2Mat> }
 const LICHT2: Record<string, [string, string][]> = { bastion: [['lichtraum2_bastion', 'Lichtraum2Bastion']], eisenkrone: [['lichtraum2_huette_ek', 'Lichtraum2HuetteEk']] };
 let L2NOISE: [THREE.DataTexture, THREE.DataTexture] | null = null;
@@ -251,6 +251,30 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
           .replace('#include <color_fragment>', 'float l2ph = vL2P.y * l2G.x; float l2se = clamp(fwidth(l2ph) * 0.35, 0.02, 0.5); diffuseColor.rgb = mix(l2ColB, l2E, smoothstep(l2G.y - l2se, l2G.y + l2se, 0.5 + 0.5 * sin(l2ph - 1.5708))) * min(bkGlow * l2G.z, l2G.w * lmCap);');
       };
       m.customProgramCacheKey = () => 'l2screen';
+      out[name] = m; continue;
+    }
+    if (p.kind === 'stain') {
+      // Spuren (seit 23.11.2026, lm2_raum.py OPT spuren): Laufspuren, Flecken, Abrieb, Rost als dünne Netze knapp über der Fläche. Sie färben das
+      // schon gezeichnete Bild um (Mischen mit doppelter Multiplikation: Ausgabe 0,5 = unverändert, darunter dunkler, darüber heller), so passen
+      // sie zu jedem Licht. Form wie in Blender (bk_lib.stain_mat): Fleck rund mit weichem Rand, Laufspur oben satt und nach unten auslaufend,
+      // beides vom Rauschen ausgefranst. Die Abwicklung uv ist die Lage im Quad (Fleck: Mitte 0, Rand ±0,5; Laufspur: x ±0,5, y 0 oben bis −1 unten).
+      const c = p.col || [0.01, 0.01, 0.01], tint = c.map(v => Math.min(1.8, Math.max(0.15, v / 0.12)));      // Farbe gegen einen mittleren Boden
+      const U = { l2Tint: V3(tint), l2K: { value: Math.min(1, p.k ?? 0.8) }, l2NoiseA: { value: nA } };
+      const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, toneMapped: false, fog: false });
+      m.blending = THREE.CustomBlending; m.blendEquation = THREE.AddEquation; m.blendSrc = THREE.DstColorFactor; m.blendDst = THREE.SrcColorFactor;
+      m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -4;
+      const spot = !!p.spot;
+      m.onBeforeCompile = (sh) => {
+        Object.assign(sh.uniforms, U);
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vSp;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvSp = vec2(uv.x, 1.0 - uv.y);');      // glTF dreht v um (v = 1 − v in Blender)
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 l2Tint; uniform float l2K; uniform sampler2D l2NoiseA; varying vec2 vSp;')
+          .replace('#include <dithering_fragment>', [
+            spot ? 'float sa = clamp(1.0 - length(vSp) * 2.0, 0.0, 1.0); sa *= sa;'
+              : 'float sa = clamp(1.0 - abs(vSp.x) * 2.0, 0.0, 1.0) * pow(clamp(1.0 + vSp.y, 0.0, 1.0), 2.0);',
+            `float sn = smoothstep(0.38, 0.62, texture2D(l2NoiseA, vSp * ${spot ? 'vec2(0.3, 0.3)' : 'vec2(0.7, 0.1)'} + vec2(0.37, 0.71)).r);`,
+            'gl_FragColor = vec4(0.5 * mix(vec3(1.0), l2Tint, clamp(sa * sn * l2K, 0.0, 1.0)), 1.0);'].join('\n'));
+      };
+      m.customProgramCacheKey = () => 'l2stain' + (spot ? 's' : 'l');
       out[name] = m; continue;
     }
     if (p.kind === 'glow' || p.kind === 'screen') {
@@ -341,8 +365,9 @@ async function loadLicht2Set(dj: string, mu: string): Promise<LmRoom[]> {
   gltf.scene.updateMatrixWorld(true);
   gltf.scene.traverse((o: any) => {
     if (!o.isMesh) return;
-    let a: THREE.Object3D | null = o; while (a && !by[a.name]) a = a.parent;      // Raum nach dem Namen des Objekts in Blender
-    const q = by[a ? a.name : data.raeume[0].name], key = String(o.material?.name || '').replace(/^ext_l2_/, '');
+    const own = (n: string) => by[n] || by[n.replace(/__spuren$/, '')];      // Spuren eines Teils: eigenes Netz „<Teil>__spuren“
+    let a: THREE.Object3D | null = o; while (a && !own(a.name)) a = a.parent;      // Raum nach dem Namen des Objekts in Blender
+    const q = (a && own(a.name)) || by[data.raeume[0].name], key = String(o.material?.name || '').replace(/^ext_l2_/, '');
     const g = o.geometry as THREE.BufferGeometry; g.computeBoundingSphere();
     rooms[q.i].meshes.push({ geo: g, mat: q.set[key] || Object.values(q.set)[0], mw: o.matrixWorld.clone(), tris: (g.index ? g.index.count : g.attributes.position.count) / 3 });
   });

@@ -169,9 +169,36 @@ Ansprechpunkte und Wegpunkte und legt eine Draufsicht als Bild bei.
 
 Der Hangar allein kostet 3,9 Millionen Dreiecke.
 
+## Leben in der Halle (23.11.2026)
+
+Wunsch des Spielers: „Fang mit dem Licht in der Rundhalle an. Sie ist auch noch ein wenig langweilig, sehr steril.“ Die Halle soll aussehen wie ein Ort,
+an dem seit 38 Jahren Menschen leben. Alles steht in `asset-src/neu/bastion/rh_leben.py` (läuft nach `rh_deck.py`, in `rh_lauf.py` und `rh_back_lauf.py`).
+
+- **Markt am Eingang:** drei Stände mit gestreiftem Stoffdach, Lichterkette, Rückwand aus Plane, Arbeitslicht und Stromkabel über eine Kabelbrücke
+  zur Wanddose: Hydroponik (150°, Gemüse in Kisten, Preise mit Kreide), Teile und Tausch (−150°, Werkzeugwand, Zahnräder) und Garküche (100°,
+  Kochfeld mit Glut, Töpfe, Schalen, Kreidetafel, zwei Hocker). Dafür weichen die zwei Infosäulen am Eingang, eine Kistengruppe und die Karre.
+- **Banner:** sechs Stoffbahnen (1,5 × 3,9 m) unter den Radialbalken bei 30°, 90°, … mit dem Zeichen der Bastion und Sätzen aus dem Eid:
+  „Wir sind die letzte Crew“, „Niemand kommt uns holen“, „Bastion Jahr 38“, „Schiff für Schiff“, „Keiner wird zurückgelassen“, „Heimstatt Deck 3“.
+- **Arbeitsstelle** (78°, vor den Quartieren): offene Bodenluke mit Absperrung, aufgeklapptem Deckel, Baustrahler auf Dreibein, Werkzeugkiste,
+  Kabeltrommel, Leitkegel. Der Hallenboden ist ein Stück, die Öffnung ist eine fast schwarze Fläche im Rahmen.
+- **Spuren:** abgetretene Laufwege zu allen Läden und zum Hangar, Reifenspuren der Karren aus Handelskontor, Werft, Kantine und Korridor,
+  Flecken vor den Ständen und an der Luke, Rost an den Pfeilerfüßen. **Neu im Spiel:** Spuren (Laufspur, Fleck, Abrieb, Rost, Staub) kamen
+  bisher nur in den Blender-Bildern vor. `lm2_raum.py` gibt sie mit `OPT spuren` als eigenes Netz je Teil aus („<Teil>__spuren“, Abwicklung = Lage
+  im Quad), `deck.ts` zeichnet sie mit einem eigenen Material (Art `stain`: färbt das fertige Bild um, doppelte Multiplikation, Form und Ausfransen
+  wie in Blender). Achtung: glTF dreht v um, der Shader rechnet `1 − v`. Die anderen Decks bekommen ihre Spuren beim nächsten Backen, wenn ihr
+  Lauf `spuren: true` setzt. Die Spurmaterialien tragen ihre Angaben seit heute in der Eigenschaft `stain` (`bk_lib.stain_mat`).
+- **Licht:** Hallenleuchten von 380/200 W auf 150/60 W und wärmer (1,0 / 0,93 / 0,84); Kronenlicht über dem Treffpunkt 1000 W warm statt 1400 W kalt;
+  Lichtleisten der Hallendecke gedimmt (eigenes Material `e_panel_h`, Stärke 1,8 statt 3,5); vor jeder Bucht ein Farbschein in der Ladenfarbe
+  (170 W, schräg auf den Hallenboden); an jedem Pfeiler ein Fluter am Fuß (70 W, warm, nach oben); die Stände leuchten warm aus sich heraus.
+- **Lichtkarte:** Die Halle ist jetzt drei Teile (`rh_halle_boden`, `rh_halle_wand`, `rh_halle_decke`, je 2048): 32, 26 und 22 Bildpunkte je Meter
+  statt 13. Die Lampenplätze trägt nur der Boden. Backen 13 Minuten.
+- **Geprüft:** Begehbarkeit (1.464 m², alle 12 Ansprechpunkte und alle Wegpunkte erreichbar), Spuren sichtbar, gebaute Fassung (andocken, in die
+  Halle gehen, keine Fehler). Last im Testfenster: Halle rund 3,5 Mio. Dreiecke und 900 Zeichenaufrufe (vorher 1,6 bis 2,6 Mio. und 240 bis 430),
+  12 bis 14 ms je Bild. Bilder: `docs/bilder/rundhalle-leben-*.jpg`.
+
 ## Offen
 
-- **Lichtkarte der Halle:** nur 13 Bildpunkte je Meter (2048 für rund 3.000 m² große Flächen). Mit 4096 wäre sie schärfer und bräuchte 4× Grafikspeicher.
+- **Last der Halle:** seit dem Leben in der Halle etwa doppelt so viele Zeichenaufrufe. Auf einem schwachen Rechner nicht gemessen.
 - **Blick in den Hangar:** Aus der Halle durch den Korridor kostet er bis 3,9 Mio. Dreiecke. Möglich wäre, ihn in der Halle erst ab einer Nähe zum Tor zu zeichnen.
 - **Kantine:** Ein Dienst fehlt noch (etwa Gerüchte oder Neuigkeiten beim Wirt).
 - **Schwacher Laptop:** nicht gemessen.

@@ -10,7 +10,7 @@ try:
     bpy.ops.wm.read_homefile(use_empty=True)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(B, 'BastionRundhalleSpiel.blend'))
     ns = {'__name__': '__main__'}
-    for f in ('bk_kit.py', 'bk_mehr.py', 'bk_med.py', 'rh_kit.py', 'rh_deck.py', 'rh_spiel.py'):
+    for f in ('bk_kit.py', 'bk_mehr.py', 'bk_med.py', 'rh_kit.py', 'rh_deck.py', 'rh_leben.py', 'rh_spiel.py'):
         p = os.path.join(B, f); exec(compile(open(p, encoding='utf-8').read(), p, 'exec'), ns)
     bpy.ops.wm.save_mainfile()
     open(mark, 'w', encoding='utf-8').write('ok ' + json.dumps(ns['spiel'], ensure_ascii=False))

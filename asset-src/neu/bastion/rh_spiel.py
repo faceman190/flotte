@@ -110,7 +110,11 @@ ROUTES = [
 CHATS = [ident(-7.0, 7.5) + [3], ident(6.5, -8.2) + [2], fk(3.4, 0.9) + [2], ident(-24.0, 2.6) + [2]]
 
 # ---------- Lichtraum 2: Teile und ihre Punkte (erster Punkt = Aufnahmeort der Raumspiegelung; alle = Plätze der Schlüssellampen) ----------
-TEILE = [{'name': 'rh_halle', 'cells': [ident(-8.0, 2.0)] + [ident(*polar(8.6, RAD(30 * k + 15))) for k in range(12)] + [ident(*polar(13.0, RAD(30 * k + 15))) for k in range(12)], 'lm': 2048},
+# Halle seit 23.11.2026 in drei Teilen (Boden mit allem, was darauf steht; Wände mit Pfeilern, Portalen, Schildern; Decke), je 2048: rund 50 statt 13
+# Bildpunkte je Meter. Die Lampenplätze trägt nur der Boden; Wand und Decke haben nur den Aufnahmeort ihrer Raumspiegelung.
+HALLE0 = ident(-8.0, 2.0)
+TEILE = [{'name': 'rh_halle_boden', 'cells': [HALLE0] + [ident(*polar(8.6, RAD(30 * k + 15))) for k in range(12)] + [ident(*polar(13.0, RAD(30 * k + 15))) for k in range(12)], 'lm': 2048},
+         {'name': 'rh_halle_wand', 'cells': [HALLE0], 'lm': 2048}, {'name': 'rh_halle_decke', 'cells': [HALLE0], 'lm': 2048},
          {'name': 'rh_korridor', 'cells': [ident(KX0 + 8, 0)] + [ident(KX0 + 2 + 4 * k, 0) for k in range(4)], 'lm': 1024}]
 for (deg, sig, t, s) in BAYS:
     f = bay(deg); TEILE.append({'name': 'rh_bucht_' + sig, 'cells': [f(3.6, 0)] + [f(x, y) for x in (2.3, 5.0, 7.4) for y in (-2.2, 2.2)], 'lm': 1024})
@@ -126,7 +130,10 @@ def part_of(o):
         for (deg, ch, name, mood) in WINGS:
             if r > RH_R + 0.6 and near(deg) < 14: return 'rh_fluegel_' + ch.lower()
         return 'rh_bucht_' + min(BAYS, key=lambda b: near(b[0]))[1]
-    return 'rh_halle'
+    cn = o.users_collection[0].name
+    if cn == 'Decke': return 'rh_halle_decke'
+    if cn == 'Schilder' or c.startswith(('Wandstück', 'Portal')) or c in ('Objekt rh_pfeiler', 'Objekt rh_fluter'): return 'rh_halle_wand'
+    return 'rh_halle_boden'
 NPART = {}
 for cname in ('Deck', 'Decke', 'Schilder'):
     for o in bpy.data.collections[cname].objects:
@@ -140,5 +147,5 @@ meta = {'typ': 'rund', 'name': 'Deck 3', 'kx0': KX0, 'walk': WALK, 'blocks': BLO
         'licht2': ['lichtraum2_rund', 'Lichtraum2Rund'], 'mund': [-DK, 0.0, OW_K / 2 - 0.2], 'tor': [KX0, OW_K / 2]}
 open(os.path.join(ROOT, 'asset-src', 'data', 'deck_rund.json'), 'w', encoding='utf-8').write(json.dumps(meta, ensure_ascii=False))
 open(os.path.join(HERE, 'lm2_rund.json'), 'w', encoding='utf-8').write(json.dumps({'rooms': TEILE, 'split': 'rund', 'glb': 'Lichtraum2Rund.glb', 'json': 'lichtraum2_rund.json',
-     'mark': 'lm2-rund.txt', 'skipmats': ['Holoschleier'], 'clamp_direct': 8, 'clamp_indirect': 4, 'deflicker': 2.5, 'vsmooth': 0.25}, ensure_ascii=False))
+     'mark': 'lm2-rund.txt', 'skipmats': ['Holoschleier'], 'clamp_direct': 8, 'clamp_indirect': 4, 'spuren': True, 'deflicker': 2.5, 'vsmooth': 0.25}, ensure_ascii=False))
 spiel = {'walk': len(WALK), 'blocks': len(BLOCKS), 'personal': len(SPOTS), 'wege': len(ROUTES), 'teile': NPART}

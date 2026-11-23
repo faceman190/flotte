@@ -68,6 +68,8 @@ def stain_mat(name, col, strength, spot=False):      # Laufspur (oben satt, nach
     for k, v in (('surface_render_method', 'BLENDED'), ('blend_method', 'BLEND')):
         try: setattr(m, k, v)
         except Exception: pass
+    import json as _json      # Angaben am Material ablegen (lm2_raum.py): Spuren im Spiel (seit 23.11.2026)
+    m['stain'] = _json.dumps({'col': [round(c, 4) for c in col], 'k': strength, 'spot': bool(spot)})
     return m
 M['spur'] = stain_mat('Laufspur', (0.012, 0.01, 0.008), 0.9); M['rost'] = stain_mat('Rostspur', (0.16, 0.06, 0.02), 0.75)
 M['staub'] = stain_mat('Staubspur', (0.3, 0.29, 0.27), 0.35); M['fleck'] = stain_mat('Fleck', (0.008, 0.008, 0.008), 0.85, True); M['abrieb'] = stain_mat('Abrieb', (0.2, 0.2, 0.2), 0.3, True)

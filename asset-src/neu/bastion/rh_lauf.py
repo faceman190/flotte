@@ -11,7 +11,7 @@ try:
     bpy.ops.wm.read_homefile(use_empty=True)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(B, 'BastionRundhalle.blend'))
     ns = {'__name__': '__main__'}
-    for f in ('bk_kit.py', 'bk_mehr.py', 'bk_med.py', 'rh_kit.py', 'rh_deck.py'):
+    for f in ('bk_kit.py', 'bk_mehr.py', 'bk_med.py', 'rh_kit.py', 'rh_deck.py', 'rh_leben.py'):
         p = os.path.join(B, f); exec(compile(open(p, encoding='utf-8').read(), p, 'exec'), ns)
     bpy.ops.wm.save_mainfile()
     note('gebaut %s in %.0f s' % (json.dumps(ns['result'], ensure_ascii=False), time.time() - t0))

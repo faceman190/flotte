@@ -25,6 +25,7 @@ OPT = dict({'rooms': [], 'lm': 1024, 'samples': 256, 'vsamples': 48, 'big': 0.03
 CELL = float(OPT.get('cell', 4.0))      # Zellmaß des Decks (Bastion 4 m, Hüttendeck der Eisenkrone 6 m)
 STAIN = ('Laufspur', 'Rostspur', 'Staubspur', 'Fleck', 'Abrieb') + tuple(OPT.get('skipmats', []))      # skipmats: Materialien, die im Spiel fehlen sollen (Rundhalle: Holoschleier)
 LOG = []
+SPUREN = {}      # Teil → [(Objekt, Lage)]: Laufspuren, Flecken, Abrieb (OPT spuren: als eigene Netze „<Teil>__spuren“ ins Spiel, deck.ts zeichnet sie)
 def note(s):
     LOG.append(s); open(os.path.join(HERE, OPT['mark']), 'w', encoding='utf-8').write('\n'.join(LOG))
 def principled(m): return [n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'] if (m and m.node_tree) else []
@@ -68,7 +69,9 @@ def realize(empties, name):      # empties: Instanzen von Bausteinen, im Hangar 
             if ob.type not in ('MESH', 'CURVE', 'FONT'): continue
             if ob.type == 'FONT' and not ob.data.body.strip(): continue
             mats = [s.material for s in ob.material_slots if s.material]
-            if mats and mats[0].name.split('.')[0] in STAIN: continue
+            if mats and mats[0].name.split('.')[0] in STAIN:
+                if OPT.get('spuren') and 'stain' in mats[0].keys() and ob.type == 'MESH': SPUREN.setdefault(name, []).append((ob, MW.copy()))      # Spuren fürs Spiel
+                continue
             me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg), depsgraph=dg)
             if not me.polygons: bpy.data.meshes.remove(me); continue
             o = bpy.data.objects.new('tmp', me); o.matrix_world = MW; SC.collection.objects.link(o); tmp.append(o)
@@ -288,6 +291,25 @@ def run():
         me.color_attributes['Col'].data.foreach_set('color', c.ravel()); me.update()
         info[name] = {'tris': tri(J), 'lit': s, 'dichte': round(p['dichte']), 'sek_karte': round(t1), 'sek_ecken': round(time.time() - tb - t1), 'kanten': round(float(thin.mean()), 3), 'ausreisser': info_aus, 'flicker': nflick}
         note('%s: Lichtkarte %d² in %.0f s, Eckpunkte in %.0f s, Licht Mittel %.3f (%.0f s)' % (name, s, t1, time.time() - tb - t1, float(x.mean()), time.time() - t0))
+    # Spuren (OPT spuren): je Teil ein Netz, Abwicklung = Lage im Quad (Fleck: Mitte 0, Rand ±0,5; Laufspur: x ±0,5, y von 0 oben bis −1 unten)
+    spur_objs = []
+    for p in parts:
+        items = SPUREN.get(p['name'], [])
+        if not items: continue
+        bm_all = bmesh.new(); names = []
+        for ob, MW in items:
+            m0 = ob.data.materials[0]; nm = m0.name.split('.')[0]
+            if nm not in names: names.append(nm); table[nm] = dict(json.loads(m0['stain']), kind='stain')
+            t = bmesh.new(); t.from_mesh(ob.data); uvl = t.loops.layers.uv.new('UVMap')
+            for f in t.faces:
+                f.material_index = names.index(nm)
+                for l in f.loops: l[uvl].uv = (l.vert.co.x, l.vert.co.y)
+            bmesh.ops.transform(t, matrix=MW, verts=t.verts[:]); me2 = bpy.data.meshes.new('t'); t.to_mesh(me2); t.free(); bm_all.from_mesh(me2); bpy.data.meshes.remove(me2)
+        me = bpy.data.meshes.new(p['name'] + '__spuren'); bm_all.to_mesh(me); bm_all.free()
+        for nm in names: mm = bpy.data.materials.get('ext_l2_' + nm) or bpy.data.materials.new('ext_l2_' + nm); me.materials.append(mm)
+        o = bpy.data.objects.new(p['name'] + '__spuren', me); SC.collection.objects.link(o); spur_objs.append(o)
+        info.setdefault(p['name'], {})['spuren'] = len(items)
+    if SPUREN: note('Spuren: %s' % {k: len(v) for k, v in SPUREN.items()})
     # Materialien je Fläche: Platzhalter mit dem Namen des Materials (das Spiel baut daraus sein eigenes)
     for p in parts:
         me = p['J'].data; names = [n for n, _ in p['mats']]; uniq = sorted(set(names)); idx = {n: i for i, n in enumerate(uniq)}
@@ -299,6 +321,7 @@ def run():
         me.polygons.foreach_set('material_index', new); me.update()
     for o in bpy.context.view_layer.objects: o.select_set(False)
     for p in parts: p['J'].select_set(True)
+    for o in spur_objs: o.select_set(True)
     bpy.context.view_layer.objects.active = parts[0]['J']
     bpy.ops.export_scene.gltf(filepath=os.path.join(ROOT, 'asset-src', 'glb', 'base', OPT['glb']), export_format='GLB', use_selection=True, export_apply=False, export_yup=True,
                               export_normals=True, export_texcoords=True, export_materials='EXPORT', export_vertex_color='ACTIVE', export_all_vertex_colors=False,
