@@ -41,7 +41,16 @@ export const CLIP_MAP = {
     walk: /^M_Neutral_Walk_Turn_[LR]_\d+_/, run: /^M_Neutral_Run_Turn_[LR]_\d+_/,
     sprint: /^M_Neutral_Sprint_Turn_[LR]_\d+_/, crouch: /^M_Neutral_Crouch_Turn_[LR]_\d+_/,
   },
-  pivots: { walk: /^M_Neutral_Walk_Pivot_/, run: /^M_Neutral_Run_Pivot_/, crouch: /^M_Neutral_Crouch_Pivot_/ },
+  // direction changes while strafing (the body keeps facing the view): a planted step from one travel direction into another.
+  // Pivot = 180°, Box = 90° between forward / back / sideways, Diamond = 90° and 135° between the diagonals, Hourglass = 135°.
+  // The clip is chosen by its MEASURED start and end direction, and by the stance: sideways there are two – LL / RR (the hip
+  // on the side of travel leads) and LR / RL (the hips stay turned the other way; that is how a reversal left <-> right ends:
+  // Pivot_LL_RL, Pivot_RR_LR). The names carry both: <family>_<from>_<to>_<foot>. See SIDE_ALT below.
+  pivots: {
+    walk: /^M_Neutral_Walk_Pivot_/,
+    run: /^M_Neutral_Run_(Pivot|Box|Diamond|Hourglass)_/,
+    crouch: /^M_Neutral_Crouch_(Pivot|Box|Diamond|Hourglass)_/,
+  },
   jump: {
     start: { stand: N + 'Jump_F_Start_Stand_Lfoot', walk: N + 'Jump_F_Start_Walk_Lfoot',
              run: N + 'Jump_F_Start_Run_Lfoot', sprint: N + 'Jump_F_Start_Sprint_Lfoot' },
@@ -63,6 +72,9 @@ export const CLIP_MAP = {
 
 // preferred order when two loops move in (almost) the same direction – the first one wins
 export const DIR_PRIORITY = ['F', 'B', 'LL', 'RR', 'FL', 'FR', 'BL', 'BR', 'LR', 'RL'];
+// the same for the second sideways stance (after a reversal left <-> right): LR / RL instead of LL / RR
+export const DIR_PRIORITY_ALT = ['F', 'B', 'LR', 'RL', 'FL', 'FR', 'BL', 'BR', 'LL', 'RR'];
+export const SIDE_MAIN = ['LL', 'RR'], SIDE_ALT = ['LR', 'RL'];
 
 // tuning values (override with new MannyAnimator({ tuning: {...} }))
 export const TUNING = {
@@ -114,6 +126,13 @@ export const TUNING = {
   stanceClips: true,      // crouch down / get up with the transition clips instead of a pose blend (standing only)
   stanceExit: 0.8,        // s – the transition clips move for about this long
   dirJumps: true,         // jumps to the side and backwards with their own clips (strafe)
+  // direction changes while strafing (capsule-led, 2026-11-23)
+  pivotAngle: 60,         // deg – a change of the travel direction of at least this much plays a planted step (smaller: the loops sweep round)
+  pivotDirTol: 30,        // deg – a clip may start / end this far from the old / new direction
+  pivotLead: 0.15,        // s – the clip is entered up to this long before its change begins (window of the pose search)
+  pivotRate: [0.6, 2.5],  // the clip follows the velocity of the capsule; its speed stays within these factors
+  pivotTail: 0.12,        // s – time after the change before the loop of the new direction takes over
+  pivotAltCost: 1,        // pose cost added to a clip that ends in the second sideways stance (LR / RL): taken only when none ends in LL / RR (a reversal left <-> right) – stopping out of that stance slides more (35 against 14 cm)
   deathStart: 0.5,        // s – where the death clips begin to fall (before that the figure just stands)
   deathSettle: 0.45,      // s – blend from the end of the fall into the lying pose
 };

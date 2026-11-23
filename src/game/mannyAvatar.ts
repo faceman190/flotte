@@ -26,7 +26,8 @@ import { MannyAnimator } from './manny/MannyAnimator.js';
 // =====================================================================================
 // brake / accel: Brems- und Anlaufrate der Spielphysik mit der Figur (1/s, 0 = Wert der Laufstelle) · url, body: nur für Tests
 // (Bewegungssatz, Figur), sonst aus der Paketliste · alt: alter Anschluss (Tempo statt Absicht) zum Vergleich im Prüfskript
-export const MANNY = { on: true, url: '' as string, body: '' as string, alt: false, brake: 8, accel: 0 };
+// turnRamp / turnMin: nach einem Richtungswechsel im Lauf steigt die Anlaufrate in turnRamp Sekunden von turnMin (Anteil) auf voll
+export const MANNY = { on: true, url: '' as string, body: '' as string, alt: false, brake: 8, accel: 0, turnRamp: 0.25, turnMin: 0.15 };
 try {
   const q = new URLSearchParams(location.search).get('manny');
   if (q === '1' || q === '0') localStorage.setItem('lf_manny', q);
@@ -70,6 +71,8 @@ const STOP_TAU = 0.08;
 /** Bremsrate der Spielphysik nach dem Loslassen (1/s): mit Manny weicher, damit die Stopp-Bewegung Platz für ihren letzten Schritt hat */
 /** Anlaufrate der Spielphysik (1/s): mit Manny auf Wunsch weicher (MANNY.accel), sonst der Wert der Laufstelle */
 export const mannyAccel = (base: number) => (MANNY.on && !MANNY.alt && anim && MANNY.accel > 0 ? MANNY.accel : base);
+/** Anteil der Anlaufrate t Sekunden nach einem Richtungswechsel im Lauf (weicher Einsatz, damit der Setzschritt der Figur passt) */
+export const mannyTurn = (t: number) => (MANNY.on && !MANNY.alt && anim && MANNY.turnRamp > 0 ? Math.min(1, MANNY.turnMin + (1 - MANNY.turnMin) * t / MANNY.turnRamp) : 1);
 export const mannyBrake = (base: number) => (MANNY.on && !MANNY.alt && anim && MANNY.brake > 0 ? MANNY.brake : base);
 // Ohne Absicht (fremder Aufrufer): Gangart nach Tempo
 const gaitOf = (spd: number) => (spd < 3 ? 'walk' : spd < 5.9 ? 'run' : 'sprint');

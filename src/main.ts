@@ -760,7 +760,7 @@ perfHooks.where = () => {
 // Nur im Entwicklungsmodus: Zugriff für Tests über die Browser-Konsole
 if ((import.meta as any).env?.DEV) (window as any).__lf = { P, G, world, enterShip, SHIP, enterSector, startJump, openDock, undock, openMap, closeMap, gateTo, stationById, placePlayer, audioDebug, sunDir, IN, showMenu, closeMenu, interact, enterSurface, startEntry, ROVER, sim: (sec: number) => { for (let i = 0; i < sec * 60; i++) simulate(1 / 60); },
   // ganze Bilder von Hand laufen lassen (wenn der Browser die Seite im Hintergrund anhält)
-  tick: (sec: number) => { for (let i = 0; i < sec * 20; i++) loop(last + 50, true); } };
+  tick: (sec: number, ms = 50) => { for (let i = 0, n = Math.round(sec * 1000 / ms); i < n; i++) loop(last + ms, true); } };   // ms: Bilddauer (Prüfskripte messen auch mit 60 Bildern je Sekunde)
 
 // =============== Start ===============
 // Schiffsmodelle laden (kurz), dann Menü zeigen. Ohne Modelle laufen die eingebauten Ersatzmodelle.

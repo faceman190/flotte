@@ -7,7 +7,7 @@ mit den Bewegungen des Manny-Satzes. Mannys Netz wird nicht mehr gezeigt und nic
 ## Figur und Bewegungssatz sind zwei Dateien
 - `lazy/Spieler` – die Figur: `asset-src/glb/lazy/Spieler.glb` (Kopie von OneDrive `Blender/Spielfigur/Final/spieler_03.glb`,
   ein Netz, 60.000 Dreiecke, 161 Knochen, drei Texturen; gepackt 1,3 MB, Texturen auf 2048 begrenzt – die Quelle hat 4096).
-- `lazy/Bewegungen` – der Bewegungssatz: 449 Clips (1.447 s) in einem eigenen kompakten Format, 12,5 MB
+- `lazy/Bewegungen` – der Bewegungssatz: 640 Clips (2.117 s) in einem eigenen kompakten Format, 18,8 MB
   (siehe „Vollständiger Bewegungssatz“ unten). Bis zum Nachmittag des 23.11.2026 war es `lazy/Manny`, eine GLB mit 321 Clips und 40 MB.
 - Die Clips finden ihre Knochen über den **Namen**. Jede Figur mit genau diesem Skelett (gleiche Knochennamen, gleiche Ruhelage)
   kann den Satz nutzen: Datei nach `asset-src/glb/lazy/` legen, `node scripts/build-manny.mjs <Name>`, in `mannyAvatar.ts`
@@ -37,7 +37,7 @@ Als GLB braucht jeder Clip 483 Kanäle mit eigenem Eintrag: Von den 40 MB für 3
 je Clip eine Zeile, Drehungen mit 16 Bit in fester Bildfolge (30 je Sekunde), mit Meshopt verdichtet. Spuren, die sich im Clip
 nicht ändern, kosten einen Wert, Spuren in Ruhelage nichts. Nur 78 der 161 Knochen haben überhaupt eine Drehspur, 2 eine
 Verschiebespur.
-- **449 Clips (1.447 s) brauchen 12,5 MB** – vorher 321 Clips 40 MB. Hochgerechnet passt der ganze neutrale Stil in rund 28 MB.
+- **640 Clips (2.117 s) brauchen 18,8 MB** – vorher 321 Clips 40 MB. Hochgerechnet passt der ganze neutrale Stil in rund 28 MB.
 - `src/game/manny/ClipStore.js` liest die Datei. Beim Laden wird nichts ausgepackt; ein Clip entsteht erst, wenn er gebraucht
   wird, und der Animator hält höchstens rund hundert Aktionen (`_act`, `_trim`). Die Analyse aller Clips liest nur die Beine: 270 ms.
 - Die Messreihe ist mit dem neuen Format unverändert: 1.825 cm Gleiten, 549° Haltungssprünge.
@@ -55,15 +55,54 @@ Verschiebespur.
 | Geduckt laufen | +4 Richtungen | schräg rückwärts fehlte bisher |
 | Sprung | 54 neue (vier Richtungen, beide Füße, leicht/schwer) | seitwärts und rückwärts eigene Absprünge und Landungen; die Fußvariante wählt der Animator nach der Haltung |
 | Tod | 4 Stürze + 4 Liegeposen | die Figur wird umgeworfen und kommt in der passenden Liegepose zur Ruhe |
+| Richtungswechsel | 191 neue (`Box`, `Diamond`, `Hourglass` für Laufen und Geduckt) + die Pivot-Clips | ab 60° Wechsel ein Setzschritt statt Überblenden, siehe unten |
 
 Die Schichten für Blick und Neigung liegen auf der gespielten Bewegung: je Knochen die Drehung von der Grundpose zur Pose, im
 Raum des Elternknochens, nach dem Mixer und vor dem Überblenden aufgerechnet. Die Neigung verschiebt die Füße mit (wie in der
 Pose): In der Kurve gleiten sie dadurch etwas mehr (Messlauf „kurve“: 86 statt 69 cm), geradeaus ändert sich nichts.
 
+### Richtungswechsel mit Setzschritt (23.11.2026, spät)
+Wechselt die Laufrichtung um mindestens 60° (W→A, A→D, W→S, schräg …), spielt die Figur den Clip, der von der alten in die neue
+Richtung führt: 90° `Box` und `Diamond`, 135° `Hourglass` und `Diamond`, 180° `Pivot`. Kleinere Wechsel (45°) blenden wie bisher.
+- **Vermessen:** Jeder Clip wird beim Laden daraufhin vermessen, wann sich seine Geschwindigkeit von der alten zur neuen Richtung
+  dreht (`_turnInfo`: Anteil p von 0 bis 1). Ein 90°-Wechsel dauert in den Clips nur 0,3 s, eine Kehrtwende 0,5 s.
+- **Auswahl:** nach gemessener Start- und Endrichtung (±30°) und nach den Füßen: Einstieg kurz vor dem Wechsel an dem Bild, das zur
+  Haltung passt – das wählt auch die Variante linker / rechter Fuß.
+- **Abspielen nach Geschwindigkeit:** Der Clip ist immer so weit durch seinen Wechsel wie die Spielfigur (`p` der Kapsel = `p` des
+  Clips, Tempo 0,6- bis 2,5-fach). Danach übernimmt die Schleife der neuen Richtung.
+- **Zweite Seitwärts-Haltung:** Eine Kehrtwende links ↔ rechts endet mit weiter gedrehter Hüfte (`Pivot_LL_RL`, `Pivot_RR_LR`).
+  Dafür gibt es einen zweiten Satz Schleifen (`loopSetsAlt`, `this.alt`): seitwärts `LR` / `RL` statt `LL` / `RR`. Clips werden
+  nach der Haltung gewählt, aus der sie starten. Wo beide Haltungen möglich sind, gewinnt die normale (`pivotAltCost`):
+  Anhalten aus der zweiten rutscht mehr (35 gegen 14 cm).
+- **Fehler gefunden:** Die 180°-Clips der ersten Fassung wurden praktisch nie ausgelöst. Geprüft wurde die geglättete Richtung;
+  die kriecht herum, die Schleife schwenkt hinterher, der Unterschied wurde nie groß genug. Jetzt löst die ungeglättete Eingabe aus.
+- **Spielphysik:** Nach einem Wechsel der Laufrichtung um mehr als 50° setzt die Beschleunigung weich ein (`MANNY.turnRamp` 0,25 s
+  von 15 % auf volle Rate, `avatar.ts` / `mannyTurn`). Ein Mensch muss erst einen Fuß aufsetzen, bevor der Körper die Richtung
+  ändert; ohne das wäre die Spielfigur dem Clip immer voraus. Das gilt mit der neuen Figur in beiden Sichten und macht Wechsel
+  etwa eine Zehntelsekunde träger. `turnRamp = 0` stellt das alte Verhalten her.
+
+Messung (`MT.wechsel()`, 84 Wechsel in vier Schrittphasen, 60 Bilder je Sekunde – `MT.hz = 60`):
+
+| Fassung | 90° (32) | 180° (28) | 135° (24) | Summe Gleiten | Haltungssprünge |
+|---|---|---|---|---|---|
+| bisher: Schleifen schwenken herum | 829 cm | 1.213 cm | 901 cm | 2.943 cm | 244° |
+| Setzschritt, Physik unverändert | 993 | 1.315 | 756 | 3.064 | 820° |
+| Setzschritt, weicher Einsatz 0,16 s | 959 | 1.300 | 738 | 2.997 | 842° |
+| **Setzschritt, weicher Einsatz 0,25 s, beide Haltungen** | **942** | **1.030** | **648** | **2.620** | 921° |
+| Setzschritt, weicher Einsatz 0,35 s | 1.156 | 1.307 | 753 | 3.216 | 898° |
+| ohne Setzschritt, weicher Einsatz 0,25 s | 1.327 | 1.237 | 1.045 | 3.609 | 239° |
+
+Die Füße gleiten mit Setzschritt 11 % weniger; dafür gibt es je Wechsel zwei Überblendungen statt einer (mehr „Haltungssprünge“,
+einzeln höchstens 8°). Im Bild der Unterschied: Die Figur senkt den Schwerpunkt, setzt den Fuß breit auf und stößt sich ab, statt
+aufrecht die Beine umzublenden. Mit der alten Messreihe (`MT.bench()`, 20 Bilder je Sekunde) schneiden die schnellen Wechsel
+schlechter ab (448 statt 268 cm bei 8 Wechseln): Bei 50 ms je Bild ist die Spielfigur nach zwei Bildern fast herum, der Clip darf
+aber höchstens 2,5-fach vorspulen. Mit 60 Bildern je Sekunde sind beide gleichauf (390 gegen 372 cm). `lf.tick(sek, ms)` kann
+deshalb jetzt auch kürzere Bilder rechnen.
+
+Nicht aufgenommen: `Prism` (45°-Wechsel, der Körper bremst dabei kaum), die Wechsel-Clips für Gehen (das Spiel joggt) und
+`Shuffle` (Haltungswechsel im Lauf).
+
 ### Noch nicht genutzt (Stand 23.11.2026)
-- **Richtungswechsel beim seitlichen Laufen** (`Box`, `Diamond`, `Hourglass`, `Prism`, `Shuffle`: rund 330 Clips, 1.100 s für
-  Gehen, Laufen, Geduckt): echte Setzschritte von jeder Richtung in jede. Das ist die Datenbasis für Motion Matching. Passt erst,
-  wenn die Spielphysik weicher beschleunigt (heute volle Geschwindigkeit nach 0,25 s; die Clips brauchen 0,6 bis 1 s).
 - **Übergänge der Gangarten** (`Transition_Walk_to_Run`, `Run_to_Sprint` …, 12 Clips).
 - **Stil „Relaxed“** (893 Clips): lockere Haltung, z. B. für Stationen. Würde den Download etwa verdoppeln.
 - **Rutschen, Klettern und Überspringen** (`Slide`, `Traversal`): brauchen neue Spielmechanik (Hindernisse erkennen).

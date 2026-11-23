@@ -1190,7 +1190,7 @@ export function updateWalk(dt: number) {
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   {
     const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? footPace(f, s, run, 6, 6.8) * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(IN.yaw), cy = Math.cos(IN.yaw);
-    setIntent(IN.yaw, f, s, run);
+    setIntent(IN.yaw, f, s, run, dt);
     const k = Math.min(1, dt * (f || s ? footAccel(9) : footBrake(12)));
     walkV.x += ((-sy * f + cy * s) * sp - walkV.x) * k; walkV.z += ((-cy * f - sy * s) * sp - walkV.z) * k;
     if (Math.hypot(walkV.x, walkV.z) < 0.05) walkV.x = walkV.z = 0;

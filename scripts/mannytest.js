@@ -33,7 +33,8 @@ window.__manny = async () => {
   // MT.body = FOOT (onfoot.ts) oder DUN (dungeon.ts) setzen, wenn nicht im Innenraum gelaufen wird
   const B = () => M.body || lf.IN;
   M.run = (steps) => {
-    const hz = 20;                                   // lf.tick rechnet immer Bilder von 50 ms
+    const hz = M.hz || 20;                           // Bilder je Sekunde der Messung (MT.hz = 60: wie im Spiel; Vorgabe 20 wie bisher)
+    const E = window.DT && window.DT.E, rr = E && M.hz ? E.renderer.render : null; if (rr) E.renderer.render = function () {};   // mit MT.hz ohne Zeichnen (schneller)
     const dt = 1 / hz, out = [];
     for (const st of steps) {
       if (st.yaw !== undefined && !st.turn) B().yaw = st.yaw;
@@ -45,7 +46,7 @@ window.__manny = async () => {
       const n = Math.round(st.sec * hz);
       for (let i = 0; i < n; i++) {
         if (st.turn) B().yaw += st.turn * dt;
-        lf.tick(dt);
+        lf.tick(dt, 1000 / hz);
         balls.forEach((b, j) => {
           const w = b.getWorldPosition(v()), h = anim.model.worldToLocal(w.clone()).y;
           const r = room().worldToLocal(w.clone());
@@ -67,6 +68,7 @@ window.__manny = async () => {
         blick: Math.round(blick), clips: anim.log.slice(log0).map(e => `${e.to}:${e.clip.replace('M_Neutral_', '')}`).join(' | ').slice(0, 260) });
     }
     for (const k of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft']) INP.keys[k] = false;
+    if (rr) E.renderer.render = rr;
     return out;
   };
   // Standardlauf: Anlaufen, Laufen, Anhalten, Sprint, seitwärts, rückwärts, Kurve
@@ -93,6 +95,26 @@ window.__manny = async () => {
     const r = M.run(steps), sum = {};
     for (const x of r) { const g = (sum[x.was] = sum[x.was] || { n: 0, rutsch_cm: 0, ideal_cm: 0, weg_m: 0, max_cm: 0, blenden: 0, sprung_grad: 0, sprung_max: 0 }); g.n++; g.blenden += x.blenden; g.sprung_grad += x.sprung_grad; g.sprung_max = Math.max(g.sprung_max, x.sprung_max); g.rutsch_cm += x.rutsch_cm; g.ideal_cm += x.ideal_cm; g.weg_m += x.weg_m; g.max_cm = Math.max(g.max_cm, x.rutsch_cm); }
     for (const g of Object.values(sum)) for (const k of Object.keys(g)) g[k] = +g[k].toFixed(1);
+    return sum;
+  };
+  // Richtungswechsel: 90° (W→A→S→D→W und zurück), 135° und 180°, je in vier Schrittphasen. Summen je Art wie bei bench.
+  M.wechsel = () => {
+    const H = M.body ? {} : (M.home || { x: -4, z: -18, yaw: Math.PI });
+    const steps = [], W = ['KeyW'], A = ['KeyA'], S = ['KeyS'], D = ['KeyD'];
+    for (let k = 0; k < 4; k++) {
+      steps.push({ name: 'an', ...H, keys: W, sec: 0.5 }, { name: 'lauf', keys: W, sec: 0.6 + 0.09 * k });
+      for (const d of [A, S, D, W, D, S, A, W]) steps.push({ name: 'w90', keys: d, sec: 0.9 + 0.07 * k });
+      steps.push({ name: 'halt', sec: 2.2 }, { name: 'an', ...H, keys: W, sec: 0.5 }, { name: 'lauf', keys: W, sec: 0.6 + 0.09 * k });
+      for (const d of [S, W, S, W]) steps.push({ name: 'w180', keys: d, sec: 1.1 + 0.07 * k });
+      steps.push({ name: 'lauf', keys: A, sec: 0.8 }); for (const d of [D, A, D]) steps.push({ name: 'w180', keys: d, sec: 1.1 + 0.07 * k });
+      steps.push({ name: 'halt', sec: 2.2 }, { name: 'an', ...H, keys: W, sec: 0.5 }, { name: 'lauf', keys: W, sec: 0.6 + 0.09 * k });
+      for (const d of [['KeyS', 'KeyA'], D, ['KeyW', 'KeyA'], S, ['KeyW', 'KeyD'], A]) steps.push({ name: 'w135', keys: d, sec: 1.0 + 0.07 * k });
+      steps.push({ name: 'halt', sec: 2.2 });
+    }
+    const L0 = anim.log.length, r = M.run(steps), sum = {};
+    for (const x of r) { const g = (sum[x.was] = sum[x.was] || { n: 0, rutsch_cm: 0, weg_m: 0, max_cm: 0, blenden: 0, sprung_grad: 0, sprung_max: 0 }); g.n++; g.blenden += x.blenden; g.sprung_grad += x.sprung_grad; g.sprung_max = Math.max(g.sprung_max, x.sprung_max); g.rutsch_cm += x.rutsch_cm; g.weg_m += x.weg_m; g.max_cm = Math.max(g.max_cm, x.rutsch_cm); }
+    for (const g of Object.values(sum)) for (const k of Object.keys(g)) g[k] = +g[k].toFixed(1);
+    sum.setzschritte = anim.log.slice(L0).filter(l => l.to === 'pivot').length;
     return sum;
   };
   return { clips: anim.clips.names.length, analyseMs: anim.analyseMs, loadMs: anim.loadMs, run: +anim.speedOf('run').toFixed(2), sprint: +anim.speedOf('sprint').toFixed(2), crouch: +anim.speedOf('crouch').toFixed(2), walk: +anim.speedOf('walk').toFixed(2),

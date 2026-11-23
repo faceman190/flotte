@@ -147,7 +147,7 @@ export function updateFoot(dt: number) {
   // Laufen (wie in der Mine): weich anlaufen, an Hindernissen entlanggleiten
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? footPace(f, s, run, 4.2, 6.4) * gearFactor('tempo') / Math.hypot(f, s) : 0;
-  setIntent(FOOT.yaw, f, s, run);
+  setIntent(FOOT.yaw, f, s, run, dt);
   const sy = Math.sin(FOOT.yaw), cy = Math.cos(FOOT.yaw), k = Math.min(1, dt * (f || s ? (FOOT.jy > 0 ? 2 : footAccel(10)) : (FOOT.jy > 0 ? 1 : footBrake(13))));
   FOOT.vx += ((-sy * f + cy * s) * sp - FOOT.vx) * k; FOOT.vz += ((-cy * f - sy * s) * sp - FOOT.vz) * k;
   const ox = FOOT.x, oz = FOOT.z, dx = FOOT.vx * dt, dzz = FOOT.vz * dt;

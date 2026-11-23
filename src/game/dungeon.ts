@@ -982,7 +982,7 @@ export function updateDungeon(dt: number) {
   // Laufen
   const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   const run = !!(keys.ShiftLeft || keys.ShiftRight), sp = f || s ? footPace(f, s, run, 4.2, 6.4) * gearFactor('tempo') / Math.hypot(f, s) : 0, sy = Math.sin(DUN.yaw), cy = Math.cos(DUN.yaw), k = Math.min(1, dt * (f || s ? footAccel(10) : footBrake(13)));
-  setIntent(DUN.yaw, f, s, run);
+  setIntent(DUN.yaw, f, s, run, dt);
   DUN.vx += ((-sy * f + cy * s) * sp - DUN.vx) * k; DUN.vz += ((-cy * f - sy * s) * sp - DUN.vz) * k;
   const dx = DUN.vx * dt, dzz = DUN.vz * dt, ox = DUN.x, oz = DUN.z;
   if (free(DUN.x + dx, DUN.z + dzz)) { DUN.x += dx; DUN.z += dzz; } else if (free(DUN.x + dx, DUN.z)) { DUN.x += dx; DUN.vz = 0; } else if (free(DUN.x, DUN.z + dzz)) { DUN.z += dzz; DUN.vx = 0; } else DUN.vx = DUN.vz = 0;

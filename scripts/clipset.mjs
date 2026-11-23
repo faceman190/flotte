@@ -96,6 +96,9 @@ export const EXTRA = [
   /^M_Neutral_Crouch_Loop_(BL|BR|LR|RL)$/,                   // geduckt: die vier fehlenden Richtungen
   /^M_Neutral_Jump_(B|LL|RL|F)_(Start|Land)_/,               // Sprung in alle vier Richtungen, beide Füße
   /^M_relaxed_ragdoll_shove_stand_[BFLR]_V$/,                // umgeworfen werden und liegen bleiben: der Tod der Figur
+  // Richtungswechsel beim seitlichen Laufen: Setzschritt von jeder Richtung in jede (90° Box und Diamond, 135° Hourglass und Diamond;
+  // 180° sind die Pivot-Clips der Grundauswahl), in beiden Seitwärts-Haltungen (LL / RR und LR / RL)
+  /^M_Neutral_(Run|Crouch)_(Box|Diamond|Hourglass)_/,
   /^M_ragdoll_getup_stand_[BFLR]$/,                          // Liegeposen (erstes Bild der Aufsteh-Clips): darin kommt der Sturz zur Ruhe
 ];
 

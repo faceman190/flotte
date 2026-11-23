@@ -36,7 +36,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { CLIP_MAP, DIR_PRIORITY, TUNING } from './clipMap.js';
+import { CLIP_MAP, DIR_PRIORITY, DIR_PRIORITY_ALT, SIDE_MAIN, SIDE_ALT, TUNING } from './clipMap.js';
 import { ClipFeatureExtractor, poseCost } from './ClipFeatures.js';
 import { Inertializer } from './Inertializer.js';
 import { FootLocker, GroundAdapt } from './FootIK.js';
@@ -155,25 +155,37 @@ export class MannyAnimator {
 
   _buildSets() {
     const names = this.clips.names;
-    this.loopSets = {};
-    for (const [gait, dirs] of Object.entries(CLIP_MAP.loops)) {
-      const set = [];
-      for (const key of DIR_PRIORITY) {
-        const name = dirs[key];
-        if (!name || !this._has(name)) continue;
-        const f = this.feat[name];
-        if (set.some((s) => Math.abs(wrapDeg(s.angle - f.dirDeg)) < 20)) continue;   // same direction twice -> skip
-        set.push({ key, name, angle: f.dirDeg, speed: f.dist / f.duration, duration: f.duration });
+    // loops per gait, once for each sideways stance (loopSets: LL / RR · loopSetsAlt: LR / RL, see this.alt)
+    this.loopSets = {}; this.loopSetsAlt = {};
+    for (const [sets, order] of [[this.loopSets, DIR_PRIORITY], [this.loopSetsAlt, DIR_PRIORITY_ALT || DIR_PRIORITY]]) {
+      for (const [gait, dirs] of Object.entries(CLIP_MAP.loops)) {
+        const set = [];
+        for (const key of order) {
+          const name = dirs[key];
+          if (!name || !this._has(name)) continue;
+          const f = this.feat[name];
+          if (set.some((s) => Math.abs(wrapDeg(s.angle - f.dirDeg)) < 20)) continue;   // same direction twice -> skip
+          set.push({ key, name, angle: f.dirDeg, speed: f.dist / f.duration, duration: f.duration });
+        }
+        set.sort((a, b) => a.angle - b.angle);
+        sets[gait] = set;
       }
-      set.sort((a, b) => a.angle - b.angle);
-      this.loopSets[gait] = set;
     }
+    this.alt = false;                                          // sideways stance: false = LL / RR, true = LR / RL
     const group = (map) => Object.fromEntries(Object.entries(map).map(([k, re]) => [k, names.filter((n) => re.test(n))]));
     this.groups = {
       starts: group(CLIP_MAP.starts), stops: group(CLIP_MAP.stops), turnInPlace: group(CLIP_MAP.turnInPlace),
       movingTurns: group(CLIP_MAP.movingTurns), pivots: group(CLIP_MAP.pivots), idleBreaks: group(CLIP_MAP.idleBreaks || {}),
     };
     this.deathClips = CLIP_MAP.death ? names.filter((n) => CLIP_MAP.death.test(n)) : [];
+    this.turn = {};
+    for (const list of Object.values(this.groups.pivots)) for (const n of list) {
+      const ti = this._turnInfo(this.feat[n]); if (!ti) continue;
+      // stance the clip starts from / ends in, from its name (<family>_<from>_<to>_<foot>): null = not sideways
+      const m = /_(?:Pivot|Box|Diamond|Hourglass)_([A-Z]+)_([A-Z]+)_/.exec(n), st = (k) => (SIDE_ALT.includes(k) ? true : SIDE_MAIN.includes(k) ? false : null);
+      ti.altFrom = m ? st(m[1]) : null; ti.altTo = m ? st(m[2]) : null;
+      this.turn[n] = ti;
+    }
     // lying pose for each death clip: the one whose pelvis lies most like the clip's last frame
     this.deathLie = new Map();
     const lying = CLIP_MAP.lying && this.clips.pose ? names.filter((n) => CLIP_MAP.lying.test(n)) : [];
@@ -186,8 +198,34 @@ export class MannyAnimator {
     for (const v of Object.values(CLIP_MAP.jump.land)) Object.values(v).forEach((n) => this._has(n));
   }
 
+  /**
+   * Where a direction change clip changes its direction. The velocity of the root (body frame: forward, right) goes from vA (start
+   * of the clip) to vB (end); p = share of that way done, 0..1. Returns { t0, t1: clip times at p = 0.05 / 0.95, tAt: clip time
+   * for p = 0, 0.05 … 1 } or null when the clip does not change direction. Played by p, the clip turns when the capsule turns.
+   */
+  _turnInfo(f) {
+    const n = f.n, v = [];
+    for (let i = 0; i < n; i++) {
+      const a = Math.max(0, i - 2), b = Math.min(n - 1, i + 2), dt = f.ts[b] - f.ts[a];
+      const d = f.rootPos[b].clone().sub(f.rootPos[a]).applyAxisAngle(UP, -f.yaw[i]);
+      v.push([d.z / dt, -d.x / dt]);
+    }
+    const k = Math.min(9, n >> 2), mean = (i0, i1) => { let x = 0, y = 0; for (let i = i0; i <= i1; i++) { x += v[i][0]; y += v[i][1]; } return [x / (i1 - i0 + 1), y / (i1 - i0 + 1)]; };
+    const vA = mean(0, k), vB = mean(n - 1 - k, n - 1), dx = vB[0] - vA[0], dy = vB[1] - vA[1], dl = dx * dx + dy * dy;
+    if (dl < 1) return null;
+    const raw = v.map((q) => ((q[0] - vA[0]) * dx + (q[1] - vA[1]) * dy) / dl);
+    // the change begins after the last time p was still small (the steps before it make p wobble around 0)
+    let i20 = 0; for (let i = n - 1; i >= 0; i--) if (raw[i] < 0.2) { i20 = i; break; }
+    const iS = Math.max(0, i20 - 8), p = new Float32Array(n); let m = 0;
+    for (let i = iS; i < n; i++) { m = Math.max(m, Math.min(1, raw[i])); p[i] = m; }
+    const tAt = new Float32Array(21); let j = iS;
+    for (let s = 0; s <= 20; s++) { const want = Math.max(0.02, s / 20); while (j < n - 1 && p[j] < want) j++; tAt[s] = f.ts[j]; }
+    return { t0: tAt[1], t1: tAt[19], tAt };
+  }
+
   /** loop speed (m/s) of a gait for a travel direction relative to the body (deg, 0 = forward, + = right) */
-  speedAt(gait, thetaDeg) { let v = 0; for (const [s, w] of this._dirWeights(gait, thetaDeg)) v += s.speed * w; return v; }
+  // (always of the main stance: the pace of the game must not depend on which way the hips are turned)
+  speedAt(gait, thetaDeg) { let v = 0; for (const [s, w] of this._dirWeights(gait, thetaDeg, false)) v += s.speed * w; return v; }
   /** clean gait cycle of every loop clip (GaitCycle.js): the loops play only that, phase 0 = left foot comes down */
   _buildCycles() {
     const T = this.tuning;
@@ -202,7 +240,7 @@ export class MannyAnimator {
     };
     // travel speed of a loop = speed over its clean cycle (the whole clip has a held last frame and reads ~1 % slow)
     this.cycles = new Map();
-    for (const set of Object.values(this.loopSets)) for (const l of set) {
+    for (const set of [...Object.values(this.loopSets), ...Object.values(this.loopSetsAlt)]) for (const l of set) {
       let c = this.cycles.get(l.name);
       if (!c) { c = findCycle(this.feat[l.name], { air: T.cycleAir, body: T.cycleBody, poseDist: (ta, tb) => poseDist(l.name, ta, tb) }); this.cycles.set(l.name, c); }
       if (c.speed > 0.2) { l.speed = c.speed; if (T.loopCycles !== false) { l.cyc = c; l.duration = c.b - c.a; } }
@@ -259,7 +297,7 @@ export class MannyAnimator {
     this.state = 'idle'; this.stateTime = 0;
     this.inertializer.active = false; this.inertializer.pending = false;
     this.footLock.reset(); this.groundAdapt.reset();
-    this._lean = 0; this._crouchPrev = undefined;
+    this._lean = 0; this._crouchPrev = undefined; this.alt = false;
   }
   _applyWeights() {
     for (const e of this._acts.values()) e.a.setEffectiveWeight(0);
@@ -276,8 +314,8 @@ export class MannyAnimator {
     if ((this._trimT = (this._trimT || 0) + (this._dtNow || 0)) > 2) { this._trimT = 0; this._trim(); }
   }
 
-  _dirWeights(gait, theta) {
-    const set = this.loopSets[gait];
+  _dirWeights(gait, theta, alt = this.alt) {
+    const set = (alt ? this.loopSetsAlt : this.loopSets)[gait];
     if (!set || !set.length) return [];
     if (set.length === 1) return [[set[0], 1]];
     let lo = null, hi = null, dLo = -Infinity, dHi = Infinity;
@@ -412,7 +450,7 @@ export class MannyAnimator {
     if (matchPhase) this.phase = this._matchLoopPhase(this._gaitKey(), this.locoTheta);
     this._playOnly('loco', blend); this.oneShot = null; this._loopFromIdle = fromIdle; this._enter('loop');
   }
-  _startIdle(blend = 0.3) { this._playOnly('idle', blend); this.oneShot = null; this._enter('idle'); }
+  _startIdle(blend = 0.3) { this._playOnly('idle', blend); this.oneShot = null; this.alt = false; this._enter('idle'); }
 
   update(dt, input = {}) {
     if (!this.mixer) return { delta: new THREE.Vector3(), facing: 0, jumpImpulse: false };
@@ -444,6 +482,8 @@ export class MannyAnimator {
     const strafe = !!input.strafe;
     let gait = input.gait || 'run';
     const thetaIn = moving ? wrapDeg((this.facing - moveYaw) * DEG) : this.locoTheta;
+    // the same from the unsmoothed input: a change of direction shows here in the very frame the keys change
+    const rawTheta = moving ? wrapDeg((this.facing - Math.atan2(rawMv.x, rawMv.y)) * DEG) : this.locoTheta;
     if (gait === 'sprint' && strafe && Math.abs(thetaIn) > 60) gait = 'run';
     this.gait = gait;
     const gk = this._gaitKey();
@@ -563,8 +603,12 @@ export class MannyAnimator {
         } else {
           this.facing = approachAngle(this.facing, targetFacing, T.proceduralTurnRate * RAD * dt);
           const d = wrapDeg(thetaIn - this.locoTheta);
-          if (Math.abs(d) > 120 && canReselect && this._enterPivot(thetaIn)) break;
+          // Direction change: a planted step. Triggered by the raw input – the smoothed direction creeps round and the loop
+          // sweeps after it, so their difference never got large (the old test `d > 120` practically never fired).
+          if (vel ? Math.abs(wrapDeg(rawTheta - this.locoTheta)) > T.pivotAngle && canReselect && this._enterPivot(rawTheta)
+            : Math.abs(d) > 120 && canReselect && this._enterPivot(thetaIn)) break;
           this.locoTheta = wrapDeg(this.locoTheta + clamp(d, -720 * dt, 720 * dt));
+          if (this.alt && Math.abs(Math.abs(this.locoTheta) - 90) > 50) this.alt = false;   // no longer sideways: the second stance is over
         }
         this._targetYaw = desiredYaw;
         break;
@@ -583,11 +627,17 @@ export class MannyAnimator {
       }
       case 'pivot': {
         if (!moving) { this._enterStop(); break; }
-        if (canReselect && Math.abs(wrapDeg(thetaIn - this._pivotTheta)) > T.reselectAngle) {   // changed mind during the pivot
+        const off = Math.abs(wrapDeg((this._pivot ? rawTheta : thetaIn) - this._pivotTheta));
+        if (canReselect && off > T.reselectAngle) {   // changed mind during the pivot
+          // another large change: the next planted step, from the direction this one was heading for
+          if (this._pivot && off > T.pivotAngle) { this.locoTheta = this._pivotTheta; if (this._enterPivot(rawTheta)) break; }
           this.locoTheta = thetaIn; this._startLoco(T.blend); break;
         }
         if (strafe) this.facing = approachAngle(this.facing, targetFacing, T.proceduralTurnRate * RAD * dt);
-        if (this.stateTime >= this._exitT) { this.locoTheta = thetaIn; this._startLoco(T.blend); }
+        if (this._pivot ? this._osPrevT >= this._pivot.ti.t1 + T.pivotTail : this.stateTime >= this._exitT) {
+          if (this._pivot && this._pivot.ti.altTo !== null) this.alt = this._pivot.ti.altTo;      // the stance the clip ends in
+          this.locoTheta = thetaIn; this._startLoco(T.blend);
+        }
         break;
       }
       case 'stop': {
@@ -637,6 +687,20 @@ export class MannyAnimator {
         t1 = this._realSpeed < 0.15 ? t0 + dt * 1.15 : f.timeAtCum(total - Math.min(total, this._stopDist));
         t1 = clamp(t1, t0 + dt * 0.5, t0 + dt * 3);
       }
+      t1 = Math.min(t1, f.duration);
+      this._osRate = (t1 - t0) / dt;
+      a.setEffectiveTimeScale(this._osRate);
+    }
+
+    // ---- capsule-led: a direction change is played by VELOCITY – the clip is as far through its change as the capsule is
+    if (vel && this.oneShot && st === 'pivot' && this._pivot && dt > 0) {
+      const P = this._pivot, f = this.feat[this.oneShot], a = this.actions[this.oneShot], t0 = this._osPrevT;
+      const sF = Math.sin(this.facing), cF = Math.cos(this.facing);
+      const vf = vel.x * sF + vel.y * cF, vr = -(vel.x * cF - vel.y * sF);              // forward, right
+      const dx = P.b[0] - P.a[0], dy = P.b[1] - P.a[1], dl = dx * dx + dy * dy;
+      const p = dl > 0.01 ? clamp(((vf - P.a[0]) * dx + (vr - P.a[1]) * dy) / dl, 0, 1) : 1;
+      const x = p * 20, k = Math.min(19, Math.floor(x)), want = P.ti.tAt[k] + (P.ti.tAt[k + 1] - P.ti.tAt[k]) * (x - k);
+      let t1 = p > 0.97 ? t0 + dt : clamp(want, t0 + dt * T.pivotRate[0], t0 + dt * T.pivotRate[1]);
       t1 = Math.min(t1, f.duration);
       this._osRate = (t1 - t0) / dt;
       a.setEffectiveTimeScale(this._osRate);
@@ -872,7 +936,9 @@ export class MannyAnimator {
   }
 
   _enterPivot(theta) {
-    const gk = this._gaitKey();
+    const gk = this._gaitKey(), T = this.tuning;
+    if (this._realSpeed !== undefined) return this._enterPivotLed(theta, gk);
+    this._pivot = null;
     const cands = [];
     for (const name of this.groups.pivots[gk] || []) {
       const f = this.feat[name];
@@ -930,6 +996,34 @@ export class MannyAnimator {
       if (!best || c < best.c) best = { name, c };
     }
     return best ? best.name : null;
+  }
+
+  /**
+   * Direction change while the game moves the character: the clip that leads from the old travel direction into the new one, entered
+   * just before its change at the frame whose feet fit (that also picks the Lfoot / Rfoot variant), then played by velocity (update).
+   */
+  _enterPivotLed(theta, gk) {
+    const T = this.tuning;
+    let best = null;
+    for (const name of this.groups.pivots[gk] || []) {
+      const f = this.feat[name], ti = this.turn[name];
+      if (!ti) continue;
+      const e0 = Math.abs(wrapDeg((f.startDirDeg ?? 0) - this.locoTheta)), e1 = Math.abs(wrapDeg((f.endDirDeg ?? 0) - theta));
+      if (e0 > T.pivotDirTol || e1 > T.pivotDirTol) continue;
+      if (ti.altFrom !== null && ti.altFrom !== this.alt) continue;      // starts sideways in the other stance
+      const a = f.index(Math.max(0, ti.t0 - T.pivotLead)), b = f.index(ti.t0 + 0.02);
+      for (let i = a; i <= b; i++) {
+        const c = (e0 + e1) / 40 + (ti.altTo ? T.pivotAltCost : 0) + poseCost(f, i, this.curPose, { speed: 0.05 });
+        if (!best || c < best.cost) best = { name, t: f.ts[i], cost: c, ti };
+      }
+    }
+    if (!best || best.cost > T.maxCost) return false;          // no clip for this change: the loops sweep round as before
+    const a0 = this.locoTheta * RAD, a1 = theta * RAD, v1 = this.speedAt(gk, theta) || this._realSpeed;
+    this._pivot = { ti: best.ti, a: [Math.cos(a0) * this._realSpeed, Math.sin(a0) * this._realSpeed], b: [Math.cos(a1) * v1, Math.sin(a1) * v1] };
+    this._playOneShot(best.name, T.moveBlend, best.t, 1);
+    this._pivotTheta = theta; this._startTheta = theta; this._targetYaw = this._strafeTarget ?? this.facing;
+    this._enter('pivot', `${best.name} @${best.t.toFixed(2)} ${Math.round(this.locoTheta)}>${Math.round(theta)}`);
+    return true;
   }
 
   _enterFall(blend) {

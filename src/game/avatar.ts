@@ -1,8 +1,12 @@
 import * as THREE from 'three';
 import { clamp } from '../core/util';
 import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, viewModelId, normLook, type SoldierVis, type FigGear } from './mineArt';
-import { driveManny, releaseManny, mannyPace, mannyBrake, mannyAccel } from './mannyAvatar';
-export const footAccel = mannyAccel;   // Anlaufrate beim Drücken der Lauftasten (1/s)
+import { driveManny, releaseManny, mannyPace, mannyBrake, mannyAccel, mannyTurn } from './mannyAvatar';
+// Richtungswechsel im Lauf: Zeit seit dem letzten Wechsel der gewünschten Laufrichtung um mehr als 50° (setIntent zählt mit).
+// Mit der neuen Spielerfigur setzt die Beschleunigung danach weich ein (mannyTurn): Ein Mensch muss erst einen Fuß aufsetzen,
+// bevor sein Körper die Richtung ändert – so passt der Setzschritt der Figur zur Bewegung des Spiels.
+const TURN = { t: 9, x: 0, z: 0 };
+export const footAccel = (base: number) => mannyAccel(base) * mannyTurn(TURN.t);   // Anlaufrate beim Drücken der Lauftasten (1/s)
 export const footBrake = mannyBrake;   // Bremsrate nach dem Loslassen der Lauftasten (1/s)
 import { P } from './state';
 // Eigene Figur: angelegte Ausrüstung plus das gewählte Aussehen (seit 2026-11-20)
@@ -34,9 +38,16 @@ export function footPace(f: number, s: number, run: boolean, normal: number, spr
 // Absicht der eigenen Figur in diesem Bild: gewünschte Laufrichtung (Raumkoordinaten) und Sprinten. Die Laufstelle setzt sie in jedem Bild
 // vor driveAvatar; driveAvatar verbraucht sie (ohne neue Angabe gilt: stehen). Manny startet und stoppt damit sofort mit den Tasten.
 const INTENT = { mx: 0, mz: 0, sprint: false };
-export function setIntent(yaw: number, f: number, s: number, run: boolean) {
+export function setIntent(yaw: number, f: number, s: number, run: boolean, dt = 0) {
   const sy = Math.sin(yaw), cy = Math.cos(yaw);
   INTENT.mx = -sy * f + cy * s; INTENT.mz = -cy * f - sy * s; INTENT.sprint = run && !STANCE.crouch && (f !== 0 || s !== 0);
+  const l = Math.hypot(INTENT.mx, INTENT.mz);
+  if (l > 0.1) {
+    const x = INTENT.mx / l, z = INTENT.mz / l;
+    if ((TURN.x || TURN.z) && x * TURN.x + z * TURN.z < 0.64) TURN.t = 0;      // cos 50°
+    TURN.x = x; TURN.z = z;
+  } else { TURN.x = TURN.z = 0; TURN.t = 9; }                                   // aus dem Stand ist kein Wechsel
+  TURN.t += dt;
 }
 export const eyeH = () => (STANCE.crouch ? 1.12 : 1.7);
 export function toggleCrouch() { STANCE.crouch = !STANCE.crouch; }
