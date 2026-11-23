@@ -61,11 +61,11 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
     moveDir: _mv, gait: gaitOf(spd), crouch: !!d.crouch, strafe: true, facing: d.yaw + Math.PI,
     jump, grounded: !air, verticalSpeed: vy,
   });
-  // Animator-Blickrichtung (Welt) relativ zum Halter, der schon um body + π gedreht ist
-  holder.updateMatrixWorld(true);
-  const hy = new THREE.Euler().setFromQuaternion(holder.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+  // Animator-Blickrichtung relativ zum Halter, der schon um body + π gedreht ist. yaw, vx, vz und facing gelten im Raum des Halters
+  // (Innenräume: Koordinaten des Decks, das selbst gedreht in der Welt liegt), deshalb die lokale Drehung des Halters, nicht die
+  // Weltdrehung: Mit der Weltdrehung stand Manny in Stationen und Schiffen um die Drehung des Raums versetzt (lief z. B. 90° seitlich).
   anim.model.position.set(0, 0, 0);
-  anim.model.rotation.set(0, out.facing - hy, 0);
+  anim.model.rotation.set(0, out.facing - holder.rotation.y, 0);
   anim.model.updateMatrixWorld(true);
   anim.finalize(dt);
   return true;

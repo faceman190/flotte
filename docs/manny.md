@@ -14,6 +14,13 @@ Für alle anderen ändert sich nichts.
 - Kann nicht: Waffen halten, Anschlag, Schießen, Nachladen, Treffer-Zucken. Beim Tod wechselt die Darstellung zurück zum Soldaten.
 - Die Spielphysik bewegt die Figur; Mannys eigene Fortbewegung in den Clips (Root Motion) wird nur für die Darstellung genutzt.
   Weil die Spieltempos (4,2 und 6,4 m/s) nicht genau zu den Clips passen (Laufen 5,1, Sprinten 7,1 m/s), rutschen die Füße beim Laufen etwas.
+- Behoben (23.11.2026): In Stationen und Schiffen lief Manny um die Drehung des Raums versetzt (oft 90° seitlich statt geradeaus).
+  Ursache: Die Blickrichtung wurde gegen die Weltdrehung des Halters gerechnet, Richtung und Tempo kommen aber in Raumkoordinaten.
+  Jetzt zählt die lokale Drehung des Halters (mannyAvatar.ts). Geprüft auf Deck 3 der Bastion: W geradeaus, D seitlich nach rechts (docs/bilder/manny-laufen.jpg).
+
+## Richtung (Entscheidung 23.11.2026)
+Wir bauen künftig auf dem Unreal-System auf: Skelett nach UE5/MetaHuman-Namen, Bewegungen aus Unreal (Game Animation Sample und eigene),
+diese Bewegungslogik als Grundlage. Die Lizenzfrage (Epic-Inhalte außerhalb von Unreal) bleibt offen, bis die Bewegungen eigene oder frei lizenzierte sind.
 
 ## Aufbau
 - `src/game/mannyAvatar.ts`: Schalter, Laden, Anbindung an `driveAvatar` (avatar.ts; nur Figuren mit `player`, also die eigene).
