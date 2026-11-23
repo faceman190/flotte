@@ -17,6 +17,8 @@ import { VIEW, STANCE, ACT, footPace, footBrake, footAccel, setIntent, eyeH, syn
 import { viewModelId } from './mineArt';
 import { AIM, aimUpdate, aimFov, aimShake } from './footgun';
 import { drawFootCross } from '../ui/footHud';
+import { fieldGrenade } from './fieldfight';
+import { noteToss } from './avatar';
 import { basePad, padGround, baseBlocked, nearDoor, surfaceAt, wallBetween } from './basewalk';
 import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
 import { FIGHT, updateFieldFight, fieldDown, fieldViewModel, hideFieldViewModel, drawFieldHUD } from './fieldfight';
@@ -179,7 +181,7 @@ export function updateFoot(dt: number) {
   FOOT.act = tgt ? 'story' : door ? 'base' : crate ? 'crate' : footNearShip() ? 'ship' : mine ? 'mine' : footNearRover() ? 'rover' : '';
   FOOT.prompt = FOOT.act === 'story' ? tgt!.label : FOOT.act === 'crate' ? (crate!.big ? 'Tresorkiste öffnen' : 'Kiste öffnen') : FOOT.act === 'base' ? `${door!.st.name} betreten` : FOOT.act === 'ship' ? (settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`) : FOOT.act === 'mine' ? `${mine!.name} betreten` : FOOT.act === 'rover' ? 'In den Rover steigen' : '';
   // eigene Figur
-  aimUpdate(dt, FIGHT.down <= 0);
+  aimUpdate(dt, FIGHT.down <= 0, { still: Math.hypot(FOOT.vx, FOOT.vz) < 0.4, crouch: STANCE.crouch, air: FOOT.jy > 0.05 });
   if (VIEW.tp) me = syncAvatar(scene, me, figGear());
   if (me) {
     me.s.g.visible = VIEW.tp;
@@ -190,6 +192,8 @@ export function updateFoot(dt: number) {
   updateFieldFight(dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH(), active: true, tp: VIEW.tp, muzzle: mz });
 }
 
+/** Taste G zu Fuß: Granate in Blickrichtung werfen */
+export function footGrenade() { if (FOOT.active && fieldGrenade({ x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH() })) noteToss(); }
 const _c = new THREE.Vector3();
 export function footCamera(dt: number) {
   if (VIEW.tp && me) tpCamPos(_c, FOOT.x, FOOT.y + FOOT.jy, FOOT.z, FOOT.yaw, FOOT.pitch, (x, y, z) => y > padGround(x, z) + 0.3 && !baseBlocked(x, z, y - 1.2) && !(CITY.walk && wallBetween(FOOT.x, FOOT.z, x, z, y - 1.8)) && !(ROVER.model && Math.hypot(x - ROVER.x, z - ROVER.z) < 2.2) && !treeNear(x, z, 1.1), dt);

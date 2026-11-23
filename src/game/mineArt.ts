@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { clone as skClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { renderer, GLOW } from '../core/engine';
+import { LYRA_ITEM, LYRA_VM, LYRA_OF_VM, LYRA_SPEC, makeLyraGun, driveLyraGun, type LyraGun, type LyraKind } from './lyraGuns';
 import { stationTemplate, stationClips } from '../models/stationModels';
 import { applyKit } from '../models/kit';
 
@@ -113,6 +114,8 @@ export interface ViewModel {
   scene: THREE.Scene; cam: THREE.PerspectiveCamera; gun: THREE.Group; flash: THREE.Sprite; flashLight: THREE.PointLight;
   key: THREE.DirectionalLight; fill: THREE.HemisphereLight; lampWarm: THREE.PointLight; lens: THREE.MeshBasicMaterial | null;
   muzzle: THREE.Vector3; lightPos: THREE.Vector3; id: string; pos: [number, number, number]; glow: THREE.MeshBasicMaterial | null;
+  lyra?: LyraGun; lyraT?: number;      // Waffe aus dem Lyra-Paket: bewegt Verschluss und Magazin selbst (lyraGuns.ts)
+  ads?: [number, number, number];      // Lage beim Zielen (fehlt: aus der Mündungshöhe geschätzt)
 }
 // Modelle je Waffe (Blender: waffe_build.py für den K-12, waffen_build.py für IG-3 und EF-2). Knoten: Körper, Glas, Absehen, Leuchtteile.
 // muzzle: Mündung im Spiel-Raum (Blender x, z, −y); pos: Lage vor der Kamera (rechts, unten, vorn).
@@ -132,6 +135,7 @@ const WDEFS: Record<string, WDef> = {
 // Welches Modell zur angelegten Waffe gehört. Standard ist das AR-39 (Gewehr der Flotte, auch ohne angelegte Waffe und für Wachen);
 // fehlt eine Datei, nimmt das Spiel den K-12.
 export function viewModelId(gear?: string) {
+  const ly = LYRA_ITEM[gear || '']; if (ly) return LYRA_VM[ly];      // Waffen aus dem Lyra-Paket: eigene Modelle (lyraGuns.ts)
   const id = gear === 'waffe_impuls' ? 'ig3' : gear === 'waffe_flinte' ? 'ef2' : gear === 'waffe_pistole' ? 'p9' : gear === 'waffe_splitter' ? 'sw' : gear === 'waffe_smg' ? 'smg' : 'ar39';
   return stationTemplate(WDEFS[id].tpl) ? id : 'k12';
 }
@@ -142,7 +146,30 @@ function wMat(W: WDef) {
   return gm;
 }
 let ENV: THREE.Texture | null = null;
+// Ich-Sicht für die Waffen aus dem Lyra-Paket: das Modell allein, ohne Hände (für diese Waffen gibt es keine gestellten). null, solange das
+// Modell lädt – der Aufrufer versucht es im nächsten Bild wieder.
+function buildLyraViewModel(id: string, kind: LyraKind): ViewModel | null {
+  const L = makeLyraGun(kind); if (!L) return null;
+  const S = LYRA_SPEC[kind], sceneV = new THREE.Scene();
+  if (!ENV) { const pm = new THREE.PMREMGenerator(renderer); ENV = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
+  sceneV.environment = ENV;
+  const cam = new THREE.PerspectiveCamera(52, 16 / 9, 0.01, 10);
+  const gun = new THREE.Group(), inner = new THREE.Group(); gun.add(inner);
+  // Rahmen der Waffe (x Lauf, y links, z oben) → Bild (−z vorn, x rechts, y oben)
+  L.g.quaternion.setFromRotationMatrix(new THREE.Matrix4().set(0, -1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, 0, 0, 0, 1));
+  L.g.traverse((o: any) => { if (o.isMesh) o.castShadow = false; });
+  inner.add(L.g); sceneV.add(gun);
+  const key = new THREE.DirectionalLight(0xfff2e4, 0.46); key.position.set(-0.6, 1.0, 0.4); sceneV.add(key); sceneV.add(key.target);
+  const fill = new THREE.HemisphereLight(0x8fa4c0, 0x241c14, 0.13); sceneV.add(fill);
+  const lampWarm = new THREE.PointLight(0xffb070, 0, 3, 1.6); lampWarm.position.set(-0.4, 0.5, -0.6); sceneV.add(lampWarm);
+  const muzzle = new THREE.Vector3(-S.muzzle[1], S.muzzle[2], -S.muzzle[0]), lightPos = new THREE.Vector3(0.0355, 0.04, -0.3835);
+  const flash = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: 0xffc070, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true, toneMapped: false }));
+  flash.scale.setScalar(0.16); flash.position.copy(muzzle); flash.visible = false; flash.renderOrder = 5; inner.add(flash);
+  const flashLight = new THREE.PointLight(0xffb060, 0, 1.5, 1.4); flashLight.position.copy(muzzle).add(new THREE.Vector3(0, 0.05, 0.05)); inner.add(flashLight);
+  return { scene: sceneV, cam, gun, flash, flashLight, key, fill, lampWarm, lens: null, muzzle, lightPos, id, pos: S.view, glow: null, lyra: L, ads: S.ads };
+}
 export function buildViewModel(id = 'k12'): ViewModel | null {
+  if (LYRA_OF_VM[id]) return buildLyraViewModel(id, LYRA_OF_VM[id]);
   const W = WDEFS[id] || WDEFS.k12;
   const t = stationTemplate(W.tpl); if (!t) return null;
   const sceneV = new THREE.Scene();
@@ -302,10 +329,16 @@ export function buildHandWeapon(id: string): { g: THREE.Group; muzzle: THREE.Vec
 // war kaum zu sehen und beim Nachladen geschah nichts. Jetzt: Achterbewegung beim Gehen (rennend stärker), deutlicher Rückstoß, Pendeln bei
 // schnellen Drehungen (sx/sy vom Aufrufer) und eine Nachladebewegung (Waffe kippt nach unten innen und kommt zurück), alles ohne Clips.
 // reload: Fortschritt 0..1 während des Nachladens, sonst −1.
-export function poseViewModel(vm: ViewModel, o: { walked: number; bob: number; kick: number; sx?: number; sy?: number; run?: number; reload?: number }) {
-  const run = o.run || 0, sx = o.sx || 0, sy = o.sy || 0, w = o.walked * 2.1;
-  const lat = Math.cos(w) * 0.011 * (1 + run), vert = o.bob * 0.8 - Math.abs(Math.sin(w)) * 0.005 * (1 + run);
+// ads: Zielen 0..1 (rechte Maustaste, footgun.ts aimK) – die Waffe wandert in die Bildmitte, Kimme auf Augenhöhe, und liegt ruhiger.
+// shots: Schusszähler (für den Verschluss der Lyra-Waffen).
+export function poseViewModel(vm: ViewModel, o: { walked: number; bob: number; kick: number; sx?: number; sy?: number; run?: number; reload?: number; ads?: number; shots?: number }) {
+  const a = o.ads || 0, calm = 1 - 0.65 * a, free = 1 - a;
+  const run = (o.run || 0) * free, sx = (o.sx || 0) * calm, sy = (o.sy || 0) * calm, w = o.walked * 2.1;
+  if (vm.lyra) { const now = performance.now(), dt = Math.min(0.1, (now - (vm.lyraT || now)) / 1000); vm.lyraT = now; driveLyraGun(vm.lyra, o.shots ?? 0, o.reload ?? -1, dt); }
+  const lat = Math.cos(w) * 0.011 * (1 + run) * calm, vert = (o.bob * 0.8 - Math.abs(Math.sin(w)) * 0.005 * (1 + run)) * calm;
+  const A = vm.ads || [0, -(vm.muzzle.y + 0.036), vm.pos[2] + 0.05];
+  const px = vm.pos[0] + (A[0] - vm.pos[0]) * a, py = vm.pos[1] + (A[1] - vm.pos[1]) * a, pz = vm.pos[2] + (A[2] - vm.pos[2]) * a;
   const rl = o.reload !== undefined && o.reload >= 0 ? Math.sin(Math.PI * Math.min(1, Math.max(0, o.reload))) : 0;
-  vm.gun.position.set(vm.pos[0] + sx + lat - rl * 0.02, vm.pos[1] + vert + sy - run * 0.02 - rl * 0.035, vm.pos[2] + o.kick * 0.075 + rl * 0.01);
-  vm.gun.rotation.set(o.kick * 0.16 + sy * 1.5 - run * 0.12 + rl * 0.12, 0.045 + sx * 2 + run * 0.25 + rl * 0.12, -sx * 2.5 + run * 0.18 + lat * 1.2 + rl * 0.42);
+  vm.gun.position.set(px + sx + lat - rl * 0.02, py + vert + sy - run * 0.02 - rl * 0.035, pz + o.kick * 0.075 * (1 - 0.4 * a) + rl * 0.01);
+  vm.gun.rotation.set(o.kick * 0.16 * (1 - 0.5 * a) + sy * 1.5 - run * 0.12 + rl * 0.12, 0.045 * free + sx * 2 + run * 0.25 + rl * 0.12, -sx * 2.5 + run * 0.18 + lat * 1.2 + rl * 0.42);
 }

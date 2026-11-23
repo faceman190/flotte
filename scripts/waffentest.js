@@ -42,3 +42,38 @@ window.__waffe = async () => {
   W.tk(40);
   return 'bereit';
 };
+
+// Zu Fuß auf Eisgarten mit der Waffe `waffe` (Kennung des Gegenstands), im echten Spielablauf:
+//   (0, eval)(await (await fetch('/scripts/waffentest.js')).text()); await __feld('waffe_kg30');
+// Legt window.M (Module des laufenden Spiels), tk(n) und show() an (show: Bild und Anzeige zusammen als Vollbild-Überlagerung).
+window.__feld = async (waffe = 'waffe_kg30', tp = true) => {
+  Storage.prototype.setItem = function () {};
+  window.__errs = window.__errs || []; window.addEventListener('error', e => __errs.push(String(e.message)));
+  window.addEventListener('unhandledrejection', e => __errs.push('rej ' + String(e.reason).slice(0, 200)));
+  const oe = console.error; console.error = (...a) => { __errs.push(a.map(String).join(' ').slice(0, 300)); oe(...a); };
+  window.requestAnimationFrame = f => setTimeout(() => f(performance.now()), 16);
+  for (let i = 0; i < 60 && !window.__lf; i++) await new Promise(r => setTimeout(r, 250));
+  await new Promise(r => setTimeout(r, 2500));
+  const dyn = new Function('u', 'return imp' + 'ort(u)'), res = () => performance.getEntriesByType('resource').map(r => r.name);
+  window.imp = n => dyn(res().find(u => u.includes(n)));
+  const M = (window.M = {});
+  for (const [k, p] of Object.entries({ ST: 'game/state.ts', AV: 'game/avatar.ts', MA: 'game/mannyAvatar.ts', OF: 'game/onfoot.ts', FF: 'game/fieldfight.ts', FG: 'game/footgun.ts', FX: 'game/footfx.ts',
+    D: 'game/dungeon.ts', INV: 'game/inventory.ts', HUD: 'ui/footHud.ts', INP: 'core/input.ts', E: 'core/engine.ts', AU: 'core/audio.ts', T3: 'deps/three.js' })) M[k] = await imp('/' + (p.startsWith('deps') ? 'node_modules/.vite/' : 'src/') + p);
+  const lf = window.__lf; lf.START.on = false;
+  M.ST.setPlayer(M.ST.newPlayer('Testpilot')); lf.tick(0.2);
+  M.ST.P.gear = Object.assign({}, M.ST.P.gear, { waffe });
+  lf.enterSurface('eisgarten'); lf.tick(0.5);
+  M.OF.landAtBase(lf.world.stations[0], true); lf.G.mode = 'rover'; M.AV.VIEW.tp = tp;
+  window.tk = (n = 20, ms = 33) => { for (let i = 0; i < n; i++) lf.tick(ms / 1000, ms); };
+  window.show = (cross = 72) => {
+    if (cross) M.HUD.drawFootCross(cross);      // das Fadenkreuz zeichnet das Spiel nur mit eingefangener Maus
+    const src = M.E.renderer.domElement, ui = document.getElementById('ui'), cv = document.createElement('canvas'); cv.width = src.width; cv.height = src.height;
+    const g = cv.getContext('2d'); g.drawImage(src, 0, 0); if (ui) g.drawImage(ui, 0, 0, cv.width, cv.height);
+    let im = document.getElementById('__shot'); if (!im) { im = document.createElement('img'); im.id = '__shot'; document.body.appendChild(im); }
+    im.style.cssText = 'position:fixed;left:0;top:0;z-index:99999;background:#000;width:100vw;height:100vh;object-fit:contain'; im.src = cv.toDataURL('image/jpeg', 0.92);
+    return cv.width + 'x' + cv.height;
+  };
+  for (let k = 0; k < 60 && !M.MA.mannyAnim(); k++) { await new Promise(r => setTimeout(r, 500)); tk(1); }
+  tk(30); await new Promise(r => setTimeout(r, 2500)); tk(10);
+  return 'bereit';
+};

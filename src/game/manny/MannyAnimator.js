@@ -792,7 +792,7 @@ export class MannyAnimator {
   _applyWeapon(dt, wi, lk) {
     const sprint = this.gaitW.sprint || 0, T = this.tuning;
     this.weapon.apply(dt, {
-      armed: !!wi, kind: wi ? wi.kind : undefined, aim: !!(wi && wi.aim) && sprint < 0.5, shots: wi ? wi.shots : undefined, hits: wi ? wi.hits : undefined,
+      armed: !!wi, kind: wi ? wi.kind : undefined, aim: !!(wi && wi.aim) && sprint < 0.5, shots: wi ? wi.shots : undefined, hits: wi ? wi.hits : undefined, toss: wi ? wi.toss : undefined,
       reload: wi && wi.reload !== undefined ? wi.reload : -1, crouchW: this.crouchW, yaw: lk.yaw, pitch: lk.pitch / (T.lookPitch || 1), ms: this._ms, snap: this._wSnap,
     });
     this._wSnap = false;

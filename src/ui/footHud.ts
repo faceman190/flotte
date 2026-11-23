@@ -2,7 +2,10 @@ import { ux, view } from '../core/engine';
 import { clamp } from '../core/util';
 import { settings, G } from '../game/state';
 import { weapon } from '../game/dungeon';
-import { GUN, gunSync, gunMode, aimK, aimSpread, KILL } from '../game/footgun';
+import { GUN, gunSync, gunMode, aimK, gunSpread, KILL } from '../game/footgun';
+import { LYRA_ITEM } from '../game/lyraGuns';
+import { P } from '../game/state';
+import { grenadeCount } from '../game/granate';
 
 // Anzeige zu Fuß (seit Alpha 1.54, Gegenstück zur Ringanzeige im Schiff): unten rechts ein Ring mit dem Leben, die Zahl in der Mitte,
 // links daneben Waffe mit Magazin und Schussmodus. Planet und Mine benutzen dieselbe Anzeige. Dazu die schlichte Aufforderung [E] und die
@@ -36,7 +39,7 @@ export function drawFootCross(fov: number) {
   const W = view.W, H = view.H, cx = W / 2, cy = H / 2, w = weapon(), ak = aimK();
   ux.save();
   const hit = G.hitMark > 0;
-  const gap = clamp(Math.tan(w.spread * aimSpread()) / Math.tan(fov * Math.PI / 360) * (H / 2) * (1 + 0.2 * ak), 4, 60) + 3;
+  const gap = clamp(Math.tan(gunSpread(w.spread)) / Math.tan(fov * Math.PI / 360) * (H / 2) * (1 + 0.2 * ak), 4, 60) + 3;
   ux.strokeStyle = hit ? AMBER : 'rgba(255,255,255,.82)'; ux.lineWidth = 1.5; ux.shadowColor = 'rgba(0,0,0,.6)'; ux.shadowBlur = 2;
   const len = 7 - 2 * ak;
   for (const [ax, ay] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ux.beginPath(); ux.moveTo(cx + ax * gap, cy + ay * gap); ux.lineTo(cx + ax * (gap + len), cy + ay * (gap + len)); ux.stroke(); }
@@ -83,8 +86,8 @@ export function drawFootRing(hp: number, max: number, hurt = 0) {
   const w = weapon(), x = -R - 16;
   ux.textAlign = 'right';
   ux.font = FONT(500, 12); ux.fillStyle = DIM; ux.fillText(w.name, x, -26);
-  // Umriss der Waffe links daneben (Pistole, Karabiner, Flinte: die drei Waffen aus dem Lyra-Paket)
-  if (w.kind) drawIcon('hud_ly_' + w.kind, x - 92, -40, 30, 0.8);
+  // Umriss der Waffe links daneben (die drei Waffen aus dem Lyra-Paket)
+  const ly = LYRA_ITEM[P.gear?.waffe || '']; if (ly) drawIcon('hud_ly_' + ly, x - 92, -40, 30, 0.8);
   if (GUN.reload > 0) {
     ux.font = FONT(600, 17); ux.fillStyle = AMBER; ux.fillText('Nachladen', x, -9);
     const p = 1 - GUN.reload / GUN.reloadT; ux.fillStyle = TRACK; ux.fillRect(x - 60, -4, 60, 2); ux.fillStyle = AMBER; ux.fillRect(x - 60, -4, 60 * clamp(p, 0, 1), 2);
@@ -94,6 +97,8 @@ export function drawFootRing(hp: number, max: number, hurt = 0) {
     ux.font = FONT(600, 22); ux.fillStyle = low ? RED : TXT; ux.fillText(String(GUN.mag), x - sw, -7);
     if (w.kind) drawIcon('hud_ly_ammo_' + w.kind, x - sw - ux.measureText(String(GUN.mag)).width - 7, -22, 15, low ? 0.95 : 0.6);
   } else { ux.font = FONT(600, 17); ux.fillStyle = TXT; ux.fillText('Energie', x, -9); }
+  // Granaten: Symbol und Zahl links unter der Waffe
+  { const n = grenadeCount(); if (n > 0) { drawIcon('hud_ly_grenade', x - 122, 12, 22, 0.8); ux.textAlign = 'left'; ux.font = FONT(600, 15); ux.fillStyle = TXT; ux.fillText('× ' + n, x - 118, 30); ux.textAlign = 'right'; } }
   ux.font = FONT(500, 12); ux.fillStyle = DIM; ux.fillText('Modus', x, 16);
   ux.font = FONT(600, 15); ux.fillStyle = TXT; ux.fillText(gunMode(w), x, 32);
   ux.restore();

@@ -116,6 +116,7 @@ export const LYRA = [
   /^MM_Pistol_Idle_ADS_AO_/,
   /^MM_(Rifle|Pistol|Shotgun)_(Fire|Reload)$/,               // Rückstoß (Aufschlag auf die Zielpose) und Nachladen
   /^MM_(Rifle|Pistol)_Equip$/,                               // Waffe ziehen
+  /^MM_Rifle_GrenadeToss$/,                                  // Granate werfen
   /^MM_HitReact_/,                                           // Treffer (Aufschlag)
 ];
 export const LYRA_BONES = /^(pelvis|spine_0\d|neck_0\d|head|clavicle_[lr]|upperarm_[lr]|lowerarm_[lr]|hand_[lr]|(index|middle|ring|pinky|thumb)_.*|weapon_[lr]|(upperarm|lowerarm)_twist_0\d_[lr])$/;

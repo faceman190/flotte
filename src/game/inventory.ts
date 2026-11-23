@@ -115,6 +115,13 @@ export function unequipShip(slot: ShipSlot): string {
   return '';
 }
 // Hülle und Schild auf die neuen Höchstwerte begrenzen
+/** n Stück eines Gegenstands aus dem Rucksack nehmen; false, wenn nicht genug da ist */
+export function takeItem(id: string, n = 1): boolean {
+  if (invCount(id) < n) return false;
+  for (let i = P.inv.length - 1; i >= 0 && n > 0; i--) if (P.inv[i].id === id) { const m = Math.min(n, P.inv[i].n); take(P.inv, i, m); n -= m; }
+  invHooks.changed();
+  return true;
+}
 function clampShip() { const S = stats(); P.hull = Math.min(P.hull, S.maxHull); P.shield = Math.min(P.shield, S.maxShield); }
 // Verbrauchsgut benutzen (wirkt auf das Schiff)
 export function useItem(i: number): string {
@@ -134,6 +141,7 @@ export function gearStock(stationId: string, danger: number): string[] {
   return GEAR_IDS.filter(id => {
     const d = gearDef(id)!;
     if (d.shop === undefined) return false;
+    if (d.immer) return true;
     if (d.shop === 2 && danger < 3) return false;
     const h = hashStr(stationId + ':' + id) % 100;
     return h < (d.shop === 0 ? 85 : d.shop === 1 ? 55 : 60);

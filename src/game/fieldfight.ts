@@ -9,7 +9,8 @@ import { world } from './world';
 import { terrainAt } from './surface';
 import { buildDrone, buildViewModel, viewModelId, poseViewModel, type DroneVis, type ViewModel } from './mineArt';
 import { weapon, shotSound } from './dungeon';
-import { gunReady, gunFired, gunUpdate, GUN, aimSpread, camShake, hurtSound, noteKill, whiz } from './footgun';
+import { throwGrenade, updateGrenades } from './granate';
+import { gunReady, gunFired, gunUpdate, GUN, aimK, gunSpread, gunFalloff, camShake, hurtSound, noteKill, whiz } from './footgun';
 import { drawFootRing } from '../ui/footHud';
 import { flinch, noteShot } from './avatar';
 import { droneBark } from './barks';
@@ -142,7 +143,7 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
   const w = weapon();
   FIGHT.cool = w.iv; FIGHT.kick = 1; FIGHT.flash = 0.06; FIGHT.lastShot = performance.now(); FIGHT.shots++; noteShot();
   shotSound(w); if (w.n > 1) camShake(0.32);
-  const sp = w.spread * aimSpread();
+  const sp = gunSpread(w.spread);
   const a = muzzle ? muzzle.clone() : vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : new THREE.Vector3(px, py - 0.15, pz);
   if (muzzle) flash(muzzle.x, muzzle.y, muzzle.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);   // Außensicht: kleines Mündungsfeuer (SMG gedämpft)
   let end: THREE.Vector3 | null = null;
@@ -162,11 +163,24 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
     end = new THREE.Vector3(px + d.x * bt, py + d.y * bt, pz + d.z * bt);
     if (best && best.id >= 0 && isClient()) { best.hit = 0.12; coopSend('fh', { s: P.sector, i: best.id, d: w.dmg }); impact(end, d, 'metall'); }
     else if (best) {
-      if (!best.alert) droneBark('alarm', Math.hypot(best.x - px, best.z - pz)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; impact(end, d, 'metall'); G.hitMark = 0.12;
+      if (!best.alert) droneBark('alarm', Math.hypot(best.x - px, best.z - pz)); best.hp -= w.dmg * gunFalloff(bt); best.hit = 0.12; best.alert = true; impact(end, d, 'metall'); G.hitMark = 0.12;
       if (best.hp <= 0) kill(best, coopNet.id);
     } else if (bt < tw + 0.01 && tw < 120) impact(end, d, 'boden', w.col);
     fxTracer(a, end, w.col, w.n > 1 ? 0.04 : 0.065);                 // Leuchtspur je Kugel
   }
+}
+// Granate werfen (Taste G, onfoot.ts): trifft alle Drohnen im Umkreis, zur Mitte hin voll
+export function fieldGrenade(me: { x: number; y: number; z: number; yaw: number; pitch: number; eye: number }) {
+  if (FIGHT.down > 0) return false;
+  return throwGrenade(me.x, me.y + me.eye, me.z, me.yaw, me.pitch, { ground: terrainAt, blast: (x, y, z, r, dmg) => {
+    for (const f of FIGHT.foes) {
+      if (f.dead) continue;
+      const d = Math.hypot(f.x - x, f.y - y, f.z - z); if (d > r) continue;
+      const dm = dmg * (1 - 0.7 * d / r);
+      if (f.id >= 0 && isClient()) { f.hit = 0.12; coopSend('fh', { s: P.sector, i: f.id, d: dm }); }
+      else { f.hp -= dm; f.hit = 0.12; f.alert = true; G.hitMark = 0.12; if (f.hp <= 0) kill(f, coopNet.id); }
+    }
+  } });
 }
 function kill(f: Foe, by = coopNet.id) {
   f.dead = true; f.g.visible = false;
@@ -261,6 +275,7 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
     coT = 0.1;
     coopSend('fst', { s: P.sector, f: FIGHT.foes.filter(f => f.id >= 0 && !f.dead).map(f => [f.id, ...pack(f.x, f.y, f.z), Math.round(f.hp), f.alert ? 1 : 0]), ev: coEv.splice(0) });
   } else if (!mates.length) coEv = [];
+  updateGrenades(dt, px, me.y + 1.1, pz, hurt);
   // Geschosse
   for (let i = FIGHT.bolts.length - 1; i >= 0; i--) {
     const b = FIGHT.bolts[i];
@@ -288,7 +303,7 @@ export function fieldViewModel(show: boolean, bob: number, walked: number) {
   if (overlay.scene !== want && (want || (vm && overlay.scene === vm.scene))) { overlay.scene = want; overlay.camera = want ? vm!.cam : null; }
   if (!show || !vm) return null;
   vm.cam.aspect = view.W / view.H; vm.cam.updateProjectionMatrix();
-  poseViewModel(vm, { walked, bob, kick: FIGHT.kick, reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });   // mineArt.ts
+  poseViewModel(vm, { walked, bob, kick: FIGHT.kick, reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, ads: aimK(), shots: FIGHT.shots });   // mineArt.ts
   vm.gun.visible = FIGHT.down <= 0;
   const sup = vm.id === 'smg', f = FIGHT.flash > 0 && (!sup || FIGHT.shots % 3 === 0); vm.flash.visible = f; vm.flashLight.intensity = f ? (sup ? 0.12 : 2.6) : 0;   // SMG mit Schalldämpfer: kleines Mündungsfeuer
   if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }

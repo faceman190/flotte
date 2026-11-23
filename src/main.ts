@@ -63,7 +63,7 @@ import { loadCharModels } from './models/charModels';
 import type { Gate, Station } from './game/world';
 import { DUN, enterDungeon, leaveDungeon, updateDungeon, dungeonCamera, drawDungeonHUD, dungeonKey, nearEntrance, dunHooks } from './game/dungeon';
 import { clearFootFx } from './game/footfx';
-import { FOOT, updateFoot, footCamera, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover, landAtBase, leaveBaseOnFoot, nearFootTarget, drawGroundMarkers, footAt, prewarmFoot } from './game/onfoot';
+import { FOOT, updateFoot, footCamera, footGrenade, drawFootHUD, leaveRover, leaveShipOnFoot, enterRover, footOff, footJump, footHooks, footNearShip, footNearRover, landAtBase, leaveBaseOnFoot, nearFootTarget, drawGroundMarkers, footAt, prewarmFoot } from './game/onfoot';
 import { CITY, updateCity, insideCityGate, preloadCities, cityDoorOut, hangarPadPose, cityHooks, cityWorld } from './game/city';
 import { updateBaseFx } from './game/basefx';
 import { preloadBases } from './models/stationModels';
@@ -455,6 +455,7 @@ onKey(code => {
   }
   if (code === 'KeyR' && G.mode === 'play') { scan(); noteScan(); return; }
   if (code === 'KeyR' && (G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { gunReload(); return; }   // zu Fuß: nachladen (footgun.ts)
+  if (code === 'KeyG' && G.mode === 'rover' && FOOT.active) { footGrenade(); return; }      // zu Fuß: Granate werfen (in der Mine: dungeonKey)
   if (code === 'KeyJ' && G.mode === 'play') { toggleJumpDrive(); return; }
   if (code === 'KeyH' && G.mode === 'play') { toggleSchnellflug(); return; }                                  // Schnellflug / Kurzsprung (schnellflug.ts)
   if (code === 'KeyN' && G.mode === 'play' && !world.surface) { pickNav(camera.getWorldDirection(new THREE.Vector3())); return; }   // Navigationsziel im Fadenkreuz

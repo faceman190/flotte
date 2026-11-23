@@ -3,8 +3,7 @@ import { MANIFEST, whenIdle } from '../core/assets';
 // @ts-ignore – reines JavaScript (aus der Manny-Demo übernommen), ohne Typen
 import { MannyAnimator } from './manny/MannyAnimator.js';
 import { buildHandWeapon } from './mineArt';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { makeLyraGun, driveLyraGun, LYRA_SPEC, type LyraGun } from './lyraGuns';
 
 // =====================================================================================
 // Eigene Spielerfigur in der Außensicht: Figur „Spieler“ auf dem UE5-Skelett mit den Bewegungen des Manny-Satzes.
@@ -35,7 +34,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 // turnRamp / turnMin: nach einem Richtungswechsel im Lauf steigt die Anlaufrate in turnRamp Sekunden von turnMin (Anteil) auf voll
 // test: nur für Prüfskripte – Waffe überall tragen (id wie in mineArt WDEFS), auch im Innenraum
 export const MANNY = { on: true, url: '' as string, body: '' as string, alt: false, brake: 8, accel: 0, turnRamp: 0.25, turnMin: 0.15,
-  test: null as null | { id: string; lyra?: Kind; aim: boolean; shots: number; hits: number; reload: number } };
+  test: null as null | { id: string; lyra?: Kind; aim: boolean; shots: number; hits: number; reload: number; toss?: number } };
 try {
   const q = new URLSearchParams(location.search).get('manny');
   if (q === '1' || q === '0') localStorage.setItem('lf_manny', q);
@@ -73,7 +72,7 @@ export interface MannyDrive {
   // Waffe in der Hand (null / fehlt = unbewaffnet): id = Modell (mineArt WDEFS), aim = im Anschlag, shots / hits = Zähler (eine Änderung
   // löst Rückstoß bzw. Zucken aus), reload = Fortschritt des Nachladens 0..1, sonst −1
   // lyra: statt des Modells id eine der drei Waffen aus dem Lyra-Paket (mit eigenen Knochen: Verschluss, Magazin)
-  weapon?: { id: string; lyra?: Kind; aim: boolean; shots: number; hits: number; reload: number } | null;
+  weapon?: { id: string; lyra?: Kind; aim: boolean; shots: number; hits: number; reload: number; toss?: number } | null;      // toss: Zähler der Granatwürfe
 }
 // Welche Haltung zu welcher Waffe gehört und wo die linke Hand greift (grip): Anteil der Strecke Griff → Mündung und Höhe unter der
 // Laufachse in Metern. Pistolen: beide Hände am Griff, wie der Clip sie hält. Gemessen am 23.11.2026 im Testfenster an der Figur.
@@ -87,35 +86,10 @@ const HOLD: Record<string, { kind: Kind; grip?: [number, number] }> = {
 };
 const BORE: Record<Kind, number> = { rifle: 0.0893, pistol: 0.0837, shotgun: 0.0995 };      // Höhe der Mündung über dem Waffenknochen (lyra.json, sockets.Muzzle)
 const GRIP_LEFT = 0.07;                                         // die linke Hand (Handgelenk) liegt so weit links neben der Laufachse
-// Lyras Waffen (lazy/Lyra…, asset-src/glb/lazy; aus lyra_paket/weapons): Modell im Rahmen des Waffenknochens (x = Lauf, z = oben), mit
-// Knochen und je zwei eigenen Clips (…_fire: Verschluss; …_reload: Magazin fällt heraus und kommt neu). muzzle aus lyra.json (sockets.Muzzle).
-const LYRA: Record<Kind, { file: string; muzzle: [number, number, number] }> = {
-  rifle: { file: 'lazy/LyraGewehr', muzzle: [0.6981, 0, 0.0893] }, pistol: { file: 'lazy/LyraPistole', muzzle: [0.1913, 0, 0.0837] },
-  shotgun: { file: 'lazy/LyraFlinte', muzzle: [0.4374, 0, 0.0995] },
-};
-interface LyraGun { g: THREE.Object3D; mixer: THREE.AnimationMixer; fire: THREE.AnimationAction | null; reload: THREE.AnimationAction | null }
-const lyraGuns: Partial<Record<Kind, LyraGun | 'lädt' | 'fehlt'>> = {};
-function lyraGun(kind: Kind): LyraGun | null {
-  const have = lyraGuns[kind];
-  if (have) return typeof have === 'string' ? null : have;
-  const url = MANIFEST?.files[LYRA[kind].file]?.url;
-  if (!url) { lyraGuns[kind] = 'fehlt'; return null; }
-  lyraGuns[kind] = 'lädt';
-  new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url).then(gl => {
-    const g = gl.scene;
-    g.traverse((o: any) => {
-      o.userData.sh = false; o.userData.shared = true;
-      if (!o.isMesh) return;
-      o.frustumCulled = false; o.castShadow = true;
-      if (o.material) { o.material.envMapIntensity = 0.3; for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) if (o.material[k]) o.material[k].anisotropy = 8; }
-    });
-    const mixer = new THREE.AnimationMixer(g);
-    const act = (end: string) => { const c = gl.animations.find(a => a.name.endsWith(end)); if (!c) return null; const a = mixer.clipAction(c); a.setLoop(THREE.LoopOnce, 1); return a; };
-    lyraGuns[kind] = { g, mixer, fire: act('_fire'), reload: act('_reload') };
-  }).catch((e: unknown) => { lyraGuns[kind] = 'fehlt'; console.warn('Lyra-Waffe nicht geladen – es bleibt beim Modell des Spiels:', e); });
-  return null;
-}
-const gun = { id: '', g: null as THREE.Object3D | null, muzzle: new THREE.Vector3(), shown: false, lyra: null as LyraGun | null, shots: -1, reloading: false };
+// Lyras Waffen (lyraGuns.ts): Modell im Rahmen des Waffenknochens, mit eigenen Clips für Verschluss und Magazin. Eine Kopie je Art für die Hand der Figur.
+const handGuns: Partial<Record<Kind, LyraGun>> = {};
+const lyraGun = (kind: Kind) => handGuns[kind] || (handGuns[kind] = makeLyraGun(kind) || undefined) || null;
+const gun = { id: '', g: null as THREE.Object3D | null, muzzle: new THREE.Vector3(), shown: false, lyra: null as LyraGun | null };
 function setGun(id: string, lyra?: Kind) {
   if (!anim?.weapon) return;
   // Lyras Modell, sobald es geladen ist; bis dahin (und wenn es fehlt) das Modell des Spiels
@@ -123,7 +97,7 @@ function setGun(id: string, lyra?: Kind) {
   if (gun.id === key) return;
   if (lg) {
     gun.g?.removeFromParent();
-    gun.id = key; gun.g = lg.g; gun.lyra = lg; gun.muzzle.set(...LYRA[lyra!].muzzle); gun.shots = -1; gun.reloading = false;
+    gun.id = key; gun.g = lg.g; gun.lyra = lg; gun.muzzle.set(...LYRA_SPEC[lyra!].muzzle); lg.shots = -1;
     anim.weapon.mount.add(lg.g); anim.weapon.grip = null;      // die Haltungen sind für diese Waffen gemacht: beide Hände wie im Clip
     return;
   }
@@ -208,21 +182,11 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
   gun.shown = !!wp && !!gun.g && (gun.id === wp.id || gun.id === 'lyra:' + wp.lyra);
   // Lyras Waffe bewegt sich selbst: Verschluss bei jedem Schuss, Magazin beim Nachladen (im Takt der Nachladebewegung der Figur)
   const LG = gun.shown ? gun.lyra : null;
-  if (LG && wp) {
-    if (gun.shots >= 0 && wp.shots !== gun.shots && LG.fire) LG.fire.reset().play();
-    gun.shots = wp.shots;
-    if (LG.reload) {
-      if (wp.reload >= 0) {
-        if (!gun.reloading) { LG.fire?.stop(); LG.reload.reset().play(); gun.reloading = true; }
-        LG.reload.paused = true; LG.reload.time = Math.min(0.999, wp.reload) * LG.reload.getClip().duration;      // die Zeit gibt das Nachladen des Spiels vor
-      } else if (gun.reloading) { LG.reload.stop(); gun.reloading = false; }
-    }
-    LG.mixer.update(dtc);
-  }
+  if (LG && wp) driveLyraGun(LG, wp.shots, wp.reload, dtc);
   const out = anim.update(dtc, {
     moveDir: _mv, gait, crouch: !!d.crouch, strafe: true, facing: face,
     jump, grounded: !air, verticalSpeed: vy, look: { pitch: d.pitch || 0 }, dead: !!d.dead,
-    weapon: wp ? { kind: (HOLD[wp.id] || HOLD.k12).kind, aim: wp.aim, shots: wp.shots, hits: wp.hits, reload: wp.reload } : null,
+    weapon: wp ? { kind: wp.lyra || (HOLD[wp.id] || HOLD.k12).kind, aim: wp.aim, shots: wp.shots, hits: wp.hits, reload: wp.reload, toss: wp.toss } : null,
     vel: led ? _vel.set(d.vx, d.vz) : undefined, stopDist: spd * Math.max(0, (MANNY.brake > 0 ? 1 / MANNY.brake : STOP_TAU + dtc) - dtc),   // Rest des Wegs bei Bremsrate r: Tempo × (1/r − Bilddauer)
   });
   // Animator-Blickrichtung relativ zum Halter, der schon um body + π gedreht ist. yaw, vx, vz und facing gelten im Raum des Halters

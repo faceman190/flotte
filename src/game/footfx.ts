@@ -159,6 +159,7 @@ export function impact(p: THREE.Vector3, dir: THREE.Vector3, kind: 'boden' | 'me
 // Auswurf je Waffe in deren Raum (Nullpunkt am Griff; x rechts, y oben, −z vorn). Energiewaffen (Impuls, Splitter) werfen nichts aus.
 export const SHELL_PORT: Record<string, [number, number, number]> = {
   smg: [0.045, 0.06, -0.1], ar39: [0.045, 0.1, 0.07], k12: [0.03, 0.05, -0.06], ef2: [0.03, 0.05, -0.08], p9: [0.018, 0.035, -0.04],
+  lyg: [0.035, 0.082, -0.12], lyp: [0.019, 0.095, -0.09], lyf: [0.024, 0.096, -0.123],      // Lyra-Waffen: lyra.json, sockets.ShellEject
 };
 interface Shell { m: THREE.Mesh; v: THREE.Vector3; w: THREE.Vector3; life: number }
 const shells = new Map<THREE.Scene, Shell[]>();
@@ -236,8 +237,18 @@ export function droneDeath(x: number, y: number, z: number, ground: (x: number, 
   sfx('explosion' + Math.floor(Math.random() * 3), (big ? 0.75 : 0.5) * Math.max(0.15, kv), big ? 0.85 : 1.35);
 }
 
+// Granate: Feuerball, Blitz, Funken, Rauch (ohne Trümmer und ohne Ton – den spielt granate.ts)
+export function grenadeFx(x: number, y: number, z: number) {
+  flash(x, y, z, '#fff0d0', 4.5, 0.16); flash(x, y, z, '#ff8a40', 7, 0.4);
+  sparks(x, y, z, 0, 0.7, 0, '#ffc070', 46, 14, 0.7, 1, 0.024);
+  flip('blast', x, y + 0.5, z, 2, 7.5, 1.4, '#6a625c', 0.6);
+  for (let i = 0; i < 7; i++) dust(x + rand(-1, 1), y + rand(-0.2, 0.6), z + rand(-1, 1), i < 3 ? '#4a3e38' : '#2e2c2c', rand(3, 4.6), rand(2, 3.4), rand(0.5, 1.2), 0.85);
+}
+const clearHooks: (() => void)[] = [];
+export function onClearFootFx(fn: () => void) { clearHooks.push(fn); }
 // Alles ausblenden (Mine verlassen, Menü, Sektorwechsel)
 export function clearFootFx() {
+  for (const fn of clearHooks) fn();
   for (const t of trs) t.on = false;
   if (trMesh) { for (let i = 0; i < TMAX; i++) trMesh.setMatrixAt(i, _m.makeScale(0, 0, 0)); trMesh.instanceMatrix.needsUpdate = true; }
   for (const c of chunks) c.on = false;

@@ -13,6 +13,7 @@ import { SF, navTarget } from '../game/schnellflug';
 import { nextHop } from './hud';
 import { SECTOR } from '../data/galaxy';
 import { FOOT } from '../game/onfoot';
+import { grenadeCount } from '../game/granate';
 import { GUN } from '../game/footgun';
 
 // Steuerungsleiste links unten: nur was gerade wichtig ist (seit Alpha 1.51, Wunsch des Spielers).
@@ -43,6 +44,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (DUN.prompt) r.push(['E', DUN.prompt, true]);
     if (GUN.max && GUN.reload <= 0 && GUN.mag < GUN.max * 0.5) r.push(['R', 'Nachladen']);
     if (fresh()) r.push(['Rechtsklick halten', 'Zielen']);
+    if (grenadeCount() > 0) r.push(['G', 'Granate werfen']);
     return { title: DUN.e ? DUN.e.name : 'Mine', rows: r };
   }
   if (m === 'rover' && FOOT.active) {
@@ -51,6 +53,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (FOOT.act === 'rover' && !FOOT.prompt) r.push(['F', 'In den Rover steigen', true]);   // steht die Aufforderung schon da (E), nicht doppelt
     if (GUN.max && GUN.reload <= 0 && GUN.mag < GUN.max * 0.5) r.push(['R', 'Nachladen']);
     if (fresh()) r.push(['Rechtsklick halten', 'Zielen']);
+    if (grenadeCount() > 0) r.push(['G', 'Granate werfen']);
     return { title: 'Zu Fuß', rows: r };
   }
   if (m === 'rover') {

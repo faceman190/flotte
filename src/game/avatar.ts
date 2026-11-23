@@ -10,6 +10,7 @@ export const footAccel = (base: number) => mannyAccel(base) * mannyTurn(TURN.t);
 export const footBrake = mannyBrake;   // Bremsrate nach dem Loslassen der Lauftasten (1/s)
 import { P } from './state';
 import { aimK } from './footgun';
+import { LYRA_ITEM } from './lyraGuns';
 // Eigene Figur: angelegte Ausrüstung plus das gewählte Aussehen (seit 2026-11-20)
 export const figGear = (): FigGear => ({ ...(P.gear || {}), look: normLook(P.look) });
 
@@ -54,7 +55,8 @@ export const eyeH = () => (STANCE.crouch ? 1.12 : 1.7);
 export function toggleCrouch() { STANCE.crouch = !STANCE.crouch; }
 export function toggleView() { VIEW.tp = !VIEW.tp; try { localStorage.setItem('lf_tp', VIEW.tp ? '1' : '0'); } catch (e) { /* egal */ } }
 // Ereignisse der eigenen Figur (zählen hoch): Treffer → Zucken, Schüsse → Anschlag. Gehen auch ins Netz.
-export const ACT = { hit: 0, shot: 0 };
+export const ACT = { hit: 0, shot: 0, toss: 0 };
+export function noteToss() { ACT.toss++; }      // Granate geworfen (granate.ts)
 export function flinch() { ACT.hit++; }
 export function noteShot() { ACT.shot++; }
 // Netzfeld g[4]: drei Zeichen [geduckt 0/1][Treffer mod 10][Schüsse mod 10]
@@ -161,7 +163,7 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   // Testfigur Manny (?manny=1): eigene Bewegungslogik, der Soldat bleibt unsichtbar im Halter
   if (a.player) {
     const mx = INTENT.mx, mz = INTENT.mz, sprint = INTENT.sprint; INTENT.mx = INTENT.mz = 0; INTENT.sprint = false;
-    const weapon = d.armed && d.wid ? { id: d.wid, lyra: LYRA_GUN[P.gear?.waffe || ''], aim: combat || !!d.ads, shots: ACT.shot, hits: ACT.hit, reload: d.reload ?? -1 } : null;
+    const weapon = d.armed && d.wid ? { id: d.wid, lyra: LYRA_ITEM[P.gear?.waffe || ''], aim: combat || !!d.ads, shots: ACT.shot, hits: ACT.hit, toss: ACT.toss, reload: d.reload ?? -1 } : null;
     if (driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground, dead: !!d.dead, weapon })) return;
     if (!s.root.visible) releaseManny(s.root);   // Schalter aus oder Figur nicht geladen: wieder der Soldat
   }
@@ -238,8 +240,6 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   if (!d.dead && a.ready) gripWeapon(a, d);
 }
 
-// Diese drei Waffen zeigt die neue Spielerfigur mit den Modellen des Lyra-Pakets (mannyAvatar.ts, LYRA)
-const LYRA_GUN: Record<string, 'rifle' | 'pistol' | 'shotgun'> = { waffe_karabiner: 'rifle', waffe_pistole: 'pistol', waffe_flinte: 'shotgun' };
 /** Mündung der Waffe der eigenen Figur in der Außensicht (Weltkoordinaten) für Leuchtspur und Mündungsfeuer; null ohne sichtbare Waffe */
 export function avatarMuzzle(a: Avatar | null): THREE.Vector3 | null {
   if (!a) return null;

@@ -2,17 +2,46 @@ import { snd, sfx, sfxAny, gunSounds, gunPart, type GunKind } from '../core/audi
 import { mouse } from '../core/input';
 import { clamp } from '../core/util';
 import { warmFlips } from './footfx';
+import { LYRA_ITEM, lyraGunReady } from './lyraGuns';
 import { P } from './state';
 
 // Magazin der Handwaffe zu Fuß (seit Alpha 1.54, mit der neuen Ringanzeige): Planeten und Minen teilen sich denselben Stand.
 // Der Vorrat ist unbegrenzt, nur das Magazin zählt. Leer lädt die Waffe von selbst nach, R lädt früher nach. Der Schneidbrenner (ohne Waffe)
 // läuft mit Energie und braucht kein Magazin.
-const MAG: Record<string, number> = { waffe_pistole: 12, waffe_smg: 40, waffe_karabiner: 30, waffe_flinte: 6, waffe_impuls: 24, waffe_splitter: 20 };
-const RELOAD: Record<string, number> = { waffe_smg: 1.6, waffe_flinte: 2.2, waffe_karabiner: 1.8, waffe_splitter: 1.9 };
+const MAG: Record<string, number> = { waffe_pistole: 12, waffe_smg: 40, waffe_karabiner: 30, waffe_flinte: 6, waffe_impuls: 24, waffe_splitter: 20, waffe_sp12: 12, waffe_kg30: 30, waffe_tf8: 8 };
+const RELOAD: Record<string, number> = { waffe_smg: 1.6, waffe_flinte: 2.2, waffe_karabiner: 1.8, waffe_splitter: 1.9, waffe_sp12: 2.0, waffe_kg30: 2.2, waffe_tf8: 2.8 };   // die drei letzten: Länge von Lyras Nachlade-Clips
 // Patronenwaffen laden hörbar nach (Aufnahmen des Lyra-Pakets, audio.ts): Magazin heraus, Magazin hinein, Verschluss – zu den Zeitpunkten,
 // an denen die Figur in der Außensicht danach greift (Anteil der Nachladezeit). Energiewaffen behalten die alten Töne.
-const KIND: Record<string, GunKind> = { waffe_pistole: 'pistol', waffe_karabiner: 'rifle', waffe_flinte: 'shotgun', waffe_smg: 'rifle' };
+const KIND: Record<string, GunKind> = { waffe_pistole: 'pistol', waffe_karabiner: 'rifle', waffe_flinte: 'shotgun', waffe_smg: 'rifle', waffe_sp12: 'pistol', waffe_kg30: 'rifle', waffe_tf8: 'shotgun' };
+// Streuung nach Hitze (lyra.json, weapons.*.spread; nur die drei Waffen des Pakets): Jeder Schuss erzeugt Hitze (per), die Hitze ergibt den
+// Öffnungswinkel in Grad (curve). Nach der Pause delay kühlt die Waffe mit cool je Sekunde ab. Faktoren für Zielen, Stillstehen, Ducken und
+// Springen (mult). first: Der erste Schuss aus dem Stand sitzt fast genau. fall: Anteil des Schadens über die Entfernung in m.
+interface HeatDef { curve: [number, number][]; per: [number, number][]; cool: number; delay: number; first: boolean; mult: [number, number, number, number]; fall: [number, number][] }
+const HEAT: Record<string, HeatDef> = {
+  waffe_kg30: { curve: [[0, 2.5], [0.0854, 3], [7, 8], [12, 15]], per: [[0, 1], [4, 1], [5, 1.25]], cool: 4, delay: 0.15, first: true, mult: [0.65, 0.8, 0.6, 1.6], fall: [[0, 1], [28, 1], [28.01, 0.5]] },
+  waffe_sp12: { curve: [[0, 2.5], [8, 12]], per: [[0, 12]], cool: 10, delay: 0.2, first: true, mult: [0.65, 0.9, 0.65, 1.25], fall: [[0, 1], [20, 1], [20.01, 0.5]] },
+  waffe_tf8: { curve: [[0, 6], [6, 9.5], [18, 20]], per: [[1, 6]], cool: 6, delay: 0.5, first: false, mult: [0.8, 0.9, 0.8, 1.75], fall: [[0, 1], [6, 1], [6.4, 0.7], [20, 0.7], [20.01, 0.5]] },
+};
+const HS = { h: 0, since: 9 };
+const BODY = { still: true, crouch: false, air: false };
+const curve = (c: [number, number][], x: number) => {
+  if (x <= c[0][0]) return c[0][1];
+  for (let i = 1; i < c.length; i++) if (x <= c[i][0]) { const [x0, y0] = c[i - 1], [x1, y1] = c[i]; return y0 + (y1 - y0) * (x - x0) / Math.max(1e-6, x1 - x0); }
+  return c[c.length - 1][1];
+};
+/** Streuung des nächsten Schusses (Abweichung nach jeder Seite, rad); base: der feste Wert der Waffe, für alle ohne Hitze-Modell */
+export function gunSpread(base: number): number {
+  const H = HEAT[GUN.id], k = aimK();
+  if (!H) return base * (1 - 0.35 * k);
+  let m = 1 + (H.mult[0] - 1) * k;
+  if (BODY.air) m *= H.mult[3]; else { if (BODY.still) m *= H.mult[1]; if (BODY.crouch) m *= H.mult[2]; }
+  if (H.first && HS.h <= 0 && BODY.still && !BODY.air) m *= 0.15;
+  return curve(H.curve, HS.h) * 0.5 * Math.PI / 180 * m;
+}
+/** Anteil des Schadens in der Entfernung d (m) */
+export const gunFalloff = (d: number) => { const H = HEAT[GUN.id]; return H ? curve(H.fall, d) : 1; };
 const PARTS: ['out' | 'in' | 'end', number][] = [['out', 0.12], ['in', 0.55], ['end', 0.86]];
+export const gunHooks = { sync: () => {} };      // Waffe gewechselt oder zum ersten Mal zu Fuß: weitere Modelle vorab laden (granate.ts)
 export const GUN = { id: '?', mag: 0, max: 0, reload: 0, reloadT: 1.5, kind: undefined as GunKind | undefined, part: 0 };
 
 export function gunSync() {
@@ -20,7 +49,9 @@ export function gunSync() {
   if (id === GUN.id) return;
   GUN.id = id; GUN.max = MAG[id] ?? 0; GUN.mag = GUN.max; GUN.reload = 0; GUN.reloadT = RELOAD[id] ?? 1.5;
   if (GUN.id !== '?' && GUN.kind !== KIND[id]) sfxAny('w_x_swap', 3, 0.4);      // andere Waffe in der Hand
-  GUN.kind = KIND[id]; gunSounds(GUN.kind); warmFlips();
+  GUN.kind = KIND[id]; gunSounds(GUN.kind); warmFlips(); HS.h = 0;
+  if (LYRA_ITEM[id]) lyraGunReady(LYRA_ITEM[id]);      // Modell schon laden
+  gunHooks.sync();
 }
 // darf jetzt geschossen werden? (leeres Magazin startet das Nachladen)
 export function gunReady(): boolean {
@@ -29,7 +60,9 @@ export function gunReady(): boolean {
   if (GUN.max && GUN.mag <= 0) { gunReload(); return false; }
   return true;
 }
-export function gunFired() { if (GUN.max) { GUN.mag = Math.max(0, GUN.mag - 1); if (GUN.mag === 0) gunReload(); } }
+export function gunFired() {
+  const H = HEAT[GUN.id]; if (H) { HS.h = Math.min(H.curve[H.curve.length - 1][0], HS.h + curve(H.per, HS.h)); HS.since = 0; }
+  if (GUN.max) { GUN.mag = Math.max(0, GUN.mag - 1); if (GUN.mag === 0) gunReload(); } }
 export function gunReload() {
   gunSync();
   if (!GUN.max || GUN.reload > 0 || GUN.mag >= GUN.max) return;
@@ -38,6 +71,7 @@ export function gunReload() {
 }
 export function gunUpdate(dt: number) {
   gunSync();      // läuft zu Fuß in jedem Bild: Die Aufnahmen der Waffe sind so vor dem ersten Schuss geladen
+  { const H = HEAT[GUN.id]; HS.since += dt; if (!H) HS.h = 0; else if (HS.since > H.delay) HS.h = Math.max(0, HS.h - H.cool * dt); }
   if (GUN.reload <= 0) return;
   GUN.reload -= dt;
   if (GUN.kind) { const p = 1 - GUN.reload / GUN.reloadT; while (GUN.part < PARTS.length && p >= PARTS[GUN.part][1]) gunPart(GUN.kind, PARTS[GUN.part++][0]); }
@@ -56,7 +90,8 @@ export const gunMode = (w: { n: number; auto: boolean }) => (w.n > 1 ? 'Schrot' 
 export const AIM = { k: 0, on: false, shake: 0, at: 0 };
 const ZOOM = Math.tan(35 * Math.PI / 180) / Math.tan(40 * Math.PI / 180);
 /** je Bild, solange zu Fuß gekämpft werden kann; can: nicht gefallen */
-export function aimUpdate(dt: number, can: boolean) {
+export function aimUpdate(dt: number, can: boolean, body?: { still: boolean; crouch: boolean; air: boolean }) {
+  if (body) Object.assign(BODY, body);
   const on = can && mouse.right && GUN.reload <= 0;
   if (on !== AIM.on) { AIM.on = on; sfxAny(on ? 'w_x_zin' : 'w_x_zout', 3, 0.3); }
   AIM.k = clamp(AIM.k + (on ? 1 : -1) * dt / 0.22, 0, 1);
@@ -66,7 +101,6 @@ export function aimUpdate(dt: number, can: boolean) {
 /** Anteil des Zielens 0..1, weich; 0, wenn gerade nicht zu Fuß gekämpft wird (Station, Schiff) */
 export const aimK = () => (performance.now() - AIM.at < 250 ? AIM.k * AIM.k * (3 - 2 * AIM.k) : 0);
 export const aimFov = (base: number) => 2 * Math.atan(Math.tan(base * Math.PI / 360) * (1 + (ZOOM - 1) * aimK())) * 180 / Math.PI;
-export const aimSpread = () => 1 - 0.35 * aimK();
 export function camShake(a: number) { AIM.shake = Math.min(1, Math.max(AIM.shake, a)); }
 /** nach dem Setzen der Kameradrehung aufrufen */
 export function aimShake(r: { x: number; y: number; z: number }) {

@@ -17,8 +17,10 @@ import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buil
 import { droneBark } from './barks';
 import { kitMaterials } from '../models/kit';
 import { onCoop, coopSend, coopNow, pack, CoopGroup } from './coop';
-import { gunReady, gunFired, gunUpdate, GUN, AIM, aimUpdate, aimFov, aimShake, aimSpread, camShake, hurtSound, noteKill, whiz } from './footgun';
+import { gunReady, gunFired, gunUpdate, GUN, AIM, aimUpdate, aimFov, aimShake, aimK, gunSpread, gunFalloff, camShake, hurtSound, noteKill, whiz } from './footgun';
 import { drawFootRing, drawPrompt, drawFootCross } from '../ui/footHud';
+import { throwGrenade, updateGrenades } from './granate';
+import { noteToss } from './avatar';
 import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, footPace, footBrake, footAccel, setIntent, makeAvatar, driveAvatar, avatarMuzzle, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, figGear, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
@@ -592,6 +594,10 @@ const WEAP: Record<string, { iv: number; n: number; spread: number; auto: boolea
   waffe_smg: { iv: 0.075, n: 1, spread: 0.024, auto: true, col: '#ffd9a0', snd: 1.05, sfx: 'smg_shot' },
   waffe_flinte: { iv: 0.85, n: 7, spread: 0.075, auto: false, col: '#ffc080', snd: 0.8, kind: 'shotgun' }, waffe_impuls: { iv: 0.2, n: 1, spread: 0.006, auto: true, col: '#b090ff', snd: 1.9 },
   waffe_splitter: { iv: 0.24, n: 2, spread: 0.03, auto: true, col: '#c070ff', snd: 2.2 },
+  // Lyra-Paket: Feuerrate und Kugelzahl aus lyra.json; die Streuung kommt aus dem Hitze-Modell (footgun.ts HEAT), spread ist nur der Ruhewert
+  waffe_sp12: { iv: 0.16, n: 1, spread: 0.022, auto: false, col: '#ffd9a0', snd: 1.5, kind: 'pistol' },
+  waffe_kg30: { iv: 0.12, n: 1, spread: 0.022, auto: true, col: '#ffd9a0', snd: 1.25, kind: 'rifle' },
+  waffe_tf8: { iv: 0.5, n: 9, spread: 0.052, auto: false, col: '#ffc080', snd: 0.8, kind: 'shotgun' },
 };
 export const weapon = () => {
   const id = P.gear?.waffe || '', d = gearDef(id), w = WEAP[id];
@@ -937,7 +943,7 @@ function shoot() {
   const w = weapon();
   DUN.cool = w.iv; DUN.kick = 1; DUN.flash = 0.06; shotsN++; noteShot();
   shotSound(w); if (w.n > 1) camShake(0.32);
-  const sp = w.spread * aimSpread();
+  const sp = gunSpread(w.spread);
   const cp = camera.getWorldPosition(_v).clone();
   const tpm = VIEW.tp ? avatarMuzzle(me) : null;
   const a = tpm || (vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : gun ? gun.localToWorld(_w.set(0, 0.008, -0.6)).clone() : cp.clone());
@@ -962,7 +968,7 @@ function shoot() {
     }
     const hp = cp.clone().addScaledVector(d, bt); end = hp;
     if (best && mates.size && !amHost(mates.keys())) { best.hit = 0.12; coopSend('mh', { e: DUN.e!.id, i: best.id, d: w.dmg }); impact(hp, d, 'metall'); G.hitMark = 0.12; }
-    else if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; impact(hp, d, 'metall'); G.hitMark = 0.12; }
+    else if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg * gunFalloff(bt); best.hit = 0.12; best.alert = true; impact(hp, d, 'metall'); G.hitMark = 0.12; }
     else impact(hp, d, 'boden', w.col);
     fxTracer(a, hp, w.col, w.n > 1 ? 0.04 : 0.065);                  // Leuchtspur je Kugel
   }
@@ -970,12 +976,24 @@ function shoot() {
 }
 export function dungeonKey(code: string) {
   if (!DUN.active || DUN.dead) return;
+  // Granate (granate.ts): rechnet in den Koordinaten der Mine, Boden bei 0, Fels und Decke sind fest
+  if (code === 'KeyG') {
+    if (throwGrenade(DUN.x, EYE(), DUN.z, DUN.yaw, DUN.pitch, { ground: () => 0, solid: (x, y, z) => y > 5.3 || solidAt(x, z), ox: BASE.x, oy: BASE.y, oz: BASE.z, blast: (x, y, z, r, dmg) => {
+      for (const f of DUN.foes) {
+        const d = Math.hypot(f.x - x, f.y - y, f.z - z); if (d > r) continue;
+        const dm = dmg * (1 - 0.7 * d / r);
+        if (mates.size && !amHost(mates.keys())) { f.hit = 0.12; coopSend('mh', { e: DUN.e!.id, i: f.id, d: dm }); }
+        else { f.hp -= dm; f.hit = 0.12; f.alert = true; G.hitMark = 0.12; }
+      }
+    } })) noteToss();
+    return;
+  }
   if (code === 'KeyE' && DUN.act) DUN.act();
 }
 export function updateDungeon(dt: number) {
   if (!DUN.active || !group) return;
   DUN.locked = document.pointerLockElement === gl;
-  if (vm && vm.id !== viewModelId(P.gear?.waffe)) { const n = buildViewModel(viewModelId(P.gear?.waffe)); if (n) { vm = n; overlay.scene = n.scene; overlay.camera = n.cam; } }
+  if (!vm || vm.id !== viewModelId(P.gear?.waffe)) { const n = buildViewModel(viewModelId(P.gear?.waffe)); if (n) { vm = n; overlay.scene = n.scene; overlay.camera = n.cam; } }
   if (!DUN.locked && (grabT -= dt) <= 0) { grabT = 0.4; const ua = (navigator as any).userActivation; if (!ua || ua.isActive) { try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* bleibt bei Zeigersteuerung */ } } }
   if (DUN.dead > 0) {
     DUN.dead -= dt;
@@ -1001,7 +1019,8 @@ export function updateDungeon(dt: number) {
   DUN.bob += (Math.sin(DUN.walked * 4.2) * Math.min(1, v / 4) * 0.045 - DUN.bob) * Math.min(1, dt * 14);
   if (moved > 0) reveal();
   // Schießen
-  aimUpdate(dt, !DUN.dead);
+  updateGrenades(dt, DUN.x, EYE() - 0.5, DUN.z, hurtPlayer);
+  aimUpdate(dt, !DUN.dead, { still: Math.hypot(DUN.vx, DUN.vz) < 0.4, crouch: STANCE.crouch, air: false });
   DUN.cool -= dt; DUN.kick = Math.max(0, DUN.kick - dt * 7); DUN.flash -= dt; DUN.hurt = Math.max(0, DUN.hurt - dt * 1.6);
   const wp = weapon();
   gunUpdate(dt);
@@ -1181,7 +1200,7 @@ export function dungeonCamera() {
     const dyaw = DUN.yaw - sway.yaw, dp = DUN.pitch - sway.pitch; sway.yaw = DUN.yaw; sway.pitch = DUN.pitch;
     sway.x = clamp(sway.x * 0.86 + dyaw * 0.35, -0.03, 0.03); sway.y = clamp(sway.y * 0.86 - dp * 0.35, -0.03, 0.03);
     const run = Math.hypot(DUN.vx, DUN.vz) > 5 ? 1 : 0, b = DUN.bob;
-    poseViewModel(vm, { walked: DUN.walked, bob: b, kick: DUN.kick, sx: sway.x, sy: sway.y, run, reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1 });   // mineArt.ts
+    poseViewModel(vm, { walked: DUN.walked, bob: b, kick: DUN.kick, sx: sway.x, sy: sway.y, run, reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, ads: aimK(), shots: shotsN });   // mineArt.ts
     if (vm.glow) { const k = 0.82 + 0.18 * Math.sin(performance.now() * 0.004); vm.glow.color.setHex(vm.id === 'ef2' ? 0x6fc2ff : 0x8fd0ff).multiplyScalar(k); }
     vm.gun.visible = DUN.dead <= 0;
     const sup = vm.id === 'smg', f = DUN.flash > 0 && (!sup || shotsN % 3 === 0); vm.flash.visible = f; vm.flashLight.intensity = f ? (sup ? 0.12 : 2.6) : 0;   // SMG mit Schalldämpfer: kleines Mündungsfeuer

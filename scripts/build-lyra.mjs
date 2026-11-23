@@ -36,6 +36,8 @@ const SOUNDS = [
   ...seq('w_x_zin', 'foley_misc/Lyra_ZoomIn_##.ogg', 3), ...seq('w_x_zout', 'foley_misc/Lyra_ZoomOut_##.ogg', 3), ...seq('w_x_swap', 'foley_misc/Lyra_WeaponSwap_##.ogg', 3),
   ...seq('w_x_imp', 'impacts/Lyra_ImpactPlaster_##.ogg', 5), ...seq('w_x_hurt', 'impacts/Lyra_Plyr_BulletImpact_##.ogg', 4),
   ...seq('w_x_kill', 'impacts/Lyra_EnemyDestroyed_##.ogg', 4), ...seq('w_x_whiz', 'whizbys/Lyra_BulletIn_Close_##.ogg', 6),
+  // Granate: Aufprall, Zündung (Körper und Druck)
+  ...seq('w_x_gb', 'grenade/grenade_bounce_##.ogg', 3), ...seq('w_x_ge', 'grenade/grenade_explode_body_##.ogg', 3), ...seq('w_x_gt', 'grenade/grenade_explode_thump_##.ogg', 3),
 ];
 fs.mkdirSync(SND, { recursive: true });
 let miss = 0;
@@ -56,7 +58,7 @@ for (const [name, file] of [['fx_ly_squib', 'effects/LDR_Squib_2_rop_comp1_0001_
 // Symbole: Grünkanal als Deckung, Farbe weiß; auf den Inhalt beschnitten
 const ICONS = { hud_ly_rifle: 'RangedWeapons_Rifle', hud_ly_pistol: 'RangedWeapons_Pistol', hud_ly_shotgun: 'RangedWeapons_Shotgun',
   hud_ly_ammo_rifle: 'RangedWeapons_Rifle_Ammo', hud_ly_ammo_pistol: 'RangedWeapons_Pistol_Ammo', hud_ly_ammo_shotgun: 'RangedWeapons_Shotgun_Ammo',
-  hud_ly_kill2: 'Accolade_DoubleElimination', hud_ly_kill3: 'Accolade_TripleElimination', hud_ly_kill4: 'Accolade_QuadrupleElimination', hud_ly_ads: 'MobileOnly_ADS' };
+  hud_ly_kill2: 'Accolade_DoubleElimination', hud_ly_kill3: 'Accolade_TripleElimination', hud_ly_kill4: 'Accolade_QuadrupleElimination', hud_ly_ads: 'MobileOnly_ADS', hud_ly_grenade: 'OtherWeapons_Grenade' };
 for (const [name, file] of Object.entries(ICONS)) {
   const { data, info } = await sharp(path.join(T, 'hud', 'T_UI_Icon_' + file + '.png')).raw().toBuffer({ resolveWithObject: true });
   const out = Buffer.alloc(info.width * info.height * 4);

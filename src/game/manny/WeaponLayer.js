@@ -28,6 +28,7 @@ const KINDS = {
   shotgun: { hip: S + 'Idle_Hipfire', ads: S + 'Idle_ADS', crouch: R + 'Crouch_Idle', fire: S + 'Fire', reload: S + 'Reload', equip: R + 'Equip',
     ao: { hip: R + 'Idle_Hipfire_AO_', ads: R + 'Idle_ADS_AO_', crouch: R + 'Crouch_Idle_AO_' }, ik: 1 },
 };
+const TOSS = 'MM_Rifle_GrenadeToss';
 const HITS = ['Front_Lgt_01', 'Front_Lgt_02', 'Front_Lgt_03', 'Front_Lgt_04', 'Front_Med_01', 'Front_Med_02', 'Left_Lgt_01', 'Right_Lgt_01'].map((n) => 'MM_HitReact_' + n);
 // aim offset poses: columns (view to the left … right of the body) and rows (down, level, up), in degrees
 const AO_COLS = [['LB', -180], ['L', -90], ['C', 0], ['R', 90], ['RB', 180]], AO_ROWS = [['D', -90], ['C', 0], ['U', 90]];
@@ -73,6 +74,7 @@ export class WeaponLayer {
     this.w = 0; this.aimW = 0; this.kind = 'rifle'; this.t = 0;
     this.fireT = 9; this.shots = -1; this.hitT = 9; this.hits = -1; this.hitClip = HITS[0];
     this.equipT = 9; this.reloadW = 0; this.reloadP = 0; this.ikW = 0; this.armed = false;
+    this.tossT = 9; this.tosses = -1;
   }
 
   _buf() { return { q: new Float32Array(this.N * 4), pel: new Float32Array([0, 0, 0, 1]), wp: new Float32Array(3) }; }
@@ -173,7 +175,7 @@ export class WeaponLayer {
   /** make sure the clips of a kind are decoded (a few ms); call when the weapon is taken, not in the middle of a fight */
   warm(kind) {
     const K = KINDS[kind] || KINDS.rifle;
-    for (const n of [K.hip, K.ads, K.crouch, K.fire, K.reload, K.equip]) this._clip(n);
+    for (const n of [K.hip, K.ads, K.crouch, K.fire, K.reload, K.equip, TOSS]) this._clip(n);
     for (const p of new Set(Object.values(K.ao))) this._grid(p);
   }
 
@@ -194,7 +196,8 @@ export class WeaponLayer {
     // counters: the first value only sets the start
     if (o.shots !== undefined) { if (this.shots >= 0 && o.shots !== this.shots) this.fireT = 0; this.shots = o.shots; }
     if (o.hits !== undefined) { if (this.hits >= 0 && o.hits !== this.hits && this.hitT > 0.25) { this.hitT = 0; this.hitClip = HITS[Math.floor(Math.random() * HITS.length)]; } this.hits = o.hits; }
-    this.t += dt; this.fireT += dt; this.hitT += dt; this.equipT += dt;
+    if (o.toss !== undefined) { if (this.tosses >= 0 && o.toss !== this.tosses) this.tossT = 0; this.tosses = o.toss; }
+    this.t += dt; this.fireT += dt; this.hitT += dt; this.equipT += dt; this.tossT += dt;
     if (this.w <= 0.001) { this.ikW = 0; this.aimW = 0; return; }
     const K = KINDS[this.kind], cw = clamp(o.crouchW || 0, 0, 1);
     const reloading = o.reload !== undefined && o.reload >= 0;
@@ -210,6 +213,12 @@ export class WeaponLayer {
     if (eq && this.equipT < eq.dur) {
       const k = clamp((eq.dur - this.equipT) / T.equipOut, 0, 1);
       this._mix(pose, this._sample(eq, this.equipT, this._tmp), k); busy = k;
+    }
+    // grenade toss: the left hand throws, the right keeps the weapon (one clip for all kinds: Lyra has it for the rifle only)
+    const ts = this._clip(TOSS);
+    if (ts && this.tossT < ts.dur) {
+      const k = Math.min(1, this.tossT / 0.1, (ts.dur - this.tossT) / 0.22);
+      this._mix(pose, this._sample(ts, this.tossT, this._tmp), k); busy = Math.max(busy, k);
     }
     // reload: the clip stretched over the reload time of the weapon
     const rl = this._clip(K.reload);
