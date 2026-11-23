@@ -19,7 +19,7 @@ import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
 import { dedup, prune, textureCompress, meshopt, reorder, quantize, getBounds } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
-import { packLazy } from './lazy-pack.mjs';
+import { packLazy, LAZY_OPTS } from './lazy-pack.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'asset-src', 'legacy'), OUT = path.join(ROOT, 'public', 'assets');
@@ -137,7 +137,8 @@ for (const kind of ['ship', 'station', 'char', 'deco', 'city', 'base']) {   // c
 const LAZY = path.join(GLB, 'lazy');
 if (fs.existsSync(LAZY)) for (const n of fs.readdirSync(LAZY).filter(x => x.toLowerCase().endsWith('.glb'))) {
   const src = fs.readFileSync(path.join(LAZY, n));
-  put('lazy/' + path.basename(n, path.extname(n)), 'glb', await packLazy(src), 'lazy', src.length);
+  const name = path.basename(n, path.extname(n));
+  put('lazy/' + name, 'glb', await packLazy(src, LAZY_OPTS[name]), 'lazy', src.length);
 }
 // ---- Begehbare Schiffsinnenräume: Innenmodell (asset-src/glb/interior/<Name>.glb) und Laufkarte (asset-src/walk/<Name>.json) ----
 // Beides im Hintergrund-Paket: wird erst beim Betreten des Schiffs gebraucht.

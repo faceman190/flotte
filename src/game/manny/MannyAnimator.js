@@ -61,10 +61,12 @@ export class MannyAnimator {
   }
 
   // ------------------------------------------------------------------ loading
-  async load(url, onProgress) {
-    const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url, onProgress);
+  // modelUrl: the figure comes from its own file (same skeleton: the clips find their bones by name); url then only supplies the clips
+  async load(url, onProgress, modelUrl) {
+    const get = (u, p) => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(u, p);
+    const [gltf, body] = await Promise.all([get(url, onProgress), modelUrl ? get(modelUrl) : null]);
     this.gltf = gltf;
-    this.model = gltf.scene;
+    this.model = (body || gltf).scene;
     this.model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
     const t0 = performance.now();
     const fx = new ClipFeatureExtractor(this.model);

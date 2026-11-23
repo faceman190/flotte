@@ -3,7 +3,7 @@
 // Die Paketliste public/assets/manifest.json nennt jede Datei mit Prüfsumme im Namen und ihrem Paket:
 //  - core:  vor dem Hauptmenü nötig (mit Ladebalken)
 //  - world: weitere Nebel und Planeten, werden danach still im Hintergrund geholt
-//  - lazy:  nur auf Anforderung (Testfigur Manny, src/game/mannyAvatar.ts)
+//  - lazy:  nur auf Anforderung (die Spielerfigur, src/game/mannyAvatar.ts, fordert ihre Dateien an, sobald das Menü steht)
 // Ein Service Worker (public/sw.js) legt die Dateien dauerhaft im Browser ab; beim nächsten Start kommen sie
 // von der Festplatte. Ohne Service Worker (Entwicklung, claude.ai) hilft der normale Browser-Zwischenspeicher.
 // Für den Spielcode werden daraus die bekannten Verzeichnisse gebaut (window.TEXDATA, SHIPDATA …) – mit
@@ -127,8 +127,15 @@ export async function loadAssets() {
   if (ASSET_STATE.sw) cleanup(m);
   addEventListener('pointerdown', askPersist, { once: true });
 }
+// Arbeiten, die beginnen sollen, sobald das Hauptmenü steht und das Laden im Hintergrund anfängt. Die Spielerfigur meldet sich hier an
+// (mannyAvatar.ts): Sie lädt ihre beiden Dateien aus dem Paket „lazy“ dann selbst, damit sie beim ersten Schritt zu Fuß fertig ist.
+// (Die Dateien stattdessen hier vorzuladen, könnte sie doppelt herunterladen: Braucht das Spiel sie, bevor der Download fertig ist,
+// fordert der Lader sie ein zweites Mal an.)
+const EARLY: (() => void)[] = [];
+export function whenIdle(fn: () => void) { EARLY.push(fn); }
 async function prefetchWorld(m: Manifest, have: Set<string>) {
-  // Paket „lazy“ (z. B. die Testfigur Manny) nur auf Anforderung, nicht im Hintergrund
+  for (const fn of EARLY) { try { fn(); } catch (e) { console.warn(e); } }
+  // Paket „lazy“ nur auf Anforderung, nicht im Hintergrund
   const rest = Object.values(m.files).filter(f => f.pack !== 'core' && f.pack !== 'lazy' && !f.url.startsWith('blob:') && !have.has(abs(f.url)));
   await pool(rest, 2, async f => { try { await fetchFile(f, () => {}); } catch { /* später erneut */ } });
   ASSET_STATE.worldDone = true;

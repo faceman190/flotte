@@ -1,14 +1,18 @@
 import * as THREE from 'three';
-import { MANIFEST } from '../core/assets';
+import { MANIFEST, whenIdle } from '../core/assets';
 // @ts-ignore – reines JavaScript (aus der Manny-Demo übernommen), ohne Typen
 import { MannyAnimator } from './manny/MannyAnimator.js';
 
 // =====================================================================================
-// Testfigur „Manny“ für die eigene Spielerfigur in der Außensicht (seit 2026-11-23, Branch manny-animator).
-// Einschalten: Spiel mit ?manny=1 öffnen (bleibt gespeichert), ausschalten mit ?manny=0.
-// Figur und 321 Bewegungen: UE5-Mannequin aus Epics Game Animation Sample, auf Manny übertragen und als GLB exportiert
-// (asset-src/glb/lazy/Manny.glb, Paket „lazy“: wird nur bei eingeschaltetem Schalter geladen, nicht vor dem Menü).
-// LIZENZ: Epic-Inhalt unter der Unreal-Engine-EULA – nur als Test gedacht, siehe docs/manny.md.
+// Eigene Spielerfigur in der Außensicht: Figur „Spieler“ auf dem UE5-Skelett mit den Bewegungen des Manny-Satzes.
+// Seit 2026-11-23 der Standard (vorher Testfigur Manny hinter ?manny=1). Zurück zur alten Soldatenfigur: ?manny=0 (bleibt
+// gespeichert), wieder ein mit ?manny=1.
+// Zwei Dateien im Paket „lazy“ (nicht vor dem Menü geladen, sondern danach im Hintergrund; spätestens beim ersten Schritt zu Fuß):
+//  - lazy/Spieler: die Figur (asset-src/glb/lazy/Spieler.glb, eigenes Modell auf Mannys Skelett, ohne Bewegungen)
+//  - lazy/Manny:   der Bewegungssatz (asset-src/glb/lazy/Manny.glb: Skelett + 321 Clips aus Epics Game Animation Sample;
+//                  das Netz der Testfigur wird beim Packen entfernt, scripts/lazy-pack.mjs)
+// Die Clips finden ihre Knochen über den Namen; jede Figur mit diesem Skelett kann den Satz nutzen.
+// LIZENZ: Die Bewegungen sind Epic-Inhalt unter der Unreal-Engine-EULA, siehe docs/manny.md.
 // Die Bewegungslogik steckt in src/game/manny/ (MannyAnimator: Starts, Stops, Drehen auf der Stelle, 8 Richtungen,
 // Ducken, Sprung; Auswahl nach Pose, Inertialization, Fuß-IK). Hier wird sie nur an die Spielerfigur angeschlossen:
 //  - Die Spielphysik bewegt die Figur weiter (Position, Sprung); Mannys Root Motion wird nicht zur Bewegung genutzt.
@@ -17,29 +21,37 @@ import { MannyAnimator } from './manny/MannyAnimator.js';
 //    · Das Spiel läuft mit Manny im Tempo der Bewegungen (mannyPace: vorwärts schneller als seitwärts und rückwärts).
 //    · Start und Stopp werden nach zurückgelegter bzw. verbleibender Strecke abgespielt, Schleifen im echten Tempo.
 //  - Der Körper schaut in Blickrichtung (Strafe-Modus des Animators), wie beim Soldaten.
-//  - Waffen, Anschlag, Schießen, Nachladen und Tod hat Manny nicht; die Soldatenfigur bleibt dafür unsichtbar im Halter.
+//  - Waffen, Anschlag, Schießen, Nachladen und Tod hat der Bewegungssatz nicht; die Soldatenfigur bleibt dafür unsichtbar im Halter
+//    (beim Tod wird sie wieder gezeigt).
 // =====================================================================================
-export const MANNY = { on: false, url: '' as string, alt: false, brake: 8, accel: 0 };   // brake / accel: Brems- und Anlaufrate der Spielphysik mit Manny (1/s, 0 = Wert der Laufstelle)   // url: nur für Tests, sonst aus der Paketliste; alt: alter Anschluss (Tempo statt Absicht) zum Vergleich im Prüfskript
+// brake / accel: Brems- und Anlaufrate der Spielphysik mit der Figur (1/s, 0 = Wert der Laufstelle) · url, body: nur für Tests
+// (Bewegungssatz, Figur), sonst aus der Paketliste · alt: alter Anschluss (Tempo statt Absicht) zum Vergleich im Prüfskript
+export const MANNY = { on: true, url: '' as string, body: '' as string, alt: false, brake: 8, accel: 0 };
 try {
   const q = new URLSearchParams(location.search).get('manny');
   if (q === '1' || q === '0') localStorage.setItem('lf_manny', q);
-  MANNY.on = (q ?? localStorage.getItem('lf_manny')) === '1';
+  MANNY.on = (q ?? localStorage.getItem('lf_manny')) !== '0';
   localStorage.removeItem('lf_manny_mm');      // Schalter für Motion Matching (23.11.2026 wieder ausgebaut)
-} catch (e) { /* ohne Speicher: aus */ }
+} catch (e) { /* ohne Speicher: ein */ }
+whenIdle(() => { if (MANNY.on) ensure(); });   // schon ab dem Hauptmenü laden: beim ersten Schritt zu Fuß ist die Figur dann da
 
 let anim: any = null, loading = false, failed = false;
 function ensure() {
   if (anim || loading || failed) return;
-  const url = MANNY.url || MANIFEST?.files['lazy/Manny']?.url;
-  if (!url) { failed = true; console.warn('Manny: Datei lazy/Manny fehlt in der Paketliste – es bleibt beim Soldaten'); return; }
+  const url = MANNY.url || MANIFEST?.files['lazy/Manny']?.url, body = MANNY.body || MANIFEST?.files['lazy/Spieler']?.url;
+  if (!url || !body) { failed = true; console.warn('Spielerfigur: lazy/Manny oder lazy/Spieler fehlt in der Paketliste – es bleibt beim Soldaten'); return; }
   loading = true;
-  new MannyAnimator().load(url).then((a: any) => {
-    a.model.traverse((o: any) => { o.userData.sh = false; o.userData.shared = true; });
-    // Die Datei bringt reinweißes Material ohne Textur mit: In der Sonne überstrahlte die Figur (weißer Schein). Mattes Grau in zwei Tönen.
-    a.model.traverse((o: any) => { if (o.isMesh && o.material?.color) { o.material = o.material.clone(); o.material.color.setHex(/_2$/.test(o.name) ? 0x5a6068 : 0x8d9298); o.material.roughness = 0.72; o.material.metalness = 0; } });
+  new MannyAnimator().load(url, undefined, body).then((a: any) => {
+    a.model.traverse((o: any) => {
+      o.userData.sh = false; o.userData.shared = true;
+      if (!o.isMesh || !o.material) return;
+      // wie die Soldatenfigur: wenig Spiegelung der Umgebung, scharfe Texturen im flachen Blickwinkel
+      o.material.envMapIntensity = 0.3;
+      for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) if (o.material[k]) o.material[k].anisotropy = 8;
+    });
     anim = a; loading = false;
-    console.info(`Manny geladen: ${Object.keys(a.actions).length} Bewegungen, Analyse ${a.analyseMs} ms`);
-  }).catch((e: unknown) => { failed = true; loading = false; console.warn('Manny nicht geladen – es bleibt beim Soldaten:', e); });
+    console.info(`Spielerfigur geladen: ${Object.keys(a.actions).length} Bewegungen, Analyse ${a.analyseMs} ms`);
+  }).catch((e: unknown) => { failed = true; loading = false; console.warn('Spielerfigur nicht geladen – es bleibt beim Soldaten:', e); });
 }
 
 export interface MannyDrive {

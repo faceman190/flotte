@@ -218,3 +218,14 @@ den Gewichten des rechten, Seiten getauscht); `zonen` und `komplett` für die Ge
   Innenwand (helle Streifen); Gewichte von der Haut für Ärmel in anderem Winkel (Ärmel lösen sich); Rasterneuaufbau der innenwandfreien Schale
   (zerbröselt); automatische Gewichte am gespiegelten Handschuh (scheitern).
 - **Offen:** Stiefel (Füße stehen noch in Socken), Rucksack, Gürtel, Finger und Daumen, Farbmasken, FBX für Cascadeur, Einbau ins Spiel.
+
+## 11. Im Spiel (23.11.2026)
+
+`Blender/Spielfigur/Final/spieler_03.glb` (Grundkörper mit Unteranzug, ein Netz mit 60.000 Dreiecken, gebunden an Mannys Skelett mit
+161 Knochen, Texturen 4096) ist die eigene Spielerfigur in der Außensicht. Sie nutzt den Bewegungssatz aus Unreal (321 Clips);
+Figur und Bewegungen sind getrennte Dateien, die Clips finden die Knochen über den Namen. Aufbau, Schalter und was noch fehlt
+(Waffe, Tod, Ausrüstung, Charakterfenster): `docs/manny.md`.
+
+Neue Fassung der Figur einbauen: Datei nach `asset-src/glb/lazy/Spieler.glb` kopieren, `node scripts/build-manny.mjs Spieler`.
+Bedingung: dasselbe Skelett mit derselben Ruhelage (bei `spieler_03` geprüft, Abweichung unter 0,001 mm und 0,06°).
+Im Spiel werden die Texturen auf 2048 begrenzt (4096 hieße rund 250 MB Grafikspeicher für eine Figur).

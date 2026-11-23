@@ -1,4 +1,5 @@
-// Prüfhelfer für die Testfigur Manny (docs/manny.md). Nur im eigenen Testfenster auf dem Entwicklungsserver, Spiel mit ?manny=1 öffnen:
+// Prüfhelfer für die Spielerfigur auf dem UE5-Skelett (docs/manny.md). Nur im eigenen Testfenster auf dem Entwicklungsserver
+// (die Figur ist der Standard; mit ?manny=0 gespeichert abgeschaltet → ?manny=1):
 //   (0, eval)(await (await fetch('/scripts/decktest.js')).text()); await __deck(); DT.enter('bastion'); await DT.ready();
 //   (0, eval)(await (await fetch('/scripts/mannytest.js')).text()); await __manny();
 // Legt window.MT an:

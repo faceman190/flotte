@@ -1,12 +1,35 @@
-# Testfigur Manny (Bewegungen aus Unreal)
+# Spielerfigur auf dem UE5-Skelett (Bewegungen aus Unreal, „Manny-Satz“)
 
-Seit 2026-11-23 (Branch `manny-animator`). Manny ersetzt auf Wunsch den Soldaten als **eigene Spielerfigur in der Außensicht**.
-Für alle anderen ändert sich nichts.
+Seit 2026-11-23. Erst als Testfigur Manny hinter `?manny=1`, seit dem Abend des 23.11.2026 mit eigener Figur und als Standard:
+Die **eigene Spielerfigur in der Außensicht** ist das Modell `spieler_03` (Grundkörper mit Unteranzug, auf Mannys Skelett gebunden)
+mit den Bewegungen des Manny-Satzes. Mannys Netz wird nicht mehr gezeigt und nicht mehr ausgeliefert.
 
-## Einschalten
-- Spiel mit `?manny=1` öffnen (bleibt auf dem Gerät gespeichert), mit `?manny=0` wieder aus.
-- Außensicht mit **V**. Beim ersten Mal lädt das Spiel die Datei `lazy/Manny` (gut 55 MB, danach aus dem Speicher).
-- Fehlt die Datei oder schlägt das Laden fehl, bleibt es beim Soldaten (Hinweis in der Konsole).
+## Figur und Bewegungssatz sind zwei Dateien
+- `lazy/Spieler` – die Figur: `asset-src/glb/lazy/Spieler.glb` (Kopie von OneDrive `Blender/Spielfigur/Final/spieler_03.glb`,
+  ein Netz, 60.000 Dreiecke, 161 Knochen, drei Texturen; gepackt 1,3 MB, Texturen auf 2048 begrenzt – die Quelle hat 4096).
+- `lazy/Manny` – der Bewegungssatz: Skelett und 321 Clips aus `asset-src/glb/lazy/Manny.glb`; das Netz der Testfigur entfernt
+  der Packer (`scripts/lazy-pack.mjs`, `LAZY_OPTS.Manny.clipsOnly`). Gepackt 40,0 MB (vorher mit Netz 58 MB).
+- Die Clips finden ihre Knochen über den **Namen**. Jede Figur mit genau diesem Skelett (gleiche Knochennamen, gleiche Ruhelage)
+  kann den Satz nutzen: Datei nach `asset-src/glb/lazy/` legen, `node scripts/build-manny.mjs <Name>`, in `mannyAvatar.ts`
+  als `lazy/<Name>` eintragen. Geprüft für `spieler_03`: Ruhelage aller 161 Knochen gleich Manny (Abweichung unter 0,001 mm
+  und 0,06°), gleiche Eltern, gleiche Bindematrizen. Weicht ein Skelett ab (andere Proportionen), reicht das nicht: Die Clips
+  bringen Mannys Knochenlängen mit und würden das Netz verziehen; dann müssen die Verschiebungsspuren bis auf `root` und
+  `pelvis` entfallen.
+- Messung mit der neuen Figur (`MT.bench()`): 1.826 cm Gleiten, 549° Haltungssprünge – genau die Werte mit Manny.
+  Bild: `docs/bilder/spieler_03_im_spiel.jpg` (Stand, Sprint, Ducken, seitwärts geduckt, rückwärts).
+
+## Schalter
+- Standard: ein. `?manny=0` zeigt wieder die alte Soldatenfigur mit altem Lauftempo (bleibt auf dem Gerät gespeichert), `?manny=1` schaltet zurück.
+- Außensicht mit **V**. Die Figur lädt ihre beiden Dateien, sobald das Hauptmenü steht (`whenIdle` in `core/assets.ts`);
+  bis sie da sind, zeigt das Spiel die Soldatenfigur mit dem alten Lauftempo.
+- Fehlt eine Datei oder schlägt das Laden fehl, bleibt es beim Soldaten (Hinweis in der Konsole).
+
+## Was mit der neuen Figur noch fehlt
+- **Waffe, Anschlag, Schießen, Nachladen, Treffer-Zucken**: Der Bewegungssatz hat dafür keine Clips. In der Außensicht hält die
+  Figur keine Waffe (die Ich-Sicht ist nicht betroffen).
+- **Tod**: Die Darstellung wechselt zum Soldaten, der umfällt.
+- **Ausrüstung** (Helm, Anzug, Rucksack) zeigt die Figur nicht; sie ist der Grundkörper.
+- **Charakterfenster, andere Spieler:innen, Wachen** zeigen weiter die Soldatenfigur.
 
 ## Was Manny kann und was nicht
 - Kann: Stehen, Drehen auf der Stelle (45/90/135/180°), Gehen, Laufen, Sprinten, Starts und Stops passend zum Fuß, 8 Richtungen,
@@ -151,11 +174,14 @@ diese Bewegungslogik als Grundlage. Die Lizenzfrage (Epic-Inhalte außerhalb von
   `ClipFeatures.js` (misst jeden Clip beim Laden), `GaitCycle.js` (saubere Schrittzyklen der Schleifen),
   `Inertializer.js` (weiche Übergänge), `FootIK.js` (Füße am Boden halten, Boden folgen),
   `clipMap.js` (alle Clipnamen und Einstellwerte an einer Stelle).
-- Datei: `asset-src/glb/lazy/Manny.glb` (321 Clips). Paket **lazy**: weder vor dem Menü noch im Hintergrund geladen, nur auf Anforderung.
-  Einzeln neu packen: `node scripts/build-manny.mjs` (dauert rund 10 Minuten); `npm run assets` packt sie ebenfalls.
+- Dateien: `asset-src/glb/lazy/Manny.glb` (Bewegungssatz, 321 Clips) und `asset-src/glb/lazy/Spieler.glb` (Figur). Paket **lazy**:
+  nicht vor dem Menü geladen; die Spielerfigur fordert ihre beiden Dateien an, sobald das Menü steht.
+  Einzeln neu packen: `node scripts/build-manny.mjs Spieler` (Sekunden) bzw. `… Manny` (rund 25 Minuten); `npm run assets` packt beide.
 
 ## Herkunft und Lizenz
 Figur (UE5-Mannequin „Manny“) und Bewegungen stammen aus Epics **Game Animation Sample** (UE 5.8), wurden in Unreal auf Manny übertragen,
 als FBX exportiert und in Blender zu GLB zusammengeführt. Das ist Epic-Inhalt unter der **Unreal-Engine-EULA**, die solche Inhalte
-nach unserem Verständnis nur in Unreal-Engine-Produkten erlaubt. Deshalb ist Manny nur als Test gedacht. Für eine Veröffentlichung
-die Bewegungslogik mit eigenen oder frei lizenzierten Clips (gleiche Clipnamen in `clipMap.js` anpassen) nutzen.
+nach unserem Verständnis nur in Unreal-Engine-Produkten erlaubt. Seit dem 23.11.2026 wird Mannys Netz nicht mehr ausgeliefert
+(die Figur ist das eigene Modell `spieler_03`); die **Bewegungen** bleiben Epic-Inhalt, ebenso die Maße des Skeletts. Für eine
+Veröffentlichung ohne dieses Risiko die Bewegungslogik mit eigenen oder frei lizenzierten Clips nutzen (gleiche Clipnamen in
+`clipMap.js` anpassen).
