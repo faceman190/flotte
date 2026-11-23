@@ -9,6 +9,7 @@ const TURN = { t: 9, x: 0, z: 0 };
 export const footAccel = (base: number) => mannyAccel(base) * mannyTurn(TURN.t);   // Anlaufrate beim Drücken der Lauftasten (1/s)
 export const footBrake = mannyBrake;   // Bremsrate nach dem Loslassen der Lauftasten (1/s)
 import { P } from './state';
+import { aimK } from './footgun';
 // Eigene Figur: angelegte Ausrüstung plus das gewählte Aussehen (seit 2026-11-20)
 export const figGear = (): FigGear => ({ ...(P.gear || {}), look: normLook(P.look) });
 
@@ -86,7 +87,7 @@ export interface Avatar {
   hitN: number; hitT: number; hitS: number; armL: THREE.Object3D[] | null;
   player?: boolean;                                            // eigene Spielerfigur: darf die Testfigur Manny zeigen (mannyAvatar.ts, ?manny=1)
 }
-export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null; armed?: boolean }   // reload: Fortschritt 0..1, sonst −1 · armed: hier kann geschossen werden (Planet, Mine) – die neue Spielerfigur trägt dann die Waffe wid
+export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null; armed?: boolean; ads?: boolean }   // ads: Zielen gehalten (rechte Maustaste) · reload: Fortschritt 0..1, sonst −1 · armed: hier kann geschossen werden (Planet, Mine) – die neue Spielerfigur trägt dann die Waffe wid
 
 export function makeAvatar(gear: FigGear, player = false): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
@@ -160,7 +161,7 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   // Testfigur Manny (?manny=1): eigene Bewegungslogik, der Soldat bleibt unsichtbar im Halter
   if (a.player) {
     const mx = INTENT.mx, mz = INTENT.mz, sprint = INTENT.sprint; INTENT.mx = INTENT.mz = 0; INTENT.sprint = false;
-    const weapon = d.armed && d.wid ? { id: d.wid, aim: combat, shots: ACT.shot, hits: ACT.hit, reload: d.reload ?? -1 } : null;
+    const weapon = d.armed && d.wid ? { id: d.wid, lyra: LYRA_GUN[P.gear?.waffe || ''], aim: combat || !!d.ads, shots: ACT.shot, hits: ACT.hit, reload: d.reload ?? -1 } : null;
     if (driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground, dead: !!d.dead, weapon })) return;
     if (!s.root.visible) releaseManny(s.root);   // Schalter aus oder Figur nicht geladen: wieder der Soldat
   }
@@ -237,6 +238,8 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   if (!d.dead && a.ready) gripWeapon(a, d);
 }
 
+// Diese drei Waffen zeigt die neue Spielerfigur mit den Modellen des Lyra-Pakets (mannyAvatar.ts, LYRA)
+const LYRA_GUN: Record<string, 'rifle' | 'pistol' | 'shotgun'> = { waffe_karabiner: 'rifle', waffe_pistole: 'pistol', waffe_flinte: 'shotgun' };
 /** Mündung der Waffe der eigenen Figur in der Außensicht (Weltkoordinaten) für Leuchtspur und Mündungsfeuer; null ohne sichtbare Waffe */
 export function avatarMuzzle(a: Avatar | null): THREE.Vector3 | null {
   if (!a) return null;
@@ -338,11 +341,12 @@ let camD = -1;
 export function tpCamPos(out: THREE.Vector3, x: number, y: number, z: number, yaw: number, pitch: number, clear: (x: number, y: number, z: number) => boolean, dt = 1 / 60) {
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
   const fx = -sy * cp, fy = sp, fz = -cy * cp;
-  let side = 0.45, px = x + cy * side, pz = z - sy * side;
+  const ak = aimK(), D = VIEW.dist * (1 - 0.36 * ak);      // Zielen (footgun.ts): näher heran und weiter über die Schulter
+  let side = 0.45 + 0.13 * ak, px = x + cy * side, pz = z - sy * side;
   const py = y + (STANCE.crouch ? 1.25 : 1.7);
   if (!clear(px, py, pz)) { side = 0; px = x; pz = z; }
-  let want = VIEW.dist;
-  for (let t = 0.2; t <= VIEW.dist; t += 0.1) if (!clear(px - fx * t, py - fy * t, pz - fz * t)) { want = Math.max(0.3, t - 0.15); break; }
+  let want = D;
+  for (let t = 0.2; t <= D; t += 0.1) if (!clear(px - fx * t, py - fy * t, pz - fz * t)) { want = Math.max(0.3, t - 0.15); break; }
   camD = camD < 0 || want < camD ? want : camD + (want - camD) * Math.min(1, dt * 4);
   out.set(px - fx * camD, py - fy * camD + 0.08, pz - fz * camD);
 }

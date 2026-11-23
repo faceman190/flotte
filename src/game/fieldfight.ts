@@ -4,12 +4,12 @@ import { mouse } from '../core/input';
 import { rng, hashStr, clamp } from '../core/util';
 import { sfx, snd, shotSfx } from '../core/audio';
 import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, clearFootFx, SHELL_PORT } from './footfx';
-import { P, saveGame } from './state';
+import { P, G, saveGame } from './state';
 import { world } from './world';
 import { terrainAt } from './surface';
 import { buildDrone, buildViewModel, viewModelId, poseViewModel, type DroneVis, type ViewModel } from './mineArt';
 import { weapon, shotSound } from './dungeon';
-import { gunReady, gunFired, gunUpdate, GUN } from './footgun';
+import { gunReady, gunFired, gunUpdate, GUN, aimSpread, camShake, hurtSound, noteKill, whiz } from './footgun';
 import { drawFootRing } from '../ui/footHud';
 import { flinch, noteShot } from './avatar';
 import { droneBark } from './barks';
@@ -133,7 +133,7 @@ function los(ax: number, ay: number, az: number, bx: number, by: number, bz: num
 function hurt(d: number) {
   if (FIGHT.down > 0) return;
   FIGHT.hp -= d * 100 / (100 + gearStat('schutz') * 3); FIGHT.hurt = 1; flinch();
-  sfx('hull_hit' + Math.floor(Math.random() * 3), 0.5, 1.2, () => snd(120, 0.15, 'sawtooth', 0.06, -40));
+  hurtSound(d);
   if (FIGHT.hp <= 0) { FIGHT.hp = 0; FIGHT.down = 3; say('Du bist zusammengebrochen …', '#ff6b5b'); }
 }
 
@@ -141,12 +141,13 @@ const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _v = new THREE.Vector3(), _w = new T
 function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, muzzle: THREE.Vector3 | null) {
   const w = weapon();
   FIGHT.cool = w.iv; FIGHT.kick = 1; FIGHT.flash = 0.06; FIGHT.lastShot = performance.now(); FIGHT.shots++; noteShot();
-  shotSound(w);
+  shotSound(w); if (w.n > 1) camShake(0.32);
+  const sp = w.spread * aimSpread();
   const a = muzzle ? muzzle.clone() : vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : new THREE.Vector3(px, py - 0.15, pz);
   if (muzzle) flash(muzzle.x, muzzle.y, muzzle.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);   // Außensicht: kleines Mündungsfeuer (SMG gedämpft)
   let end: THREE.Vector3 | null = null;
   for (let s = 0; s < w.n; s++) {
-    _e.set(pitch + (Math.random() - 0.5) * 2 * w.spread, yaw + (Math.random() - 0.5) * 2 * w.spread, 0);
+    _e.set(pitch + (Math.random() - 0.5) * 2 * sp, yaw + (Math.random() - 0.5) * 2 * sp, 0);
     const d = new THREE.Vector3(0, 0, -1).applyEuler(_e);
     let tw = 120;
     for (let t = 0.5; t < 120; t += 0.5) { if (terrainAt(px + d.x * t, pz + d.z * t) > py + d.y * t) { tw = t; break; } }
@@ -161,7 +162,7 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
     end = new THREE.Vector3(px + d.x * bt, py + d.y * bt, pz + d.z * bt);
     if (best && best.id >= 0 && isClient()) { best.hit = 0.12; coopSend('fh', { s: P.sector, i: best.id, d: w.dmg }); impact(end, d, 'metall'); }
     else if (best) {
-      if (!best.alert) droneBark('alarm', Math.hypot(best.x - px, best.z - pz)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; impact(end, d, 'metall');
+      if (!best.alert) droneBark('alarm', Math.hypot(best.x - px, best.z - pz)); best.hp -= w.dmg; best.hit = 0.12; best.alert = true; impact(end, d, 'metall'); G.hitMark = 0.12;
       if (best.hp <= 0) kill(best, coopNet.id);
     } else if (bt < tw + 0.01 && tw < 120) impact(end, d, 'boden', w.col);
     fxTracer(a, end, w.col, w.n > 1 ? 0.04 : 0.065);                 // Leuchtspur je Kugel
@@ -174,6 +175,7 @@ function kill(f: Foe, by = coopNet.id) {
   sfx('ferrox_death', 0.35, 1.1, () => snd(160, 0.4, 'sawtooth', 0.05, -120));
   if (f.id >= 0 && mates.length && !isClient()) coEv.push(['k', f.id, by]);
   if (by !== coopNet.id) return;                                   // ein Mitspieler hat sie erwischt
+  noteKill();
   const cr = Math.round((40 + Math.random() * 50) * (1 + 0.4 * (danger() - 1)));
   P.credits += cr; P.earned += cr; P.kills = (P.kills || 0) + 1;
   say(`Drohne zerstört · +${cr} Credits`, '#ffb347');
@@ -264,7 +266,7 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
     const b = FIGHT.bolts[i];
     b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.life -= dt; b.m.position.set(b.x, b.y, b.z);
     const hitMe = me.active && Math.hypot(b.x - px, b.z - pz) < 0.45 && b.y > me.y && b.y < me.y + 1.9;
-    if (hitMe) hurt(b.dmg);
+    if (hitMe) hurt(b.dmg); else if (me.active) whiz(b, Math.hypot(b.x - px, b.y - py + 0.3, b.z - pz));
     const ground = terrainAt(b.x, b.z) > b.y;
     if (hitMe || ground) boltHit(b.x, ground ? terrainAt(b.x, b.z) + 0.05 : b.y, b.z, BOLT_COL);
     if (hitMe || b.life <= 0 || ground) { scene.remove(b.m); FIGHT.bolts.splice(i, 1); }

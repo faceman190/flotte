@@ -15,6 +15,8 @@ import { radio } from '../ui/radio';
 import { nearEntrance } from './dungeon';
 import { VIEW, STANCE, ACT, footPace, footBrake, footAccel, setIntent, eyeH, syncAvatar, driveAvatar, avatarMuzzle, tpCamPos, resetTpCam, figGear, type Avatar } from './avatar';
 import { viewModelId } from './mineArt';
+import { AIM, aimUpdate, aimFov, aimShake } from './footgun';
+import { drawFootCross } from '../ui/footHud';
 import { basePad, padGround, baseBlocked, nearDoor, surfaceAt, wallBetween } from './basewalk';
 import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
 import { FIGHT, updateFieldFight, fieldDown, fieldViewModel, hideFieldViewModel, drawFieldHUD } from './fieldfight';
@@ -177,10 +179,11 @@ export function updateFoot(dt: number) {
   FOOT.act = tgt ? 'story' : door ? 'base' : crate ? 'crate' : footNearShip() ? 'ship' : mine ? 'mine' : footNearRover() ? 'rover' : '';
   FOOT.prompt = FOOT.act === 'story' ? tgt!.label : FOOT.act === 'crate' ? (crate!.big ? 'Tresorkiste öffnen' : 'Kiste öffnen') : FOOT.act === 'base' ? `${door!.st.name} betreten` : FOOT.act === 'ship' ? (settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`) : FOOT.act === 'mine' ? `${mine!.name} betreten` : FOOT.act === 'rover' ? 'In den Rover steigen' : '';
   // eigene Figur
+  aimUpdate(dt, FIGHT.down <= 0);
   if (VIEW.tp) me = syncAvatar(scene, me, figGear());
   if (me) {
     me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, ground: footGround, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true });
+    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, ground: footGround, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on });
   }
   // Kampf: Schießen (Klick), Drohnen, Geschosse; in der Außensicht kommt der Leuchtstrich aus der Mündung der Figur
   const mz = VIEW.tp ? avatarMuzzle(me) : null;
@@ -192,10 +195,10 @@ export function footCamera(dt: number) {
   if (VIEW.tp && me) tpCamPos(_c, FOOT.x, FOOT.y + FOOT.jy, FOOT.z, FOOT.yaw, FOOT.pitch, (x, y, z) => y > padGround(x, z) + 0.3 && !baseBlocked(x, z, y - 1.2) && !(CITY.walk && wallBetween(FOOT.x, FOOT.z, x, z, y - 1.8)) && !(ROVER.model && Math.hypot(x - ROVER.x, z - ROVER.z) < 2.2) && !treeNear(x, z, 1.1), dt);
   else _c.set(FOOT.x, FOOT.y + FOOT.jy + eyeH() + FOOT.bob, FOOT.z);
   camera.position.copy(_c);
-  camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch + FIGHT.kick * 0.012, FOOT.yaw, 0);
+  camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch + FIGHT.kick * 0.012, FOOT.yaw, 0); aimShake(camera.rotation);
   if (FIGHT.down > 0 && !VIEW.tp) camera.position.y -= (3 - FIGHT.down) * 0.4;
   fieldViewModel(FOOT.active && !VIEW.tp, FOOT.bob, FOOT.walked);
-  if (Math.abs(camera.fov - 72) > 0.05) { camera.fov = 72; camera.updateProjectionMatrix(); }
+  { const f = aimFov(72); if (Math.abs(camera.fov - f) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } }
 }
 
 // Anzeige: Aufforderung, Richtung zu Schiff und Rover, Fadenkreuz
@@ -240,7 +243,7 @@ export function drawFootHUD() {
   drawGroundMarkers();
   const bs = world.stations[0], bp = bs && basePad(bs);
   if (bp) { const dD = Math.hypot(FOOT.x - bp.door.x, FOOT.z - bp.door.z); if (dD > 4 && dD < 400) { _p.set(bp.door.x, padGround(bp.door.x, bp.door.z) + 3, bp.door.z).project(camera); if (_p.z < 1 && Math.abs(_p.x) < 1 && Math.abs(_p.y) < 1) { ux.fillStyle = '#7fe0a0'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'center'; ux.fillText(`EINGANG · ${Math.round(dD)} m`, (_p.x + 1) / 2 * W, (1 - _p.y) / 2 * H); } } }
-  if (FOOT.locked) { ux.fillStyle = 'rgba(255,255,255,.75)'; ux.beginPath(); ux.arc(W / 2, H / 2, 2.2, 0, 6.283); ux.fill(); }
+  if (FOOT.locked) drawFootCross(72);      // Fadenkreuz, Treffermarke, Abschüsse in Folge (ui/footHud.ts)
   if (FOOT.prompt) drawPrompt(FOOT.prompt, '#e09030', H * 0.66);   // gleiche Aufforderung wie in Station und Mine (ui/footHud.ts)
   if (!FOOT.locked) { ux.textAlign = 'center'; ux.font = '11px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = '#8aa0b0'; ux.fillText('Klick: Maus einfangen', W / 2, H - 12); }
   ux.restore();

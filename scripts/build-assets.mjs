@@ -178,7 +178,7 @@ const SND = path.join(ROOT, 'asset-src', 'sound');
 if (fs.existsSync(SND)) for (const n of fs.readdirSync(SND).filter(x => /.(ogg|mp3)$/i.test(x))) { const b = fs.readFileSync(path.join(SND, n)); put('sound/' + path.basename(n, path.extname(n)), path.extname(n).slice(1).toLowerCase(), b, 'core', b.length); }
 
 // ---- Aufnahmen, die erst bei Bedarf geladen werden (asset-src/sound-lazy/<name>.ogg|mp3): Paket world, im Spiel wie die anderen Klänge.
-//      Handwaffen w_… (audio.ts gunShot). Einzeln nachtragen ohne ganzen Lauf: node scripts/add-lazy-sounds.mjs ----
+//      Handwaffen w_… (audio.ts gunShot). Einzeln nachtragen ohne ganzen Lauf: node scripts/build-lyra.mjs ----
 const SNDL = path.join(ROOT, 'asset-src', 'sound-lazy');
 if (fs.existsSync(SNDL)) for (const n of fs.readdirSync(SNDL).filter(x => /\.(ogg|mp3)$/i.test(x))) { const b = fs.readFileSync(path.join(SNDL, n)); put('sound/' + path.basename(n, path.extname(n)), path.extname(n).slice(1).toLowerCase(), b, 'world', b.length); }
 

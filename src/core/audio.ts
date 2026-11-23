@@ -142,7 +142,10 @@ export function shotSfx(key: string, vol = 1, rate = 1, fallback?: () => void, g
 // aufschaukelt. Nachladen: Magazin heraus (out), Magazin hinein (in), Verschluss (end; die Flinte hat keinen).
 export type GunKind = 'rifle' | 'pistol' | 'shotgun';
 const GUN_N: Record<GunKind, [number, number]> = { rifle: [6, 3], pistol: [4, 3], shotgun: [3, 3] };
-export function gunSounds(kind: GunKind) { for (const k of Object.keys(window.SOUNDDATA || {})) if (k.startsWith('w_' + kind + '_')) want(k); }
+// kind fehlt: nur die allgemeinen Aufnahmen zu Fuß (w_x_…: Zielen, Waffenwechsel, Einschlag, Treffer, Abschuss, Vorbeiflug)
+export function gunSounds(kind?: GunKind) { for (const k of Object.keys(window.SOUNDDATA || {})) if (k.startsWith('w_x_') || (kind && k.startsWith('w_' + kind + '_'))) want(k); }
+/** eine von n Fassungen einer Aufnahme (Schlüssel + Nummer) */
+export const sfxAny = (key: string, n: number, vol = 1, rate = 1, fallback?: () => void) => sfx(key + Math.floor(Math.random() * n), vol, rate, fallback);
 export function gunShot(kind: GunKind, vol = 1, rate = 1, fallback?: () => void) {
   const [np, nn] = GUN_N[kind], p = 'w_' + kind + '_p' + Math.floor(Math.random() * np), n = 'w_' + kind + '_n' + Math.floor(Math.random() * nn);
   want(n);

@@ -17,8 +17,8 @@ import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buil
 import { droneBark } from './barks';
 import { kitMaterials } from '../models/kit';
 import { onCoop, coopSend, coopNow, pack, CoopGroup } from './coop';
-import { gunReady, gunFired, gunUpdate, GUN } from './footgun';
-import { drawFootRing, drawPrompt } from '../ui/footHud';
+import { gunReady, gunFired, gunUpdate, GUN, AIM, aimUpdate, aimFov, aimShake, aimSpread, camShake, hurtSound, noteKill, whiz } from './footgun';
+import { drawFootRing, drawPrompt, drawFootCross } from '../ui/footHud';
 import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, footPace, footBrake, footAccel, setIntent, makeAvatar, driveAvatar, avatarMuzzle, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, figGear, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
@@ -930,20 +930,21 @@ function reveal() {
 function hurtPlayer(d: number) {
   if (DUN.dead) return;
   const dmg = d * 100 / (100 + gearStat('schutz') * 3);
-  DUN.hp -= dmg; DUN.hurt = 1; flinch(); sfx('hull_hit' + Math.floor(Math.random() * 3), 0.5, 1.2, () => snd(120, 0.15, 'sawtooth', 0.06, -40));
+  DUN.hp -= dmg; DUN.hurt = 1; flinch(); hurtSound(d);
   if (DUN.hp <= 0) { DUN.hp = 0; DUN.dead = 2.2; say('Du bist zusammengebrochen. Der Förderkorb bringt dich nach oben.', '#ff6b5b'); }
 }
 function shoot() {
   const w = weapon();
   DUN.cool = w.iv; DUN.kick = 1; DUN.flash = 0.06; shotsN++; noteShot();
-  shotSound(w);
+  shotSound(w); if (w.n > 1) camShake(0.32);
+  const sp = w.spread * aimSpread();
   const cp = camera.getWorldPosition(_v).clone();
   const tpm = VIEW.tp ? avatarMuzzle(me) : null;
   const a = tpm || (vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : gun ? gun.localToWorld(_w.set(0, 0.008, -0.6)).clone() : cp.clone());
   if (tpm) flash(tpm.x, tpm.y, tpm.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);
   let end: THREE.Vector3 | null = null;
   for (let s = 0; s < w.n; s++) {
-    _e.set(DUN.pitch + (Math.random() - 0.5) * 2 * w.spread, DUN.yaw + (Math.random() - 0.5) * 2 * w.spread, 0);
+    _e.set(DUN.pitch + (Math.random() - 0.5) * 2 * sp, DUN.yaw + (Math.random() - 0.5) * 2 * sp, 0);
     const d = new THREE.Vector3(0, 0, -1).applyEuler(_e);
     // Wand: in kleinen Schritten vorwärts, bis Fels, Boden oder Decke erreicht ist
     let tw = 60;
@@ -1000,6 +1001,7 @@ export function updateDungeon(dt: number) {
   DUN.bob += (Math.sin(DUN.walked * 4.2) * Math.min(1, v / 4) * 0.045 - DUN.bob) * Math.min(1, dt * 14);
   if (moved > 0) reveal();
   // Schießen
+  aimUpdate(dt, !DUN.dead);
   DUN.cool -= dt; DUN.kick = Math.max(0, DUN.kick - dt * 7); DUN.flash -= dt; DUN.hurt = Math.max(0, DUN.hurt - dt * 1.6);
   const wp = weapon();
   gunUpdate(dt);
@@ -1058,7 +1060,7 @@ export function updateDungeon(dt: number) {
     const fo = DUN.foes[i];
     if (fo.hp <= -900) { group.remove(fo.g); DUN.foes.splice(i, 1); continue; }   // schon vorher zerstört (Abgleich)
     if (fo.hp <= 0) {
-      droneDeath(BASE.x + fo.x, BASE.y + fo.y, BASE.z + fo.z, () => BASE.y, !!fo.boss);   // Blitz, Funken, Rauch, Trümmer (footfx.ts)
+      droneDeath(BASE.x + fo.x, BASE.y + fo.y, BASE.z + fo.z, () => BASE.y, !!fo.boss); noteKill();   // Blitz, Funken, Rauch, Trümmer (footfx.ts)
       group.remove(fo.g); DUN.foes.splice(i, 1); DUN.kills++; droneBark('tot', Math.hypot(DUN.x - fo.x, DUN.z - fo.z));
       if (fo.boss) say(AR() ? 'Wächterkern zerstört. Der Speicherkern ist frei.' : WR() ? 'Wächterkern zerstört. Die Brücke ist frei.' : 'Wächterkern zerstört. Der Tresor ist frei.', '#ffb347');
       continue;
@@ -1131,7 +1133,7 @@ export function updateDungeon(dt: number) {
     const b = DUN.bolts[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.life -= dt;
     b.m.position.set(BASE.x + b.x, BASE.y + b.y, BASE.z + b.z);
     const hitP = Math.hypot(b.x - DUN.x, b.z - DUN.z) < 0.45 && Math.abs(b.y - (EYE() - 0.5)) < 1.0;
-    if (hitP) hurtPlayer(b.dmg);
+    if (hitP) hurtPlayer(b.dmg); else whiz(b, Math.hypot(b.x - DUN.x, b.y - EYE() + 0.3, b.z - DUN.z));
     if (hitP || b.life <= 0 || b.y < 0 || solidAt(b.x, b.z)) { if (b.life > 0) boltHit(BASE.x + b.x, BASE.y + Math.max(0.05, b.y), BASE.z + b.z, b.col, b.big); scene.remove(b.m); DUN.bolts.splice(i, 1); }
   }
   // Lampenlichter den nächsten Lampen zuteilen, Stirnlampe mitführen
@@ -1149,7 +1151,7 @@ export function updateDungeon(dt: number) {
   // eigene Figur (Außensicht): Laufen nach Richtung, Anschlag nach Schüssen, Neigung mit dem Blick
   if (me) {
     me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true });
+    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on });
   }
   for (const m of DUN.msg) m.life -= dt;
   DUN.msg = DUN.msg.filter(m => m.life > 0);
@@ -1158,13 +1160,13 @@ export function updateDungeon(dt: number) {
 // Kamera, Stirnlampe und Waffe im Bild
 export function dungeonCamera() {
   camera.position.set(BASE.x + DUN.x, BASE.y + EYE() + DUN.bob - (DUN.dead > 0 ? (2.2 - DUN.dead) * 0.5 : 0), BASE.z + DUN.z);
-  camera.rotation.order = 'YXZ'; camera.rotation.set(DUN.pitch + DUN.kick * 0.012, DUN.yaw, 0);
+  camera.rotation.order = 'YXZ'; camera.rotation.set(DUN.pitch + DUN.kick * 0.012, DUN.yaw, 0); aimShake(camera.rotation);
   if (VIEW.tp && me) {
     // Außensicht: über der rechten Schulter; hält Abstand zu Felswänden
     tpCamPos(_v, DUN.x, 0, DUN.z, DUN.yaw, DUN.pitch, (x, y, z) => free(x, z, 0.28) && y > 0.25 && y < 2.6);
     camera.position.set(BASE.x + _v.x, BASE.y + _v.y, BASE.z + _v.z);
   }
-  if (Math.abs(camera.fov - 74) > 0.05) { camera.fov = 74; camera.updateProjectionMatrix(); }
+  { const f = aimFov(74); if (Math.abs(camera.fov - f) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } }
   camera.updateMatrixWorld();
   if (head) {
     // Licht sitzt an der Waffenlampe (rechts unten) und leuchtet geradeaus
@@ -1234,8 +1236,7 @@ export function drawDungeonHUD(roverX = 0, roverZ = 0, roverOn = false) {
   // Treffer: roter Rand
   if (DUN.hurt > 0 || DUN.dead > 0) { const a = DUN.dead > 0 ? 0.6 : DUN.hurt * 0.45; const gr = ux.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.8); gr.addColorStop(0, 'rgba(160,0,0,0)'); gr.addColorStop(1, `rgba(160,0,0,${a})`); ux.fillStyle = gr; ux.fillRect(0, 0, W, H); }
   // Fadenkreuz
-  ux.strokeStyle = G.hitMark > 0 ? '#ffb347' : 'rgba(255,255,255,.8)'; ux.lineWidth = 1.5;
-  for (const [ax, ay] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ux.beginPath(); ux.moveTo(W / 2 + ax * 5, H / 2 + ay * 5); ux.lineTo(W / 2 + ax * 12, H / 2 + ay * 12); ux.stroke(); }
+  drawFootCross(74);      // Fadenkreuz, Treffermarke, Abschüsse in Folge (ui/footHud.ts)
   if (!DUN.locked) { ux.fillStyle = 'rgba(255,255,255,.7)'; ux.font = '14px Rajdhani,"Segoe UI",sans-serif'; ux.textAlign = 'center'; ux.fillText('Klicken, um die Maus einzufangen', W / 2, H / 2 + 40); }
   // Leben und Waffe: Ringanzeige unten rechts (seit Alpha 1.54, ui/footHud.ts; vorher ein Kasten mit Balken)
   drawFootRing(DUN.hp, DUN.maxHp, DUN.hurt);

@@ -13,8 +13,9 @@
 // directly. apply() has to run after the mixer and after Inertializer.savePure(), before Inertializer.apply() – like PoseLayers.
 // The Lyra clips in the set hold the upper body only (scripts/clipset.mjs, LYRA_BONES).
 //
-// socket: an Object3D on the bone weapon_r, turned so that a weapon model with the barrel along −z and its top along +y (the
-// game's weapon models, origin at the grip) lies in the hand like Lyra's. The bone itself has x = barrel, z = up.
+// mount: an Object3D on the bone weapon_r in the bone's own frame (x = barrel, z = up): Lyra's weapon models hang here unchanged.
+// socket: a child of mount, turned so that a weapon model with the barrel along −z and its top along +y (the game's own weapon
+// models, origin at the grip) lies in the hand like Lyra's.
 import * as THREE from 'three';
 import { TwoBoneIK } from './FootIK.js';
 
@@ -60,10 +61,11 @@ export class WeaponLayer {
     this.iW = this.B.indexOf(this.wr);
     this.ready = !!(sp && this.pelvis && this.wr && this.B[0] === sp && clips._decode && clips.has(KINDS.rifle.ads) && clips.has(KINDS.rifle.hip));
     this._data = new Map(); this._ao = new Map(); this._ref = new Map();
-    this.socket = new THREE.Object3D(); this.socket.name = 'Waffe';
+    this.mount = new THREE.Object3D(); this.mount.name = 'WaffeKnochen';
+    this.socket = new THREE.Object3D(); this.socket.name = 'Waffe'; this.mount.add(this.socket);
     // weapon model (x right, y up, −z barrel)  →  bone weapon_r (x barrel, y left, z up)
     this.socket.quaternion.setFromRotationMatrix(new THREE.Matrix4().set(0, 0, -1, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1));
-    if (this.wr) this.wr.add(this.socket);
+    if (this.wr) this.wr.add(this.mount);
     const ua = bones.get('upperarm_l'), la = bones.get('lowerarm_l'), hl = bones.get('hand_l');
     this.ikL = ua && la && hl ? new TwoBoneIK(ua, la, hl) : null;
     this.grip = null;                                     // fore grip in the socket's frame (set with the weapon model), null = as animated
@@ -188,7 +190,7 @@ export class WeaponLayer {
     else if (o.armed && o.kind !== this.kind && KINDS[o.kind]) { this.kind = o.kind; this.warm(this.kind); this.equipT = o.snap ? 9 : 0; }
     this.armed = !!o.armed;
     this.w = o.snap ? want : clamp(this.w + Math.sign(want - this.w) * dt / T.blend, 0, 1);
-    this.socket.visible = this.w > 0.35;
+    this.mount.visible = this.w > 0.35;
     // counters: the first value only sets the start
     if (o.shots !== undefined) { if (this.shots >= 0 && o.shots !== this.shots) this.fireT = 0; this.shots = o.shots; }
     if (o.hits !== undefined) { if (this.hits >= 0 && o.hits !== this.hits && this.hitT > 0.25) { this.hitT = 0; this.hitClip = HITS[Math.floor(Math.random() * HITS.length)]; } this.hits = o.hits; }

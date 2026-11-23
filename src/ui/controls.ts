@@ -42,6 +42,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     const r: Row[] = [];
     if (DUN.prompt) r.push(['E', DUN.prompt, true]);
     if (GUN.max && GUN.reload <= 0 && GUN.mag < GUN.max * 0.5) r.push(['R', 'Nachladen']);
+    if (fresh()) r.push(['Rechtsklick halten', 'Zielen']);
     return { title: DUN.e ? DUN.e.name : 'Mine', rows: r };
   }
   if (m === 'rover' && FOOT.active) {
@@ -49,6 +50,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (FOOT.prompt) r.push(['E', FOOT.prompt, true]);
     if (FOOT.act === 'rover' && !FOOT.prompt) r.push(['F', 'In den Rover steigen', true]);   // steht die Aufforderung schon da (E), nicht doppelt
     if (GUN.max && GUN.reload <= 0 && GUN.mag < GUN.max * 0.5) r.push(['R', 'Nachladen']);
+    if (fresh()) r.push(['Rechtsklick halten', 'Zielen']);
     return { title: 'Zu Fuß', rows: r };
   }
   if (m === 'rover') {

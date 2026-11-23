@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { scene, camera, GLOW } from '../core/engine';
 import { rand } from '../core/util';
-import { sfx } from '../core/audio';
+import { sfx, sfxAny } from '../core/audio';
 import { sparks, flash } from './fx';
 
 // =====================================================================================
@@ -10,6 +10,7 @@ import { sparks, flash } from './fx';
 //  · Einschläge: Funken (fx.sparks), kleiner Blitz, Staubwölkchen (Boden/Fels) bzw. mehr Funken (Metall)
 //  · Hülsen in der Ich-Sicht: fliegen rechts aus der Waffe und fallen aus dem Bild (Szene der Waffe, nicht der Welt)
 //  · Drohnen: Energiebolzen mit Kern, Leuchten und Schweif; Mündungsblitz; Einschlagblitz; Explosion mit Rauch und Trümmern
+//  · Flipbooks aus dem Lyra-Paket (seit 2026-11-23): Staubwolke am Einschlag, Feuerball mit Rauch, wenn eine Drohne zerbricht
 // Alles aus Pools ohne Lichtquellen (jedes neue Licht zwingt alle Materialien zu neuen Shadern, siehe fieldfight.ts).
 // =====================================================================================
 
@@ -77,6 +78,54 @@ export function dust(x: number, y: number, z: number, col: string, size: number,
   d.v.set(rand(-0.3, 0.3), vy, rand(-0.3, 0.3)); (d.sp.material as THREE.SpriteMaterial).color.set(col); (d.sp.material as THREE.SpriteMaterial).rotation = rand(0, 6.28);
 }
 
+// ---------- Flipbooks aus dem Lyra-Paket ----------
+// Zwei Bildfolgen (asset-src/tex-world, aus scripts/build-lyra.mjs): fx_ly_squib = Staubwolke eines Einschlags (14 × 14 Bilder, grau mit
+// Deckung), fx_ly_explosion = Feuerball (8 × 8 Bilder: Rauch in Rot, Feuer in Grün, Deckung in Alpha). Je Effekt ein Viereck, das sich zur
+// Kamera dreht und die Bilder der Reihe nach zeigt. Die Texturen kommen aus dem Hintergrund-Paket; bis sie da sind, bleibt der alte Effekt.
+interface Flip { m: THREE.Mesh; cell: THREE.Vector2; op: { value: number }; tint: THREE.Color; t: number; life: number; s0: number; s1: number; vy: number }
+const FLIPS = {
+  puff: { key: 'fx_ly_squib', n: 14, frames: 196, blast: false, max: 14, tex: null as THREE.Texture | null, ok: false, pool: [] as Flip[], i: 0 },
+  blast: { key: 'fx_ly_explosion', n: 8, frames: 64, blast: true, max: 6, tex: null as THREE.Texture | null, ok: false, pool: [] as Flip[], i: 0 },
+};
+let FLIP_GEO: THREE.PlaneGeometry | null = null;
+const FLIP_VS = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+const FLIP_FS = `uniform sampler2D map; uniform vec2 cell; uniform float n; uniform float op; uniform vec3 tint; varying vec2 vUv;
+void main() {
+  vec4 t = texture2D(map, (cell + clamp(vUv, 0.015, 0.985)) / n);
+  #ifdef BLAST
+    vec3 col = tint * (0.15 + t.r * 1.5) + vec3(1.0, 0.46, 0.12) * t.g * 3.2 + vec3(1.0, 0.85, 0.6) * t.g * t.g * 5.0;
+  #else
+    vec3 col = tint * (0.3 + t.r * 1.3);
+  #endif
+  gl_FragColor = vec4(col, t.a * op);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+/** kind: 'puff' | 'blast' · s0 → s1: Größe in m · false, solange die Bildfolge noch nicht geladen ist */
+function flip(kind: 'puff' | 'blast', x: number, y: number, z: number, s0: number, s1: number, life: number, col: string, vy = 0) {
+  const F = FLIPS[kind];
+  if (!F.tex) {
+    const url = window.TEXDATA?.[F.key]; if (!url) return false;
+    F.tex = new THREE.TextureLoader().load(url, () => { F.ok = true; });
+    F.tex.colorSpace = THREE.NoColorSpace; F.tex.generateMipmaps = false; F.tex.minFilter = THREE.LinearFilter;      // ohne Verkleinerungsstufen: Nachbarbilder liefen sonst ineinander
+  }
+  if (!F.ok) return false;
+  let f = F.pool.length < F.max ? null : F.pool[F.i = (F.i + 1) % F.max];
+  if (!f) {
+    const cell = new THREE.Vector2(), op = { value: 1 }, tint = new THREE.Color();
+    const mat = new THREE.ShaderMaterial({ uniforms: { map: { value: F.tex }, cell: { value: cell }, n: { value: F.n }, op, tint: { value: tint } },
+      vertexShader: FLIP_VS, fragmentShader: FLIP_FS, defines: F.blast ? { BLAST: 1 } : {}, transparent: true, depthWrite: false, fog: false });
+    const m = new THREE.Mesh(FLIP_GEO ||= new THREE.PlaneGeometry(1, 1), mat);
+    m.frustumCulled = false; m.renderOrder = 4; m.userData.sh = false; scene.add(m);
+    f = { m, cell, op, tint, t: 0, life: 0, s0: 1, s1: 1, vy: 0 }; F.pool.push(f);
+  }
+  f.m.position.set(x, y, z); f.m.scale.setScalar(s0); f.m.quaternion.copy(camera.quaternion); f.m.visible = true;
+  f.cell.set(0, F.n - 1); f.op.value = 1; f.tint.set(col); f.t = 0; f.life = life; f.s0 = s0; f.s1 = s1; f.vy = vy;
+  return true;
+}
+/** Bildfolgen vorab laden (zu Fuß mit Waffe), damit der erste Einschlag sie schon zeigt */
+export function warmFlips() { for (const k of ['puff', 'blast'] as const) { const F = FLIPS[k]; if (!F.tex && window.TEXDATA?.[F.key]) { F.tex = new THREE.TextureLoader().load(window.TEXDATA[F.key], () => { F.ok = true; }); F.tex.colorSpace = THREE.NoColorSpace; F.tex.generateMipmaps = false; F.tex.minFilter = THREE.LinearFilter; } } }
+
 // ---------- Trümmer ----------
 interface Chunk { on: boolean; p: THREE.Vector3; v: THREE.Vector3; r: THREE.Euler; w: THREE.Vector3; s: number; life: number; ground: (x: number, z: number) => number }
 const CMAX = 64;
@@ -91,6 +140,7 @@ function chInit() {
 }
 
 // ---------- Einschläge ----------
+let impAt = 0;
 // kind: 'boden' (Erde, Fels: Staub und wenige Funken), 'metall' (Drohne: viele Funken, Blitz)
 export function impact(p: THREE.Vector3, dir: THREE.Vector3, kind: 'boden' | 'metall', col = '#ffd9a0') {
   if (kind === 'metall') {
@@ -99,7 +149,9 @@ export function impact(p: THREE.Vector3, dir: THREE.Vector3, kind: 'boden' | 'me
   } else {
     sparks(p.x, p.y, p.z, -dir.x, -dir.y + 0.4, -dir.z, col, 3, 6, 0.2, 0.8, 0.012);
     flash(p.x, p.y, p.z, '#ffe2b0', 0.18, 0.05);
-    dust(p.x, p.y + 0.05, p.z, '#8a7f70', 0.55, 0.7, 0.5, 0.5);
+    if (!flip('puff', p.x - dir.x * 0.12, p.y - dir.y * 0.12 + 0.12, p.z - dir.z * 0.12, 0.35, 1.25, 0.75, '#a89c8c', 0.45)) dust(p.x, p.y + 0.05, p.z, '#8a7f70', 0.55, 0.7, 0.5, 0.5);
+    const d = camD(p.x, p.y, p.z), now = performance.now();      // höchstens ein Einschlagsgeräusch je 70 ms (Schrot trifft siebenfach)
+    if (d < 45 && now - impAt > 70) { impAt = now; sfxAny('w_x_imp', 5, 0.3 / (1 + (d / 14) ** 2), 0.95 + Math.random() * 0.1); }
   }
 }
 
@@ -172,6 +224,7 @@ export function droneDeath(x: number, y: number, z: number, ground: (x: number, 
   flash(x, y, z, '#fff0d0', 2.4 * k, 0.18); flash(x, y, z, '#ff8a40', 3.6 * k, 0.45);
   sparks(x, y, z, 0, 0.6, 0, '#ffc070', Math.round(28 * k), 11, 0.6, 1, 0.022);
   for (let i = 0; i < 6 * k; i++) dust(x + rand(-0.5, 0.5), y + rand(-0.2, 0.4), z + rand(-0.5, 0.5), i < 2 ? '#4a3e38' : '#2e2c2c', rand(2.2, 3.4) * k, rand(1.8, 3), rand(0.6, 1.3), 0.9);
+  flip('blast', x, y + 0.25 * k, z, 1.3 * k, 4.4 * k, 1.25, '#6a625c', 0.5);      // Feuerball, der zu Rauch wird
   const m = chInit();
   for (let i = 0; i < 9 * k; i++) {
     const c = chunks[chI = (chI + 1) % CMAX];
@@ -190,12 +243,23 @@ export function clearFootFx() {
   for (const c of chunks) c.on = false;
   if (chMesh) { for (let i = 0; i < CMAX; i++) chMesh.setMatrixAt(i, _m.makeScale(0, 0, 0)); chMesh.instanceMatrix.needsUpdate = true; }
   for (const d of dusts) { d.life = 0; d.sp.visible = false; }
+  for (const F of Object.values(FLIPS)) for (const f of F.pool) { f.life = 0; f.m.visible = false; }
   for (const L of shells.values()) for (const s of L) { s.life = 0; s.m.visible = false; }
 }
 // ---------- je Bild ----------
 let lastT = 0;
 export function updateFootFx(dt?: number) {
   const now = performance.now() / 1000; if (dt === undefined) { dt = lastT ? Math.min(0.1, now - lastT) : 1 / 60; } lastT = now;
+  // Flipbooks: zur Kamera drehen, wachsen, Bild weiterschalten
+  for (const F of Object.values(FLIPS)) for (const f of F.pool) {
+    if (f.life <= 0) continue;
+    f.t += dt; const u = f.t / f.life;
+    if (u >= 1) { f.life = 0; f.m.visible = false; continue; }
+    const fr = Math.min(F.frames - 1, Math.floor(u * F.frames)), s = f.s0 + (f.s1 - f.s0) * (1 - (1 - u) * (1 - u));
+    f.cell.set(fr % F.n, F.n - 1 - Math.floor(fr / F.n));
+    f.m.position.y += f.vy * dt; f.m.scale.setScalar(s); f.m.quaternion.copy(camera.quaternion);
+    f.op.value = u > 0.8 ? (1 - u) / 0.2 : 1;
+  }
   // Leuchtspuren
   if (trMesh) {
     let any = false;
