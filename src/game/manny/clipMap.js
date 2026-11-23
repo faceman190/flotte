@@ -85,6 +85,14 @@ export const TUNING = {
   mmBlend: 0.2,           // s – inertialization time when the search jumps to another frame
   mmLoopBlend: 0.12,      // s – blend when a loop goes round its cycle (its two ends fit to 4 – 15 cm, not exactly)
   mmHold: 0.25,           // s – no new search this long after a jump (unless the intent changes)
+  // calm start and stop for jogging (capsule-led, 2026-11-23): the Run starts / stops look like sprinting
+  // Instead: straight from standing into the loop, the gait mixed by real speed (walk <-> run); on release the loop rolls out
+  // the same way and the stop of the slower gait steps in once the character is slow. {} = old behaviour.
+  calmGait: { run: 'walk' },   // gait -> slower gait that carries its start and stop
+  softStartBlend: 0.25,   // s – standing -> loop
+  softStopBlend: 0.2,     // s – loop -> stop of the slower gait
+  coastSpeed: 1.5,        // m/s – below this the stop clip takes over
+  coastMix: false,        // true = mix the gaits by speed while rolling out too (measured worse: the stride shrinks within 0.1 s)
   capsuleAccel: 9.5,      // 1/s – how fast the game's velocity follows the keys (for the predicted path)
   capsuleBrake: 8,        // 1/s – the same after releasing the keys
 };

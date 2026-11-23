@@ -249,13 +249,22 @@ export class MannyAnimator {
   }
   _updateLoco(dt) {
     const list = []; let dur = 0, speed = 0;
+    // calm start / rolling out: the gait follows the real speed (walk <-> run, in phase), like a blend space
+    const calm = this._calmNow();
+    if (calm && (!this._coast || this.tuning.coastMix)) {
+      const gk = this._gaitKey(), v0 = this.speedAt(calm, this.locoTheta), v1 = this.speedAt(gk, this.locoTheta);
+      const k = v1 > v0 + 0.1 ? clamp((this._realSpeed - v0) / (v1 - v0), 0, 1) : 1;
+      for (const g of Object.keys(this.gaitW)) this.gaitW[g] = g === gk ? k : g === calm ? 1 - k : 0;
+    }
     for (const [g, gw] of Object.entries(this.gaitW)) {
       if (gw <= 1e-3) continue;
       for (const [s, w] of this._dirWeights(g, this.locoTheta)) { list.push([s, w * gw]); dur += s.duration * w * gw; speed += s.speed * w * gw; }
     }
     // capsule-led: the loop plays as fast as the character really moves (feet do not slide when the game is slower / faster)
-    const want = this._realSpeed !== undefined && this.state === 'loop' && speed > 0.3 ? clamp(this._realSpeed / speed, 0.6, 1.3) : 1;
-    this._locoRate = approach(this._locoRate ?? 1, want, 3 * dt);
+    // straight out of standing (calm start) the rate follows the capsule at once and from further down: the first step is as slow as the character
+    const soft = !!calm;
+    const want = this._realSpeed !== undefined && this.state === 'loop' && speed > 0.3 ? clamp(this._realSpeed / speed, soft ? 0.25 : 0.6, 1.3) : 1;
+    this._locoRate = soft ? want : approach(this._locoRate ?? 1, want, 3 * dt);
     if (dur > 0) this.phase = (this.phase + dt * this._locoRate / dur) % 1;
     const m = new Map();
     for (const [s, w] of list) {
@@ -341,9 +350,17 @@ export class MannyAnimator {
   // ------------------------------------------------------------------ state machine
   _enter(state, clip = '') {
     this.log.push({ t: +this.time.toFixed(2), from: this.state, to: state, clip });
-    this.state = state; this.stateTime = 0;
+    this.state = state; this.stateTime = 0; this._coast = false;
+  }
+  /** calm start / rolling out: the slower gait whose loop is mixed in by real speed, or null */
+  _calmNow() {
+    const T = this.tuning, gk = this._gaitKey();
+    if (this._realSpeed === undefined || this.state !== 'loop' || !T.calmGait || !T.calmGait[gk]) return null;
+    return this._coast || (this._loopFromIdle && this.stateTime < 0.5) ? T.calmGait[gk] : null;
   }
   _gaitKey() { return this.crouch ? 'crouch' : this.gait; }
+  /** the gait that is really being played (largest loop weight): a sprint stops as a sprint, even when its key is released together with the direction */
+  _shownGait() { if (this.crouch) return 'crouch'; let g = this._gaitKey(), w = 0; for (const [k, v] of Object.entries(this.gaitW)) if (v > w) { w = v; g = k; } return g; }
   _startLoco(blend, fromIdle = false, matchPhase = true) {
     if (matchPhase) this.phase = this._matchLoopPhase(this._gaitKey(), this.locoTheta);
     this._playOnly('loco', blend); this.oneShot = null; this._loopFromIdle = fromIdle; this._enter('loop');
@@ -454,9 +471,14 @@ export class MannyAnimator {
       }
       case 'loop': {
         if (!moving) {
-          if (this._loopFromIdle && this.stateTime < T.tapTime) this._enterSettle(); else this._enterStop();
+          if (this._loopFromIdle && this.stateTime < T.tapTime) this._enterSettle();
+          // calm stop: roll out in the loop at the real speed (feet stay on the ground they cover), step in once slow
+          else if (vel && strafe && T.calmGait && T.calmGait[gk] && (this._coast || this._shownGait() === gk) && this._realSpeed > T.coastSpeed) {
+            this._coast = true; this.facing = approachAngle(this.facing, targetFacing, T.proceduralTurnRate * RAD * dt);
+          } else this._enterStop(this._coast ? gk : this._shownGait());
           break;
         }
+        this._coast = false;
         if (!strafe) {
           const need = wrapDeg((moveYaw - this.facing) * DEG);
           if (Math.abs(need) > T.movingTurnThreshold && canReselect && this._enterMovingTurn(need)) break;
@@ -635,7 +657,8 @@ export class MannyAnimator {
       if (c.l && c.r) { const s = this._supportContacts(); if (s.l && !s.r) c.r = false; else if (s.r && !s.l) c.l = false; }
       return c;
     }
-    if (!this.tuning.footLockStates.includes(st)) return { l: false, r: false };
+    // a calm stop (stop of the slower gait) locks its support foot: it comes out of a wider stride than the clip's own
+    if (!this.tuning.footLockStates.includes(st) && !(st === 'stop' && this._calmStop)) return { l: false, r: false };
     if (this.oneShot && this.feat[this.oneShot]) {
       const f = this.feat[this.oneShot], i = f.index(this.actions[this.oneShot].time);
       const c = { l: !!f.contactL[i], r: !!f.contactR[i] };
@@ -760,6 +783,14 @@ export class MannyAnimator {
 
   _enterStart(theta, strafe, moveYaw) {
     const gk = this._gaitKey(), T = this.tuning;
+    // calm start (capsule-led): the Run starts of the clip set are sprint starts in all but name (trunk 59° forward, hips 20 cm
+    // down) and the game is at full speed after 0.25 s – the dive flashed up and was gone. Straight into the loop instead, at the
+    // phase that fits the standing pose; the loop then plays as fast as the character really moves.
+    if (strafe && this._realSpeed !== undefined && T.calmGait && T.calmGait[gk]) {
+      // the phase is matched in the slower gait (its loop is the one that shows first; the gaits run in phase)
+      this.locoTheta = theta; this.phase = this._matchLoopPhase(T.calmGait[gk], theta);
+      this._startLoco(T.softStartBlend, true, false); return;
+    }
     const need = strafe ? 0 : wrapDeg((moveYaw - this.facing) * DEG);   // + = turn left
     const want = strafe ? theta : 0;                                      // travel dir relative to (final) facing
     const cands = [];
@@ -789,12 +820,14 @@ export class MannyAnimator {
     this._enter('start', best.name + (best.t > 0 ? ` @${best.t.toFixed(2)}` : '') + (turning ? ` yaw x${this._yawScale.toFixed(2)}` : ''));
   }
 
-  _enterStop() {
-    const gk = this._gaitKey();
+  _enterStop(gait) {
+    const gk = gait || this._gaitKey(), T = this.tuning;
     const theta = this.state === 'loop' ? this.locoTheta : (this._startTheta ?? 0);
     const cur = this.planarVel.length();
     if (cur < 0.5) { this._enterSettle(); return; }
-    const cands = (this.groups.stops[gk] || this.groups.stops.run).map((name) => {
+    // calm stop (capsule-led): the Run stops brake like a sprint (hips down to 70 cm); the Walk stops step in upright
+    const sg = (this._stopDist !== undefined && T.calmGait && T.calmGait[gk]) || gk;
+    const cands = (this.groups.stops[sg] || this.groups.stops.run).map((name) => {
       const f = this.feat[name]; const d = f.startDirDeg ?? f.dirDeg;
       return { name, extra: Math.abs(wrapDeg(d - theta)) / 40, f };
     }).filter((c) => c.extra < 1.5);
@@ -806,7 +839,8 @@ export class MannyAnimator {
     const f = this.feat[best.name];
     const settle = this._settleTime(f, best.t);
     if (settle - best.t < 0.15) { this._enterSettle(); return; }
-    this._playOneShot(best.name, this.tuning.stopBlend, best.t, 1);
+    this._playOneShot(best.name, sg !== gk ? T.softStopBlend : T.stopBlend, best.t, 1);
+    this._calmStop = sg !== gk;
     this._exitT = this._stopExit(f, best.t) - best.t;
     this._enter('stop', `${best.name} @${best.t.toFixed(2)}`);
   }

@@ -102,6 +102,43 @@ passt zu Tempo UND Weg der Figur. Mehr Bewegungsmaterial oder eine weichere Anla
   lässt aber die Füße insgesamt mehr gleiten (450 statt 356 cm) und ist deshalb aus.
 - „Messdaten beim Packen statt beim Laden“ ist nicht nötig: Vermessen 0,35 s in Scheiben, Datenbank bauen 0,09 s.
 
+## Ruhiger Anlauf und Stopp beim Joggen (23.11.2026)
+Rückmeldung nach dem ersten Test: Beim Anlaufen blitzt kurz eine Sprint-Bewegung auf, beim Anhalten kommt der Stopp aus dem Sprint, obwohl man
+nur joggt. Gespielt wurden die richtigen Clips (`Run_Start`, `Run_Stop`) – sie sehen aber fast wie die des Sprints aus:
+
+| Clip | größte Vorlage des Oberkörpers | tiefste Hüfte |
+|---|---|---|
+| Run_Start_F | 59° | 72 cm |
+| Sprint_Start_F | 61° | 73 cm |
+| Run_Loop_F (zum Vergleich) | 23–32° | 89–94 cm |
+| Run_Stop_F | – | 70 cm |
+| Walk_Stop_F | – | 86–95 cm |
+
+Das Spiel ist nach 0,25 s auf vollem Tempo, der Start-Clip braucht 0,8 s. Er wurde deshalb in fünf Bildern durchgespult: tief abducken, gleich
+wieder aufrichten. Fürs Joggen gilt jetzt (`TUNING.calmGait = { run: 'walk' }`, `{}` = altes Verhalten):
+- **Anlauf:** kein Start-Clip. Aus dem Stand direkt in die Schleife, in der Phase, die zur Standhaltung passt; in der ersten halben Sekunde wird
+  die Gangart nach dem echten Tempo gemischt (Gehen ↔ Laufen, im selben Schritt). Vorlage steigt gleichmäßig von 3° auf 27°, Hüfte bleibt über 87 cm.
+- **Stopp:** Beim Loslassen rollt die Lauf-Schleife im echten Tempo aus (Füße bleiben auf dem Boden, den sie zurücklegen); unter 1,5 m/s setzt der
+  Stopp aus dem Gehen ein (aufrecht, zweiter Fuß setzt nach). Der Standfuß wird dabei festgehalten. Hüfte bleibt über 82 cm.
+- Sprint und Ducken behalten ihre eigenen Starts und Stopps. Ein Sprint stoppt als Sprint, auch wenn Shift zusammen mit der Richtung losgelassen
+  wird (`_shownGait`: Es zählt die Gangart, die gerade zu sehen ist).
+- Mit Motion Matching (`?mm=1`) gilt das nicht – dort sucht die Datenbank weiter in den Run-Starts und -Stopps.
+
+Preis: Die Füße gleiten bei Anlauf und Stopp etwas mehr, weil kein Clip mehr genau diese Bewegung liefert (Messreihe `MT.bench()`):
+
+| Fassung | Gleiten gesamt | Anlauf (24) | Lauf | Stopp (24) | Haltungssprünge |
+|---|---|---|---|---|---|
+| Stufe 3 wie hochgeladen | 1.568 cm | 249 | 331 | 663 | 541° |
+| dieselbe mit Naht in der Flugphase | 1.461 cm | 294 | 286 | 622 | 583° |
+| ruhiger Anlauf und Stopp (Standard) | 1.826 cm | 508 | 324 | 726 | 549° |
+
+Dabei gefunden:
+- **Naht der Schleifen:** Der Rest zwischen den beiden Enden eines Schrittzyklus (bis 15 cm) wird in 0,12 s überblendet. Lag die Naht auf dem
+  Aufsetzen eines Fußes, glitt dieser Fuß bei jedem Schritt bis 18 cm – je nachdem, wie die Phase zum Bildtakt lag, schwankte „Lauf“ zwischen 10 und
+  68 cm je Sekunde. Die Naht liegt jetzt bevorzugt in der Flugphase (`mmWeights.cycleAir`), dort sieht man die Überblendung nicht (10–21 cm).
+  Die älteren Einzelvergleiche von Lauf-Abschnitten in diesem Dokument sind mit dieser Schwankung zu lesen.
+- **Gangart beim Ausrollen nicht mischen** (`coastMix`): In 0,1 s schrumpft der Schritt vom Laufen aufs Gehen, die Füße wandern dabei 20–40 cm je Bild.
+
 ## Richtung (Entscheidung 23.11.2026)
 Wir bauen künftig auf dem Unreal-System auf: Skelett nach UE5/MetaHuman-Namen, Bewegungen aus Unreal (Game Animation Sample und eigene),
 diese Bewegungslogik als Grundlage. Die Lizenzfrage (Epic-Inhalte außerhalb von Unreal) bleibt offen, bis die Bewegungen eigene oder frei lizenzierte sind.

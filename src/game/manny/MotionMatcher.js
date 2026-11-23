@@ -24,6 +24,7 @@ export class MotionMatcher {
   /** feat: ClipFeatures by clip name · entries: [{ name, kind: 'start'|'loop'|'stop'|'pivot', gait }] */
   /** poseDist(name, ta, tb): mean rotation difference (deg) of ALL bones of a clip between two times (optional, for the loop cycles) */
   constructor(feat, entries, weights = {}, poseDist = null) {
+    this.cycleAir = weights.cycleAir ?? 0.06;   // m – a seam with a foot on the ground costs this much more than one in the flight phase
     this.poseDist = poseDist; this.cycleBody = weights.cycleBody ?? 0;   // measured: choosing the seam by the feet alone slides least (356 cm against 450 cm with 0.03)
     this.weights = Object.assign({}, MM_WEIGHTS, weights);
     this.clips = [];                    // { name, kind, gait, off, n, loop }
@@ -55,9 +56,12 @@ export class MotionMatcher {
     const d = (i, j) => Math.sqrt(f.footL[i].distanceToSquared(f.footL[j]) + f.footR[i].distanceToSquared(f.footR[j])
       + 0.01 * (f.velL[i].distanceToSquared(f.velL[j]) + f.velR[i].distanceToSquared(f.velR[j])));
     let bi = 0, bj = n - 1, bs = Infinity, bc = 0;
+    const air = (i) => !f.contactL[i] && !f.contactR[i] && !f.contactL[i + 1] && !f.contactR[i + 1];
     const cand = [];
     for (let i = 1; i < n - min - 1; i++) for (let j = i + min; j < n - 1; j++) {
-      const cst = d(i, j), score = cst - 0.0012 * (j - i);       // a slightly longer cycle is welcome when it fits as well
+      // a slightly longer cycle is welcome when it fits as well; a seam in the flight phase too (the rest between the two ends
+      // is blended away over about 0.1 s – on a foot that has just come down that shows as sliding, in the air it does not)
+      const cst = d(i, j), score = cst - 0.0012 * (j - i) + (air(i) && air(j) ? 0 : this.cycleAir);
       if (score < bs) { bs = score; bi = i; bj = j; bc = cst; }
       if (cst < 0.3) cand.push([score, i, j, cst]);
     }
