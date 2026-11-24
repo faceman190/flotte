@@ -40,3 +40,17 @@ Flutlicht), Export `rv_export.py` → `deco/Aussenstelle` und `deco/Aussenstelle
 
 Unter „Deine Aufträge“: die Bodenarbeiten für den Planeten des Sektors (annehmen; Erz an der Basis abgeben) und die Liste, wer auf welcher
 Station gerade Arbeit hat. Aufgabenfeld und Flottenband zeigen Stations- und Bodenaufgaben gemeinsam.
+
+## Ruf schaltet frei (`src/game/reputation.ts`)
+
+- Werft: Würger ab „Bekannt“ (Grenzwacht), Kormoran ab „Bekannt“ (Flottenrat), Pfeil ab „Geschätzt“ (Flottenrat), Wisent ab „Geschätzt“
+  (Bergbaugilde). Wer das Schiff schon besitzt, behält es. `SHIP_RANG`, `shipLock`.
+- Ausrüster: seltene Zufallsstücke (Rang „Episch“) ab „Bekannt“, Spitzenstücke („Legendär“) ab „Vertraut“ bei der Fraktion der Station;
+  das Grundsortiment (`immer`: Figurenpaket, Lyra-Waffen) bleibt frei. `gearLock`.
+- Flottenband → Ruf: „Freigeschaltet je Rang“ mit Haken und Schlössern (`unlocks`).
+
+## Fremde Bodenfahrzeuge (`src/game/net.ts`, `server/server.mjs`)
+
+Das Netzfeld `v` = [Art, Tempo, Lenkung, x, y, z, qx, qy, qz, qw] des Bodenfahrzeugs (auch wenn der Pilot daneben zu Fuß ist). Bei den
+anderen steht das richtige Modell (Dachs oder Wiesel), Räder federn, drehen und lenken (`driveRemoteRover`). Ältere Fassungen ohne `v`
+zeigen weiter den starren Rover. Fremde Fahrer sitzen noch nicht sichtbar im Wiesel.
