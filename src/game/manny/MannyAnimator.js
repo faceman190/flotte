@@ -54,6 +54,19 @@ const approachAngle = (cur, target, maxStep) => cur + Math.max(-maxStep, Math.mi
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const ROOT_ONLY = new Set(['root']);
 
+// the relaxed style (stations, towns): the same map with the walk, run and stand clips of the Relaxed set (sprint and crouch stay neutral;
+// the calm start and stop of the run go through the walk loops, so walk has to change with it).
+// Its sideways loops are named differently (LR_offset / RR_offset).
+function relaxedMap(map) {
+  const re = (x) => (x instanceof RegExp ? new RegExp(x.source.replace(/M_Neutral_(Walk|Run|Stand)/g, 'M_Relaxed_$1'), x.flags) : typeof x === 'string' ? x.replace(/^M_Neutral_(Walk|Run|Stand)_/, 'M_Relaxed_$1_') : x);
+  const deep = (o) => (o && typeof o === 'object' && !(o instanceof RegExp) ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, deep(v)])) : re(o));
+  const m = deep(map);
+  m.loops.run = { ...m.loops.run, LR: 'M_Relaxed_Run_Loop_LR_offset', RR: 'M_Relaxed_Run_Loop_RR_offset' };
+  m.loops.walk = { ...m.loops.walk, LR: 'M_Relaxed_Walk_Loop_LR_offset', RR: 'M_Relaxed_Walk_Loop_RR_offset' };
+  m.idleBreaks = { ...m.idleBreaks, stand: /^M_Relaxed_Stand_Idle_Break_vd+$/ };
+  return m;
+}
+
 export class MannyAnimator {
   constructor(opts = {}) {
     this.tuning = Object.assign({}, TUNING, opts.tuning || {});
@@ -177,31 +190,39 @@ export class MannyAnimator {
 
   _buildSets() {
     const names = this.clips.names;
-    // loops per gait, once for each sideways stance (loopSets: LL / RR · loopSetsAlt: LR / RL, see this.alt)
-    this.loopSets = {}; this.loopSetsAlt = {};
-    for (const [sets, order] of [[this.loopSets, DIR_PRIORITY], [this.loopSetsAlt, DIR_PRIORITY_ALT || DIR_PRIORITY]]) {
-      for (const [gait, dirs] of Object.entries(CLIP_MAP.loops)) {
-        const set = [];
-        for (const key of order) {
-          const name = dirs[key];
-          if (!name || !this._has(name)) continue;
-          const f = this.feat[name];
-          if (set.some((s) => Math.abs(wrapDeg(s.angle - f.dirDeg)) < 20)) continue;   // same direction twice -> skip
-          set.push({ key, name, angle: f.dirDeg, speed: f.dist / f.duration, duration: f.duration });
+    // loops per gait, once for each sideways stance (loopSets: LL / RR · loopSetsAlt: LR / RL, see this.alt), and the candidate groups –
+    // for each style: neutral (everywhere) and relaxed (stations and towns, see setStyle; only run and stand differ)
+    const build = (map) => {
+      const loopSets = {}, loopSetsAlt = {};
+      for (const [sets, order] of [[loopSets, DIR_PRIORITY], [loopSetsAlt, DIR_PRIORITY_ALT || DIR_PRIORITY]]) {
+        for (const [gait, dirs] of Object.entries(map.loops)) {
+          const set = [];
+          for (const key of order) {
+            const name = dirs[key];
+            if (!name || !this._has(name)) continue;
+            const f = this.feat[name];
+            if (set.some((q) => Math.abs(wrapDeg(q.angle - f.dirDeg)) < 20)) continue;   // same direction twice -> skip
+            set.push({ key, name, angle: f.dirDeg, speed: f.dist / f.duration, duration: f.duration });
+          }
+          set.sort((x, y) => x.angle - y.angle);
+          sets[gait] = set;
         }
-        set.sort((a, b) => a.angle - b.angle);
-        sets[gait] = set;
       }
-    }
-    this.alt = false;                                          // sideways stance: false = LL / RR, true = LR / RL
-    const group = (map) => Object.fromEntries(Object.entries(map).map(([k, re]) => [k, names.filter((n) => re.test(n))]));
-    this.groups = {
-      starts: group(CLIP_MAP.starts), stops: group(CLIP_MAP.stops), turnInPlace: group(CLIP_MAP.turnInPlace),
-      movingTurns: group(CLIP_MAP.movingTurns), pivots: group(CLIP_MAP.pivots), idleBreaks: group(CLIP_MAP.idleBreaks || {}),
+      const group = (m) => Object.fromEntries(Object.entries(m).map(([k, re]) => [k, names.filter((n) => re.test(n))]));
+      const groups = {
+        starts: group(map.starts), stops: group(map.stops), turnInPlace: group(map.turnInPlace),
+        movingTurns: group(map.movingTurns), pivots: group(map.pivots), idleBreaks: group(map.idleBreaks || {}),
+      };
+      return { loopSets, loopSetsAlt, groups, idleStand: map.idle.stand };
     };
+    this._styles = { neutral: build(CLIP_MAP) };
+    const R = relaxedMap(CLIP_MAP);
+    if (this.clips.has(R.loops.run.F) && this.clips.has(R.idle.stand)) this._styles.relaxed = build(R);
+    this._style = 'neutral'; this._useStyle(this._styles.neutral);
+    this.alt = false;                                          // sideways stance: false = LL / RR, true = LR / RL
     this.deathClips = CLIP_MAP.death ? names.filter((n) => CLIP_MAP.death.test(n)) : [];
     this.turn = {};
-    for (const list of Object.values(this.groups.pivots)) for (const n of list) {
+    for (const st of Object.values(this._styles)) for (const list of Object.values(st.groups.pivots)) for (const n of list) {
       const ti = this._turnInfo(this.feat[n]); if (!ti) continue;
       // stance the clip starts from / ends in, from its name (<family>_<from>_<to>_<foot>): null = not sideways
       const m = /_(?:Pivot|Box|Diamond|Hourglass)_([A-Z]+)_([A-Z]+)_/.exec(n), st = (k) => (SIDE_ALT.includes(k) ? true : SIDE_MAIN.includes(k) ? false : null);
@@ -262,12 +283,24 @@ export class MannyAnimator {
     };
     // travel speed of a loop = speed over its clean cycle (the whole clip has a held last frame and reads ~1 % slow)
     this.cycles = new Map();
-    for (const set of [...Object.values(this.loopSets), ...Object.values(this.loopSetsAlt)]) for (const l of set) {
+    for (const set of Object.values(this._styles).flatMap((st) => [...Object.values(st.loopSets), ...Object.values(st.loopSetsAlt)])) for (const l of set) {
       let c = this.cycles.get(l.name);
       if (!c) { c = findCycle(this.feat[l.name], { air: T.cycleAir, body: T.cycleBody, poseDist: (ta, tb) => poseDist(l.name, ta, tb) }); this.cycles.set(l.name, c); }
       if (c.speed > 0.2) { l.speed = c.speed; if (T.loopCycles !== false) { l.cyc = c; l.duration = c.b - c.a; } }
     }
   }
+
+  _useStyle(st) { this.loopSets = st.loopSets; this.loopSetsAlt = st.loopSetsAlt; this.groups = st.groups; this._idleStand = st.idleStand; }
+  /** style of movement: 'neutral' or 'relaxed' (only if its clips are loaded). Switches in idle and in the loop (phase matched, soft blend);
+   *  in a one-shot (start, stop, turn …) it waits for the next idle or loop. Returns the style now in use. */
+  setStyle(name) {
+    const st = this._styles?.[name]; if (!st || name === this._style) return this._style;
+    if (!['idle', 'break', 'loop'].includes(this.state)) return this._style;
+    this._style = name; this._useStyle(st);
+    if (this.state === 'loop') this._startLoco(this.tuning.styleBlend ?? 0.45); else this._startIdle(this.tuning.styleBlend ?? 0.45);
+    return name;
+  }
+  get style() { return this._style; }
 
   speedOf(gait) { const s = (this.loopSets[gait] || []).find((l) => l.key === 'F'); return s ? s.speed : 0; }
   groupSizes() { return Object.fromEntries(Object.entries(this.groups).map(([g, v]) => [g, Object.fromEntries(Object.entries(v).map(([k, l]) => [k, l.length]))])); }
@@ -329,7 +362,7 @@ export class MannyAnimator {
     const norm = total > 0 ? 1 / total : 0;
     for (const [k, s] of this._slots) {
       const w = s.w * norm; if (w <= 0) continue;
-      if (k === 'idle') { add(CLIP_MAP.idle.stand, w * (1 - this.crouchW)); add(CLIP_MAP.idle.crouch, w * this.crouchW); }
+      if (k === 'idle') { add(this._idleStand || CLIP_MAP.idle.stand, w * (1 - this.crouchW)); add(CLIP_MAP.idle.crouch, w * this.crouchW); }
       else if (k === 'loco') for (const [n, lw] of this._locoWeights) add(n, w * lw);
       else add(k, w);
     }
@@ -479,6 +512,7 @@ export class MannyAnimator {
     if (!this.mixer) return { delta: new THREE.Vector3(), facing: 0, jumpImpulse: false };
     const T = this.tuning;
     this.time += dt; this.stateTime += dt; this._dtNow = dt;
+    if (input.style && input.style !== this._style) this.setStyle(input.style);
     const vel = input.vel || null;                 // capsule-led: real planar velocity
     this._realSpeed = vel ? vel.length() : undefined;
     this._stopDist = vel ? input.stopDist : undefined;

@@ -100,6 +100,9 @@ export const EXTRA = [
   // 180° sind die Pivot-Clips der Grundauswahl), in beiden Seitwärts-Haltungen (LL / RR und LR / RL)
   /^M_Neutral_(Run|Crouch)_(Box|Diamond|Hourglass)_/,
   /^M_ragdoll_getup_stand_[BFLR]$/,                          // Liegeposen (erstes Bild der Aufsteh-Clips): darin kommt der Sturz zur Ruhe
+  /^M_Relaxed_Run_(Loop|Start|Stop|Pivot|Turn)_/,            // lockerer Stil in Stationen und Städten (seit 2026-11-24): Laufen …
+  /^M_Relaxed_Walk_(Loop|Start|Stop)_/,                      // … Gehen (sanftes Anlaufen und Anhalten laufen über die Gehschleifen) …
+  /^M_Relaxed_Stand_(Idle|Turn)_/,                           // … Stehen, Pausen, Drehen auf der Stelle (MannyAnimator setStyle)
 ];
 
 // Knochen, deren Spuren nie gebraucht werden (keine Haut, keine Kinder mit Haut): Hilfsknochen für Unreals eigene IK

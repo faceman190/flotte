@@ -274,3 +274,16 @@ nach unserem Verständnis nur in Unreal-Engine-Produkten erlaubt. Seit dem 23.11
 (die Figur ist das eigene Modell `spieler_03`); die **Bewegungen** bleiben Epic-Inhalt, ebenso die Maße des Skeletts. Für eine
 Veröffentlichung ohne dieses Risiko die Bewegungslogik mit eigenen oder frei lizenzierten Clips nutzen (gleiche Clipnamen in
 `clipMap.js` anpassen).
+
+## Lockerer Stil in Stationen und Städten (seit 2026-11-24)
+
+- 89 Clips aus dem Relaxed-Satz (`scripts/clipset.mjs`): Laufen (Schleifen, Starts, Stopps, Wenden, Kurven), Gehen (Schleifen, Starts,
+  Stopps; das sanfte Anlaufen und Anhalten läuft über die Gehschleifen), Stehen mit zwölf Pausen, Drehen auf der Stelle. Satz jetzt 22,2 MB
+  (vorher 19,2 MB).
+- `MannyAnimator`: je Stil eigene Schleifen und Gruppen (`_styles.neutral`, `_styles.relaxed` aus `relaxedMap(CLIP_MAP)`; Sprint und
+  Ducken bleiben neutral). `setStyle(name)` bzw. `input.style` wechselt im Stand und im Lauf (Phase passend, 0,45 s überblendet), in
+  einem Einmal-Clip erst danach.
+- Wann: `mannyHooks.relaxed` (main.ts) – zu Fuß in einer Station (nicht im eigenen Schiff) oder in einer Stadt, ohne Waffe in der Hand.
+- Wirkung aufs Spiel: Der lockere Lauf ist rund 12 % langsamer (das Tempo kommt aus den Schleifen). Fußrutschen gleich bis etwas besser.
+- Versucht und verworfen (2026-11-24): eigene Übergangsclips beim Gangartwechsel (Gehen/Laufen/Sprinten). Die Füße rutschten im Wechsel
+  stärker (155 cm nach Zeit, 373 cm nach Weg abgespielt, gegen 57 cm beim Überblenden der Schleifen, die im echten Tempo laufen).

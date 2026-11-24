@@ -40,6 +40,7 @@ import type { Mode } from './game/state';
 import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, liquidAt, ROVER, SURF } from './game/surface';
 import { wieselScan } from './game/wiesel';
 import { initTestlabor, updateTestlabor, testHooks } from './game/testlabor';
+import { mannyHooks } from './game/mannyAvatar';
 import { TESTF } from './game/testflags';
 import { PLANETS, PTYPE, planetBaseId } from './data/planets';
 import { d3 } from './core/util';
@@ -987,4 +988,6 @@ if (location.hostname.startsWith('test.')) {
   b.style.cssText = 'position:fixed;left:8px;top:6px;z-index:9999;font:700 11px "Share Tech Mono",Consolas,monospace;color:#ffb347;background:rgba(8,12,16,.65);padding:2px 8px;letter-spacing:2px;pointer-events:none';
   document.body.appendChild(b);
 }
+// Bewegungsstil der Figur: locker in Stationen (zu Fuß, nicht im eigenen Schiff) und Städten, sonst neutral (MannyAnimator setStyle)
+mannyHooks.relaxed = () => (IN.active && !!IN.station && !IN.ship) || G.cityWalk;
 initTestlabor();      // F8: Testlabor (nur Testserver, Entwicklungsserver, ?dev=1), game/testlabor.ts

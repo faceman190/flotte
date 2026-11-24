@@ -52,7 +52,8 @@ whenIdle(() => { if (MANNY.on) ensure(); });   // schon ab dem Hauptmenü laden:
 let anim: any = null, loading = false, failed = false;
 // Körper und Ausrüstung am Skelett des Animators. tracht: was die eigene Figur gerade tragen soll (setzt avatar.ts)
 let fig: Figur | null = null;
-export const mannyHooks = { tracht: null as null | (() => Tracht) };
+// relaxed: lockerer Bewegungsstil (Stationen, Städte; main.ts setzt es), sonst der neutrale
+export const mannyHooks = { tracht: null as null | (() => Tracht), relaxed: null as null | (() => boolean) };
 function dress() { if (fig) fig.setzen(mannyHooks.tracht ? mannyHooks.tracht() : { figur: 1, teile: {} }); return !!fig && fig.bereit; }
 function ensure() {
   if (anim || loading || failed) return;
@@ -265,7 +266,7 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
   if (LG && wp) driveLyraGun(LG, wp.shots, wp.reload, dtc);
   anim.fpView = st.fp;      // Ich-Sicht: die Waffe sinkt weniger tief (WeaponLayer), sonst verschwindet sie aus dem Bild
   const out = anim.update(dtc, {
-    moveDir: _mv, gait, crouch: !!d.crouch, strafe: true, facing: face,
+    moveDir: _mv, gait, crouch: !!d.crouch, strafe: true, facing: face, style: mannyHooks.relaxed?.() && !wp ? 'relaxed' : 'neutral',
     jump, grounded: !air, verticalSpeed: vy, look: { pitch: d.pitch || 0 }, dead: !!d.dead,
     weapon: wp ? { kind: wp.lyra || (HOLD[wp.id] || HOLD.k12).kind, aim: wp.aim, shots: wp.shots, hits: wp.hits, reload: wp.reload, toss: wp.toss } : null,
     vel: led ? _vel.set(d.vx, d.vz) : undefined, stopDist: spd * Math.max(0, (MANNY.brake > 0 ? 1 / MANNY.brake : STOP_TAU + dtc) - dtc),   // Rest des Wegs bei Bremsrate r: Tempo × (1/r − Bilddauer)
