@@ -15,7 +15,7 @@ import { PLANETS, planetBaseId } from '../data/planets';
 import { unitPrice, basePriceHere, sellValue, sell, refineInfo, refineStart, refineCollect, refineTime, offers, accept, deliver, abandon, MAX_CONTRACTS, sellsHere, buyPrice, buy } from '../game/economy';
 import { itemIcon } from './icons';
 import { shipsAt, board, buyShip, sellShip, sellPrice, stored, storedTotal, storeFromCargo, takeToCargo, shipPrice } from '../game/fleet';
-import { REP, stationFaction, rankName, serviceFactor, repOf, level, refineFeeFactor } from '../game/reputation';
+import { REP, stationFaction, rankName, serviceFactor, repOf, level, refineFeeFactor, shipLock, gearLock } from '../game/reputation';
 import { missionOffers, acceptMission, abandonMission, MAX_MISSIONS, missionTypeName, minRankName } from '../game/missions';
 import { RARITY, KIND_N, GEAR_SLOTS, WEAR_SLOTS, gearDef, isShipKind, type GearKind, type GearSlot } from '../data/gear';
 import { shipMods, gearStock, gearBuyPrice, gearSellPrice, buyGear, sellGear, toLocker, fromLocker, invCap, invCount, canAdd, canStore, LOCKER_SLOTS } from '../game/inventory';
@@ -281,8 +281,8 @@ function vWerft(): View {
   const sel = selShip, c = SHIPS[sel], b = computeStats(sel, emptyUp() as Up), pr = shipPrice(sel), M = shipMax;
   let h = `<nav class="pn" aria-label="Schiffe"><p class="lb">Im Angebot</p>`;
   for (const id of ids) {
-    const p = shipPrice(id), own = id === P.cls ? 'dein Schiff' : here.some(r => r.cls === id) ? 'im Hangar' : '', on = id === sel && !selFz;
-    h += `<button class="row ${on ? 'sel' : ''}" data-a="ship" data-k="${id}" ${on ? 'aria-current="true"' : ''}><span><b>${SHIPS[id].n}</b><small>${SHIPS[id].role}${own ? ` · <i class="up">${own}</i>` : ''}</small></span><span class="mo ${P.credits < p ? 'dn' : 'hi'}">${fmtN(p)} Cr</span></button>`;
+    const p = shipPrice(id), own = id === P.cls ? 'dein Schiff' : here.some(r => r.cls === id) ? 'im Hangar' : '', on = id === sel && !selFz, lock = shipLock(id, owns(id));
+    h += `<button class="row ${on ? 'sel' : ''}" data-a="ship" data-k="${id}" ${on ? 'aria-current="true"' : ''}><span><b>${SHIPS[id].n}</b><small>${SHIPS[id].role}${own ? ` · <i class="up">${own}</i>` : ''}${lock ? ` · <i class="dn">🔒 ${lock}</i>` : ''}</small></span><span class="mo ${P.credits < p || lock ? 'dn' : 'hi'}">${fmtN(p)} Cr</span></button>`;
   }
   // Bodenfahrzeuge (seit 2026-11-24): fahren im Schiff mit, eins davon wird beim Landen ausgesetzt
   h += `<p class="lb">Bodenfahrzeuge</p>`;
@@ -302,10 +302,12 @@ function vWerft(): View {
     ${cmp('Hülle', b.maxHull, S.maxHull, M.hull)}${cmp('Schild', b.maxShield, S.maxShield, M.shield)}${cmp('Frachtraum', b.cargo, S.cargo, M.cargo)}${cmp('Tempo', b.max, S.max, M.speed, ' m/s')}${cmp('Wendigkeit', b.turn * 100, S.turn * 100, M.turn * 100, ' %')}${cmp('Kanonen', b.dmg, S.dmg, M.dmg, ' Schaden')}
     <div class="sep"></div><p class="lb">Ausrüstung</p><p>${extras.join(' · ')}</p>
     <div class="act">${line('Credits danach', `${fmtN(P.credits - pr)} Cr`, P.credits < pr ? 'dn' : '')}
-    <button class="pri big" data-a="buy" data-k="${sel}" ${P.credits >= pr ? '' : 'disabled'}><span>Kaufen</span><span class="mo">${pr < c.price ? `<s>${fmtN(c.price)}</s> ` : ''}${fmtN(pr)} Cr</span></button></div></aside>`;
+    ${shipLock(sel, owns(sel)) ? `<p class="dn">Gesperrt: ${shipLock(sel, owns(sel))}. Ruf steigt mit Aufträgen und Aufgaben dieser Fraktion.</p>` : ''}
+    <button class="pri big" data-a="buy" data-k="${sel}" ${P.credits >= pr && !shipLock(sel, owns(sel)) ? '' : 'disabled'}><span>${shipLock(sel, owns(sel)) ? 'Rang nötig' : 'Kaufen'}</span><span class="mo">${pr < c.price ? `<s>${fmtN(c.price)}</s> ` : ''}${fmtN(pr)} Cr</span></button></div></aside>`;
   return { k: kpi('Credits', `${fmtN(P.credits)} Cr`) + kpi('Deine Schiffe hier', String(1 + here.length)), cols: '300px minmax(0,1fr) 370px', h };
 }
 
+const owns = (cls: string) => P.cls === cls || P.fleet.some(r => r.cls === cls);
 // Werft, Bodenfahrzeug gewählt: Ansicht, Beschreibung, Werte im Vergleich, Kaufen bzw. „beim Landen aussetzen“
 const fzAktiv = (): FzId => { const k = normFz(P.fahrzeug); return k === 'wiesel' && !(P.fahrzeuge || []).includes('wiesel') ? 'dachs' : k; };
 function vWerftFz(nav: string, k: FzId): View {
@@ -395,8 +397,9 @@ function vAusruester(): View {
   // ----- Raster -----
   const card = (r: ShopRow) => {
     const d = gearDef(r.id)!, pr = buy ? gearBuyPrice(r.id) : gearSellPrice(r.id) * r.n;
-    const ok = buy ? P.credits >= pr && (shop.ziel === 'spind' ? canStore(r.id) : canAdd(r.id)) : true;
-    const quick = buy ? `<button class="shQ" data-a="gbuy" data-k="${r.id}" ${ok ? '' : 'disabled'}>Sofort kaufen</button>`
+    const lock = buy ? gearLock(d, st().id, secId()) : null;
+    const ok = buy ? !lock && P.credits >= pr && (shop.ziel === 'spind' ? canStore(r.id) : canAdd(r.id)) : true;
+    const quick = buy ? `<button class="shQ" data-a="gbuy" data-k="${r.id}" ${ok ? '' : 'disabled'}>${lock ? '🔒 Rang nötig' : 'Sofort kaufen'}</button>`
       : shop.mode === 'verkauf' ? `<button class="shQ" data-a="${r.n > 1 ? 'gsellall' : 'gsell'}" data-n="${r.key}">Verkaufen</button>`
       : `<button class="shQ" data-a="gtake" data-n="${r.key}">Nehmen</button>`;
     return `<div class="shCard${r.key === shop.sel ? ' on' : ''}" data-n="${esc(d.n.toLowerCase())}" style="--rc:${RARITY[d.rar].c}">
@@ -431,7 +434,9 @@ function vAusruester(): View {
       <p class="shDesc">${esc(d.desc)}</p>
       <div class="shView">${model ? '<canvas id="tmItem"></canvas>' : `<div class="shBig">${gearIcon(id, 190)}</div>`}
         ${model && wear ? `<button class="sm shProbe" data-a="shprobe">${shop.probe ? 'Nur das Teil' : 'Anprobieren'}</button>` : ''}</div>`;
-    if (buy) h += `<button class="pri big" data-a="gbuy" data-k="${id}" ${P.credits >= pr && room ? '' : 'disabled'}><span>${P.credits < pr ? 'Zu wenig Credits' : !room ? (shop.ziel === 'spind' ? 'Spind voll' : 'Rucksack voll') : 'Kaufen'}</span><span class="mo">${fmtN(pr)} Cr</span></button>`;
+    const glock = buy ? gearLock(d, st().id, secId()) : null;
+    if (glock) h += `<p class="dn">Gesperrt: ${glock}.</p><button class="pri big" disabled><span>Rang nötig</span><span class="mo">${fmtN(pr)} Cr</span></button>`;
+    else if (buy) h += `<button class="pri big" data-a="gbuy" data-k="${id}" ${P.credits >= pr && room ? '' : 'disabled'}><span>${P.credits < pr ? 'Zu wenig Credits' : !room ? (shop.ziel === 'spind' ? 'Spind voll' : 'Rucksack voll') : 'Kaufen'}</span><span class="mo">${fmtN(pr)} Cr</span></button>`;
     else if (shop.mode === 'verkauf') h += `<div class="shActs"><button data-a="gstore" data-n="${sel.key}">In den Spind</button>${sel.n > 1 ? `<button data-a="gsell" data-n="${sel.key}">Eins verkaufen · ${fmtN(sp)}</button>` : ''}</div>
       <button class="pri big" data-a="${sel.n > 1 ? 'gsellall' : 'gsell'}" data-n="${sel.key}"><span>${sel.n > 1 ? `Alle ${sel.n} verkaufen` : 'Verkaufen'}</span><span class="mo">+${fmtN(sp * sel.n)} Cr</span></button>`;
     else h += `<button class="pri big" data-a="gtake" data-n="${sel.key}"><span>In den Rucksack</span><span class="mo">${P.inv.length}/${invCap()}</span></button>`;
@@ -651,6 +656,7 @@ $('dockCard').addEventListener('click', e => {
   if (a === 'shmode') { shop.mode = k; shop.sel = ''; shop.probe = false; snd(700, 0.04, 'sine', 0.025, 200); }
   if (a === 'shsel') { shop.sel = k; snd(800, 0.05, 'sine', 0.03, 200); }
   if (a === 'shprobe') shop.probe = !shop.probe;
+  if (a === 'gbuy' && gearLock(gearDef(k), st().id, secId())) { note = 'Dafür reicht dein Ruf hier noch nicht.'; render(); return; }
   if (a === 'gbuy') { const pr = gearBuyPrice(k), er = buyGear(k, shop.ziel); note = er || `${gearDef(k)!.n} gekauft: −${fmtN(pr)} Credits. ${shop.ziel === 'spind' ? 'Liegt im Spind.' : 'Liegt im Rucksack: anlegen im Flottenband unter „Ausrüstung“ (Taste I).'}`; if (!er) sfx('ui_confirm', 0.5, 1, () => snd(700, 0.12, 'sine', 0.05, -200)); }
   if (a === 'gsell' || a === 'gsellall') { const nm = gearDef(P.inv[n]?.id || '')?.n || '', cr = sellGear(n, a === 'gsell' ? 1 : 9999); if (cr) { note = `${nm} verkauft: +${fmtN(cr)} Credits.`; snd(600, 0.12, 'sine', 0.05, 200); } }
   if (a === 'gstore') { const er = toLocker(n); note = er || 'In den Spind gelegt.'; }
@@ -695,7 +701,7 @@ $('dockCard').addEventListener('click', e => {
     if (r && b.dataset.arm === '1') { const cr = sellShip(r); note = `${r.name} verkauft: +${fmtN(cr)} Credits. Ihre Fracht liegt im Lager.`; }
     else if (r) { b.dataset.arm = '1'; b.textContent = 'Wirklich verkaufen?'; b.classList.add('warn'); return; }
   }
-  if (a === 'buy') {
+  if (a === 'buy' && !shipLock(k, owns(k))) {
     const r = buyShip(k as ShipId, loc());
     if (r) { note = `${r.name} gekauft. Sie steht im Hangar bereit: Dort kannst du umsteigen.`; snd(600, 0.5, 'triangle', 0.06, 600); }
   }

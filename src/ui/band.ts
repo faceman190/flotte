@@ -19,7 +19,7 @@ import { SIL, trackedContract } from './hud';
 import { NET, netHooks, sendChat, isOnline, pilotsHere, myStation } from '../game/net';
 import { TRADE, tradeHooks, requestTrade, acceptTrade, declineTrade, withdrawTrade, cancelTrade, setOffer, setReady, tradeValue, offerCount, cargoSpaceAfter, offerCovered, type Offer } from '../game/trade';
 import { roomName } from './mp';
-import { REP, REP_IDS, RANKS, TRUST_LV, level, nextRank, rankName, repOf, repHooks, type RepId } from '../game/reputation';
+import { REP, REP_IDS, RANKS, TRUST_LV, level, nextRank, rankName, repOf, repHooks, unlocks, type RepId } from '../game/reputation';
 import { abandonMission, missionLines, missionTypeName, missionHooks } from '../game/missions';
 import { aufgabenListe, aufgabeAbbrechen } from '../game/aufgaben';
 import { storyObjective } from '../game/story';
@@ -412,6 +412,8 @@ function repApp() {
       ${now.length ? `<ul class="repL">${now.map(p => `<li>${esc(p)}</li>`).join('')}${l >= TRUST_LV ? '<li>Vertrauensaufträge an ihren Stationen</li>' : ''}</ul>` : '<p class="hint" style="margin:4px 0 8px">Noch keine. Ab „Bekannt“ geht es los.</p>'}
       ${nx ? `<div class="sm" style="color:var(--mut);letter-spacing:2px;font-size:11px">NÄCHSTER RANG: ${esc(nx.n.toUpperCase())} · NOCH ${fmtN(nx.need)}</div>
         ${next.length ? `<ul class="repL dim">${next.map(p => `<li>${esc(p)}</li>`).join('')}${l + 1 === TRUST_LV ? '<li>Vertrauensaufträge an ihren Stationen</li>' : ''}</ul>` : ''}` : '<p class="good" style="margin:4px 0 8px">Höchster Rang erreicht.</p>'}
+      <div class="sm" style="color:var(--mut);letter-spacing:2px;font-size:11px">FREIGESCHALTET JE RANG</div>
+      <ul class="repL">${unlocks(id).map(u => `<li class="${l >= u.lv ? '' : 'dim'}">${l >= u.lv ? '✓' : '🔒'} ${esc(RANKS[u.lv].n)}: ${esc(u.t)}</li>`).join('')}</ul>
       <div class="sm" style="color:var(--mut);letter-spacing:2px;font-size:11px">SO STEIGT DEIN RUF</div>
       <ul class="repL dim">${f.how.map(p => `<li>${esc(p)}</li>`).join('')}</ul>
     </div>`;

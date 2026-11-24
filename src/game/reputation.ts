@@ -100,3 +100,31 @@ export function contractFactor(stationId: string, sectorId: string) {
   return level(f) < 0 ? 0.85 : 1 + 0.05 * pos(f);
 }
 export function trustSlot(stationId: string, sectorId: string) { const f = stationFaction(stationId, sectorId); return !!f && level(f) >= TRUST_LV; }
+
+// ---------- Freischaltungen (seit 2026-11-24): Ruf schaltet Schiffe in der Werft und seltene Ausrüstung frei ----------
+// Wer ein Schiff schon besitzt, behält es. Ausrüstung: seltene (Rang 2) ab „Bekannt“, Spitzenstücke (Rang 3) ab „Vertraut“ bei der Fraktion,
+// der die Station gehört (Stationen ohne Fraktion sperren nichts). Das Grundsortiment des Ausrüsters (immer) bleibt frei. Anzeige: Werft, Ausrüster (ui/dock.ts), Ruf im Flottenband (ui/band.ts).
+export const SHIP_RANG: Record<string, [RepId, number]> = { wuerger: ['wacht', 1], kormoran: ['rat', 1], pfeil: ['rat', 2], wisent: ['gilde', 2] };
+export const gearRang = (rar: number) => (rar >= 3 ? 3 : rar >= 2 ? 1 : 0);
+const beimBei = (f: RepId) => (f === 'rat' ? 'beim Flottenrat' : `bei der ${REP[f].n}`);
+export const rangText = (f: RepId, lv: number) => `ab „${RANKS[lv].n}“ ${beimBei(f)}`;
+/** Sperre für ein Schiff in der Werft (null: frei) */
+export function shipLock(cls: string, owned: boolean): string | null {
+  const r = SHIP_RANG[cls]; if (!r || owned || level(r[0]) >= r[1]) return null;
+  return rangText(r[0], r[1]);
+}
+/** Sperre für Ausrüstung an einer Station (null: frei). Das Grundsortiment (immer: Figurenpaket, Lyra-Waffen) ist nie gesperrt. */
+export function gearLock(g: { rar: number; immer?: boolean } | undefined, stationId: string, sectorId: string): string | null {
+  if (!g || g.immer) return null;
+  const lv = gearRang(g.rar), f = stationFaction(stationId, sectorId);
+  if (!lv || !f || level(f) >= lv) return null;
+  return rangText(f, lv);
+}
+/** was die Fraktion je Rang freischaltet (Anzeige im Flottenband) */
+export function unlocks(id: RepId): { lv: number; t: string }[] {
+  const out: { lv: number; t: string }[] = [];
+  for (const [cls, [f, lv]] of Object.entries(SHIP_RANG)) if (f === id) out.push({ lv, t: `Werft: ${cls === 'wuerger' ? 'Würger' : cls === 'kormoran' ? 'Kormoran' : cls === 'pfeil' ? 'Pfeil' : 'Wisent'}` });
+  const wo = id === 'rat' ? 'im Menschenraum' : id === 'wacht' ? 'im Grenzgebiet' : 'an Planetenbasen und Gildehütten';
+  out.push({ lv: 1, t: `Ausrüster ${wo}: seltene Ausrüstung` }, { lv: 3, t: `Ausrüster ${wo}: Spitzenausrüstung` }, { lv: TRUST_LV, t: 'Vertrauensaufträge an ihren Stationen' });
+  return out.sort((a, b) => a.lv - b.lv);
+}
