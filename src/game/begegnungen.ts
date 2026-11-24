@@ -12,6 +12,7 @@ import { addRep, type RepId } from './reputation';
 import { ortePrompt, orteKey } from './orte';
 import { buildCivilian, SHIPNAMES, type CivType } from '../models/ships';
 import type { ItemId } from '../data/items';
+import { aufgabeKapsel } from './aufgaben';
 
 // =====================================================================================
 // Begegnungen unterwegs (seit 2026-11-24): Beim Fliegen durch einen Sektor taucht ab und zu etwas auf, das man ansteuern kann – ein Notruf,
@@ -154,7 +155,7 @@ export function updateBegegnungen(dt: number) {
     const need = ev.kind === 'kapsel' ? 3.5 : 5;
     if (ev.hold >= need) {
       S.beam.visible = false; ev.hold = 0; ev.done = true;
-      if (ev.kind === 'kapsel') { ev.root.visible = false; ev.leave = 0.5; lohn(Math.round(rand(300, 500)), 'rat', 6, `${ev.who} ist an Bord. „Ich dachte, mich findet keiner mehr.“`); }
+      if (ev.kind === 'kapsel') { aufgabeKapsel(); ev.root.visible = false; ev.leave = 0.5; lohn(Math.round(rand(300, 500)), 'rat', 6, `${ev.who} ist an Bord. „Ich dachte, mich findet keiner mehr.“`); }
       else { ev.leave = 22; if (ev.ship) for (const gl of ev.ship.glows) gl.scale.setScalar(6 * (gl.userData.base || 1)); burst(ev.x, ev.y, ev.z, '#9fd8ff', 30, 60, 0.8); lohn(Math.round(rand(450, 700)), 'gilde', 5, `„${ev.name}“: Antrieb läuft! Danke für die Starthilfe.`); }
     }
   }

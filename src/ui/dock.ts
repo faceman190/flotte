@@ -26,6 +26,8 @@ import { trachtOf } from '../game/avatar';
 import { radio } from './radio';
 import { showShip, hideShip, showModel } from './shipPreview';
 import { FZ, FZ_IDS, buildFahrzeug, fzLaden, normFz, type FzId } from '../models/rover';
+import { bodenAushang, bodenAnnehmen, bodenAbgeben } from '../game/bodenaufgaben';
+import { aufgabenAushang } from '../game/aufgaben';
 
 // Stationsterminals (seit Alpha 1.25): Jeder Dienst hat seinen eigenen Ort auf der Station und sein eigenes Terminal.
 // Es gibt keine Leiste mehr, über die man von einem Dienst zum nächsten springt: Wer etwas anderes will, läuft hin.
@@ -467,8 +469,27 @@ function vAuftraege(): View {
     h += `<div class="box"><div class="pt"><span class="nm">${ico(c.item)}<span><b>${c.amount} ${ITEMS[c.item].n}</b><small>${esc(c.stName)} · ${esc(SECTOR[c.sector].name)}</small></span></span><span class="mo hi">${fmtN(c.reward)} Cr</span></div>
       <div class="pt"><span class="mo ${have >= c.amount ? 'up' : ''}">${Math.min(have, c.amount)} / ${c.amount}</span><span>${here ? `<button class="pri" data-a="deliver" data-n="${i}" ${have >= c.amount ? '' : 'disabled'}>Abliefern</button> ` : ''}<button data-a="abandon" data-n="${i}">Abbrechen</button></span></div></div>`;
   });
+  h += brett(def.id, s.id);
   h += `</aside>`;
   return { k: kpi('Credits', `${fmtN(P.credits)} Cr`) + kpi(`Frachtraum · ${esc(P.shipName)}`, `${cargoUsed()} / ${stats().cargo}`), cols: 'minmax(0,1fr) 440px', h };
+}
+
+// Schwarzes Brett (seit 2026-11-24) im Aufträge-Terminal: Bodenaufgaben der Planeten in diesem Sektor (annehmen, Erz an der Basis abgeben)
+// und wer auf welcher Station gerade Arbeit hat (Stationsaufgaben, game/aufgaben.ts)
+function brett(sector: string, stationId: string) {
+  const bo = bodenAushang(sector), au = aufgabenAushang(), basis = stationId === planetBaseId(sector);
+  let h = `<div class="sep"></div><div class="pt"><h3>Schwarzes Brett</h3><span class="mo">Aushänge</span></div>`;
+  if (bo.length) {
+    h += `<p class="lb">Bodenarbeiten auf ${esc(bo[0].planet)} · Bodenfahrzeug nötig</p>`;
+    for (const o of bo) {
+      const btn = o.abgabe && basis ? `<button class="pri" data-a="boddel" data-k="${o.id}">Abgeben</button>` : o.aktiv ? `<span class="mo up">läuft · ${esc(o.stand)}</span>` : o.pause ? '<span class="dim">später wieder</span>' : `<button data-a="bodacc" data-k="${o.id}">Annehmen</button>`;
+      h += `<div class="box"><div class="pt"><span><b>${esc(o.titel)}</b><small style="color:${REP[o.fac].c}">${REP[o.fac].n}</small></span><span class="mo hi">${fmtN(o.lohn)} Cr<small class="dim">+${o.ruf} Ruf</small></span></div><p class="hint">${esc(o.text)}</p><div class="pt"><span></span>${btn}</div></div>`;
+    }
+  }
+  h += `<p class="lb">Arbeit auf den Decks</p>`;
+  for (const a of au) h += `<div class="pt"><span>${esc(a.wer)} · ${esc(a.wo)}<small class="dim">${esc(a.titel)}</small></span><span class="mo ${a.frei ? 'up' : 'dim'}">${a.aktiv ? 'läuft' : a.frei ? 'hat Arbeit' : 'später'}</span></div>`;
+  h += `<p class="hint end">Bodenarbeiten nimmst du hier an und erledigst sie draußen; Stationsaufgaben vergeben die Leute selbst: hingehen, ansprechen (E).</p>`;
+  return h;
 }
 
 // ---------- Missionen ----------
@@ -618,6 +639,8 @@ $('dockCard').addEventListener('click', e => {
     if (m) sfx('ui_confirm', 0.5, 1, () => snd(700, 0.12, 'sine', 0.05, 300));
   }
   if (a === 'ship') { selShip = k as ShipId; selFz = null; }
+  if (a === 'bodacc') note = bodenAnnehmen(k) || note;
+  if (a === 'boddel') note = bodenAbgeben(k) || note;
   if (a === 'fz') selFz = normFz(k);
   if (a === 'buyfz' && k === 'wiesel' && !(P.fahrzeuge || []).includes(k) && P.credits >= FZ.wiesel.price) {
     P.credits -= FZ.wiesel.price; (P.fahrzeuge ||= []).push(k); P.fahrzeug = k;

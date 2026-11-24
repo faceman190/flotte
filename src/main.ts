@@ -18,6 +18,7 @@ import { initFerrox, updateSpawning, updateEnemies, updateProjectiles, updateSta
 import { initTraffic, updateTraffic, initAllies, updateAllies } from './game/npc';
 import { updateMissions } from './game/missions';
 import { updateAufgaben } from './game/aufgaben';
+import { updateBoden, drawBodenHUD, bodenE } from './game/bodenaufgaben';
 import { updateBegegnungen } from './game/begegnungen';
 import { playIntro, updateIntro, skipIntro, INTRO } from './game/intro';
 import { updateGroundShade } from './game/groundShade';
@@ -226,7 +227,12 @@ testHooks.reise = (ziel: string) => {
     else { enterSector(sec, { station: a }); resumeNearStation(); }
   } else if (typ === 'pl' && PLANETS[sec]) {
     P.sector = sec; P.surface = true;
-    if (a === 'basis') { P.x = 0; P.y = 600; P.z = 0; inside = resumeAt({ k: 'st', id: planetBaseId(sec), base: true }); }
+    if (a === 'basis') {
+      // Basis mit Landefeld: zu Fuß davor; Stadt (Talstadt): durchs Tor in den Hangar wie beim Weiterspielen in der Stadt
+      P.x = 0; P.y = 600; P.z = 0; void enterSurface(sec, { x: 0, y: 600, z: 0, yaw: 0 });
+      const st = world.stations.find(s => s.id === planetBaseId(sec));
+      if (st) inside = resumeStation(st, (st.def as any).city ? { k: 'st', id: st.id, city: true } : { k: 'st', id: st.id, base: true });
+    }
     else {
       P.fahrzeug = a;
       void enterSurface(sec, { x: 300, y: 600, z: 0, yaw: 0 });
@@ -524,6 +530,7 @@ onKey(code => {
     else if (G.mode === 'dungeon') dungeonKey(code);
     else if (G.mode === 'rover') {
       // im Rover oder zu Fuß (FOOT): Schiff, Mine, Rover
+      if (bodenE(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, !FOOT.active && ROVER.active)) return;      // Bodenaufgaben: Außenstelle, vermisster Rover
       const atShip = FOOT.active ? footNearShip() : nearShip();
       const mine = atShip ? null : nearEntrance(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z);
       const door = FOOT.active ? nearDoor(FOOT.x, FOOT.z) : null;
@@ -796,6 +803,7 @@ function simulate(dt: number) {
   if (world.surface && !IN.active && !DUN.active) updateSalvage(dt, (x, y, z) => puff(x, y, z, (Math.random() - 0.5) * 1.5, 2 + Math.random() * 2, (Math.random() - 0.5) * 1.5, '#2a2622', 2.2));
   if (live) updateMissions(dt);
   updateAufgaben();      // Fristen der Stationsaufgaben
+  if (world.surface && G.mode === 'rover') hook('Bodenaufgaben', () => updateBoden(dt, FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z));
   if (live) updateBegegnungen(dt);      // Begegnungen unterwegs
   updateAsteroids(dt);
   if (m !== 'menu') { updateSpawning(dt); updateEnemies(dt); updateProjectiles(dt); updateStationDefense(dt); }
@@ -918,6 +926,7 @@ function loop(now: number, manual = false) {
   if (!(FOOT.active && world.surface && G.mode === 'rover')) hideFieldViewModel();   // Waffe der Ich-Sicht nur zu Fuß auf einem Planeten (blieb nach Sektorwechsel sonst im Bild, auch in der Station)
   drawWalkHUD();
   if (!FOOT.active) { drawRoverHUD(); if (G.mode === 'rover' && ROVER.active) { drawSalvageHUD(ROVER.x, ROVER.z); drawGroundMarkers(); } } else drawFootHUD();
+  if (G.mode === 'rover' && world.surface) drawBodenHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, !FOOT.active && ROVER.active);
   drawDungeonHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, ROVER.active);
   if (G.mode === 'rover') $('prompt').classList.add('hidden');
   if (G.mode === 'play' || G.mode === 'jump' || G.mode === 'entry') updatePanels(dt);

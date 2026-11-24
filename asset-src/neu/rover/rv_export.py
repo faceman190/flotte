@@ -19,6 +19,7 @@ CFG = {
     'Navigationsboje': {'near': 0.25, 'far': 0.12, 'drop_near': {'Schraube'}, 'schrift': 1.0, 'res': 4, 'far_min': 0.35},
     'Gedenkboje': {'near': 0.22, 'far': 0.08, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 0.4},
     'Rover': {'near': 0.55, 'far': 0.12, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 0.25, 'fern': False},
+    'Aussenstelle': {'near': 0.5, 'far': 0.06, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 0.6},
     'Wiesel': {'near': 0.4, 'far': 0.12, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 0.25, 'fern': False},
     'Torwache': {'near': 0.4, 'far': 0.05, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 2.5},
     'Fernohr': {'near': 0.4, 'far': 0.05, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 3.0},

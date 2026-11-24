@@ -208,10 +208,10 @@ function jobsApp() {
   const so = storyObjective();
   const story = so ? `<div class="bcard" style="max-width:820px;margin-bottom:18px;border-left:3px solid #ffd27a"><h4 style="color:#ffd27a">Hauptgeschichte</h4><div class="bbig" style="font-size:20px">${esc(so.title.toUpperCase())}</div>${so.lines.map(([t, done, sub]) => `<div class="obj${done ? ' done' : ''}${sub ? ' sub' : ''}" style="margin-top:6px">${sub ? '' : '<i></i>'}<span>${t}</span></div>`).join('')}</div>` : '';
   const al = aufgabenListe();
-  const auf = al.length ? `<h4 class="bh">STATIONSAUFGABEN</h4><div class="blist" style="margin-bottom:18px">${al.map(x => {
+  const auf = al.length ? `<h4 class="bh">STATIONS- UND BODENAUFGABEN</h4><div class="blist" style="margin-bottom:18px">${al.map(x => {
     const on = P.track === 'auf:' + x.id;
     return `<div class="bitem${on ? ' on' : ''}" style="cursor:default;align-items:flex-start;border-left:3px solid #9fd8ff">
-      <div style="flex:1;min-width:0"><div class="sm" style="color:#9fd8ff">Bergbaugilde · ${esc(x.ort)}</div><div class="nm">${esc(x.titel)}</div>
+      <div style="flex:1;min-width:0"><div class="sm" style="color:#9fd8ff">${esc(x.wer)} · ${esc(x.ort)}</div><div class="nm">${esc(x.titel)}</div>
         <div class="sm">${x.n}/${x.max}${x.rest !== null ? ` · noch ${Math.max(0, Math.ceil(x.rest / 60))} min` : ''}</div>${meter(x.n, x.max, '#9fd8ff')}
         <div class="btnRow" style="justify-content:flex-start;margin-top:6px"><button data-a="track" data-k="auf:${x.id}" ${on ? 'disabled' : ''}>${on ? 'Wird verfolgt' : 'Im HUD verfolgen'}</button>
           <button data-a="adrop" data-k="${x.id}">${dropArm === 'auf:' + x.id ? 'Wirklich abbrechen?' : 'Abbrechen'}</button></div></div>

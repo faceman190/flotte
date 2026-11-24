@@ -7,6 +7,7 @@ import { world } from './world';
 import { SALV } from './salvage';
 import { stollenEingaenge } from './dungeon';
 import { radio } from '../ui/radio';
+import { bodenScan } from './bodenaufgaben';
 
 // =====================================================================================
 // Sensormast des Erkundungsbuggys „Wiesel“ (seit 2026-11-24): [R] im Buggy tastet 1,6 km um ihn herum ab (Ring läuft über das Gelände,
@@ -46,7 +47,8 @@ export function wieselScan(x: number, y: number, z: number): boolean {
   }
   for (const w of SALV.wrecks) if (near(w.x, w.z)) f.push({ k: 'wrack', x: w.x, y: 0, z: w.z, t: `◇ ${w.name.toUpperCase()}`, col: '#e0b030', ok: () => true });
   for (const e of stollenEingaenge()) if (near(e.x, e.z)) f.push({ k: 'stollen', x: e.x, y: e.y + e.size + 3, z: e.z, t: `▲ ${e.name.toUpperCase()}`, col: '#c8a0ff', ok: () => true });
-  for (const w of f) if (w.k === 'wrack') w.y = (world.ground?.(w.x, w.z) ?? 0) + 10;
+  for (const v of bodenScan(x, z, R)) f.push({ k: 'wrack', x: v.x, y: v.y, z: v.z, t: v.t, col: v.col, ok: () => true });
+  for (const w of f) if (w.k === 'wrack' && !w.t.startsWith('✚')) w.y = (world.ground?.(w.x, w.z) ?? 0) + 10;
   S.funde = f;
   const n = (k: FundArt) => f.filter(q => q.k === k).length, teile: string[] = [];
   const add = (c: number, one: string, many: string) => { if (c) teile.push(`${c} ${c === 1 ? one : many}`); };

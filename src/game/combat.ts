@@ -16,6 +16,7 @@ import { radio } from '../ui/radio';
 import { SHARED, hostEvent } from './shared';
 import { addRep, killFaction, bountyFactor } from './reputation';
 import { rollKillLoot } from './inventory';
+import { aufgabeFerrox } from './aufgaben';
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
 
@@ -260,6 +261,7 @@ export function killEnemy(e: any, i: number, byPlayer = false, drops = true) {
   world.enemies.splice(i, 1);
   if (G.lockT === e) G.lockT = null;
   const bounty = byPlayer ? bountyFor(e.type) : 0;
+  if (byPlayer) aufgabeFerrox();      // Stationsaufgabe der Einsatzleitung (aufgaben.ts)
   if (byPlayer) { P.kills++; P.credits += bounty; P.earned += bounty; lootNote(e.type); if (bounty) floatText(e.x, e.y, e.z, bounty, 'Cr', '#ffd27a', 'kill'); }
   if (e.type === 'mother') {
     for (let k = 0; k < 6; k++) setTimeout(() => {

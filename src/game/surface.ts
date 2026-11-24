@@ -15,6 +15,7 @@ import { buildGate } from '../models/structures';
 import { buildFahrzeug, fzLaden, fzBereit, FZ, normFz, type FzId, type RoverNeu, type RoverRad } from '../models/rover';
 import { updateFahrer, fahrerWeg } from './fahrer';
 import { updateWieselScan, drawWieselScan, wieselScanWeg, WSCAN } from './wiesel';
+import { BODEN_OBST, bodenHooks } from './bodenaufgaben';
 import { buildFlora, updateFlora } from './flora';
 import { gearFactor } from './inventory';
 import { buildDungeonEntrances } from './dungeon';
@@ -695,6 +696,7 @@ export function updateRover(dt: number) {
   for (const s of world.stations) obst.push({ x: s.x, z: s.z, r: 34 }, { x: s.dock.x, z: s.dock.z, r: 6 });
   obst.push({ x: R.ship.x, z: R.ship.z, r: stats().radius * 0.75 + 2.0 });
   for (const w of SALV.wrecks) obst.push({ x: w.x, z: w.z, r: w.r + 2.4 });
+  for (const b of BODEN_OBST) obst.push({ x: b.x, z: b.z, r: b.r + 2.0 });      // Außenstelle, verunglückter Rover (bodenaufgaben.ts)
   for (const o of obst) {
     const d = Math.hypot(nx - o.x, nz - o.z);
     if (d >= o.r) continue;
@@ -889,4 +891,5 @@ function drawRoverPrompt(W: number, H: number) {
   ux.fillStyle = '#e09030'; ux.fillText(R.prompt, W / 2, y + 1);
   ux.restore();
 }
+bodenHooks(k => buildRover(k) as any, (x, z) => liquidAt(x, z));
 export function hideRover() { if (ROVER.model) scene.remove(ROVER.model.g); ROVER.active = false; fahrerWeg(); wieselScanWeg(); }
