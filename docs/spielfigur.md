@@ -226,6 +226,7 @@ den Gewichten des rechten, Seiten getauscht); `zonen` und `komplett` für die Ge
 Figur und Bewegungen sind getrennte Dateien, die Clips finden die Knochen über den Namen. Aufbau, Schalter und was noch fehlt
 (Waffe, Tod, Ausrüstung, Charakterfenster): `docs/manny.md`.
 
-Neue Fassung der Figur einbauen: Datei nach `asset-src/glb/lazy/Spieler.glb` kopieren, `node scripts/build-manny.mjs Spieler`.
+**Seit 24.11.2026** gibt es drei Figuren mit Ausrüstungsteilen aus dem Paket „Spielcharakter“: [spielcharakter.md](spielcharakter.md).
+Neue Fassung einer Figur einbauen: Paket neu entpacken, `node scripts/build-figuren.mjs` (früher: `asset-src/glb/lazy/Spieler.glb`, `build-manny.mjs Spieler`).
 Bedingung: dasselbe Skelett mit derselben Ruhelage (bei `spieler_03` geprüft, Abweichung unter 0,001 mm und 0,06°).
 Im Spiel werden die Texturen auf 2048 begrenzt (4096 hieße rund 250 MB Grafikspeicher für eine Figur).

@@ -41,6 +41,11 @@ exportiert werden. Übernommen ist die **Methode**.
   Waffen der höchste Punkt des Modells (man schaut über das Zielfernrohr hinweg).
 - **Mündung**: Leuchtspur und Mündungsfeuer kommen in beiden Ansichten aus der Waffe der Figur (`avatarMuzzle`).
 
+## Kleidung (seit 24.11.2026)
+
+Die Figur trägt jetzt, was der Pilot angelegt hat ([spielcharakter.md](spielcharakter.md)): In der Ich-Sicht sieht man Handschuhe, Ärmel,
+Weste, Beine und Stiefel. Helm, Kopf und Haare hängen am Kopfknochen und verschwinden mit ihm.
+
 ## Offen
 
 - **Kein eigener Schatten** in der Ich-Sicht (die Figur fehlt im Hauptbild und damit im Schattendurchgang).

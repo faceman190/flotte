@@ -149,10 +149,13 @@ export function gearStock(stationId: string, danger: number): string[] {
 }
 export const gearBuyPrice = (id: string) => Math.round((gearDef(id)?.val || 0) * serviceFactor());
 export const gearSellPrice = (id: string) => Math.round((gearDef(id)?.val || 0) * 0.45);
-export function buyGear(id: string): string {
+export const canStore = (id: string, n = 1) => !!gearDef(id) && fits(P.locker, LOCKER_SLOTS, id, n);
+/** kaufen; ziel: in den Rucksack oder gleich in den Spind */
+export function buyGear(id: string, ziel: 'rucksack' | 'spind' = 'rucksack'): string {
   const pr = gearBuyPrice(id);
   if (!gearDef(id)) return 'Gegenstand fehlt.';
   if (P.credits < pr) return 'Zu wenig Credits.';
+  if (ziel === 'spind') { if (!canStore(id)) return 'Der Spind ist voll.'; P.credits -= pr; put(P.locker, LOCKER_SLOTS, id, 1); invHooks.changed(); return ''; }
   if (!canAdd(id)) return 'Kein Platz im Rucksack.';
   P.credits -= pr; addItem(id, 1);
   return '';

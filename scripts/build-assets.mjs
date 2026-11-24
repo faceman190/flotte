@@ -19,7 +19,7 @@ import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
 import { dedup, prune, textureCompress, meshopt, reorder, quantize, getBounds } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
-import { packLazy, LAZY_OPTS } from './lazy-pack.mjs';
+import { packLazy, lazyOpts } from './lazy-pack.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'asset-src', 'legacy'), OUT = path.join(ROOT, 'public', 'assets');
@@ -138,7 +138,7 @@ const LAZY = path.join(GLB, 'lazy');
 if (fs.existsSync(LAZY)) for (const n of fs.readdirSync(LAZY).filter(x => x.toLowerCase().endsWith('.glb'))) {
   const src = fs.readFileSync(path.join(LAZY, n));
   const name = path.basename(n, path.extname(n));
-  put('lazy/' + name, 'glb', await packLazy(src, LAZY_OPTS[name]), 'lazy', src.length);
+  put('lazy/' + name, 'glb', await packLazy(src, lazyOpts(name)), 'lazy', src.length);
 }
 // Fertig gepackte Dateien für das Paket „lazy“ (asset-src/lazy/<Name>.lca → lazy/<Name>): der Bewegungssatz der Spielerfigur,
 // geschrieben von scripts/build-clips.mjs

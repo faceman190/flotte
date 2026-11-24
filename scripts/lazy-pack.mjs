@@ -8,6 +8,7 @@
 //  - clipsOnly: Netz und Haut entfernen, es bleiben Skelett und Bewegungen (Bewegungssatz für Figuren mit demselben Skelett)
 //  - tex:       größte Kantenlänge der Texturen (Standard 1024)
 //  - level:     Meshopt-Stufe (Standard 'medium')
+//  - keepTex:   Texturen unverändert lassen (schon in der Zielgröße: Körper und Ausrüstungsteile aus scripts/build-figuren.mjs)
 import sharp from 'sharp';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
@@ -15,8 +16,9 @@ import { dedup, prune, resample, textureCompress, meshopt } from '@gltf-transfor
 import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
 
 export const LAZY_OPTS = {
-  Spieler: { tex: 2048 },          // Spielerfigur auf demselben Skelett, ohne eigene Bewegungen
 };
+// Einstellungen zu einem Dateinamen: Skelett, Körper und Ausrüstungsteile der Spielerfiguren behalten ihre Texturen
+export const lazyOpts = name => (/^(Skelett|Koerper\d|Teil_)/.test(name) ? { keepTex: true } : LAZY_OPTS[name]);
 
 let io = null;
 export async function packLazy(src, o = {}) {
@@ -33,7 +35,7 @@ export async function packLazy(src, o = {}) {
   const tex = o.tex || 1024;
   await doc.transform(
     dedup(), resample({ tolerance: 1e-4 }), prune(),
-    textureCompress({ encoder: sharp, targetFormat: 'webp', quality: o.tex ? 90 : 85, resize: [tex, tex] }),
+    ...(o.keepTex ? [] : [textureCompress({ encoder: sharp, targetFormat: 'webp', quality: o.tex ? 90 : 85, resize: [tex, tex] })]),
     meshopt({ encoder: MeshoptEncoder, level: o.level || 'medium' }),
   );
   return Buffer.from(await io.writeBinary(doc));

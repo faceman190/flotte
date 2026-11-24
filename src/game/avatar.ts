@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { clamp } from '../core/util';
 import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, viewModelId, normLook, type SoldierVis, type FigGear } from './mineArt';
-import { driveManny, releaseManny, mannyPace, mannyBrake, mannyAccel, mannyTurn, mannyMuzzle, mannyReady, mannyFirstPerson } from './mannyAvatar';
+import { driveManny, releaseManny, mannyPace, mannyBrake, mannyAccel, mannyTurn, mannyMuzzle, mannyReady, mannyFirstPerson, mannyHooks } from './mannyAvatar';
+import { TEIL_PLATZ, normFigur, type Tracht } from './figur';
+import { gearDef, WEAR_SLOTS } from '../data/gear';
 // Ich-Sicht mit ganzem Körper (mannyAvatar.ts): bodyView() = die Figur ist dafür bereit; fpBody(Kamera, Zielen 0..1) nach dem Setzen der Kamera
 export const bodyView = mannyReady, fpBody = mannyFirstPerson;
 // Richtungswechsel im Lauf: Zeit seit dem letzten Wechsel der gewünschten Laufrichtung um mehr als 50° (setIntent zählt mit).
@@ -15,6 +17,14 @@ import { aimK } from './footgun';
 import { LYRA_ITEM } from './lyraGuns';
 // Eigene Figur: angelegte Ausrüstung plus das gewählte Aussehen (seit 2026-11-20)
 export const figGear = (): FigGear => ({ ...(P.gear || {}), look: normLook(P.look) });
+// Neue Spielerfigur (figur.ts): gewählte Figur und die Teile, die zur angelegten Ausrüstung gehören
+export function trachtOf(figur: unknown, gear?: Record<string, string | undefined> | null): Tracht {
+  const t: Tracht = { figur: normFigur(figur), teile: {} };
+  for (const s of WEAR_SLOTS) { const teil = gearDef(gear?.[s] || '')?.teil; if (teil && TEIL_PLATZ[teil]) t.teile[TEIL_PLATZ[teil]] = teil; }
+  return t;
+}
+export const figTracht = () => trachtOf(P.figur, P.gear);
+mannyHooks.tracht = figTracht;
 
 // =====================================================================================
 // Eigene Spielerfigur in der Außensicht – gemeinsam für Mine, Station, Hangar, Schiffe und den Planetenboden.

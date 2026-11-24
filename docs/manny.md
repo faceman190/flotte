@@ -5,6 +5,11 @@ Die **eigene Spielerfigur in der Außensicht** ist das Modell `spieler_03` (Grun
 mit den Bewegungen des Manny-Satzes. Mannys Netz wird nicht mehr gezeigt und nicht mehr ausgeliefert.
 
 ## Figur und Bewegungssatz sind zwei Dateien
+
+> **Seit 24.11.2026:** Die Figur ist nicht mehr eine feste Datei `lazy/Spieler`. Der Animator lädt nur das Skelett (`lazy/Skelett`);
+> Körper (drei Figuren zur Wahl) und Ausrüstungsteile hängt `src/game/figur.ts` daran. Siehe [spielcharakter.md](spielcharakter.md).
+> Die folgenden Punkte beschreiben den Stand vom 23.11.2026; was über Skelett und Bewegungssatz gesagt ist, gilt weiter.
+
 - `lazy/Spieler` – die Figur: `asset-src/glb/lazy/Spieler.glb` (Kopie von OneDrive `Blender/Spielfigur/Final/spieler_03.glb`,
   ein Netz, 60.000 Dreiecke, 161 Knochen, drei Texturen; gepackt 1,3 MB, Texturen auf 2048 begrenzt – die Quelle hat 4096).
 - `lazy/Bewegungen` – der Bewegungssatz: 640 Clips (2.117 s) in einem eigenen kompakten Format, 18,8 MB
@@ -259,7 +264,7 @@ diese Bewegungslogik als Grundlage. Die Lizenzfrage (Epic-Inhalte außerhalb von
   `clipMap.js` (alle Clipnamen und Einstellwerte an einer Stelle).
 - Dateien: `asset-src/lazy/Bewegungen.lca` (Bewegungssatz) und `asset-src/glb/lazy/Spieler.glb` (Figur). Paket **lazy**:
   nicht vor dem Menü geladen; die Spielerfigur fordert ihre beiden Dateien an, sobald das Menü steht.
-  Einzeln neu packen: `node scripts/build-manny.mjs Spieler` (Figur) bzw. `node scripts/build-clips.mjs` (Bewegungssatz); `npm run assets` nimmt beide mit.
+  Einzeln neu packen: `node scripts/build-figuren.mjs` (Skelett, Körper, Ausrüstungsteile; früher `build-manny.mjs Spieler`) bzw. `node scripts/build-clips.mjs` (Bewegungssatz); `npm run assets` nimmt beide mit.
 - `ClipStore.js` (liest den Bewegungssatz), `PoseLayers.js` (Blick und Neigung), `WeaponLayer.js` (Oberkörper mit Waffe, [lyra.md](lyra.md)).
 
 ## Herkunft und Lizenz

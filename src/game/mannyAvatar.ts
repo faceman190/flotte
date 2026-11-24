@@ -5,13 +5,15 @@ import { BODY_LAYER, bodyPass } from '../core/engine';
 import { MannyAnimator } from './manny/MannyAnimator.js';
 import { buildHandWeapon } from './mineArt';
 import { makeLyraGun, driveLyraGun, LYRA_SPEC, type LyraGun } from './lyraGuns';
+import { Figur, type Tracht } from './figur';
 
 // =====================================================================================
 // Eigene Spielerfigur in der Außensicht: Figur „Spieler“ auf dem UE5-Skelett mit den Bewegungen des Manny-Satzes.
 // Seit 2026-11-23 der Standard (vorher Testfigur Manny hinter ?manny=1). Zurück zur alten Soldatenfigur: ?manny=0 (bleibt
 // gespeichert), wieder ein mit ?manny=1.
 // Zwei Dateien im Paket „lazy“ (nicht vor dem Menü geladen, sondern danach im Hintergrund; spätestens beim ersten Schritt zu Fuß):
-//  - lazy/Spieler: die Figur (asset-src/glb/lazy/Spieler.glb, eigenes Modell auf Mannys Skelett, ohne Bewegungen)
+//  - lazy/Skelett: das Skelett (UE5 Manny). Körper und Ausrüstung hängt game/figur.ts daran: je Figur eine Körperdatei, je Teil eine Datei
+//                  (seit 2026-11-24, Paket „Spielcharakter“; vorher eine feste Figur lazy/Spieler)
 //  - lazy/Manny:   der Bewegungssatz (asset-src/glb/lazy/Manny.glb: Skelett + 321 Clips aus Epics Game Animation Sample;
 //                  das Netz der Testfigur wird beim Packen entfernt, scripts/lazy-pack.mjs)
 // Die Clips finden ihre Knochen über den Namen; jede Figur mit diesem Skelett kann den Satz nutzen.
@@ -48,20 +50,19 @@ try {
 whenIdle(() => { if (MANNY.on) ensure(); });   // schon ab dem Hauptmenü laden: beim ersten Schritt zu Fuß ist die Figur dann da
 
 let anim: any = null, loading = false, failed = false;
+// Körper und Ausrüstung am Skelett des Animators. tracht: was die eigene Figur gerade tragen soll (setzt avatar.ts)
+let fig: Figur | null = null;
+export const mannyHooks = { tracht: null as null | (() => Tracht) };
+function dress() { if (fig) fig.setzen(mannyHooks.tracht ? mannyHooks.tracht() : { figur: 1, teile: {} }); return !!fig && fig.bereit; }
 function ensure() {
   if (anim || loading || failed) return;
-  const url = MANNY.url || MANIFEST?.files['lazy/Bewegungen']?.url, body = MANNY.body || MANIFEST?.files['lazy/Spieler']?.url;
-  if (!url || !body) { failed = true; console.warn('Spielerfigur: lazy/Bewegungen oder lazy/Spieler fehlt in der Paketliste – es bleibt beim Soldaten'); return; }
+  const url = MANNY.url || MANIFEST?.files['lazy/Bewegungen']?.url, body = MANNY.body || MANIFEST?.files['lazy/Skelett']?.url;
+  if (!url || !body) { failed = true; console.warn('Spielerfigur: lazy/Bewegungen oder lazy/Skelett fehlt in der Paketliste – es bleibt beim Soldaten'); return; }
   loading = true;
   new MannyAnimator().load(url, undefined, body).then((a: any) => {
-    a.model.traverse((o: any) => {
-      o.userData.sh = false; o.userData.shared = true;
-      if (!o.isMesh || !o.material) return;
-      // wie die Soldatenfigur: wenig Spiegelung der Umgebung, scharfe Texturen im flachen Blickwinkel
-      o.material.envMapIntensity = 0.3;
-      for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) if (o.material[k]) o.material[k].anisotropy = 8;
-    });
-    anim = a; loading = false;
+    a.model.traverse((o: any) => { o.userData.sh = false; o.userData.shared = true; });
+    fig = new Figur(a.model); fig.onChange = () => { st.layer = -1; };      // neue Netze: Zeichenebene neu setzen
+    anim = a; loading = false; dress();
     console.info(`Spielerfigur geladen: ${a.clips.names.length} Bewegungen, Analyse ${a.analyseMs} ms`);
   }).catch((e: unknown) => { failed = true; loading = false; console.warn('Spielerfigur nicht geladen – es bleibt beim Soldaten:', e); });
 }
@@ -128,7 +129,7 @@ export function mannyMuzzle(out: THREE.Vector3): boolean {
 }
 const st = { lastY: 0, lx: 0, lz: 0, air: false, first: true, blocked: 0, fp: false, layer: 0 };
 /** ist die Figur geladen und eingeschaltet? (dann zeigt auch die Ich-Sicht den ganzen Körper) */
-export const mannyReady = () => MANNY.on && !!anim;
+export const mannyReady = () => MANNY.on && !!anim && dress();
 // Ich-Sicht: Wo der Halsansatz (neck_01) relativ zum Auge liegt, im Raum der Kamera: back dahinter, down darunter. Die Kamera neigt sich
 // mit dem Blick um den Hals wie ein Kopf – beim Blick nach unten wandert sie über die Brust, man sieht Bauch, Beine und Füße.
 // Unreals Vorlage zieht dafür die Wirbelsäule zurück und bindet den Kopf an die Kamera; hier wird die ganze Figur verschoben (die Füße
@@ -218,7 +219,7 @@ export const mannyAnim = () => anim;
 export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: number, d: MannyDrive): boolean {
   if (!MANNY.on) return false;
   ensure();
-  if (!anim) return false;
+  if (!anim || !dress()) return false;      // solange Skelett oder Körper noch laden: Soldat
   const dtc = Math.min(dt, 0.1), spd = Math.hypot(d.vx, d.vz), air = !!d.air, face = d.yaw + Math.PI;
   // Neu im Halter oder vom Spiel versetzt (Tür, Aufzug, Einstieg): sofort richtig hinstellen, ohne Drehbewegung und ohne Überblenden
   const fresh = anim.model.parent !== holder || st.first;
@@ -274,3 +275,5 @@ export function releaseManny(soldier?: THREE.Object3D) {
   if (anim?.model.parent) anim.model.removeFromParent();
   if (soldier) soldier.visible = true;
 }
+/** nur für Prüfskripte: Körper und Ausrüstung der eigenen Figur */
+export const mannyFigur = () => fig;

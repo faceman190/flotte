@@ -65,3 +65,8 @@ Die Zuordnung der Tresen steht wie bisher in den Deckdaten (`personal` in `deck_
 - Tresen im selben Raum stehen nah beieinander; ein eigenes Quartier für das Lager gibt es nicht (Entscheidung: Lager bleibt im Raum Lager).
 - An Planetenbasen ist das Landefeld-Terminal nur ein Schild an der Wand.
 - Schmale Fenster (unter etwa 1100 px Breite) sind nicht eigens gestaltet.
+
+## Ausrüster als Laden (24.11.2026)
+
+Der Ausrüster ist seit dem 24.11.2026 ein Laden mit Kacheln, Filtern und drehbarem Modell des gewählten Gegenstands
+(Reiter Kaufen / Verkaufen / Spind). Beschreibung: [spielcharakter.md](spielcharakter.md).

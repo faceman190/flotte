@@ -1,6 +1,6 @@
 import { $, esc, fmtN, fmtD, d3 } from '../core/util';
 import { showFig, hideFig } from './figPreview';
-import { figGear } from '../game/avatar';
+import { figTracht } from '../game/avatar';
 import { snd, sfx } from '../core/audio';
 import { releaseAll } from '../core/input';
 import { P, G, stats, cargoUsed, saveGame, type Mode, type ShipRec } from '../game/state';
@@ -114,7 +114,7 @@ function render() {
   if (app !== 'inventar') hideFig();
   b.innerHTML = app === 'start' ? startApp() : app === 'inventar' ? invApp() : app === 'auftraege' ? jobsApp() : app === 'fuhrpark' ? fleetApp() : app === 'fracht' ? cargoApp() : app === 'handel' ? tradeApp() : app === 'ruf' ? repApp() : funkApp();
   b.querySelectorAll<HTMLElement>('[data-a]').forEach(el => el.onclick = () => act(el.dataset.a!, el.dataset.k || ''));
-  if (app === 'inventar' && document.getElementById('invFig')) showFig('invFig', figGear);   // Figur mit der angelegten Ausrüstung
+  if (app === 'inventar' && document.getElementById('invFig')) showFig('invFig', figTracht);   // Figur mit der angelegten Ausrüstung
   const ci = document.getElementById('bandChat') as HTMLInputElement | null;
   if (ci) {
     const go = () => { sendChat(ci.value); ci.value = ''; };

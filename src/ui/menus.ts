@@ -1,7 +1,6 @@
 import { $ } from '../core/util';
 import { leaveToBlack, startBusy } from './startfx';
-import { LOOK_DEFAULT, type Look } from '../game/mineArt';
-import { lookPicker, stageTools } from './lookUi';
+import { figurPicker, stageTools } from './lookUi';
 import { showFig, hideFig } from './figPreview';
 import { setQuality } from '../core/engine';
 import { gpuInfo } from '../core/perf';
@@ -10,7 +9,7 @@ import { settings, saveSettings, hasSave, G } from '../game/state';
 import { storageInfo, clearStoredAssets, ASSET_STATE, MANIFEST } from '../core/assets';
 
 export const menuHooks = {
-  newGame: (_name: string, _look: Look) => {},
+  newGame: (_name: string, _figur: number) => {},
   continueGame: () => {},
   resume: () => {},
   quit: () => {},
@@ -43,8 +42,8 @@ function openSub(id: string, from: string) { click(); returnTo = from; hide(from
 function closeSub(id: string) { click(); hide(id); if (returnTo) show(returnTo); returnTo = null; }
 
 $('mContinue').onclick = () => { if (startBusy()) return; click(); menuHooks.continueGame(); };
-// Neuer Pilot (seit 2026-11-20 mit Charaktererstellung): Rufzeichen, Gesicht, Uniform; drehbare Figur links (figPreview.ts)
-const ngLook: Look = { ...LOOK_DEFAULT };
+// Neuer Pilot (seit 2026-11-20 mit Charaktererstellung): Rufzeichen und Figur (seit 2026-11-24 eine von drei Figuren); drehbare Figur links (figPreview.ts)
+const ngSel = { figur: 1 };
 const ngReset = stageTools('newGame');
 const ngName = () => $('ngName') as HTMLInputElement;
 const ngSync = () => {   // Namensschild auf der Bühne und Zeichenzähler folgen dem Eingabefeld
@@ -57,9 +56,9 @@ $('mNew').onclick = () => {
   click();
   $('ngWarn').textContent = hasSave() ? 'Dein bisheriger Spielstand wird überschrieben.' : '';
   hide('menu'); show('newGame');
-  lookPicker('ngLook', ngLook, () => {}, 2);
+  figurPicker('ngLook', ngSel, () => {}, 2);
   ngReset(); ngSync();
-  showFig('ngFig', () => ({ anzug: 'anzug_overall', waffe: 'waffe_smg', look: ngLook }));   // so, wie der neue Pilot startet
+  showFig('ngFig', () => ({ figur: ngSel.figur, teile: {} }));   // so, wie der neue Pilot startet: nur der Körper im Unteranzug
   setTimeout(() => ngName().select(), 30);
 };
 $('ngBack').onclick = () => { click(); hideFig(); hide('newGame'); show('menu'); };
@@ -68,7 +67,7 @@ const goNew = () => {
   if (startBusy()) return;
   sfx('ui_confirm', 0.5, 1, () => snd(600, 0.05, 'sine', 0.03, 100));
   // Personalakte blendet aus, das Bild wird schwarz, dann beginnt das Intro (ui/startfx.ts)
-  leaveToBlack('newGame').then(ok => { if (!ok) return; hideFig(); menuHooks.newGame(name, { ...ngLook }); });
+  leaveToBlack('newGame').then(ok => { if (!ok) return; hideFig(); menuHooks.newGame(name, ngSel.figur); });
 };
 $('ngGo').onclick = goNew;
 $('ngName').addEventListener('keydown', e => { if ((e as KeyboardEvent).key === 'Enter') goNew(); });

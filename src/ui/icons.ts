@@ -35,6 +35,9 @@ function gearBody(kind: GearKind, c: string) {
   switch (kind) {
     case 'helm': return `<path d="M4 15a8 8 0 0 1 16 0v4H4z" fill="${c}"/><path d="M9 12h10v5H9z" fill="#14181e"/><path d="M10.5 13.5h7" stroke="${hi}" stroke-width="1.2"/><path d="M6 11a7 7 0 0 1 6-4" fill="none" stroke="${hi}" stroke-width="1.2"/>`;
     case 'anzug': return `<path d="M8 3l4 2 4-2 5 4-3 4-1-1v11H7V10l-1 1-3-4z" fill="${c}"/><path d="M12 5v16M7 14h10" stroke="${dark}" stroke-width="1"/><path d="M8 3l4 2-2 4z" fill="${hi}"/>`;
+    case 'weste': return `<path d="M7 3l3 2.5h4L17 3l3 3.5-2 3.5v11H6V10L4 6.5z" fill="${c}"/><path d="M8.5 14h3v4h-3zM12.5 14h3v4h-3z" fill="${dark}"/><path d="M8 9.5h8" stroke="${hi}" stroke-width="1.2"/>`;
+    case 'handschuh': return `<path d="M7.5 21v-5.5L4.5 11l1.6-1.4L8.5 12V5.2a1.4 1.4 0 0 1 2.8 0V10h.9V3.9a1.4 1.4 0 0 1 2.8 0V10h.9V5.4a1.4 1.4 0 0 1 2.8 0V15l-1.7 6z" fill="${c}"/><path d="M8 17.5h9.6" stroke="${dark}" stroke-width="1.2"/><path d="M9.9 5.4v4" stroke="${hi}" stroke-width="1"/>`;
+    case 'stiefel': return `<path d="M7 3h7v9.5l6 3V19H7z" fill="${c}"/><path d="M6 19h15v2.2H6z" fill="${dark}"/><path d="M9 6.5h4M9 9.5h4" stroke="${hi}" stroke-width="1.2"/>`;
     case 'rucksack': return `<path d="M9 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="${c}" stroke-width="2"/><rect x="5.5" y="7" width="13" height="14" rx="3" fill="${c}"/><rect x="8.5" y="13" width="7" height="5" rx="1" fill="${dark}"/><path d="M7 10h10" stroke="${hi}" stroke-width="1.2"/>`;
     case 'waffe': return `<path d="M2 8h18v4h-8l-1 3H8l1 6H5L4 12H2z" fill="${c}"/><path d="M13 9.6h6" stroke="${hi}" stroke-width="1.2"/><path d="M20 9h2v2h-2z" fill="${c}"/>`;
     case 'werkzeug': return `<path d="M15 3a5 5 0 0 0-4.8 6.4L3 16.6 6.4 20l7.2-7.2A5 5 0 0 0 20.6 7l-3 3-2.6-.9L14 6.4l3-3A5 5 0 0 0 15 3z" fill="${c}"/><path d="M5 17.5l5-5" stroke="${hi}" stroke-width="1.2"/>`;

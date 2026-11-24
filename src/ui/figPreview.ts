@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { renderer, gl, prePass, DEFAULT_ENV } from '../core/engine';
-import { makeAvatar, driveAvatar, type Avatar } from '../game/avatar';
-import { soldierGearKey, viewModelId, type FigGear } from '../game/mineArt';
+import { Figur, neuesSkelett, type Tracht } from '../game/figur';
+import { mannyAnim } from '../game/mannyAvatar';
 
 // =====================================================================================
-// Figurenvorschau (seit 2026-11-20): der Pilot mit Aussehen und Ausrüstung, drehbar mit der Maus.
-// Für die Charaktererstellung (Neues Spiel), die Garderobe und die Ausrüstung im Flottenband.
+// Figurenvorschau: der Pilot mit gewählter Figur und angelegter Ausrüstung, drehbar mit der Maus.
+// Für „Neuer Pilot“, die Garderobe und die Ausrüstung im Flottenband.
+// Seit 2026-11-24 zeigt sie die neue Spielerfigur (game/figur.ts): eigenes Skelett, Körper und Teile daran; Netze und Bilder teilt sie
+// sich mit der Figur im Spiel. Haltung: die Stehbewegung aus dem Bewegungssatz, sobald er geladen ist (bis dahin die A-Haltung).
 // Gezeichnet wie die Schiffsansicht der Werft (shipPreview.ts): mit dem Renderer des Spiels VOR dem eigentlichen Bild (prePass),
 // Ausschnitt in die 2D-Fläche kopieren, danach übermalt das Spielbild alles wieder. Kein zweiter WebGL-Kontext.
 // Die Fläche wird über ihre id gesucht: Seiten, die ihr HTML neu aufbauen (Flottenband), ersetzen sie dabei.
@@ -40,23 +42,43 @@ sc.add(new THREE.AmbientLight(0x5a6470, 0.9));
 const holder = new THREE.Group(); sc.add(holder);
 const pHolder = new THREE.Group(); sc.add(pHolder);
 
-let id = '', gearOf: (() => FigGear) | null = null, av: Avatar | null = null, nav: Avatar | null = null, key0 = '', last = 0, yaw = Math.PI + 0.45, spin = true;   // Drehung der ganzen Figur (die Figur selbst schaut stur geradeaus, sonst machte sie Seitschritte)
-let drag: { x: number; yaw: number } | null = null, bound: HTMLCanvasElement | null = null;
-let focus = 0, focusT = 0, rotDir = 0, headY = 1.62, waitT = 0;
-const jobs: { g: FigGear; part: 'kopf' | 'brust'; cb: (url: string) => void }[] = [];
+// Eine Puppe: eigenes Skelett mit Körper und Teilen; steht in der Stehbewegung des Bewegungssatzes
+interface Puppe { root: THREE.Object3D; fig: Figur; mixer: THREE.AnimationMixer | null; head: THREE.Object3D | null }
+function puppe(parent: THREE.Object3D, done: (p: Puppe) => void) {
+  neuesSkelett().then(root => { if (!root) return; parent.add(root); done({ root, fig: new Figur(root), mixer: null, head: root.getObjectByName('head') || null }); });
+}
+const NO_ROOT = new Set(['root']);
+function pose(p: Puppe, dt: number) {
+  if (!p.mixer) {
+    const clips = mannyAnim()?.clips, name = clips?.names?.find((n: string) => /Stand_Idle_Loop$/.test(n));
+    const c = name && clips.clip(name, { skip: NO_ROOT });
+    if (c) { p.mixer = new THREE.AnimationMixer(p.root); p.mixer.clipAction(c).play(); }
+  }
+  p.mixer?.update(dt);
+}
 
-export function showFig(canvasId: string, gear: () => FigGear) {
-  id = canvasId; gearOf = gear; last = 0; spin = true; focus = focusT = 0; rotDir = 0;
+let id = '', trachtOf: (() => Tracht) | null = null, last = 0, yaw = 0.45, spin = true;
+let main: Puppe | null = null, mainAsked = false, port: Puppe | null = null, portAsked = false;
+let drag: { x: number; yaw: number } | null = null, bound: HTMLCanvasElement | null = null;
+let focus = 0, focusT = 0, rotDir = 0, headY = 1.62, headX = 0;
+const jobs: { t: Tracht; part: 'kopf' | 'brust'; cb: (url: string) => void; n: number }[] = [];
+
+export function showFig(canvasId: string, tracht: () => Tracht) {
+  id = canvasId; trachtOf = tracht; last = 0; spin = true; focus = focusT = 0; rotDir = 0;
   prePass.fn = draw;
 }
-export function hideFig() { if (prePass.fn === draw) prePass.fn = null; id = ''; gearOf = null; rotDir = 0; }
+export function hideFig() {
+  if (prePass.fn === draw) prePass.fn = null;
+  id = ''; trachtOf = null; rotDir = 0;
+  main?.fig.leeren(); port?.fig.leeren();      // Dateien freigeben (bleiben noch kurz im Speicher, falls die Vorschau gleich wieder aufgeht)
+}
 /** Kamera: 0 ganze Figur, 1 Gesicht (weich überblendet) */
 export function figView(f: number) { focusT = f; }
 export const figViewNow = () => focusT;
 /** Drehknöpfe: −1, 0, 1 solange gedrückt */
 export function figRotate(dir: number) { rotDir = dir; if (dir) spin = false; }
-/** Standbild für eine Auswahlkachel (Kopf oder Brust), wird im nächsten Bild der Vorschau gezeichnet */
-export function figPortrait(g: FigGear, part: 'kopf' | 'brust', cb: (url: string) => void) { jobs.push({ g, part, cb }); }
+/** Standbild für eine Auswahlkachel (Kopf oder Brust), wird in einem der nächsten Bilder der Vorschau gezeichnet */
+export function figPortrait(t: Tracht, part: 'kopf' | 'brust', cb: (url: string) => void) { jobs.push({ t, part, cb, n: 0 }); }
 
 // Drehen mit der Maus (gedrückt halten und ziehen); danach dreht sie sich nicht mehr von selbst
 function bind(cv: HTMLCanvasElement) {
@@ -83,45 +105,30 @@ function shoot() {
   renderer.setRenderTarget(rt);
 }
 const _v = new THREE.Vector3();
-let headX = 0;
-function headOf(a: Avatar) { const h = a.s.root.getObjectByName('head'); if (!h) return null; a.s.g.updateMatrixWorld(true); h.getWorldPosition(_v); headX = _v.x; return _v.y; }
-const still = (wid?: string) => ({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, vx: 0, vz: 0, wid });
+function headOf(p: Puppe) { if (!p.head) return null; p.root.parent!.updateMatrixWorld(true); p.head.getWorldPosition(_v); headX = _v.x; return _v.y; }
 
-// Standbilder erst zeichnen, wenn Clips und alle Bilder der Figur geladen sind (sonst bleibt eine schwarze Gestalt in der Kachel)
-function texReady(o: THREE.Object3D) {
-  let ok = true;
-  o.traverse((m: any) => {
-    if (!ok || !m.isMesh || !m.visible) return;
-    for (const mt of ([] as any[]).concat(m.material)) for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) {
-      const t = mt?.[k]; if (t && !(t.image && (t.image.width || t.image.videoWidth))) ok = false;
-    }
-  });
-  return ok;
-}
 const pc = document.createElement('canvas'); pc.width = pc.height = 192;
-let pa: Avatar | null = null, paT = 0;
 function portraitJob(dt: number) {
   const j = jobs[0]; if (!j) return;
-  if (!pa) { pa = makeAvatar(j.g); paT = 0; if (!pa) return; }   // Modell noch nicht geladen: später
-  pHolder.add(pa.s.g); pHolder.rotation.y = Math.PI + (j.part === 'kopf' ? 0.32 : 0.12);
-  driveAvatar(pa, 1 / 30, still());                         // ohne Waffe: sie verdeckte Gesicht und Uniform
-  paT += dt;
-  if (!pa.ready || (!texReady(pa.s.g) && paT < 20)) { pHolder.remove(pa.s.g); return; }   // warten (nach 20 s trotzdem)
-  holder.visible = false;
-  const hy = headOf(pa) ?? 1.62;
-  const sp = pa.s.root.getObjectByName('spine_01'), bx = sp ? sp.getWorldPosition(_v).x : 0;
+  if (!port) { if (!portAsked) { portAsked = true; puppe(pHolder, p => { port = p; p.root.visible = false; }); } return; }
+  port.fig.setzen(j.t); pose(port, dt);
+  if (!port.fig.fertig || !port.fig.bereit) return;          // lädt noch
+  if (++j.n < 3) return;                                      // zwei Bilder Vorlauf: Haltung und Knochen stehen
+  pHolder.rotation.y = j.part === 'kopf' ? 0.32 : 0.12;
+  holder.visible = false; port.root.visible = true;
+  const hy = headOf(port) ?? 1.62;
+  const sp = port.root.getObjectByName('spine_01'), bx = sp ? sp.getWorldPosition(_v).x : 0;
   const r = j.part === 'kopf' ? aim(1, hy + 0.02, 0.2, 0.02, headX) : aim(1, hy - 0.62, 0.42, 0.05, bx);
   shoot();
   pc.getContext('2d')!.drawImage(gl, r.sx, r.sy, r.cw, r.ch, 0, 0, pc.width, pc.height);
-  pHolder.remove(pa.s.g); holder.visible = true; pa = null; jobs.shift();
+  port.root.visible = false; holder.visible = true; jobs.shift();
   j.cb(pc.toDataURL('image/jpeg', 0.86));
 }
 
 // pro Bild (prePass); auch von Tests aufrufbar
 export function draw() {
-  if (!gearOf) return;
+  if (!trachtOf) return;
   const now = performance.now();
-  if (jobs.length && (!last || now - last >= 33)) portraitJob(last ? Math.min(0.1, (now - last) / 1000) : 1 / 30);
   const cv = id ? document.getElementById(id) as HTMLCanvasElement | null : null;
   if (!cv) return;                                          // Seite gerade ohne Vorschau: warten, bis sie wieder da ist
   if (!cv.isConnected || cv.offsetParent === null) return;   // unsichtbar (Reiter gewechselt)
@@ -129,24 +136,17 @@ export function draw() {
   const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 30;
   if (last && now - last < 33) return;
   last = now;
+  portraitJob(dt);
   // Zeichenfläche in der angezeigten Größe (scharf, auch wenn sie mit dem Fenster wächst)
   const k = Math.min(window.devicePixelRatio || 1, 1.5), w = Math.max(40, Math.round(cv.clientWidth * k)), h = Math.max(40, Math.round(cv.clientHeight * k));
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-  // neue Ausrüstung oder neues Aussehen: neue Figur im Hintergrund laden, die alte bleibt bis dahin stehen
-  const g = gearOf(), kk = soldierGearKey(g) + '|' + (g.waffe || ''), wid = viewModelId(g.waffe);
-  if (kk !== key0) {
-    const n = makeAvatar(g);
-    if (n) { if (nav) holder.remove(nav.s.g); nav = n; key0 = kk; waitT = 0; holder.add(n.s.g); n.s.g.visible = false; }
-  }
-  if (nav) {
-    driveAvatar(nav, dt, still(wid)); waitT += dt;
-    if (nav.ready && (texReady(nav.s.g) || waitT > 20)) { if (av) holder.remove(av.s.g); av = nav; nav = null; av.s.g.visible = true; }
-  }
+  if (!main && !mainAsked) { mainAsked = true; puppe(holder, p => { main = p; }); }
+  if (main) { main.fig.setzen(trachtOf()); pose(main, dt); }   // neue Figur oder Ausrüstung lädt im Hintergrund, die alte bleibt bis dahin stehen
   if (spin) yaw += dt * 0.35;
   yaw += rotDir * dt * 2.2;
   holder.rotation.y = yaw;
   const ctx = cv.getContext('2d');
-  if (!av) {                                                  // noch nicht fertig geladen: Hinweis statt schwarzer Gestalt
+  if (!main || !main.fig.bereit) {                             // noch nicht fertig geladen: Hinweis statt leerer Bühne
     if (ctx) {
       const W = cv.width, H = cv.height, gr = ctx.createLinearGradient(0, 0, 0, H);
       gr.addColorStop(0, '#16263a'); gr.addColorStop(1, '#05090e'); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
@@ -156,8 +156,7 @@ export function draw() {
     }
     return;
   }
-  driveAvatar(av, dt, still(wid));
-  headY = headOf(av) ?? headY;
+  headY = headOf(main) ?? headY;
   focus += (focusT - focus) * Math.min(1, dt * 6);
   // Ausschnitt: ganze Figur oder Gesicht, dazwischen weich
   const e = focus * focus * (3 - 2 * focus);

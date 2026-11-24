@@ -1,5 +1,5 @@
 // =====================================================================================
-// Figuren des Pakets „lazy“ (asset-src/glb/lazy/*.glb, z. B. Spieler.glb) einzeln packen und in die Paketliste eintragen, ohne alle Spieldaten neu
+// Figuren des Pakets „lazy“ (asset-src/glb/lazy/*.glb, z. B. die Lyra-Waffen; Skelett, Körper und Teile der Spielerfiguren schreibt scripts/build-figuren.mjs dorthin) einzeln packen und in die Paketliste eintragen, ohne alle Spieldaten neu
 // zu erzeugen (npm run assets löscht public/assets und baut alles neu; dafür fehlen hier einige große Rohdateien).
 // Gleiche Umwandlung wie build-assets.mjs für das Paket „lazy“: Geometrie und Animationen mit Meshopt, Texturen WebP.
 // Paket „lazy“ wird weder vor dem Menü noch im Hintergrund geladen, nur wenn das Spiel die Datei anfordert (?manny=1).
@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
-import { packLazy, LAZY_OPTS } from './lazy-pack.mjs';
+import { packLazy, lazyOpts } from './lazy-pack.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'public', 'assets'), MAN = path.join(OUT, 'manifest.json');
@@ -23,7 +23,7 @@ for (const n of fs.readdirSync(dir).filter(x => x.toLowerCase().endsWith('.glb')
   const name = path.basename(n, path.extname(n));
   if (only.length && !only.includes(name)) continue;
   const key = 'lazy/' + name, src = fs.readFileSync(path.join(dir, n));
-  const buf = await packLazy(src, LAZY_OPTS[name]);
+  const buf = await packLazy(src, lazyOpts(name));
   const rel = `${key}.${hash(buf)}.glb`;
   if (m.files[key]) fs.rmSync(path.join(OUT, m.files[key].url.slice('assets/'.length)), { force: true });
   fs.mkdirSync(path.dirname(path.join(OUT, rel)), { recursive: true });
