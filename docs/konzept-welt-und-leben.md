@@ -59,3 +59,12 @@ testserver“. Leitlinien wie immer: realistisch statt verspielt, im Browser fl�
 ## Reihenfolge
 
 6 (Wetter) → 8 (Handbergbau) → 10 (Recht) → 9 (Quartier) → 7 (Außenbord). Jeder Punkt kommt einzeln auf den Testserver.
+
+## Stand der Umsetzung (24.11.2026, auf test)
+
+- 6 Tag, Nacht, Wetter: `src/game/wetter.ts` (Testlabor: Welt → Tageszeit und Wetter).
+- 8 Bergbau mit der Hand: `src/game/dungeon.ts` (buildAdern, updateAbbau), Handbohrer `werk_handbohrer` und sieben Kristall-Fundstücke in `src/data/gear.ts`.
+- 10 Recht und Ordnung: `src/game/recht.ts`, Treffer in `combat.ts`, Patrouillen in `npc.ts`, Bußgeld beim Andocken (`main.ts`, `hud.ts`); Testlabor setzt die Stufe.
+- 7 Außenbord: `src/game/eva.ts`, Modus `eva` (main.ts), Container von Hand in `begegnungen.ts` (evaContainer). Nicht am Andockpunkt einer Station.
+- 9 Quartier: noch nicht gebaut. Ein eigener begehbarer Raum braucht entweder ein eigenes Deck mit gebackenem Licht (wie das Pumpwerk) oder
+  eine Erweiterung der Schiffsräume (meshRoom.ts) auf Gebäude; beides ist ein eigenes größeres Stück Arbeit.
