@@ -1,5 +1,6 @@
 import { $, esc, fmtN, fmtD, d3 } from '../core/util';
 import { showFig, hideFig } from './figPreview';
+import { garderobeOpen } from './lookUi';
 import { figTracht } from '../game/avatar';
 import { snd, sfx } from '../core/audio';
 import { releaseAll } from '../core/input';
@@ -114,7 +115,9 @@ function render() {
   if (app !== 'inventar') hideFig();
   b.innerHTML = app === 'start' ? startApp() : app === 'inventar' ? invApp() : app === 'auftraege' ? jobsApp() : app === 'fuhrpark' ? fleetApp() : app === 'fracht' ? cargoApp() : app === 'handel' ? tradeApp() : app === 'ruf' ? repApp() : funkApp();
   b.querySelectorAll<HTMLElement>('[data-a]').forEach(el => el.onclick = () => act(el.dataset.a!, el.dataset.k || ''));
-  if (app === 'inventar' && document.getElementById('invFig')) showFig('invFig', figTracht);   // Figur mit der angelegten Ausrüstung
+  // Figur mit der angelegten Ausrüstung. Nicht, solange die Garderobe offen ist: Sie liegt über dem Band und hat ihre eigene Vorschau
+  // (der Klick auf „Garderobe“ baut das Band neu auf – das lenkte die Vorschau zurück auf die verdeckte Fläche, die Garderobe blieb leer).
+  if (app === 'inventar' && document.getElementById('invFig') && !garderobeOpen()) showFig('invFig', figTracht);
   const ci = document.getElementById('bandChat') as HTMLInputElement | null;
   if (ci) {
     const go = () => { sendChat(ci.value); ci.value = ''; };

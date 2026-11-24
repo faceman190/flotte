@@ -3,7 +3,7 @@ import { initWeltLeben, updateWeltLeben } from './game/weltLeben';
 import { crewHooks, crewStadt } from './game/crewStimmen';
 import { dockBark } from './game/barks';
 import * as THREE from 'three';
-import { warm, camera, render, scene, aimShadows, markShadows, gl, compileFor, warmScene } from './core/engine';
+import { warm, camera, render, renderStill, prePass, scene, aimShadows, markShadows, gl, compileFor, warmScene } from './core/engine';
 import { hideBoot } from './core/assets';
 import { updateSky, sunDir, sky } from './core/sky';
 import { updateAmbience, drawFlare, resetAmbienceCamera } from './core/ambience';
@@ -852,7 +852,7 @@ function loop(now: number, manual = false) {
     syncParticles();
     syncBolts([world.bullets, world.ebullets]);
     render();
-  }
+  } else if (world.def && prePass.fn) renderStill();   // Flottenband mit Figurenvorschau (Ausrüstung, Garderobe): Das Spiel steht, die Vorschau braucht trotzdem Bilder
   if (G.mode !== 'play' && G.mode !== 'rover') laserSound(false);
   if (G.mode === 'rover' && !FOOT.active) boosterSound(true, Math.min(1, Math.abs(ROVER.speed) / 26) * 0.45, 0.1);
   else if (G.mode === 'entry') boosterSound(true, 1, 0.6, 0.3);

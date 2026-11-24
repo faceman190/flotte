@@ -131,7 +131,7 @@ export const overlay: { scene: THREE.Scene | null; camera: THREE.Camera | null }
 // So ragen Arme und Waffe nie in Wände (wie Unreals „First Person Rendering“), die Figur steht trotzdem im Licht der Szene, und die
 // Nahgrenze des Hauptbilds (0,5 m auf Planeten) schneidet die Hände nicht ab. on setzt die Figur in jedem Bild neu.
 export const BODY_LAYER = 7;
-export const bodyPass = { on: false, near: 0.03, far: 30 };
+export const bodyPass = { on: false, was: false, near: 0.03, far: 30 };      // was: im letzten gezeichneten Bild an (für renderStill)
 let bodyLightT = 0;
 function renderBody() {
   // Lichter gelten nur für Ebenen, auf denen sie selbst liegen: alle auch auf die Körper-Ebene legen (neue Lichter spätestens nach 0,4 s)
@@ -251,11 +251,18 @@ export function warmScene(label: string, prime: null | (() => void) = null, maxM
     requestAnimationFrame(() => requestAnimationFrame(begin)); setTimeout(begin, 150);
   }));
 }
+/**
+ * Standbild: das letzte Spielbild noch einmal zeichnen, ohne dass sich etwas bewegt. Für das Flottenband: Dort steht das Spiel und es wird
+ * nichts gezeichnet – eine Vorschau (prePass: Figur im Inventar und in der Garderobe) braucht aber den Renderer und malt dabei über das
+ * Spielbild, das deshalb danach wieder hergestellt werden muss. Der Körper der Ich-Sicht bleibt, wie er im letzten Bild war.
+ */
+export function renderStill() { bodyPass.on = bodyPass.was; render(); }
 export function render() {
   if (prePass.fn) prePass.fn();
   if (vignettePass) vignettePass.uniforms.time.value = (performance.now() % 10000) / 1000;
   if (view.hiQ && composer) composer.render();
   else renderer.render(scene, camera);
+  bodyPass.was = bodyPass.on;
   if (bodyPass.on) { bodyPass.on = false; renderBody(); }
   if (overlay.scene && overlay.camera) {
     renderer.autoClear = false; renderer.setRenderTarget(null); renderer.clearDepth();

@@ -61,6 +61,7 @@ export function stageTools(rootId: string) {
 // ---------- Garderobe: im Flottenband (Ausrüstung) in Stationen ----------
 const tmp = { figur: 1 };
 const grReset = stageTools('garderobe');
+export const garderobeOpen = () => !$('garderobe').classList.contains('hidden');
 export const garderobeHere = () => !!G.dockedAt || IN.active;   // angedockt oder zu Fuß in einer Station oder im Schiff
 export function openGarderobe() {
   tmp.figur = normFigur(P.figur);
