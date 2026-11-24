@@ -34,7 +34,8 @@ import { START, leaveToBlack, startBusy, bootLog, bootReady, openCover, settled,
 import type { IntroEnd } from './game/intro';
 import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
-import { startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
+import { quartierFahrt, inKojeAufwachen, startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
+import { quartierHooks } from './game/quartier';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
 import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, liquidAt, ROVER, SURF } from './game/surface';
@@ -412,7 +413,8 @@ dockHooks.openMap = openMap;
 dockHooks.shipChanged = () => { G.camInit = false; refreshHangarShips(); };
 dockHooks.enter = st => enterInterior(st);
 dockHooks.leave = leaveInterior;
-interiorHooks.openTab = (t, n) => showMenu(t, n);
+interiorHooks.openTab = (t, n, s) => showMenu(t, n, s);
+quartierHooks.fahren = (owner, deko) => quartierFahrt(owner, deko);      // Aufzug zu den Quartieren (game/quartier.ts, interior.ts)
 interiorHooks.undock = undock;
 dockHooks.launch = startLaunch;
 // Planetenbasis zu Fuß: hinein durch die Tür, hinaus wieder vor die Tür (das Schiff steht auf dem Landefeld)
@@ -653,6 +655,11 @@ hooks.respawn = () => {
   const st = stats();
   P.hull = st.maxHull; P.shield = st.maxShield; P.ammo = st.maxAmmo; P.rockets = st.maxRockets; P.charges = st.maxCharges;
   resetDrones();
+  // Quartier mit Koje als Aufwachpunkt (game/quartier.ts): auf der Bastion in der eigenen Koje aufwachen
+  if (P.quartier?.koje && SECTOR.heimstatt) {
+    P.sector = 'heimstatt'; P.surface = false;
+    if (resumeAt({ k: 'st', id: 'bastion' }) && inKojeAufwachen()) { $('hud').classList.add('hidden'); document.body.classList.add('playing'); radio('SYSTEM', 'Du wachst in deiner Koje auf. Draußen wartet ein neuer Jäger im Hangar.'); saveGame(); return; }
+  }
   const h = SECTOR[P.home.sector]?.stations.some(s => s.id === P.home.station) ? P.home : { sector: 'heimstatt', station: 'bastion' };
   if (h.sector !== P.sector || world.surface) enterSector(h.sector, { station: h.station });
   else { const s = stationById(h.station) || world.stations[0]; placePlayer(s.launch.x, s.launch.y, s.launch.z, s.launch.yaw, 140); }

@@ -164,13 +164,14 @@ def b_pfeiler():
 
 # =====================================================================================
 # Gekrümmte Wandstücke zwischen den Öffnungen (abgerollt gebaut, dann gebogen)
-# kind: 'tuer' (Tür mit Schild), 'schott' (Schott zum nächsten Deck), 'automat' (Nische mit zwei Automaten), 'info' (Stationsplan)
+# kind: 'tuer' (Tür mit Schild), 'schott' (Schott zum nächsten Deck), 'automat' (Nische mit zwei Automaten), 'info' (Stationsplan),
+#       'aufzug' (Aufzug zu den Quartieren, seit dem Quartier nach Alpha 1.58)
 # =====================================================================================
 def sector_fill(L, kind, label=''):
     h = RH_HW; xa, xb = -L / 2, L / 2
-    nw = {'tuer': 2.7, 'gang': 3.4, 'schott': 4.2, 'automat': 2.9, 'info': 0.0}[kind]
-    nh = {'tuer': 2.85, 'gang': 2.9, 'schott': 3.4, 'automat': 2.75, 'info': 0.0}[kind]
-    nd = {'tuer': 0.5, 'gang': 0.5, 'schott': 0.75, 'automat': 0.85, 'info': 0.0}[kind]
+    nw = {'tuer': 2.7, 'gang': 3.4, 'schott': 4.2, 'automat': 2.9, 'info': 0.0, 'aufzug': 2.9}[kind]
+    nh = {'tuer': 2.85, 'gang': 2.9, 'schott': 3.4, 'automat': 2.75, 'info': 0.0, 'aufzug': 3.0}[kind]
+    nd = {'tuer': 0.5, 'gang': 0.5, 'schott': 0.75, 'automat': 0.85, 'info': 0.0, 'aufzug': 0.5}[kind]
     # Rückwand (mit Aussparung für die Nische)
     if nw:
         for (u0, u1) in ((xa, -nw / 2), (nw / 2, xb)): box('Hallenwand', u1 - u0, 0.15, h, (u0 + u1) / 2, 0.075, h / 2, M['wall4'], 0)
@@ -216,7 +217,7 @@ def sector_fill(L, kind, label=''):
         box('Leitungsträger', 0.08, 0.7, 0.06, u, -0.45, 6.72, M['frame'], 0.006); pipe('Leitungsbügel', [(u, -0.97, 6.72), (u, -0.97, 7.18)], 0.012, M['steel']); u += 1.6
     for q in range(3): streak((xa + L * (0.2 + 0.3 * q), -0.035, 2.82), END_X, END_Y, 0.3, 1.5, 'spur' if q != 1 else 'rost')
     # Nische
-    if kind in ('tuer', 'schott', 'automat', 'gang'):
+    if kind in ('tuer', 'schott', 'automat', 'gang', 'aufzug'):
         for sx in (-1, 1):
             box('Laibung', 0.14, nd, nh, sx * (nw / 2 + 0.07), nd / 2 - 0.02, nh / 2, M['frame'], 0.012)
             box('Nischenrahmen', 0.24, 0.12, nh + 0.24, sx * (nw / 2 + 0.12), -0.06, (nh + 0.24) / 2, M['frame'], 0.02)
@@ -244,6 +245,25 @@ def sector_fill(L, kind, label=''):
         cyl('Statuslicht', 0.03, 0.02, nw / 2 - 0.3, y - 0.1, 1.6, M['e_green'], 'Y', n=12, bev=0)
         box('Türschild', len(label) * 0.11 + 0.3, 0.04, 0.3, 0, -0.14, nh + 0.42, M['wall4'], 0.01)
         text(label, 0.16, (0, -0.165, nh + 0.36), END_X, END_Y, M['txtw'], align='CENTER')
+        text(label, 0.2, (0, -1.0, 0.012), (1, 0, 0), (0, 1, 0), M['txto'], align='CENTER')
+    elif kind == 'aufzug':      # Aufzug zu den Quartieren: zwei Schiebetüren aus Stahl, Stockanzeige, Rufpult, Lichtleisten in der Laibung
+        y = nd - 0.02; tw = 1.5; th = 2.3
+        box('Aufzugrahmen', tw + 0.44, 0.14, th + 0.22, 0, y - 0.03, (th + 0.22) / 2, M['frame'], 0.018)
+        box('Aufzugschacht', tw, 0.1, th, 0, y + 0.08, th / 2, M['wall4'], 0)
+        for sx in (-1, 1):
+            box('Aufzugtür', tw / 2 - 0.006, 0.05, th - 0.01, sx * (tw / 4 + 0.003), y - 0.1, th / 2, M['steel'], 0.006)
+            box('Türschlitz', 0.06, 0.008, 0.95, sx * 0.24, y - 0.128, 1.4, M['glass'], 0)
+            box('Türband', tw / 2 - 0.1, 0.008, 0.16, sx * tw / 4, y - 0.128, 0.16, M['warn'], 0)
+            box('Laibungslicht', 0.03, 0.03, nh - 0.3, sx * (nw / 2 - 0.03), -0.04, (nh - 0.3) / 2 + 0.15, M['e_cool'], 0)
+        box('Türfuge', 0.012, 0.055, th - 0.01, 0, y - 0.1, th / 2, M['rubber'], 0)
+        box('Aufzugschwelle', tw + 0.4, 0.55, 0.012, 0, y - 0.3, 0.006, M['warn2'], 0.004)
+        box('Stockanzeige', 0.62, 0.06, 0.16, 0, y - 0.1, th + 0.36, M['frame'], 0.008); box('Stockbild', 0.56, 0.008, 0.11, 0, y - 0.134, th + 0.36, M['screen5'], 0)
+        text('D3', 0.07, (-0.2, y - 0.14, th + 0.33), END_X, END_Y, M['e_holo']); text('Q', 0.07, (0.14, y - 0.14, th + 0.33), END_X, END_Y, M['e_amber'])
+        bx = tw / 2 + 0.42
+        box('Rufpult', 0.2, 0.06, 0.38, bx, y - 0.08, 1.3, M['frame'], 0.008); box('Rufpultbild', 0.12, 0.008, 0.08, bx, y - 0.114, 1.42, M['screen'], 0)
+        for (z, mm) in ((1.3, 'e_cool'), (1.19, 'e_amber')): cyl('Rufknopf', 0.03, 0.016, bx, y - 0.118, z, M[mm], 'Y', n=16, bev=0)
+        box('Türschild', len(label) * 0.11 + 0.9, 0.04, 0.3, 0, -0.14, nh + 0.42, M['wall4'], 0.01)
+        text('AUFZUG  ·  ' + label, 0.16, (0, -0.165, nh + 0.36), END_X, END_Y, M['txtw'], align='CENTER')
         text(label, 0.2, (0, -1.0, 0.012), (1, 0, 0), (0, 1, 0), M['txto'], align='CENTER')
     elif kind == 'schott':
         y = nd - 0.02; tw = 3.6; th = 3.0

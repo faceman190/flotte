@@ -12,7 +12,7 @@ BAYS = [(0, 'a', 'AUFTRÄGE', 'AUFTRÄGE  ·  MISSIONEN  ·  KOPFGELD'), (60, 'h
         (-60, 'r', 'AUSRÜSTER', 'AUSRÜSTUNG  ·  MODULE  ·  ANZÜGE')]
 # Wandstücke zwischen den Öffnungen: (von Öffnung, bis Öffnung, Art, Schrift)
 SECTORS = [(120, 180, 'info', 'STATIONSPLAN'), (-180, -120, 'automat', ''), (-120, -60, 'schott', 'DECK 2'),
-           (-60, 0, 'gang', 'KRANKENSTATION'), (0, 60, 'gang', 'BESPRECHUNG'), (60, 120, 'tuer', 'QUARTIERE')]
+           (-60, 0, 'gang', 'KRANKENSTATION'), (0, 60, 'gang', 'BESPRECHUNG'), (60, 120, 'aufzug', 'QUARTIERE')]
 def th(a): return TH_K if a in (180, -180) else TH_B
 
 def place_flat(objs, ang, loc):      # flach gebaute Teile (Schilder) an ihren Platz drehen
@@ -228,8 +228,8 @@ def sheet():
     hwb = YP_B + 0.5
     put1(MOD['Portal Bucht'], 2 * hwb, 'PORTAL BUCHT', sub='Rollgitter · Schildkasten')
     put1(prop('rh_pfeiler'), 1.2, 'PFEILER')
-    sec = [c for n_, c in MOD.items() if n_.startswith('Wandstück tuer')][0]
-    yc = y + 3.2; inst(sec, (BX0 - R_, yc, 0), 0.0, C_BLATT); lab('WANDSTÜCK', BX0 - 2.2, yc); lab('gebogen · Tür', BX0 - 2.9, yc, 0.22); y += 6.4 + 1.6
+    sec = [c for n_, c in MOD.items() if n_.startswith('Wandstück aufzug')][0]
+    yc = y + 3.2; inst(sec, (BX0 - R_, yc, 0), 0.0, C_BLATT); lab('WANDSTÜCK', BX0 - 2.2, yc); lab('gebogen · Aufzug', BX0 - 2.9, yc, 0.22); y += 6.4 + 1.6
     yc = y + KW / 2 + 0.6; inst(prop('rh_joch'), (BX0 - 2.0, yc, 0), 0.0, C_BLATT); inst(MOD['Joch oben'], (BX0 - 2.0, yc, 0), 0.0, C_BLATT); lab('KORRIDORJOCH', BX0 - 3.0, yc); y += KW + 2.8
     for nm in ('buchtwand',): yc = y + 1.0; inst(dress(nm), (BX0 - 1.7, yc, 0), PI, C_BLATT); lab('BUCHTWAND', BX0 - 2.2, yc); y += 3.6
     SHEET1 = (2.0, y)
@@ -278,6 +278,7 @@ def cameras():
     cam('eingang', (-15.6, 2.2, 1.7), (14.0, -2.5, 3.0), 15)
     cam('treffpunkt', (-7.0, -5.6, 1.7), (3.0, 4.0, 2.6), 17)
     cam('kuppel', (-10.5, 5.5, 1.6), (1.5, -1.5, 7.0), 13)
+    cam('aufzug', (1.6, 9.5, 1.65), (0.0, 17.2, 1.7), 20)
     bay_cam('auftraege', 0); bay_cam('handel', 60); bay_cam('werft', 120); bay_cam('kantine', -120); bay_cam('ausruester', -60)
     F = Frame(120, D0); cam('werft_innen', F.p(1.0, -3.7, 1.65), F.p(6.6, 1.2, 1.5), 17)
     F = Frame(-120, D0); cam('kantine_innen', F.p(1.0, 3.8, 1.65), F.p(7.2, -1.4, 1.6), 17)
@@ -290,7 +291,7 @@ def cameras():
     (a1, b1), (a2, b2) = SHEETS
     cam('baukasten1', (BX0 - 28, (a1 + b1) / 2, 7.5), (BX0, (a1 + b1) / 2, 3.0), 24)
     cam('baukasten2', (BX0 - 19, 88.0, 5.6), (BX0 - 3.0, 88.0, 1.4), 26)
-VIEWS = ['baukasten1', 'baukasten2', 'plan', 'vogel', 'gang', 'eingang', 'treffpunkt', 'kuppel', 'auftraege', 'handel', 'werft', 'kantine', 'ausruester', 'werft_innen', 'kantine_innen', 'auftraege_innen', 'flur', 'besprechung', 'krankenstation']
+VIEWS = ['aufzug', 'baukasten1', 'baukasten2', 'plan', 'vogel', 'gang', 'eingang', 'treffpunkt', 'kuppel', 'auftraege', 'handel', 'werft', 'kantine', 'ausruester', 'werft_innen', 'kantine_innen', 'auftraege_innen', 'flur', 'besprechung', 'krankenstation']
 def setp(o, k, v):
     try: setattr(o, k, v)
     except Exception: pass

@@ -28,10 +28,11 @@ import { showShip, hideShip, showModel } from './shipPreview';
 import { FZ, FZ_IDS, buildFahrzeug, fzLaden, normFz, type FzId } from '../models/rover';
 import { bodenAushang, bodenAnnehmen, bodenAbgeben } from '../game/bodenaufgaben';
 import { aufgabenAushang } from '../game/aufgaben';
+import { QS, QPREIS, quartierHooks, eigeneDeko, mieten, nrText, gueltigeEinladungen, funde, schiffe, fundName, QEINLADUNG_MS, type QDeko } from '../game/quartier';
 
 // Stationsterminals (seit Alpha 1.25): Jeder Dienst hat seinen eigenen Ort auf der Station und sein eigenes Terminal.
 // Es gibt keine Leiste mehr, über die man von einem Dienst zum nächsten springt: Wer etwas anderes will, läuft hin.
-type Tab = 'markt' | 'ausruester' | 'raffinerie' | 'auftraege' | 'missionen' | 'lager' | 'hangar' | 'werft' | 'werkstatt' | 'service' | 'info';
+type Tab = 'markt' | 'ausruester' | 'raffinerie' | 'auftraege' | 'missionen' | 'lager' | 'hangar' | 'werft' | 'werkstatt' | 'service' | 'info' | 'quartier';
 let tab: Tab = 'markt';
 let note = '';
 let opening = false;   // nur das erste Bild nach dem Öffnen blendet ein (sonst flackert jeder Klick)
@@ -69,10 +70,12 @@ export function openDock(s: Station) {
   saveGame();
 }
 // Ein Terminal öffnen (vom Tresen oder Stand aus): genau ein Dienst
-export function showMenu(t?: string, n?: string) {
-  if (!G.dockedAt || !t || !tabs().includes(t as Tab)) return;
+export function showMenu(t?: string, n?: string, sub?: string) {
+  const quart = t === 'quartier' && G.dockedAt?.id === 'bastion';      // Quartier: kein Dienst der Station, nur über Aufzug und Möbel im Quartier
+  if (!G.dockedAt || !t || (!tabs().includes(t as Tab) && !quart)) return;
   tab = t as Tab; note = n || '';
   resetSel(); opening = true;
+  if (t === 'ausruester' && sub === 'spind') shop.mode = 'spind';      // Spind im Quartier: gleich die Spind-Ansicht
   G.mode = 'dock';
   if (document.pointerLockElement) document.exitPointerLock();
   releaseAll();
@@ -139,11 +142,11 @@ function tabs(): Tab[] {
   const no = st().def.no;      // Dienste, die es an dieser Station nicht gibt (Eisenkrone: Ausrüster, Werft und Werkstatt bleiben auf der Bastion)
   return no ? all.filter(t => !no.includes(t)) : all;
 }
-const TAB_N: Record<Tab, string> = { ausruester: 'Ausrüster', markt: 'Markt', raffinerie: 'Raffinerie', auftraege: 'Aufträge', missionen: 'Missionen', lager: 'Lager', hangar: 'Hangar', werft: 'Werft', werkstatt: 'Werkstatt', service: 'Service', info: 'Auskunft' };
+const TAB_N: Record<Tab, string> = { quartier: 'Quartier', ausruester: 'Ausrüster', markt: 'Markt', raffinerie: 'Raffinerie', auftraege: 'Aufträge', missionen: 'Missionen', lager: 'Lager', hangar: 'Hangar', werft: 'Werft', werkstatt: 'Werkstatt', service: 'Service', info: 'Auskunft' };
 const TAB_T: Record<Tab, string> = {
   markt: 'Markt · Waren handeln', ausruester: 'Ausrüster · Ausrüstung und Module', raffinerie: 'Raffinerie · Erz einschmelzen', auftraege: 'Aufträge · Lieferungen',
   missionen: 'Missionen', lager: 'Lager · Fracht einlagern', hangar: 'Hangar · Deine Schiffe', werft: 'Werft · Schiffe kaufen', werkstatt: 'Werkstatt · Schiff ausbauen',
-  service: 'Service · Reparatur und Munition', info: 'Auskunft · Station und Sektor',
+  service: 'Service · Reparatur und Munition', info: 'Auskunft · Station und Sektor', quartier: 'Quartier · Bastion',
 };
 const n1 = (v: number) => v.toFixed(1).replace('.', ',');
 const clampN = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -560,11 +563,47 @@ function vInfo(): View {
   return { k: kpi('Credits', `${fmtN(P.credits)} Cr`) + kpi('Zone', fac.n), cols: 'minmax(0,1fr) 400px', h };
 }
 
-const VIEWS: Record<Tab, () => View> = { markt: vMarkt, raffinerie: vRaff, lager: vLager, werft: vWerft, werkstatt: vWerkstatt, service: vService, ausruester: vAusruester, auftraege: vAuftraege, missionen: vMissionen, hangar: vHangar, info: vInfo };
+// ---------- Quartier (game/quartier.ts): Aufzug auf Deck 3, Bildschirm und Regal im Quartier ----------
+function vQuartier(): View {
+  const own = P.quartier, nr = own ? nrText(own.nr) : '—';
+  const k = kpi('Quartier', nr) + kpi('Credits', `${fmtN(P.credits)} Cr`);
+  const rowB = (name: string, sub: string, btn: string) => `<div class="rw gH"><span class="nm"><span><b>${esc(name)}</b><small>${sub}</small></span></span><span></span><span></span><span class="r">${btn}</span></div>`;
+  if (QS.mode === 'aufzug') {
+    let h = `<section class="pn"><h3>Quartiere der Bastion</h3><p>Ein eigener Raum an Bord: Koje, Spind, Schreibtisch und ein Fenster ins All. Die Bastion vermietet Quartiere an die Piloten der Flotte. Einmal bezahlt, gehört es dir.</p>`;
+    if (own) h += `<div class="box"><p class="lb acc">Dein Quartier</p><h2>${nr}</h2><p>Deck Q, über diesen Aufzug. Gemietet seit ${new Date(own.seit).toLocaleDateString('de-DE')}.</p></div>
+      <div class="act"><button class="pri big" data-a="qfahrt"><span>Ins Quartier fahren</span><span class="mo">${nr}</span></button></div>`;
+    else h += `<div class="act"><button class="pri big" data-a="qmiete" ${P.credits >= QPREIS ? '' : 'disabled'}><span>${P.credits >= QPREIS ? 'Quartier mieten' : 'Zu wenig Credits'}</span><span class="mo">${fmtN(QPREIS)} Cr</span></button></div>`;
+    const inv = gueltigeEinladungen();
+    h += `<h3>Einladungen</h3>` + (inv.length ? inv.map((e, i) => rowB(e.von, `Quartier ${nrText(e.deko.nr)} · gilt noch ${Math.max(1, Math.ceil((QEINLADUNG_MS - (Date.now() - e.t)) / 60000))} min`, `<button class="pri" data-a="qbesuch" data-n="${i}">Besuchen</button>`)).join('')
+      : '<p class="hint">Keine Einladungen. Andere Piloten laden dich an ihrem Bildschirm im Quartier ein.</p>');
+    h += `</section><aside class="pn"><p class="lb">Im Quartier</p><div>${line('Koje', 'ausruhen, Aufwachpunkt')}${line('Spind', 'einlagern, herausnehmen')}${line('Regal', 'Schiffe und Fundstücke')}${line('Bildschirm', 'Übersicht, Gäste')}</div>
+      <div class="box"><p class="lb acc">Besuch</p><p>In ein fremdes Quartier kommt nur, wen der Besitzer einlädt. Wer zu Gast ist, sieht dessen Schiffe und Sammlung, aber Koje, Spind und Bildschirm bleiben zu.</p></div></aside>`;
+    return { k, cols: 'minmax(0,1fr) 400px', h };
+  }
+  if (QS.mode === 'schirm') {
+    let h = `<section class="pn"><h3>Pilot ${esc(P.name)}</h3><div>${line('Credits', `${fmtN(P.credits)} Cr`)}${line('Abschüsse', fmtN(P.kills))}${line('Abgebaut', `${fmtN(P.mined)} E`)}${line('Verdient', `${fmtN(P.earned)} Cr`)}${line('Schiffe', String(1 + P.fleet.length))}${line('Sektoren erkundet', `${P.visited.length} / 18`)}</div>
+      <h3>Ruf</h3><div>${(Object.keys(REP) as (keyof typeof REP)[]).map(f => line(REP[f].n, rankName(f))).join('')}</div>`;
+    const pl = quartierHooks.piloten();
+    h += `<h3>Gäste einladen</h3>` + (pl.length ? pl.map(p => rowB(p.name, 'auf der Bastion', `<button class="pri" data-a="qinv" data-n="${p.id}">Einladen</button>`)).join('')
+      : '<p class="hint">Gerade ist kein anderer Pilot auf der Bastion. Einladen kannst du nur, wer mit dir online auf der Station ist.</p>');
+    h += `</section><aside class="pn"><p class="lb">Quartier</p><h2>${nr}</h2><div>${line('Aufwachpunkt', own?.koje ? 'Koje' : 'noch nicht', own?.koje ? 'up' : 'dim')}${line('Schiffsmodelle', String(Math.min(4, schiffe().length)))}${line('Fundstücke', String(Object.keys(funde()).length))}</div>
+      <div class="box"><p class="lb acc">Einladungen</p><p>Eine Einladung gilt eine Viertelstunde. Der Gast fährt mit dem Aufzug auf Deck 3 in dein Quartier.</p></div></aside>`;
+    return { k, cols: 'minmax(0,1fr) 400px', h };
+  }
+  // Regal: Sammlung des Besitzers (eigene oder die des Gastgebers)
+  const d: QDeko = QS.in && QS.deko ? QS.deko : eigeneDeko(), mine = d.name === P.name, f = mine ? funde() : null;
+  let h = `<section class="pn"><h3>Schiffe${mine ? '' : ' von ' + esc(d.name)}</h3><div class="chips">${d.schiffe.map(c => `<span>${esc(SHIPS[c as ShipId]?.n || c)}</span>`).join('') || '<span>keine</span>'}</div>
+    <h3>Fundstücke</h3><div>${d.funde.length ? d.funde.map(id => line(fundName(id), f ? `${f[id]} Stück` : 'im Regal')).join('') : '<p class="hint">Noch keine Kristalle. Mit dem Handbohrer in den Minen abbauen.</p>'}</div>
+    <h3>Legendäre Stücke</h3><div class="chips">${d.legenden.map(id => `<span>${esc(gearDef(id)?.n || id)}</span>`).join('') || '<span>noch keine</span>'}</div></section>
+    <aside class="pn"><p class="lb">Regal</p><h2>${nrText(d.nr)}</h2><div class="box"><p>Im Regal stehen Modelle der Schiffe und je ein Kristall jeder Sorte, die im Rucksack oder Spind liegt. Was dazukommt, steht beim nächsten Besuch im Regal.</p></div></aside>`;
+  return { k, cols: 'minmax(0,1fr) 400px', h };
+}
+
+const VIEWS: Record<Tab, () => View> = { quartier: vQuartier, markt: vMarkt, raffinerie: vRaff, lager: vLager, werft: vWerft, werkstatt: vWerkstatt, service: vService, ausruester: vAusruester, auftraege: vAuftraege, missionen: vMissionen, hangar: vHangar, info: vInfo };
 
 function render() {
   const s = st(), def = world.def!;
-  if (!tabs().includes(tab)) tab = tabs()[0];
+  if (!tabs().includes(tab) && tab !== 'quartier') tab = tabs()[0];
   const v = VIEWS[tab](), others = tabs().filter(t => t !== tab).map(t => TAB_N[t]);
   $('dockCard').innerHTML = `<div class="tm${opening ? ' in' : ''}">
     <header class="tmH"><div class="tmPlate">${esc(plate(s.name))}</div>
@@ -605,6 +644,11 @@ $('dockCard').addEventListener('click', e => {
   if (!b || b.disabled || G.mode !== 'dock') return;
   const a = b.dataset.a, k = b.dataset.k as any, n = +(b.dataset.n || 0);
   if (a === 'close') { closeMenu(); return; }
+  // Quartier (game/quartier.ts)
+  if (a === 'qmiete') { note = mieten(); if (P.quartier) { sfx('ui_confirm', 0.5, 1, () => snd(900, 0.15, 'sine', 0.05, 400)); saveGame(); } }
+  if (a === 'qfahrt' && P.quartier) { closeMenu(); quartierHooks.fahren(P.name, eigeneDeko()); return; }
+  if (a === 'qbesuch') { const e = gueltigeEinladungen()[n]; if (e) { closeMenu(); quartierHooks.fahren(e.von, e.deko); return; } note = 'Diese Einladung gilt nicht mehr.'; }
+  if (a === 'qinv') { const who = quartierHooks.piloten().find(p => p.id === n); note = who && quartierHooks.einladen(n, eigeneDeko()) ? `Einladung an ${who.name} geschickt.` : 'Einladen ging nicht (nicht verbunden).'; }
   // Mengen wählen (Markt, Raffinerie): Umschalt-Klick ändert um zehn
   if (a === 'inc' || a === 'dec' || a === 'max') {
     const g = b.dataset.g, d = (a === 'dec' ? -1 : 1) * (e.shiftKey ? 10 : 1);

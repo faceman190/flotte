@@ -164,6 +164,14 @@ wss.on('connection', ws => {
       toAll({ t: 'mkt', st, k, s: market[st][k].s, at: market[st][k].t });
     } else if (m.t === 'tr') {
       trade(ws, c, m);
+    } else if (m.t === 'qi') {
+      // Einladung ins Quartier (seit 2026-11-24): nur an einen Piloten in derselben Station, mit der Ausstattung des Quartiers
+      const o = byId(+m.to), d = m.deko && typeof m.deko === 'object' ? m.deko : {}, now = Date.now();
+      if (!o || o === c || !c.name || !stationOf(c) || stationOf(o) !== stationOf(c) || now - (c.qiT || 0) < 1500) return;
+      c.qiT = now;
+      const list = (a, n, len) => (Array.isArray(a) ? a.slice(0, n).map(v => clean(v, len)).filter(Boolean) : []);
+      const ws2 = wsOf(o);
+      if (ws2) send(ws2, { t: 'qi', from: c.id, name: c.name, deko: { nr: Math.floor(+d.nr) || 0, schiffe: list(d.schiffe, 4, 16), funde: list(d.funde, 5, 20), legenden: list(d.legenden, 8, 32) } });
     } else if (m.t === 'chat') {
       const now = Date.now(), text = clean(m.text, 200);
       if (!text || now - c.chatT < 700) return;   // einfache Bremse gegen Spam

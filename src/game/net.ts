@@ -22,6 +22,7 @@ import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { SHIPS, type ShipId } from '../data/ships';
 import type { Paint } from '../models/gltfShips';
 import { radio } from '../ui/radio';
+import { quartierHooks, einladungAn, dekoAusNetz, ortKennung, nrText } from './quartier';
 
 // =====================================================================================
 // Mehrspieler (Client): Verbindung zum Server, eigenen Stand senden (10× pro Sekunde),
@@ -142,8 +143,15 @@ function onMsg(m: any) {
     coopReceive(m);
   } else if (m.t === 'chat') {
     radio(m.name, m.text, m.id === NET.id ? '#ffb347' : '#7fe0a0');
+  } else if (m.t === 'qi') {
+    // Einladung ins Quartier eines anderen Piloten (game/quartier.ts)
+    const name = String(m.name || ''), d = dekoAusNetz(m.deko, name);
+    if (name && d) { einladungAn(name, +m.from || 0, d); radio(name, `Komm vorbei: Quartier ${nrText(d.nr)}. Der Aufzug „Quartiere“ auf Deck 3 bringt dich hin.`, '#ffb35a'); }
   }
 }
+// Quartier: andere Piloten auf der Bastion einladen
+quartierHooks.piloten = () => pilotsHere().map(r => ({ id: r.id, name: r.name }));
+quartierHooks.einladen = (id, deko) => { if (NET.status !== 'online') return false; sendMsg({ t: 'qi', to: id, deko }); return true; };
 function disposeObj(o: THREE.Object3D) { scene.remove(o); o.traverse((c: any) => { if (c.isMesh && !c.userData.shared) c.geometry?.dispose(); }); }
 function removeRemote(id: number) { const r = remotes.get(id); if (!r) return; if (r.fig) dropRemote(r.fig); if (r.ship) disposeObj(r.ship.g); if (r.rover) disposeObj(r.rover); remotes.delete(id); }
 function clearRemotes() { for (const id of [...remotes.keys()]) removeRemote(id); syncOtherPilots([]); }
@@ -175,7 +183,7 @@ function sendState() {
   // im Flug die Flugposition (das Modell wird nur beim Zeichnen nachgeführt), sonst die Lage des Modells
   const s = myState(), p = s.m === 'schiff' ? P : s.o.position, q = s.o.quaternion;
   // zu Fuß in einer Station (nicht im eigenen Schiff): Position im Stationsraum mitschicken
-  const w = DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [IN.station.id, IN.x, IN.z, IN.yaw, IN.fy + IN.jy] : null;      // Station: fünfter Eintrag = Höhe (Rampen, Sprung)
+  const w = DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [ortKennung(IN.station.id), IN.x, IN.z, IN.yaw, IN.fy + IN.jy] : null;      // Station: fünfter Eintrag = Höhe (Rampen, Sprung)
   // Bodenfahrzeug: Art, Tempo, Lenkung, Lage und Drehung des Modells (auch wenn der Pilot daneben zu Fuß ist)
   const rm = world.surface && ROVER.active && ROVER.model ? ROVER.model.g : null;
   const v = rm ? [ROVER.kind, ROVER.speed, ROVER.steer, rm.position.x, rm.position.y, rm.position.z, rm.quaternion.x, rm.quaternion.y, rm.quaternion.z, rm.quaternion.w] : undefined;

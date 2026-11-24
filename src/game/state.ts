@@ -54,6 +54,7 @@ export interface Player {
   bodenZuletzt?: Record<string, number>;
   adern?: Record<string, number>;
   fahndung?: { s: number; t: number };      // Fahndungsstufe 0–3 und letzte Tat (ms), game/recht.ts           // Kristalladern in Minen: wann abgebaut (ms), je '<Mine>:<Nummer>' (dungeon.ts)    // je Bodenaufgabe: wann zuletzt erledigt (ms), für die Pause                     // gekaufte Bodenfahrzeuge (der Dachs gehört jedem Piloten und steht hier nicht)
+  quartier?: { nr: number; seit: number; koje?: boolean };      // Quartier auf der Bastion (game/quartier.ts): Nummer, seit wann gemietet, Koje ist der Aufwachpunkt
   rep?: Record<string, number>;    // Ruf bei den Fraktionen (siehe reputation.ts)
   missions?: import('./missions').Mission[];   // angenommene Fraktionsmissionen
   story?: import('./story').StoryState;        // Fortschritt der Geschichte (Prolog)

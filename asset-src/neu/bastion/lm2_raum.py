@@ -38,7 +38,7 @@ def kind(m):
     es = sock(b, 'Emission Strength'); tr = sock(b, 'Transmission Weight', 'Transmission')
     if nm in ('Bildschirm', 'Wandbild'): return 'screen'
     if 'bk' in m.keys() and json.loads(m['bk']).get('stripes') and json.loads(m['bk']).get('es', 0) > 0: return 'screen'      # leuchtende Streifen (Rundhalle: Ringschirm, Kurstafel, Auftragstafel, Sternkarte)
-    if nm == 'Sternfeld': return 'stars'
+    if nm in ('Sternfeld', 'Ausblick'): return 'stars'      # Ausblick (Quartier): im Spiel ein eigener Himmel nach der Blickrichtung
     if es is not None and (es.is_linked or es.default_value > 0): return 'glow'
     if tr is not None and tr.default_value > 0.5: return 'glass'
     return 'lit'

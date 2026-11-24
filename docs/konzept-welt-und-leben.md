@@ -66,5 +66,4 @@ testserver“. Leitlinien wie immer: realistisch statt verspielt, im Browser fl�
 - 8 Bergbau mit der Hand: `src/game/dungeon.ts` (buildAdern, updateAbbau), Handbohrer `werk_handbohrer` und sieben Kristall-Fundstücke in `src/data/gear.ts`.
 - 10 Recht und Ordnung: `src/game/recht.ts`, Treffer in `combat.ts`, Patrouillen in `npc.ts`, Bußgeld beim Andocken (`main.ts`, `hud.ts`); Testlabor setzt die Stufe.
 - 7 Außenbord: `src/game/eva.ts`, Modus `eva` (main.ts), Container von Hand in `begegnungen.ts` (evaContainer). Nicht am Andockpunkt einer Station.
-- 9 Quartier: noch nicht gebaut. Ein eigener begehbarer Raum braucht entweder ein eigenes Deck mit gebackenem Licht (wie das Pumpwerk) oder
-  eine Erweiterung der Schiffsräume (meshRoom.ts) auf Gebäude; beides ist ein eigenes größeres Stück Arbeit.
+- 9 Quartier: gebaut (Aufzug „QUARTIERE“ auf Deck 3, eigenes Modell mit gebackenem Licht, Fassung je Pilot, Besuch auf Einladung), siehe docs/quartier.md.

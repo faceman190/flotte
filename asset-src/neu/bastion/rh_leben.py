@@ -233,7 +233,7 @@ def leben():
     # Kisten und Säcke zwischen den Ständen und am Eingang
     for (r, d, nm, ang) in ((14.6, 160, 'kisten', 0.4), (14.5, -160, 'fass', 0.0), (14.4, 108, 'kisten', 2.1), (12.0, 141, 'rh_kuebel', 0)):
         x, y = polar(r, RAD(d)); inst(prop(nm), (x, y, 0), RAD(d) + ang, C_DECK)
-    x, y = polar(12.3, RAD(78)); inst(prop('rh_arbeit'), (x, y, 0), RAD(78), C_DECK)
+    x, y = polar(11.8, RAD(73)); inst(prop('rh_arbeit'), (x, y, 0), RAD(73), C_DECK)      # seit dem Aufzug (90°) etwas zur Seite
     # Fluter an allen Pfeilern
     for (deg, *_r) in BAYS + [(180,)]:
         t = th(deg)

@@ -30,7 +30,9 @@ import { bodyView, fpBody } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
 import { crewBesuch, crewSpruch, crewFetzen, crewDurchsage, crewEile, crewHooks } from './crewStimmen';
-import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, type Deck, type HangarBuild } from './deck';
+import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, type Deck, type HangarBuild, type DeckQuartier } from './deck';
+import { QS, eigeneDeko, nrText, FUND_FARBE, ortKennung, type QDeko } from './quartier';
+import { REP } from './reputation';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -56,7 +58,7 @@ interface Leaver { p: Person; x: number; z: number; path: number[][]; i: number;
 
 export const interiorHooks = {
   toCity: () => {},
-  openTab: (_tab: string, _note: string) => {},
+  openTab: (_tab: string, _note: string, _sub?: string) => {},
   undock: () => {},
   openMap: () => {},
   pause: () => {},
@@ -614,6 +616,7 @@ function build(st: Station) {
       if (i < 2) mkWalker(nodes, i * 3 + 7, true);
     });
     for (const [x, z, n] of dk.chats) mkChat(x, z, n);
+    if (dk.quartier) quartierAufbau(dk.quartier, g);      // Aufzug auf Deck 3 und das Quartier (game/quartier.ts)
   }
 
   boxUV(S, 1 / 6);
@@ -720,6 +723,19 @@ export function enterStanding(st: Station, mode: boolean | 'city', at?: { x?: nu
   if (!IN.active) return;
   for (const g2 of SHIP.glows) g2.visible = false;      // Triebwerke aus, wie nach dem Aufsetzen
   if (at && at.x !== undefined && at.z !== undefined && isFinite(at.x) && isFinite(at.z) && free(at.x, at.z)) { IN.x = at.x; IN.z = at.z; IN.yaw = at.yaw || 0; }
+  // im Quartier gespeichert: im eigenen Quartier weiter (ohne eigenes Quartier vor dem Aufzug auf Deck 3)
+  const Q = deck?.quartier;
+  if (Q && Q.drin(IN.x, IN.z)) {
+    if (P.quartier) quartierSetzen(P.name, eigeneDeko());
+    else { [IN.x, IN.z, IN.yaw] = Q.halle.ankunft; }
+  }
+}
+// Nach einem Abschuss in der eigenen Koje aufwachen (main.ts, hooks.respawn): Figur auf die Bettkante
+export function inKojeAufwachen() {
+  const Q = deck?.quartier; if (!Q || !IN.active || !P.quartier) return false;
+  quartierSetzen(P.name, eigeneDeko());
+  IN.x = Q.koje[0]; IN.z = Q.koje[1]; IN.yaw = Math.atan2(Q.koje[0] - Q.mitte[0], Q.koje[1] - Q.mitte[1]); IN.pitch = 0;
+  return true;
 }
 export function startLaunch(done: () => void) {
   if (!IN.active || !IN.station || SEQ.t >= 0) return false;
@@ -757,6 +773,7 @@ export function syncParkedShip() {
 // ---------- Betreten / Verlassen ----------
 // mode: false = mit dem Schiff (Landeanflug), true = Planetenbasis zu Fuß, 'city' = aus der Stadt zu Fuß durch die Promenadentür
 export function enterInterior(st: Station, mode: boolean | 'city' = false) {
+  QS.in = false; QS.owner = ''; QS.deko = null;
   const onFoot = mode === true, fromCity = mode === 'city';
   if (IN.active) leaveInterior();
   IN.active = true; IN.station = st;
@@ -913,6 +930,175 @@ export function leaveInterior() {
   camera.near = 0.5; camera.updateProjectionMatrix();
   IN.active = false; IN.station = null; IN.target = null; IN.say.t = 0;
   G.inside = false; meHolder.visible = false;
+  QS.in = false; QS.owner = ''; QS.deko = null; qDeko = null; qSchild = null; qSchirm = null;
+}
+
+// ---------- Quartier auf der Bastion (seit 2026-11-24, game/quartier.ts) ----------
+// Das Modell steht im Deck (Anbau, deck.ts). Hier: Aufzug, Koje, Spind, Regal, Bildschirm, Fenster, Türschild mit Nummer und Name, und im
+// Regal die Schiffe und Fundstücke des Besitzers (seine Ausstattung, QDeko). Die Fahrt versetzt die Figur hinter einer kurzen Blende.
+let qDeko: THREE.Group | null = null, qSchild: { tex: THREE.CanvasTexture; cv: HTMLCanvasElement } | null = null, qQ: DeckQuartier | null = null;
+let qSchirm: { tex: THREE.CanvasTexture; cv: HTMLCanvasElement } | null = null;
+function quartierAufbau(Q: DeckQuartier, g: THREE.Group) {
+  qQ = Q;
+  qDeko = new THREE.Group(); qDeko.visible = false; g.add(qDeko);
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 190;
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; disposables.push(tex);
+  const pm = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }); disposables.push(pm);
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(Q.schild.w * 0.94, Q.schild.h * 0.9), pm);
+  pl.position.set(Q.schild.x + Q.schild.nx * 0.004, Q.schild.y, Q.schild.z + Q.schild.nz * 0.004); pl.rotation.y = Math.atan2(Q.schild.nx, Q.schild.nz);
+  g.add(pl); qSchild = { tex, cv }; schildMalen(null);
+  // Hauptschirm am Schreibtisch: eigene Anzeige (Pilot, Credits, Ruf, Uhr) statt der Streifen aus Blender
+  if (Q.monitor) {
+    const M = Q.monitor, cv2 = document.createElement('canvas'); cv2.width = 1024; cv2.height = 594;
+    const t2 = new THREE.CanvasTexture(cv2); t2.colorSpace = THREE.SRGBColorSpace; t2.anisotropy = 4; disposables.push(t2);
+    const m2 = new THREE.MeshBasicMaterial({ map: t2, toneMapped: false }); disposables.push(m2);
+    const sp = new THREE.Mesh(new THREE.PlaneGeometry(M.w * 0.935, M.h * 0.92), m2);
+    sp.position.set(M.x + M.nx * 0.003, M.y, M.z + M.nz * 0.003); sp.rotation.order = 'YXZ'; sp.rotation.set(-M.tilt, Math.atan2(M.nx, M.nz), 0);
+    g.add(sp); qSchirm = { tex: t2, cv: cv2 };
+  }
+  if (Q.karte) {      // Sternkarte über dem Tisch: die Sektoren der Galaxiekarte mit ihren Verbindungen, Heimstatt markiert
+    const M = Q.karte, cv3 = document.createElement('canvas'); cv3.width = 768; cv3.height = 648; karteMalen(cv3);
+    const t3 = new THREE.CanvasTexture(cv3); t3.colorSpace = THREE.SRGBColorSpace; t3.anisotropy = 4; disposables.push(t3);
+    const m3 = new THREE.MeshBasicMaterial({ map: t3, toneMapped: false }); disposables.push(m3);
+    const kp = new THREE.Mesh(new THREE.PlaneGeometry(M.w * 0.97, M.h * 0.97), m3);
+    kp.position.set(M.x + M.nx * 0.003, M.y, M.z + M.nz * 0.003); kp.rotation.y = Math.atan2(M.nx, M.nz);
+    g.add(kp);
+  }
+  const own = () => QS.owner === P.name;
+  const [hx, hz] = Q.halle.aufzug;
+  inters.push({ x: hx, z: hz, r: 2.4, label: () => 'Aufzug · Quartiere', act: () => { QS.mode = 'aufzug'; interiorHooks.openTab('quartier', ''); } });
+  inters.push({ x: Q.aufzug[0], z: Q.aufzug[1], r: 1.5, label: () => 'Aufzug · zurück auf Deck 3', act: () => quartierFahrt('', null) });
+  inters.push({ x: Q.koje[0], z: Q.koje[1], r: 1.7, label: () => (own() ? 'Koje · ausruhen' : `Koje von ${QS.owner}`), act: () => (own() ? kojeRuhen() : say('SYSTEM', `Das ist die Koje von ${QS.owner}. Du bist hier zu Gast.`)) });
+  inters.push({ x: Q.spind[0], z: Q.spind[1], r: 1.5, label: () => (own() ? 'Spind öffnen' : `Spind von ${QS.owner} · abgeschlossen`), act: () => { if (own()) interiorHooks.openTab('ausruester', 'Dein Spind im Quartier: einlagern und herausnehmen.', 'spind'); else say('SYSTEM', 'Abgeschlossen.'); } });
+  inters.push({ x: Q.regal[0], z: Q.regal[1], r: 1.6, label: () => 'Regal · Sammlung ansehen', act: () => { QS.mode = 'regal'; interiorHooks.openTab('quartier', ''); } });
+  inters.push({ x: Q.tisch[0], z: Q.tisch[1], r: 1.5, label: () => (own() ? 'Bildschirm · Übersicht und Gäste' : `Bildschirm von ${QS.owner} · gesperrt`), act: () => { if (own()) { QS.mode = 'schirm'; interiorHooks.openTab('quartier', ''); } else say('SYSTEM', 'Gesperrt. Nur der Besitzer kommt an seinen Bildschirm.'); } });
+  inters.push({ x: Q.fenster[0], z: Q.fenster[1], r: 1.8, label: () => 'Aus dem Fenster sehen', act: () => say('SYSTEM', FENSTER[Math.floor(Math.random() * FENSTER.length)]) });
+}
+const FENSTER = ['Unter der Bastion dreht sich der Planet. Wolkenbänder ziehen über das Meer, auf der Nachtseite glimmen Städte.',
+  'Draußen ist es still. Ab und zu blinkt ein Frachter auf dem Weg zum Sprungtor.', 'Die Lufthülle des Planeten leuchtet blau am Rand. Von hier oben sieht alles friedlich aus.'];
+function schirmMalen(d: QDeko | null) {
+  if (!qSchirm) return;
+  const { cv, tex } = qSchirm, c = cv.getContext('2d')!, W = cv.width, H = cv.height, own = !!d && d.name === P.name;
+  const bg = c.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#06141a'); bg.addColorStop(1, '#030a0e'); c.fillStyle = bg; c.fillRect(0, 0, W, H);
+  c.fillStyle = 'rgba(120,220,230,0.05)'; for (let y = 0; y < H; y += 4) c.fillRect(0, y, W, 1);      // Zeilen
+  c.fillStyle = '#0d2a33'; c.fillRect(0, 0, W, 64);
+  c.font = 'bold 30px "Segoe UI", Arial, sans-serif'; c.fillStyle = '#7fe6ee'; c.textAlign = 'left';
+  c.fillText(`BASTION · QUARTIER ${d ? nrText(d.nr) : ''}`, 28, 43);
+  const now = new Date(); c.textAlign = 'right'; c.fillText(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`, W - 28, 43);
+  c.textAlign = 'left';
+  if (!own) { c.font = 'bold 64px "Segoe UI", Arial, sans-serif'; c.fillStyle = '#ff9b5a'; c.fillText('GESPERRT', 60, 250); c.font = '30px "Segoe UI", Arial, sans-serif'; c.fillStyle = '#8fb0b8'; c.fillText(d ? `Persönlicher Schirm von ${d.name}` : '', 60, 300); tex.needsUpdate = true; return; }
+  c.font = 'bold 52px "Segoe UI", Arial, sans-serif'; c.fillStyle = '#e8f4f6'; c.fillText(P.name.toUpperCase(), 40, 140);
+  c.font = '28px "Segoe UI", Arial, sans-serif'; c.fillStyle = '#7fa8b0'; c.fillText(`Pilot der Flotte · ${P.shipName}`, 40, 182);
+  const rows: [string, string][] = [['Credits', `${Math.floor(P.credits).toLocaleString('de-DE')} Cr`], ['Abschüsse', String(P.kills)], ['Schiffe', String(1 + P.fleet.length)], ['Sektoren', `${P.visited.length} / 18`]];
+  rows.forEach(([k, v], i) => { const y = 250 + i * 52; c.fillStyle = '#6f939a'; c.fillText(k, 40, y); c.fillStyle = '#d9eef1'; c.textAlign = 'right'; c.fillText(v, 470, y); c.textAlign = 'left'; c.fillStyle = 'rgba(127,230,238,0.12)'; c.fillRect(40, y + 14, 430, 2); });
+  // Ruf als Balken
+  c.fillStyle = '#7fe6ee'; c.font = 'bold 26px "Segoe UI", Arial, sans-serif'; c.fillText('RUF', 540, 120);
+  Object.entries(P.rep || {}).slice(0, 4).forEach(([f, v], i) => {
+    const y = 160 + i * 70, k = Math.max(0, Math.min(1, (+v + 100) / 1100));
+    c.font = '26px "Segoe UI", Arial, sans-serif'; c.fillStyle = '#9fc0c6'; c.fillText((REP as Record<string, { n: string }>)[f]?.n || f, 540, y);
+    c.fillStyle = '#0f3039'; c.fillRect(540, y + 14, 440, 14); c.fillStyle = '#ffb35a'; c.fillRect(540, y + 14, 440 * k, 14);
+  });
+  // kleine Kurve: Verdienst
+  c.strokeStyle = '#37c7d4'; c.lineWidth = 3; c.beginPath();
+  for (let i = 0; i <= 40; i++) { const x = 540 + i * 11, y = 520 - 50 * (0.5 + 0.35 * Math.sin(i * 0.45 + P.earned * 0.001) + 0.15 * Math.sin(i * 1.7)); if (i) c.lineTo(x, y); else c.moveTo(x, y); }
+  c.stroke(); c.fillStyle = '#6f939a'; c.font = '22px "Segoe UI", Arial, sans-serif'; c.fillText('Markt Heimstatt · Erzpreise', 540, 570);
+  tex.needsUpdate = true;
+}
+function karteMalen(cv: HTMLCanvasElement) {
+  const c = cv.getContext('2d')!, W = cv.width, H = cv.height;
+  c.fillStyle = '#040b12'; c.fillRect(0, 0, W, H);
+  c.strokeStyle = 'rgba(90,170,210,0.08)'; c.lineWidth = 1;
+  for (let x = 0; x < W; x += 48) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
+  for (let y = 0; y < H; y += 48) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+  const R0 = (s: number) => { let h = s; return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909)) >>> 0) / 4294967296; };
+  const rnd = R0(7); for (let i = 0; i < 260; i++) { c.fillStyle = `rgba(200,220,255,${0.15 + rnd() * 0.5})`; c.fillRect(rnd() * W, rnd() * H, 1.5, 1.5); }
+  const px = (m: [number, number]) => [40 + m[0] / 1000 * (W - 80), 70 + m[1] / 600 * (H - 130)];
+  const secs = Object.values(SECTOR) as any[];
+  c.strokeStyle = 'rgba(120,200,230,0.35)'; c.lineWidth = 1.5;
+  for (const s of secs) for (const l of s.links || []) { const o = (SECTOR as any)[l]; if (!o || l < s.id) continue; const [a, b] = px(s.map), [e, f] = px(o.map); c.beginPath(); c.moveTo(a, b); c.lineTo(e, f); c.stroke(); }
+  c.font = '15px "Segoe UI", Arial, sans-serif'; c.textAlign = 'center';
+  for (const s of secs) {
+    const [x, y] = px(s.map), home = s.id === 'heimstatt', seen = P.visited.includes(s.id);
+    c.fillStyle = home ? '#ffb35a' : seen ? '#7fe6ee' : '#3d6470'; c.beginPath(); c.arc(x, y, home ? 7 : 4.5, 0, Math.PI * 2); c.fill();
+    if (home) { c.strokeStyle = 'rgba(255,179,90,0.6)'; c.beginPath(); c.arc(x, y, 13, 0, Math.PI * 2); c.stroke(); }
+    c.fillStyle = home ? '#ffcf96' : seen ? '#a9cdd4' : '#4f7480'; c.fillText(s.name, x, y - 12);
+  }
+  c.textAlign = 'left'; c.fillStyle = '#7fe6ee'; c.font = 'bold 22px "Segoe UI", Arial, sans-serif'; c.fillText('STERNKARTE · BEKANNTE SEKTOREN', 26, 38);
+  c.fillStyle = '#6f939a'; c.font = '16px "Segoe UI", Arial, sans-serif'; c.fillText(`erkundet ${P.visited.length} von ${secs.length}`, 26, H - 22);
+}
+function schildMalen(d: QDeko | null) {
+  if (!qSchild) return;
+  const { cv, tex } = qSchild, c = cv.getContext('2d')!;
+  c.fillStyle = '#0a0d10'; c.fillRect(0, 0, cv.width, cv.height);
+  c.strokeStyle = 'rgba(255,170,80,0.35)'; c.lineWidth = 4; c.strokeRect(8, 8, cv.width - 16, cv.height - 16);
+  c.textAlign = 'center'; c.fillStyle = '#ffb35a'; c.font = 'bold 92px "Segoe UI", Arial, sans-serif';
+  c.fillText(d ? nrText(d.nr) : 'Q', cv.width / 2, 108);
+  c.fillStyle = '#b9c2cc'; c.font = '34px "Segoe UI", Arial, sans-serif'; c.fillText(d ? d.name.toUpperCase() : 'QUARTIER', cv.width / 2, 160);
+  tex.needsUpdate = true;
+}
+// Schiffsmodelle und Fundstücke des Besitzers ins Regal
+function quartierDeko(d: QDeko | null) {
+  if (!qDeko || !qQ) return;
+  while (qDeko.children.length) {
+    const c = qDeko.children[0]; qDeko.remove(c);
+    c.traverse((o: any) => { if (o.isMesh && !o.userData.shared) { o.geometry?.dispose(); (o.material as THREE.Material)?.dispose?.(); } });
+  }
+  qDeko.visible = !!d; schildMalen(d); schirmMalen(d);
+  if (!d) return;
+  const box = new THREE.Box3(), sz = new THREE.Vector3();
+  d.schiffe.forEach((cls, i) => {
+    const slot = qQ!.schiffe[i]; if (!slot || !(cls in SHIPS)) return;
+    const m = buildShipModel(cls as ShipId, (cls === P.cls && d.name === P.name ? P.paint || 'Orange' : 'Orange') as Paint);
+    m.g.traverse((o: any) => { o.userData.shared = true; if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+    m.g.position.set(0, 0, 0); m.g.rotation.set(0, 0, 0); m.g.scale.setScalar(1); m.g.updateMatrixWorld(true);
+    box.setFromObject(m.g); box.getSize(sz);
+    const k = 0.3 / Math.max(0.01, sz.x, sz.z);
+    const w = new THREE.Group(); w.add(m.g);
+    m.g.scale.setScalar(k); m.g.position.set(-(box.min.x + box.max.x) / 2 * k, -box.min.y * k + 0.045, -(box.min.z + box.max.z) / 2 * k);
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.05, 0.04, 14), new THREE.MeshStandardMaterial({ color: 0x23272c, metalness: 0.7, roughness: 0.4 }));
+    st.position.y = 0.02; w.add(st);
+    w.position.set(slot[0], slot[1], slot[2]); w.rotation.y = 0.7 + i * 0.35;
+    qDeko!.add(w);
+  });
+  d.funde.forEach((id, i) => {
+    const slot = qQ!.funde[i]; if (!slot) return;
+    const col = FUND_FARBE[id] || 0xffffff;
+    const kr = new THREE.Mesh(new THREE.OctahedronGeometry(0.035, 0), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.55, metalness: 0.1, roughness: 0.2, transparent: true, opacity: 0.92 }));
+    kr.scale.set(1, 1.7, 1); kr.position.set(slot[0], slot[1] + 0.075, slot[2]); kr.rotation.set(0.15, i * 0.9, 0.1);
+    const ft = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.045, 0.02, 16), new THREE.MeshStandardMaterial({ color: 0x1a1d21, metalness: 0.6, roughness: 0.45 }));
+    ft.position.set(slot[0], slot[1] + 0.01, slot[2]);
+    qDeko!.add(kr, ft);
+  });
+}
+function quartierSetzen(owner: string, deko: QDeko | null) {
+  QS.in = !!owner; QS.owner = owner; QS.deko = owner ? deko : null;
+  quartierDeko(QS.deko);
+}
+// Aufzug fahren: ins Quartier (owner = Besitzer) oder zurück auf Deck 3 (owner leer)
+export function quartierFahrt(owner: string, deko: QDeko | null) {
+  const Q = deck?.quartier; if (!Q || !IN.active || room) return;
+  IN.panel = null;
+  sfx('ui_confirm', 0.35, 0.6, () => snd(240, 0.25, 'sine', 0.03, -40));
+  snd(70, 1.6, 'sawtooth', 0.012, 30);      // Brummen des Aufzugs
+  setTimeout(() => snd(1320, 0.5, 'sine', 0.035, -20), 1300);      // Glocke bei der Ankunft
+  void warmScene(owner ? 'Aufzug zu den Quartieren' : 'Aufzug nach Deck 3', () => {
+    quartierSetzen(owner, deko);
+    const [x, z, yaw] = owner ? Q.ankunft : Q.halle.ankunft;
+    IN.x = x; IN.z = z; IN.yaw = yaw; IN.pitch = 0; walkV.x = walkV.z = 0;
+    deck?.update(IN.x, IN.z); deck?.prime();
+  }).then(() => {
+    if (!owner) return;
+    if (owner === P.name) say('SYSTEM', `Quartier ${nrText(deko?.nr || P.quartier?.nr || 0)}. Willkommen zu Hause.`);
+    else say('SYSTEM', `Quartier ${nrText(deko?.nr || 0)} von ${owner}. Du bist hier zu Gast.`);
+  });
+}
+function kojeRuhen() {
+  snd(330, 0.8, 'sine', 0.03, -60);
+  void warmScene('Ein paar Stunden Schlaf', () => {
+    const S = stats(); P.hull = S.maxHull; P.shield = S.maxShield;
+    if (P.quartier) P.quartier.koje = true;
+    saveGame();
+  }).then(() => say('SYSTEM', 'Ausgeruht. Dein Schiff ist gewartet, der Spielstand gesichert. Nach einem Abschuss wachst du hier auf.'));
 }
 
 // ---------- Eigene Schiffe betreten ----------
@@ -1593,7 +1779,7 @@ interface Other extends NetAct { p: Person | null; av: Avatar | null; x: number;
 const others = new Map<number, Other>();
 export function syncOtherPilots(list: { id: number; name: string; st: string; x: number; z: number; yaw: number; y?: number; g?: string[] | null }[]) {
   if (!IN.active || !IN.station || !stationGroup) { if (others.size) clearOthers(); return; }
-  const here = IN.station.id, seen = new Set<number>();
+  const here = ortKennung(IN.station.id), seen = new Set<number>();      // im Quartier: „bastion#q:<Besitzer>“ (game/quartier.ts)
   for (const o of list) {
     if (o.st !== here) continue;
     seen.add(o.id);

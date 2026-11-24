@@ -20,6 +20,7 @@ import { scene } from '../core/engine';
 import { world } from './world';
 import { releaseAll } from '../core/input';
 import { radio } from '../ui/radio';
+import { quartierHooks, eigeneDeko, quartierNr } from './quartier';
 import { esc, fmtN } from '../core/util';
 import type { Paint } from '../models/gltfShips';
 
@@ -65,7 +66,7 @@ const CSS = `
 #tldbg{position:fixed;left:12px;top:40px;z-index:9997;background:rgba(8,12,16,.82);color:#bfe8d8;font:11px Consolas,monospace;padding:6px 8px;white-space:pre;pointer-events:none;border-left:2px solid #4fd6c4}`;
 
 function ziele(): [string, string][] {
-  const o: [string, string][] = [];
+  const o: [string, string][] = [['qu', 'Bastion · im eigenen Quartier (wird gratis gemietet)']];
   for (const [sid, s] of Object.entries(SECTOR)) {
     for (const st of s.stations) {
       o.push([`st:${sid}:${st.id}:in`, `${s.name} · ${st.name} – zu Fuß in der Station`]);
@@ -161,6 +162,10 @@ function vorWeg() { VOR.mixer?.stopAllAction(); VOR.sk?.removeFromParent(); VOR.
 
 function act(a: string, k: string) {
   const v = (id: string) => (el?.querySelector('#' + id) as HTMLSelectElement | null)?.value || '';
+  if (a === 'reise' && v('tlZiel') === 'qu') {      // Quartier: mieten (gratis), zu Fuß auf die Bastion, dann mit dem Aufzug hinauf
+    P.quartier ||= { nr: quartierNr(P.name), seit: Date.now() };
+    vorWeg(); zu(); testHooks.reise('st:heimstatt:bastion:in'); setTimeout(() => quartierHooks.fahren(P.name, eigeneDeko()), 1500); say('Reise: Quartier'); return;
+  }
   if (a === 'reise') { const z = v('tlZiel'); if (!z) return; if (z.endsWith(':wiesel')) (P.fahrzeuge ||= []).includes('wiesel') || P.fahrzeuge!.push('wiesel'); vorWeg(); zu(); testHooks.reise(z); say('Reise: ' + (ziele().find(x => x[0] === z)?.[1] || z)); return; }
   if (a === 'geld') { P.credits += 100000; say(`+100.000 Credits · Kontostand ${fmtN(P.credits)}`); }
   if (a === 'voll') { const s = stats(); P.hull = s.maxHull; P.shield = s.maxShield; P.ammo = s.maxAmmo; P.rockets = s.maxRockets; P.charges = s.maxCharges; say('Hülle, Schild, Munition, Raketen und Ladungen aufgefüllt.'); }

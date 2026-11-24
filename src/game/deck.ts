@@ -42,6 +42,21 @@ interface RundJson {
   personal: DeckJson['personal']; wege: DeckJson['wege']; gruppen: number[][]; karte_xy: number[]; licht2: [string, string];
   mund: number[]; tor: number[];      // mund: Mündung des Korridors in die Halle (x, y, halbe Breite); tor: Hangartor (x, halbe Breite)
 }
+// Anbau eines Decks (seit 2026-11-24): das Quartier der Bastion, weit abseits der Rundhalle im selben Plan (asset-src/neu/bastion/qu_spiel.py)
+interface AnbauJson {
+  typ: 'anbau'; name: string; walk: number[][][]; blocks: number[][][]; orte: RundJson['orte']; licht2: [string, string];
+  quartier: { mitte: number[]; r: number; ankunft: number[]; aufzug: number[]; koje: number[]; spind: number[]; regal: number[]; tisch: number[]; fenster: number[]; schild: number[]; monitor?: number[]; karte?: number[]; schiffe: number[][]; funde: number[][] };
+  halle: { aufzug: number[]; tuer: number[] };
+}
+// Quartier in Innenraum-Koordinaten (interior.ts): Punkte [x, z], Blickrichtungen als Gierwinkel der Figur (IN.yaw)
+export interface DeckQuartier {
+  mitte: [number, number]; r: number; ankunft: [number, number, number]; aufzug: [number, number]; koje: [number, number]; spind: [number, number]; regal: [number, number];
+  tisch: [number, number]; fenster: [number, number]; schild: { x: number; y: number; z: number; nx: number; nz: number; w: number; h: number };
+  monitor: { x: number; y: number; z: number; nx: number; nz: number; w: number; h: number; tilt: number } | null;
+  karte: { x: number; y: number; z: number; nx: number; nz: number; w: number; h: number; tilt: number } | null;
+  schiffe: [number, number, number][]; funde: [number, number, number][]; halle: { aufzug: [number, number]; ankunft: [number, number, number] };
+  drin: (x: number, z: number) => boolean;
+}
 export interface DeckSpot { tab: string; x: number; z: number; face: number; tx: number; tz: number; titel?: string; satz?: string }      // titel und satz: Figur ohne Dienst, sagt nur ihren Satz
 export interface DeckNode { x: number; z: number; stop: null | { face: number; t: [number, number]; p: number; who: string | null } }
 export interface Deck {
@@ -52,6 +67,7 @@ export interface Deck {
   release: () => void;      // beim Verlassen des Innenraums: Grafikspeicher der Lichtraum-Bilder freigeben
   prime: () => void;        // beim Betreten, hinter der Blende: alle Raumspiegelungen aufnehmen
   primeStep: () => boolean; // beim Anflug: eine Raumspiegelung aufnehmen (false = alle fertig)
+  quartier?: DeckQuartier;  // Bastion: das Quartier (Anbau) mit Aufzug auf Deck 3
   stale: () => boolean;     // ohne Lichträume gebaut, die inzwischen geladen sind: Der Innenraum baut das Deck dann neu      // ist dieser Ort bzw. der Hangar vom Standort aus zu sehen?
 }
 
@@ -76,7 +92,7 @@ const LMCAP = { value: 1 }, LMSHADE = { value: 0 }, LMSPEC = { value: 1 };      
 // Bastion seit 2026-11-19: Rundhalle (nur Daten, ganz im Lichtraum 2); ohne deren Dateien (Artifact-Fassung) das alte Deck 3 nach Plan D
 // Pumpwerk Reifschleier seit 2026-11-24: Deck aus dem Eiswerk-Baukasten (asset-src/neu/eiswerk, docs/eiswerk-baukasten.md), ganz im Lichtraum 2
 const DECKS: Record<string, [string, string][]> = { bastion: [['deck_rund', ''], ['deck_bastion', 'BastionDeck']], eisenkrone: [['deck_huette_ek', ''], ['deck_eisenkrone', 'EisenkroneDeck']], pumpwerk: [['deck_pumpwerk', '']] };
-const LOADED: Record<string, { data: DeckJson; parts: Record<string, Part[]>; neu: boolean }> = {}, LOADING: Record<string, Promise<boolean>> = {};
+const LOADED: Record<string, { data: DeckJson; parts: Record<string, Part[]>; neu: boolean; anbau?: AnbauJson }> = {}, LOADING: Record<string, Promise<boolean>> = {};
 function pickDeck(id: string): [string, string, boolean] | null {
   const W = window as any;
   for (const [d, m] of DECKS[id] || []) { const dj = W.DATAFILES?.[d] as string | undefined, mu = m ? W.BASEDATA?.[m] as string | undefined : ''; if (dj && (mu || !m)) return [dj, mu || '', !m]; }
@@ -86,6 +102,8 @@ export const hasDeck = (id: string) => id in DECKS;
 export const deckReady = (id = 'bastion') => !!LOADED[id];
 export const deckData = (id = 'bastion') => LOADED[id]?.data;      // Daten des geladenen Decks (Prüfwerkzeuge: decktest.js, lueckensuche.js)
 export const lichtReady = (id = 'bastion') => !!LM[id] && !LM_BUSY;      // Lichträume geladen und für die Raumspiegelung vorbereitet (Tests)
+const ANBAU: Record<string, string> = { bastion: 'deck_quartier' };
+const W2 = window as any;
 export function loadDeck(id = 'bastion'): Promise<boolean> {
   if (LOADED[id]) return Promise.resolve(true);
   if (id in LOADING) return LOADING[id];
@@ -95,7 +113,10 @@ export function loadDeck(id = 'bastion'): Promise<boolean> {
   return (LOADING[id] = (async () => {
     try {
       const [data, gltf] = await Promise.all([fetch(dj).then(r => { if (!r.ok) throw new Error('Deckdaten: ' + r.status); return r.json(); }), mu ? new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(mu) : Promise.resolve(null)]);
-      LOADED[id] = { data, parts: gltf ? partsOf(gltf.scene) : {}, neu };
+      // Anbau (Quartier der Bastion): eigene Datei, fehlt sie (Artifact-Fassung), bleibt das Deck ohne
+      const aj = ANBAU[id] && neu ? W2.DATAFILES?.[ANBAU[id]] as string | undefined : undefined;
+      const anbau = aj ? await fetch(aj).then(r => (r.ok ? r.json() : null)).catch(() => null) as AnbauJson | null : null;
+      LOADED[id] = { data, parts: gltf ? partsOf(gltf.scene) : {}, neu, anbau: anbau || undefined };
       loadLicht(id).catch(() => false);      // Lichtraum (falls vorhanden) im Hintergrund dazu
       return true;
     } catch (e) { console.warn('Deck nicht geladen:', id, e); delete LOADING[id]; return false; }
@@ -141,7 +162,8 @@ function loadLicht(id: string): Promise<boolean> {
   if (id in LMLOADING) return LMLOADING[id];
   const W = window as any, pick = (L: [string, string][] | undefined) => (L || []).map(([j, m]) => [W.DATAFILES?.[j], W.BASEDATA?.[m]]).filter(q => q[0] && q[1]) as [string, string][];
   const own = LOADED[id]?.data?.licht2;      // das Deck nennt seinen Lichtraum selbst (Rundhalle); sonst die Liste je Station
-  const sets2 = pick(own ? [own] : LICHT2[id]), sets = sets2.length || LOADED[id]?.neu ? [] : pick(LICHT[id]);      // die neue Art ersetzt die alte ganz; ein Deck ohne Bausteinmodell hat nur die neue
+  const ab = LOADED[id]?.anbau?.licht2;
+  const sets2 = pick(own ? (ab ? [own, ab] : [own]) : LICHT2[id]), sets = sets2.length || LOADED[id]?.neu ? [] : pick(LICHT[id]);      // die neue Art ersetzt die alte ganz; ein Deck ohne Bausteinmodell hat nur die neue
   if (!sets.length && !sets2.length) return Promise.resolve(false);
   return (LMLOADING[id] = (async () => {
     // jeder Satz für sich: Fehlt einer (Datei nicht geladen), bleiben seine Räume Bausteine
@@ -240,6 +262,7 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
   const env = interiorEnv(), M = materials(), [nA, nN] = l2Noise(), out: Record<string, THREE.Material> = {};
   const V3 = (c: number[]) => ({ value: new THREE.Vector3(c[0], c[1], c[2]) }), V4 = (a: number, b: number, c: number, d: number) => ({ value: new THREE.Vector4(a, b, c, d) });
   for (const [name, p] of Object.entries(mats)) {
+    if (name === 'Ausblick') { out[name] = ausblickMat(); continue; }      // Quartier: Himmel nach der Blickrichtung (Sterne, Planet)
     if (p.kind === 'stars') { out[name] = M.stars; continue; }
     if (p.kind === 'glass') { const g = (M.glass as THREE.MeshStandardMaterial).clone(); g.userData.env = [env, g.envMapIntensity, 2.2]; out[name] = g; continue; }
     if (p.kind === 'screen' && p.stripes) {
@@ -351,6 +374,71 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
     out[name] = m;
   }
   return out;
+}
+// Blick ins All aus dem Quartier (seit 2026-11-24): Die Fläche hinter dem Fenster zeichnet den Himmel nach der Blickrichtung, nicht nach
+// ihrer Lage. So liegen Sterne und Planet unendlich weit weg und verschieben sich nicht, wenn man durchs Zimmer geht (die Sternfelder der
+// Rundhalle kleben dagegen als Muster auf der Fläche). Richtungen im Modellraum des Decks (glTF: x = Fenster, y = oben).
+// Der Planet ist eine Kugel in Blickrichtungen: Tag- und Nachtseite, Kontinente und Wolken aus dem Rauschbild (dreht sich langsam), Lufthülle am Rand.
+let AUSBLICK: THREE.ShaderMaterial | null = null;
+function ausblickMat() {
+  if (AUSBLICK) return AUSBLICK;
+  const [nA] = l2Noise(), T = { value: 0 };
+  const m = new THREE.ShaderMaterial({
+    uniforms: { uN: { value: nA }, uT: T, uGlow: GLOW },
+    side: THREE.DoubleSide,
+    vertexShader: `varying vec3 vD;
+      void main() { vec4 wp = modelMatrix * vec4(position, 1.0); vD = transpose(mat3(modelMatrix)) * (wp.xyz - cameraPosition); gl_Position = projectionMatrix * viewMatrix * wp; }`,
+    fragmentShader: `uniform sampler2D uN; uniform float uT; uniform float uGlow; varying vec3 vD;
+      float h3(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+      vec4 tri(vec3 n, float k) { vec3 w = abs(n); w /= (w.x + w.y + w.z); return texture2D(uN, n.yz * k) * w.x + texture2D(uN, n.xz * k + 0.31) * w.y + texture2D(uN, n.xy * k + 0.67) * w.z; }
+      vec3 stars(vec3 d) {
+        vec3 c = vec3(0.0);
+        for (int i = 0; i < 2; i++) {
+          float sc = i == 0 ? 150.0 : 340.0, th = i == 0 ? 0.986 : 0.993;
+          vec3 q = d * sc, id = floor(q), f = fract(q) - 0.5; float h = h3(id + float(i) * 17.0);
+          if (h > th) { float b = (h - th) / (1.0 - th); float r = length(f); vec3 tint = mix(vec3(1.0, 0.82, 0.65), vec3(0.72, 0.84, 1.0), fract(h * 91.0));
+            c += tint * smoothstep(0.36, 0.0, r) * (0.25 + 2.2 * b * b) * (i == 0 ? 1.0 : 0.55); }
+        }
+        return c;
+      }
+      void main() {
+        vec3 d = normalize(vD);
+        // Milchstraße: Band um einen Großkreis, vom Rauschen gefleckt
+        float bd = dot(d, normalize(vec3(-0.25, 0.85, 0.45)));
+        float band = exp(-bd * bd * 9.0), nb = tri(d, 0.9).r * tri(d, 2.3).g;
+        vec3 col = vec3(0.004, 0.005, 0.009) + vec3(0.05, 0.055, 0.08) * band * (0.25 + nb * 1.6) + vec3(0.05, 0.025, 0.035) * band * nb * nb * 2.0;
+        col += stars(d) * (1.0 - 0.6 * band);
+        // Planet: Kugel mit dem Halbmesser 1 im Abstand D (Winkelhalbmesser a) in Richtung pc
+        vec3 pc = normalize(vec3(1.0, -0.4, 0.3)); float a = 0.36, Dd = 1.0 / sin(a);
+        vec3 C = pc * Dd, L = normalize(vec3(0.45, 0.55, -0.7));
+        float b = dot(d, C), disc = b * b - (Dd * Dd - 1.0);
+        float ang = acos(clamp(dot(d, pc), -1.0, 1.0));
+        if (disc > 0.0) {
+          vec3 N = normalize(d * (b - sqrt(disc)) - C);
+          float t = uT * 0.004, cs = cos(t), sn = sin(t); vec3 Nr = vec3(cs * N.x + sn * N.z, N.y, -sn * N.x + cs * N.z);
+          float land = tri(Nr, 0.32).r * 0.55 + tri(Nr, 0.85).g * 0.3 + tri(Nr, 2.4).b * 0.15;
+          float cloud = tri(Nr * vec3(1.0, 3.0, 1.0) + vec3(uT * 0.0015, 0.0, 0.0), 0.5).b * 0.55 + tri(Nr * vec3(1.0, 2.0, 1.0), 1.6).r * 0.3 + tri(Nr, 4.0).g * 0.15;
+          vec3 base = mix(vec3(0.02, 0.06, 0.11), vec3(0.13, 0.12, 0.085), smoothstep(0.5, 0.56, land));
+          base = mix(base, vec3(0.22, 0.2, 0.17), smoothstep(0.62, 0.7, land));
+          base = mix(base, vec3(0.78, 0.8, 0.83), smoothstep(0.5, 0.75, cloud) * 0.85);
+          float lam = dot(N, L), day = smoothstep(-0.08, 0.25, lam);
+          vec3 p = base * (max(lam, 0.0) * 1.5 + 0.006);
+          p += vec3(1.0, 0.62, 0.3) * 0.05 * smoothstep(0.58, 0.63, land) * (1.0 - smoothstep(0.5, 0.7, cloud)) * (1.0 - day) * step(0.5, fract(land * 37.0));      // Lichter der Städte auf der Nachtseite
+          float rim = pow(1.0 - max(dot(N, -d), 0.0), 3.0);
+          p += vec3(0.25, 0.45, 0.95) * rim * (0.08 + 0.7 * smoothstep(-0.25, 0.45, lam));
+          col = p;
+        } else {
+          vec3 side = normalize(d - pc * dot(d, pc));
+          float halo = exp(-max(ang - a, 0.0) * 55.0) * smoothstep(-0.4, 0.6, dot(side, L));
+          col += vec3(0.22, 0.42, 0.95) * halo * 0.6;
+        }
+        gl_FragColor = vec4(col * min(uGlow * 1.43, 1.6), 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  m.onBeforeRender = () => { T.value = performance.now() / 1000; };
+  return (AUSBLICK = m);
 }
 // Kein MeshoptDecoder.useWorkers: Sein Hilfsfaden wird aus dem Quelltext zweier Funktionen gebaut und sucht sie unter ihrem
 // ursprünglichen Namen. Der Verkleinerer der gebauten Fassung benennt sie um, der Faden antwortet dann nie, und danach hängt jedes
@@ -935,13 +1023,17 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
   const toPlan = (x: number, z: number): [number, number] => [K0 + (hz0 - z), -x];
   const I = (poly: number[][]) => poly.map(([x, y]) => [gx(y), gz(x)]);
   const rects: Rect[] = [], blocks: Rect[] = [];
-  for (const p of D.walk) strips(I(p), rects);
-  for (const p of D.blocks) strips(I(p), blocks);
+  const A = LOADED[id]?.anbau;      // Quartier (Anbau): Laufflächen, Standflächen und Orte kommen dazu
+  for (const p of [...D.walk, ...(A ? A.walk : [])]) strips(I(p), rects);
+  for (const p of [...D.blocks, ...(A ? A.blocks : [])]) strips(I(p), blocks);
+  const ORTE = A ? [...D.orte, ...A.orte] : D.orte;
+  const QM = A ? A.quartier.mitte : null, QR = A ? A.quartier.r : 0;
+  const inQ = (px: number, py: number) => !!QM && Math.hypot(px - QM[0], py - QM[1]) < QR;      // Plankoordinaten im Quartier?
   const group = new THREE.Group(), meshes: { m: THREE.Mesh; c: THREE.Vector3; r: number }[] = []; let tris = 0;
   // Lichtraum 2: Teile mit ihren Punkten (Plan → Innenraum)
   const lm = deckTune.lichtraum ? LM[id] : undefined;
   const lmT = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0));
-  const SPOT: Record<string, [number, number]> = { halle: [6.8, 14], korridor: [4.6, 9], bucht: [4.3, 8], fluegel: [3.15, 8] };      // Höhe und Reichweite der Schlüssellampen je Teil
+  const SPOT: Record<string, [number, number]> = { halle: [6.8, 14], korridor: [4.6, 9], bucht: [4.3, 8], fluegel: [3.15, 8], quartier: [2.4, 6] };      // Höhe und Reichweite der Schlüssellampen je Teil
   const parts: { R: LmRoom; pts: [number, number][]; x: number; z: number; spot: [number, number]; gpu: boolean }[] = [];
   if (lm) for (const R of lm.rooms2) {
     for (const q of R.meshes) {
@@ -1010,12 +1102,13 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
   const spots: DeckSpot[] = D.personal.map(s => ({ tab: s.tab, x: gx(s.y), z: gz(s.x), face: yaw(s.face), tx: gx(s.ty), tz: gz(s.tx), titel: s.titel, satz: s.satz }));
   const routes: DeckNode[][] = D.wege.map(w => w.map(n => { const s = n[2] as any; return { x: gx(n[1] as number), z: gz(n[0] as number), stop: s ? { face: yaw(s.face), t: s.t, p: s.p, who: s.who } : null }; }));
   const chats = D.gruppen.map(q => [gx(q[1]), gz(q[0]), q[2]] as [number, number, number]);
-  const ort = (x: number, z: number) => { const [px, py] = toPlan(x, z); return D.orte.find(o => inPoly(o.poly, px, py)); };
+  const ort = (x: number, z: number) => { const [px, py] = toPlan(x, z); return ORTE.find(o => inPoly(o.poly, px, py)); };
   // Hangar sichtbar? Im Korridor immer, in der Halle nur auf der Sichtlinie durch die Mündung des Korridors zum Tor
   const [MX, , MH] = D.mund, TX = D.tor[0];
   let camX = 1e9, camZ = 1e9;
   const sight = (x: number, z: number) => {
     const [px, py] = toPlan(x, z);
+    if (inQ(px, py)) return false;      // aus dem Quartier sieht man den Hangar nicht
     if (px < MX) return true;
     const ym = py + (MX - px) * (0 - py) / (TX - px);
     return Math.abs(ym) < MH;
@@ -1025,7 +1118,7 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
   // Figuren und ihre Namen nur zeigen, wo man sie sehen kann: Korridor, Halle samt Buchten, je Flügel (Gang und Raum) ein Bereich.
   // Vom Korridor in Halle und Buchten nur durch die Mündung; in die Flügel nur aus dem Flügel selbst.
   const RR = Math.hypot(D.mund[0], D.mund[2]) + 0.4;      // Hallenradius (aus der Mündung des Korridors)
-  const zoneOf = (px: number, py: number) => (px < MX ? 'k' : Math.hypot(px, py) < RR ? 'h' : (() => {
+  const zoneOf = (px: number, py: number) => (inQ(px, py) ? 'q' : px < MX ? 'k' : Math.hypot(px, py) < RR ? 'h' : (() => {
     const d = Math.atan2(py, px) * 180 / Math.PI; return Math.abs(Math.abs(d) - 30) < 14 ? 'w' + Math.sign(d) : 'h';
   })());
   const seenFrom = (ex: number, ez: number, x: number, z: number) => {
@@ -1034,7 +1127,23 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
     if ((za === 'k' && zb === 'h') || (za === 'h' && zb === 'k')) { const t = (MX - ax) / (bx - ax || 1e-6), ym = ay + (by - ay) * t; return t >= 0 && t <= 1 && Math.abs(ym) < MH; }
     return false;
   };
+  // Quartier in Innenraum-Koordinaten: Punkte (Plan x, y) → (x, z); Blick in Grad (0 = Osten) → Gierwinkel der Figur (IN.yaw = Winkel)
+  let quartier: DeckQuartier | undefined;
+  if (A) {
+    const Q = A.quartier, pt = (p: number[]) => [gx(p[1]), gz(p[0])] as [number, number], RAD = Math.PI / 180, sc = Q.schild;
+    const hz = A.halle.aufzug;
+    quartier = {
+      mitte: pt(Q.mitte), r: Q.r, ankunft: [...pt(Q.ankunft), Q.ankunft[2] * RAD], aufzug: pt(Q.aufzug), koje: pt(Q.koje), spind: pt(Q.spind), regal: pt(Q.regal), tisch: pt(Q.tisch), fenster: pt(Q.fenster),
+      schild: { x: gx(sc[1]), y: sc[2], z: gz(sc[0]), nx: -sc[4], nz: -sc[3], w: sc[5], h: sc[6] },
+      karte: Q.karte ? { x: gx(Q.karte[1]), y: Q.karte[2], z: gz(Q.karte[0]), nx: -Q.karte[4], nz: -Q.karte[3], w: Q.karte[5], h: Q.karte[6], tilt: Q.karte[7] } : null,
+      monitor: Q.monitor ? { x: gx(Q.monitor[1]), y: Q.monitor[2], z: gz(Q.monitor[0]), nx: -Q.monitor[4], nz: -Q.monitor[3], w: Q.monitor[5], h: Q.monitor[6], tilt: Q.monitor[7] } : null,
+      schiffe: Q.schiffe.map(p => [gx(p[1]), p[2], gz(p[0])] as [number, number, number]), funde: Q.funde.map(p => [gx(p[1]), p[2], gz(p[0])] as [number, number, number]),
+      halle: { aufzug: pt(hz), ankunft: [...pt([hz[0], hz[1] - 0.6]), 270 * RAD] },
+      drin: (x, z) => { const [px, py] = toPlan(x, z); return inQ(px, py); },
+    };
+  }
   return {
+    quartier,
     group, rects, blocks, spots, routes, chats, tris, map: { x: gx(D.karte_xy[1]), z: gz(D.karte_xy[0]) }, name: D.name,
     inside: (z: number) => z < hz0 - 0.2 && z > hz0 - 90,
     area: (x, z) => ort(x, z)?.name || D.name,
