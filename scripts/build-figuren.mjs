@@ -7,17 +7,15 @@
 //   lazy/Skelett        das gemeinsame Skelett (UE5 Manny, 161 Knochen) mit einem unsichtbaren Dreieck (ohne Haut lädt three.js keine Knochen)
 //   lazy/Koerper1 …     je Figur nur der Körper (Körper, Kopf, Haare …), ohne die eigene Ausrüstung
 //   lazy/Teil_<id>      je Ausrüstungsteil eine Datei
-//   tex/aus_<id>        Bilder der Teile für Laden und Rucksack (gerendert mit Blender: asset-src/neu/spielcharakter_skripte/bilder.py)
+// Die Bilder der Teile für Laden und Rucksack rendert scripts/build-itembilder.mjs (danach aufrufen, wenn ein Teil neu ist).
 // Zwischenstand (Texturen schon verkleinert) liegt in asset-src/glb/lazy und asset-src/tex-world: Daraus packen auch
 // build-assets.mjs und build-manny.mjs, das Paket selbst braucht es dann nicht mehr.
 //
 // Aufruf: node scripts/build-figuren.mjs            zerlegen (falls das Paket da ist) und packen
-//         node scripts/build-figuren.mjs --bilder   zusätzlich die Bilder der Teile neu rendern (braucht Blender)
 // =====================================================================================
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import sharp from 'sharp';
 import { NodeIO } from '@gltf-transform/core';
@@ -26,9 +24,8 @@ import { prune, dedup, textureCompress } from '@gltf-transform/functions';
 import { packLazy, lazyOpts } from './lazy-pack.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = path.join(ROOT, 'asset-src', 'neu', 'spielcharakter'), LAZY = path.join(ROOT, 'asset-src', 'glb', 'lazy'), TEX = path.join(ROOT, 'asset-src', 'tex-world');
+const SRC = path.join(ROOT, 'asset-src', 'neu', 'spielcharakter'), LAZY = path.join(ROOT, 'asset-src', 'glb', 'lazy');
 const OUT = path.join(ROOT, 'public', 'assets'), MAN = path.join(OUT, 'manifest.json');
-const BLENDER = process.env.BLENDER || 'C:/EXTRA/Blender/blender.exe';
 const hash = buf => crypto.createHash('sha1').update(buf).digest('hex').slice(0, 10);
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
@@ -82,19 +79,6 @@ if (fs.existsSync(path.join(SRC, 'spiel.json'))) {
     + 'export const FIGUR_TEILE = ' + JSON.stringify({ teile: Object.fromEntries(spiel.ausruestung.map(a => [a.id, a.slot])), verdeckt: spiel.verdeckt }, null, 2) + ' as const;\n');
 } else console.log('Paket fehlt (' + SRC + ') – es wird nur aus asset-src/glb/lazy neu gepackt.');
 
-// ---------- Bilder der Teile ----------
-if (process.argv.includes('--bilder')) {
-  const tmp = fs.mkdtempSync(path.join(process.env.TEMP || '/tmp', 'figbild-'));
-  const jobs = fs.readdirSync(LAZY).filter(n => /^Teil_.*\.glb$/.test(n)).map(n => ['aus_' + n.slice(5, -4), path.join(LAZY, n)]);
-  fs.writeFileSync(path.join(tmp, 'jobs.json'), JSON.stringify(jobs.map(([n, f]) => ({ name: n, file: f, out: path.join(tmp, n + '.png') }))));
-  execFileSync(BLENDER, ['-b', '-P', path.join(ROOT, 'asset-src', 'neu', 'spielcharakter_skripte', 'bilder.py'), '--', path.join(tmp, 'jobs.json')], { stdio: ['ignore', 'ignore', 'inherit'] });
-  for (const [n] of jobs) {
-    await sharp(path.join(tmp, n + '.png')).trim({ threshold: 2 }).resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toFile(path.join(TEX, n + '.png'));
-    console.log('Bild ' + n);
-  }
-  fs.rmSync(tmp, { recursive: true, force: true });
-}
-
 // ---------- packen und in die Paketliste eintragen ----------
 const m = JSON.parse(fs.readFileSync(MAN, 'utf8'));
 function put(key, ext, buf, pack, orig) {
@@ -109,10 +93,6 @@ for (const n of fs.readdirSync(LAZY).filter(x => /^(Skelett|Koerper\d|Teil_.*)\.
   const name = n.slice(0, -4), src = fs.readFileSync(path.join(LAZY, n)), buf = await packLazy(src, lazyOpts(name));
   put('lazy/' + name, 'glb', buf, 'lazy', src.length);
   console.log(`lazy/${name}: ${(src.length / 1048576).toFixed(2)} → ${(buf.length / 1048576).toFixed(2)} MB`);
-}
-for (const n of fs.readdirSync(TEX).filter(x => /^aus_.*\.png$/.test(x))) {      // gleiche Regel wie build-assets.mjs für asset-src/tex-world
-  const src = fs.readFileSync(path.join(TEX, n));
-  put('tex/' + n.slice(0, -4), 'webp', await sharp(src).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 86, effort: 5 }).toBuffer(), 'world', src.length);
 }
 // die alte Einzelfigur (lazy/Spieler) ist durch lazy/Koerper1 ersetzt
 if (m.files['lazy/Spieler']) { fs.rmSync(path.join(OUT, m.files['lazy/Spieler'].url.slice('assets/'.length)), { force: true }); delete m.files['lazy/Spieler']; }

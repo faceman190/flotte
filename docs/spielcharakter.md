@@ -65,13 +65,17 @@ Drehbare Modelle haben die acht Teile und alle Waffen; alles andere zeigt sein B
 - **Gegenstände** (`data/gear.ts`): Arten und Plätze `weste`, `handschuh`, `stiefel`; Feld `teil` = Modell an der Figur;
   `WEAR_SLOTS` = Plätze, die man an der Figur sieht. `inventory.ts` `buyGear(id, ziel)` kauft auch direkt in den Spind.
 - **Laden** (`ui/dock.ts` `vAusruester`, `shopRows`, `shopAfter`; Gestaltung am Ende von `style.css`, Klassen `.sh…`).
-- **Bilder der Teile** (`tex/aus_<id>`): gerendert mit Blender (`asset-src/neu/spielcharakter_skripte/bilder.py`).
+- **Bilder** (`tex/aus_<name>`, 384 px, freigestellt): `node scripts/build-itembilder.mjs` rendert sie mit Blender (Cycles) aus den echten
+  Spielmodellen – die acht Teile, alle neun Waffen und die Granate. Studio, Licht und Blickwinkel sind die des Bildbogens der übrigen
+  Gegenstände (`asset-src/neu/items/items_lib.py`), damit im Laden alles zusammenpasst; das Skript ist
+  `asset-src/neu/spielcharakter_skripte/bilder.py`. Handschuhe und Stiefel werden dafür als Paar aufgestellt, Waffen schräg ins Bild
+  gelegt. Welcher Gegenstand welches Bild zeigt: `gear.ts`, Feld `img`. Übersicht: `bilder/spielcharakter-itembilder.jpg`.
 
 ## Neue Figur oder neues Teil einbauen
 
 1. Paket neu erzeugen (beim Spieler: `python Skripte\spiel_paket.py`) und nach `asset-src/neu/spielcharakter` entpacken.
-2. `node scripts/build-figuren.mjs --bilder` (zerlegt, rendert die Bilder, packt, trägt in die Paketliste ein; Blender unter
-   `C:/EXTRA/Blender/blender.exe` oder Umgebungsvariable `BLENDER`).
+2. `node scripts/build-figuren.mjs` (zerlegt, packt, trägt in die Paketliste ein), danach `node scripts/build-itembilder.mjs`
+   (rendert die Bilder; Blender unter `C:/EXTRA/Blender/blender.exe` oder Umgebungsvariable `BLENDER`).
 3. Neues Teil: einen Gegenstand in `data/gear.ts` anlegen (`teil`, `img: 'aus_<id>'`). Neue Figur: Eintrag in `KOERPER`
    (`build-figuren.mjs`) und in `FIGUREN` (`figur.ts`).
 4. Prüfen: `(0, eval)(await (await fetch('/scripts/figurtest.js')).text()); await __figur();` dann
@@ -83,7 +87,7 @@ Drehbare Modelle haben die acht Teile und alle Waffen; alles andere zeigt sein B
 - **Weste über dem Raumanzug**: geht, ist aber für den Feldoverall gemacht; an den Schultern liegt sie nicht überall auf.
 - **Rucksäcke** haben kein Modell an der Figur (im Paket gibt es den Platz, aber kein Teil).
 - **Mitspieler und Wachen** sind weiter die alte Soldatenfigur; Figur und Teile gehen noch nicht ins Netz.
-- **Bilder der drei Lyra-Waffen und der Granate** im Laden sind weiter Umrisse (ihre Modelle haben in Blender kein Material).
+- **SM-4**: Das Modell hat noch keine eigenen Bilder (im Spiel schlichtes Grau), entsprechend dunkel ist ihr Bild im Laden.
 - Die Ausrüstung im Flottenband zeigt jetzt zehn Plätze in einer Spalte; die Liste ist lang.
 - Gefühl und Aussehen im laufenden Spiel (Bewegung mit Kleidung, Durchstoßen in Extremhaltungen wie Ducken oder Sprint) sind ungeprüft.
 

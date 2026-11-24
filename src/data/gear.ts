@@ -64,7 +64,7 @@ export interface GearDef {
   shop?: 0 | 1 | 2;                                // im Laden: 0 fast überall, 1 seltener, 2 nur in gefährlichen Sektoren; fehlt = nur zu finden
   bolt?: string;                                   // Waffenmodul: eigenes Geschoss der Bordkanonen (game/bolts.ts, BOLTS)
   immer?: boolean;                                 // im Laden jeder Station (sonst entscheidet ein Würfel je Station)
-  img?: string;                                    // eigenes Bild statt des Bildbogens (Schlüssel in den Texturen: aus_… aus scripts/build-figuren.mjs)
+  img?: string;                                    // eigenes Bild statt des Bildbogens (Schlüssel in den Texturen: aus_…, gerendert aus dem echten Modell von scripts/build-itembilder.mjs)
   teil?: string;                                   // Modell an der Spielerfigur: Ausrüstungsteil aus dem Paket „Spielcharakter“ (game/figur.ts, z. B. helm_01)
 }
 
@@ -99,16 +99,16 @@ export const GEAR = {
   ruck_lasten: { n: 'Lastengestell', kind: 'rucksack', rar: 2, val: 1500, desc: 'Tragegestell der Bergleute. Fasst viel, drückt aufs Tempo.', st: { plaetze: 14, tempo: -4 }, shop: 1 },
   ruck_schwebe: { n: 'Schwebetornister', kind: 'rucksack', rar: 3, val: 6000, desc: 'Trägt sein Gewicht selbst.', st: { plaetze: 20 } },
   // ----- Waffen -----
-  waffe_pistole: { n: 'Dienstpistole P-7', kind: 'waffe', rar: 0, val: 200, desc: 'Zuverlässige Seitenwaffe der Flotte.', st: { schaden: 8 }, shop: 0 },
-  waffe_karabiner: { n: 'Sturmgewehr AR-39', kind: 'waffe', rar: 1, val: 900, desc: 'Das Standardgewehr der Flotte. Kurz genug für enge Gänge.', st: { schaden: 16 }, shop: 1 },
-  waffe_smg: { n: 'Maschinenpistole SM-4', kind: 'waffe', rar: 1, val: 1300, desc: 'Kompakt, mit Schalldämpfer. Hohe Feuerrate, wenig Rückstoß, für enge Gänge.', st: { schaden: 11 }, shop: 1 },   // Modell und Haltung vom Spieler (SMG_Final.fbx, Cascadeur-Clip s_aim)
-  waffe_flinte: { n: 'Enterflinte', kind: 'waffe', rar: 2, val: 2100, desc: 'Auf kurze Entfernung verheerend.', st: { schaden: 24 }, shop: 2 },
-  waffe_impuls: { n: 'Impulsgewehr', kind: 'waffe', rar: 2, val: 3400, desc: 'Verschießt gebündelte Energiestöße.', st: { schaden: 30 }, shop: 2 },
+  waffe_pistole: { n: 'Dienstpistole P-7', kind: 'waffe', rar: 0, val: 200, desc: 'Zuverlässige Seitenwaffe der Flotte.', st: { schaden: 8 }, shop: 0, img: 'aus_p9' },
+  waffe_karabiner: { n: 'Sturmgewehr AR-39', kind: 'waffe', rar: 1, val: 900, desc: 'Das Standardgewehr der Flotte. Kurz genug für enge Gänge.', st: { schaden: 16 }, shop: 1, img: 'aus_ar39' },
+  waffe_smg: { n: 'Maschinenpistole SM-4', kind: 'waffe', rar: 1, val: 1300, desc: 'Kompakt, mit Schalldämpfer. Hohe Feuerrate, wenig Rückstoß, für enge Gänge.', st: { schaden: 11 }, shop: 1, img: 'aus_smg' },   // Modell und Haltung vom Spieler (SMG_Final.fbx, Cascadeur-Clip s_aim)
+  waffe_flinte: { n: 'Enterflinte', kind: 'waffe', rar: 2, val: 2100, desc: 'Auf kurze Entfernung verheerend.', st: { schaden: 24 }, shop: 2, img: 'aus_ef2' },
+  waffe_impuls: { n: 'Impulsgewehr', kind: 'waffe', rar: 2, val: 3400, desc: 'Verschießt gebündelte Energiestöße.', st: { schaden: 30 }, shop: 2, img: 'aus_ig3' },
   // Aus dem Lyra-Paket (seit 2026-11-24, game/lyraGuns.ts): eigene Modelle in beiden Ansichten, Streuung wächst im Dauerfeuer (footgun.ts HEAT)
-  waffe_sp12: { n: 'Pistole SP-12', kind: 'waffe', rar: 0, val: 380, desc: 'Zwölf Schuss, schneller Abzug. Wer zu schnell feuert, streut; ein ruhiger Schuss aus dem Stand sitzt.', st: { schaden: 10 }, shop: 0, immer: true, img: 'hud_ly_pistol' },
-  waffe_kg30: { n: 'Kampfgewehr KG-30', kind: 'waffe', rar: 1, val: 1500, desc: 'Vollautomatisch, dreißig Schuss. Der erste Schuss sitzt, im Dauerfeuer wandert die Garbe; im Anschlag bleibt sie enger. Ab 28 Metern halbe Wirkung.', st: { schaden: 15 }, shop: 0, immer: true, img: 'hud_ly_rifle' },
-  waffe_tf8: { n: 'Trommelflinte TF-8', kind: 'waffe', rar: 2, val: 2800, desc: 'Acht Schuss in der Trommel, neun Kugeln je Schuss. Auf wenige Meter verheerend, danach schnell schwächer.', st: { schaden: 22 }, shop: 0, immer: true, img: 'hud_ly_shotgun' },
-  waffe_splitter: { n: 'Splitterwerfer', kind: 'waffe', rar: 3, val: 9000, desc: 'Ferrox-Technik. Niemand weiß genau, wie er arbeitet.', st: { schaden: 44 } },
+  waffe_sp12: { n: 'Pistole SP-12', kind: 'waffe', rar: 0, val: 380, desc: 'Zwölf Schuss, schneller Abzug. Wer zu schnell feuert, streut; ein ruhiger Schuss aus dem Stand sitzt.', st: { schaden: 10 }, shop: 0, immer: true, img: 'aus_sp12' },
+  waffe_kg30: { n: 'Kampfgewehr KG-30', kind: 'waffe', rar: 1, val: 1500, desc: 'Vollautomatisch, dreißig Schuss. Der erste Schuss sitzt, im Dauerfeuer wandert die Garbe; im Anschlag bleibt sie enger. Ab 28 Metern halbe Wirkung.', st: { schaden: 15 }, shop: 0, immer: true, img: 'aus_kg30' },
+  waffe_tf8: { n: 'Trommelflinte TF-8', kind: 'waffe', rar: 2, val: 2800, desc: 'Acht Schuss in der Trommel, neun Kugeln je Schuss. Auf wenige Meter verheerend, danach schnell schwächer.', st: { schaden: 22 }, shop: 0, immer: true, img: 'aus_tf8' },
+  waffe_splitter: { n: 'Splitterwerfer', kind: 'waffe', rar: 3, val: 9000, desc: 'Ferrox-Technik. Niemand weiß genau, wie er arbeitet.', st: { schaden: 44 }, img: 'aus_sw' },
   // ----- Werkzeuge -----
   werk_scanner: { n: 'Handscanner', kind: 'werkzeug', rar: 0, val: 150, desc: 'Findet die ergiebigsten Stellen einer Ader.', st: { abbau: 5 }, shop: 0 },
   werk_bohrkopf: { n: 'Gehärteter Bohrkopf', kind: 'werkzeug', rar: 1, val: 700, desc: 'Ersatzkopf für den Rover-Bohrer, hält länger scharf.', st: { abbau: 12 }, shop: 0 },
@@ -125,7 +125,7 @@ export const GEAR = {
   vb_schaum: { n: 'Reparaturschaum', kind: 'verbrauch', rar: 0, val: 60, desc: 'Dichtet Risse in der Hülle. Stellt 25 Hüllenpunkte wieder her.', stack: 10, use: { hull: 25 }, shop: 0 },
   vb_zelle: { n: 'Schildzelle', kind: 'verbrauch', rar: 1, val: 110, desc: 'Lädt den Schild des Schiffs sofort um 40 Punkte auf.', stack: 10, use: { shield: 40 }, shop: 0 },
   vb_satz: { n: 'Feldreparatursatz', kind: 'verbrauch', rar: 2, val: 320, desc: 'Flickplatten, Kleber, Schweißdraht. Stellt 70 Hüllenpunkte wieder her.', stack: 5, use: { hull: 70 }, shop: 1 },
-  vb_granate: { n: 'Splittergranate', kind: 'verbrauch', rar: 1, val: 160, desc: 'Zu Fuß mit G werfen. Prallt ab und zündet nach gut zwei Sekunden. Reißt im Umkreis von fünf Metern alles mit – auch den Werfer.', stack: 6, shop: 0, immer: true, img: 'hud_ly_grenade' },
+  vb_granate: { n: 'Splittergranate', kind: 'verbrauch', rar: 1, val: 160, desc: 'Zu Fuß mit G werfen. Prallt ab und zündet nach gut zwei Sekunden. Reißt im Umkreis von fünf Metern alles mit – auch den Werfer.', stack: 6, shop: 0, immer: true, img: 'aus_granate' },
   vb_notkern: { n: 'Notkern', kind: 'verbrauch', rar: 2, val: 380, desc: 'Einmal-Energiekern. Lädt den Schild um 120 Punkte auf.', stack: 5, use: { shield: 120 }, shop: 1 },
   // ----- Fundstücke -----
   fund_datenkern: { n: 'Datenkern', kind: 'fund', rar: 1, val: 350, desc: 'Speicher aus einem Ferrox-Wrack. Händler zahlen gut dafür.', stack: 20 },

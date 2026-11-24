@@ -564,15 +564,15 @@ td .gico{margin-right:8px}
 .tm .shFilt input::placeholder{color:var(--tu);text-transform:uppercase;font:600 15px var(--fh);letter-spacing:.06em}
 .tm .shGrid{flex:1;min-height:0;overflow:hidden auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-content:start;padding-right:4px}
 .tm .shNone{grid-column:1/-1;padding:18px 4px}
-.tm .shCard{display:grid;grid-template-columns:96px minmax(0,1fr);grid-template-rows:86px 30px;gap:6px 0;background:var(--tr);padding:8px;border:1px solid transparent;clip-path:var(--c8)}
+.tm .shCard{display:grid;grid-template-columns:112px minmax(0,1fr);grid-template-rows:104px 28px;gap:6px 0;background:var(--tr);padding:8px;border:1px solid transparent;clip-path:var(--c8)}
 .tm .shCard.on{background:var(--ts);border-color:var(--tt);box-shadow:inset 3px 0 0 var(--tt)}
 .tm .shCard button{clip-path:none;min-height:0;text-transform:none;letter-spacing:0}
-.tm .shCard .shPic{grid-row:1;grid-column:1;position:relative;background:var(--td);padding:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--tl)}
+.tm .shCard .shPic{grid-row:1;grid-column:1;position:relative;background:radial-gradient(circle at 50% 42%,#33424e 0%,#1a242c 62%,#10171c 100%);padding:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--tl)}
 .tm .shCard .shPic .gico,.tm .shCard .shPic svg{pointer-events:none}
 .tm .shCard .shPic em{position:absolute;right:4px;bottom:2px;font:600 13px var(--fm);font-style:normal;color:var(--th);text-shadow:0 1px 2px #000}
 .tm .shCard .shInfo{grid-row:1/3;grid-column:2;background:none;text-align:left;padding:4px 6px 4px 14px;display:flex;flex-direction:column;gap:3px;align-items:flex-start;justify-content:flex-start;font:15px/1.3 'IBM Plex Sans',system-ui,sans-serif;color:var(--tx)}
 .tm .shCard .shInfo:hover:not(:disabled),.tm .shCard .shPic:hover:not(:disabled){background:none;color:var(--tx)}
-.tm .shCard .shPic:hover:not(:disabled){background:var(--td);border-color:var(--tt)}
+.tm .shCard .shPic:hover:not(:disabled){background:radial-gradient(circle at 50% 42%,#3c4e5c 0%,#1e2a33 62%,#121a20 100%);border-color:var(--tt)}
 .tm .shCard .shInfo b{font-weight:600;font-size:17px;color:var(--rc,var(--th));line-height:1.2}
 .tm .shCard .shInfo small{font-size:13px}
 .tm .shCard .shPr{margin-top:auto;font:600 20px var(--fm);color:var(--th)}
@@ -588,7 +588,7 @@ td .gico{margin-right:8px}
 .tm .shFacts .row b{font:600 14px var(--fm);color:var(--th);display:inline;overflow:visible}
 .tm .shFacts .good{color:var(--tt)}.tm .shFacts .bad{color:var(--tw)}
 .tm .shDesc{font-size:14px;flex:none}
-.tm .shView{position:relative;flex:1;min-height:150px;background:#0d1215;border:1px solid var(--tl);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.tm .shView{position:relative;flex:1;min-height:150px;background:radial-gradient(circle at 50% 42%,#26323b 0%,#131b21 65%,#0d1215 100%);border:1px solid var(--tl);display:flex;align-items:center;justify-content:center;overflow:hidden}
 .tm .shView canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .tm .shView .shProbe{position:absolute;right:8px;bottom:8px}
 .tm .shBig{opacity:.95}

@@ -51,8 +51,8 @@ import { GEAR_ATLAS } from '../data/gearAtlas';
 export function gearIcon(id: string, size = 24, ghost = false) {
   // gerendertes Bild aus dem Bogen (Blender), sonst das gezeichnete Symbol
   const ATLAS_URL: string = ((window as any).TEXDATA || {}).items || '';   // erst beim Zeichnen nachsehen: die Liste entsteht beim Laden der Spieldaten
-  const own = ghost ? '' : ((window as any).TEXDATA || {})[gearDef(id)?.img || ''] || '';      // eigenes Bild (Umriss), auf dunklem Grund wie die Bilder des Bogens
-  if (own) return `<span class="gico" style="width:${size}px;height:${size}px;background:#141b22 url(${own}) center / 82% no-repeat;border-radius:3px"></span>`;
+  const own = ghost ? '' : ((window as any).TEXDATA || {})[gearDef(id)?.img || ''] || '';      // eigenes Bild: aus dem echten Modell gerendert (scripts/build-itembilder.mjs), freigestellt wie die Bilder des Bogens
+  if (own) return `<span class="gico" style="width:${size}px;height:${size}px;background:url(${own}) center / contain no-repeat"></span>`;
   const ai = ghost || !ATLAS_URL ? -1 : GEAR_ATLAS.ids.indexOf(id);
   if (ai >= 0) {
     const k = size / GEAR_ATLAS.cell, col = ai % GEAR_ATLAS.cols, row = Math.floor(ai / GEAR_ATLAS.cols);

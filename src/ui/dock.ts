@@ -371,7 +371,7 @@ function vAusruester(): View {
       : shop.mode === 'verkauf' ? `<button class="shQ" data-a="${r.n > 1 ? 'gsellall' : 'gsell'}" data-n="${r.key}">Verkaufen</button>`
       : `<button class="shQ" data-a="gtake" data-n="${r.key}">Nehmen</button>`;
     return `<div class="shCard${r.key === shop.sel ? ' on' : ''}" data-n="${esc(d.n.toLowerCase())}" style="--rc:${RARITY[d.rar].c}">
-      <button class="shPic" data-a="shsel" data-k="${r.key}" aria-label="${esc(d.n)}">${gearIcon(r.id, 78)}${r.n > 1 ? `<em>${r.n}</em>` : ''}</button>
+      <button class="shPic" data-a="shsel" data-k="${r.key}" aria-label="${esc(d.n)}">${gearIcon(r.id, 98)}${r.n > 1 ? `<em>${r.n}</em>` : ''}</button>
       <button class="shInfo" data-a="shsel" data-k="${r.key}"><b>${esc(d.n)}</b><small>${KIND_N[d.kind]} · ${RARITY[d.rar].n}</small>
         <span class="shPr${buy && P.credits < pr ? ' dn' : ''}">${shop.mode === 'spind' ? 'Im Spind' : `¤ ${shortCr(pr)}`}</span></button>
       ${quick}</div>`;
@@ -400,7 +400,7 @@ function vAusruester(): View {
         <div class="row"><span>Im Besitz</span><b>${have}</b></div></div>
       ${buy && cmp ? `<p class="hint">Verglichen mit dem angelegten: ${esc(cmp.n)}</p>` : ''}
       <p class="shDesc">${esc(d.desc)}</p>
-      <div class="shView">${model ? '<canvas id="tmItem"></canvas>' : `<div class="shBig">${gearIcon(id, 150)}</div>`}
+      <div class="shView">${model ? '<canvas id="tmItem"></canvas>' : `<div class="shBig">${gearIcon(id, 190)}</div>`}
         ${model && wear ? `<button class="sm shProbe" data-a="shprobe">${shop.probe ? 'Nur das Teil' : 'Anprobieren'}</button>` : ''}</div>`;
     if (buy) h += `<button class="pri big" data-a="gbuy" data-k="${id}" ${P.credits >= pr && room ? '' : 'disabled'}><span>${P.credits < pr ? 'Zu wenig Credits' : !room ? (shop.ziel === 'spind' ? 'Spind voll' : 'Rucksack voll') : 'Kaufen'}</span><span class="mo">${fmtN(pr)} Cr</span></button>`;
     else if (shop.mode === 'verkauf') h += `<div class="shActs"><button data-a="gstore" data-n="${sel.key}">In den Spind</button>${sel.n > 1 ? `<button data-a="gsell" data-n="${sel.key}">Eins verkaufen · ${fmtN(sp)}</button>` : ''}</div>
