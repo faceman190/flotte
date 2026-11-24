@@ -258,11 +258,12 @@ function cityMat(name: string, look: KitLook = {}) {
 }
 // Eigenes Zusatzlicht je Figur: Bewegte Figuren haben keinen Platz in der Lichtkarte. Ihre Materialien werden kopiert und bekommen eine Helligkeit,
 // die city.ts je Bild aus dem Lichtraster der Stadt (kit_pr_<Name>, bake_city_probe) am Standort der Figur setzt.
-export function probeLit(root: THREE.Object3D): THREE.Color {
-  const col = new THREE.Color(0, 0, 0), u = { value: col }, done = new Map<THREE.Material, THREE.Material>();
+// col: Farbe einer Figur, die schon eine hat (Netze, die später dazukommen: fremdFigur.ts); schon umgestellte Materialien bleiben
+export function probeLit(root: THREE.Object3D, col = new THREE.Color(0, 0, 0)): THREE.Color {
+  const u = { value: col }, done = new Map<THREE.Material, THREE.Material>();
   root.traverse((o: any) => {
     const src = o.isMesh ? o.material : null;
-    if (!src || !src.isMeshStandardMaterial) return;
+    if (!src || !src.isMeshStandardMaterial || src.userData.probe) return;
     let m = done.get(src);
     if (!m) {
       m = src.clone() as THREE.Material; const prev = src.onBeforeCompile, pk = src.customProgramCacheKey, mm = m;
@@ -271,6 +272,7 @@ export function probeLit(root: THREE.Object3D): THREE.Color {
         s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 kitProbe;').replace('#include <lights_fragment_maps>', 'irradiance += kitProbe;\n#include <lights_fragment_maps>');
       };
       m.customProgramCacheKey = () => pk.call(src) + '|probe';
+      m.userData.probe = true;
       done.set(src, m);
     }
     o.material = m;

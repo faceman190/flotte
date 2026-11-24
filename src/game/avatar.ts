@@ -14,7 +14,8 @@ export const footAccel = (base: number) => mannyAccel(base) * mannyTurn(TURN.t);
 export const footBrake = mannyBrake;   // Bremsrate nach dem Loslassen der Lauftasten (1/s)
 import { P } from './state';
 import { aimK } from './footgun';
-import { LYRA_ITEM } from './lyraGuns';
+import { LYRA_ITEM, LYRA_OF_VM } from './lyraGuns';
+import { FremdFigur } from './fremdFigur';
 // Eigene Figur: angelegte Ausrüstung plus das gewählte Aussehen (seit 2026-11-20)
 export const figGear = (): FigGear => ({ ...(P.gear || {}), look: normLook(P.look) });
 // Neue Spielerfigur (figur.ts): gewählte Figur und die Teile, die zur angelegten Ausrüstung gehören
@@ -73,12 +74,12 @@ export function flinch() { ACT.hit++; }
 export function noteShot() { ACT.shot++; }
 // Netzfeld g[4]: drei Zeichen [geduckt 0/1][Treffer mod 10][Schüsse mod 10]
 export const netFlags = () => (STANCE.crouch ? '1' : '0') + (ACT.hit % 10) + (ACT.shot % 10);
-export interface NetAct { crouch: boolean; hit: number; fire: number; fl: string }
+export interface NetAct { crouch: boolean; hit: number; fire: number; fl: string; shots?: number }      // shots: Schüsse gezählt (für den Rückstoß der neuen Figur)
 export function readNetFlags(n: NetAct, s?: string | null) {
   if (!s || s.length < 3) return;
   n.crouch = s[0] === '1';
   if (n.fl && s[1] !== n.fl[1]) n.hit++;
-  if (n.fl && s[2] !== n.fl[2]) n.fire = 0.25;
+  if (n.fl && s[2] !== n.fl[2]) { n.fire = 0.25; n.shots = (n.shots || 0) + ((+s[2] - +n.fl[2] + 10) % 10 || 1); }
   n.fl = s;
 }
 // Linke Hand am Vorderschaft: Anteil der Strecke Griff → Mündung, dann oben (−: darunter) und zur linken Seite, in Metern
@@ -100,8 +101,10 @@ export interface Avatar {
   body: number; phase: number; aimW: number; fireW: number; fireT: number; aimT: number; turning: number; first: boolean;
   hitN: number; hitT: number; hitS: number; armL: THREE.Object3D[] | null;
   player?: boolean;                                            // eigene Spielerfigur: darf die Testfigur Manny zeigen (mannyAvatar.ts, ?manny=1)
+  // fremde Figur (Mitspieler, Wache): tracht = was sie trägt; dann zeigt fremd (fremdFigur.ts) die neue Figur statt des Soldaten
+  tracht?: Tracht | null; fremd?: FremdFigur | null;
 }
-export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null; armed?: boolean; ads?: boolean; fp?: boolean }   // ads: Zielen gehalten (rechte Maustaste) · reload: Fortschritt 0..1, sonst −1 · armed: hier kann geschossen werden (Planet, Mine) – die neue Spielerfigur trägt dann die Waffe wid
+export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null; armed?: boolean; ads?: boolean; fp?: boolean; shots?: number }   // ads: Zielen gehalten (rechte Maustaste) · reload: Fortschritt 0..1, sonst −1 · armed: hier kann geschossen werden (Planet, Mine) – die neue Spielerfigur trägt dann die Waffe wid
 
 export function makeAvatar(gear: FigGear, player = false): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
@@ -109,11 +112,12 @@ export function makeAvatar(gear: FigGear, player = false): Avatar | null {
   return { s, ready: false, sW: 0, reloadW: 0, gaits: [], cgait: null, death: [], dying: null, cw: 0, airW: 0, body: 0, phase: 0, aimW: 0, fireW: 0, fireT: 0, aimT: 0, turning: 0, first: true,
     hitN: -1, hitT: 0, hitS: 1, armL: arm.every(Boolean) ? arm as THREE.Object3D[] : null, player };
 }
-// Figur im Halter halten; bei geänderter Ausrüstung (Helm, Anzug, Rucksack) neu bauen
-export function syncAvatar(holder: THREE.Object3D, a: Avatar | null, gear: FigGear) {
+// Figur im Halter halten; bei geänderter Ausrüstung (Helm, Anzug, Rucksack) neu bauen. player: die eigene Figur (sonst ein Mitspieler –
+// bis 24.11.2026 bekamen auch Mitspieler player = true und zogen die eigene neue Figur zu sich herüber)
+export function syncAvatar(holder: THREE.Object3D, a: Avatar | null, gear: FigGear, player = true) {
   if (a && a.s.gearKey === soldierGearKey(gear)) { if (a.s.g.parent !== holder) holder.add(a.s.g); return a; }
-  const n = makeAvatar(gear, true); if (!n) return a;
-  if (a) { releaseManny(); a.s.g.removeFromParent(); n.body = a.body; n.first = false; }
+  const n = makeAvatar(gear, player); if (!n) return a;
+  if (a) { if (player) releaseManny(); a.s.g.removeFromParent(); n.body = a.body; n.first = false; n.tracht = a.tracht; n.fremd = a.fremd; a.fremd = null; }
   holder.add(n.s.g);
   return n;
 }
@@ -172,6 +176,13 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   }
   a.body = wrap(a.body);
   s.g.rotation.y = a.body + Math.PI;
+  // Mitspieler und Wachen: die neue Figur mit ihrer Ausrüstung (fremdFigur.ts); solange sie lädt, der Soldat
+  if (!a.player && a.tracht) {
+    const f = a.fremd || (a.fremd = new FremdFigur());
+    const weapon = d.armed && d.wid ? { id: d.wid, lyra: LYRA_OF_VM[d.wid], aim: combat || !!d.ads, shots: d.shots ?? 0, hits: d.hit ?? 0, reload: d.reload ?? -1 } : null;
+    if (f.drive(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, dead: d.dead, ground: d.ground, tracht: a.tracht, weapon })) return;
+    s.root.visible = true;
+  }
   // Testfigur Manny (?manny=1): eigene Bewegungslogik, der Soldat bleibt unsichtbar im Halter
   if (a.player) {
     const mx = INTENT.mx, mz = INTENT.mz, sprint = INTENT.sprint; INTENT.mx = INTENT.mz = 0; INTENT.sprint = false;
@@ -258,6 +269,7 @@ export function avatarMuzzle(a: Avatar | null): THREE.Vector3 | null {
   if (!a) return null;
   const out = new THREE.Vector3();
   if (a.player && !a.s.root.visible) return mannyMuzzle(out) ? out : null;      // die neue Figur führt (der Soldat steht unsichtbar still)
+  if (a.fremd && !a.s.root.visible) return a.fremd.muzzle(out) ? out : null;
   return a.s.weapon ? a.s.weapon.localToWorld(out.copy(a.s.muzzle)) : null;
 }
 // Stärke des Treffer-Zuckens 0..1 (schnell hin, langsam zurück)
@@ -327,26 +339,31 @@ function gripWeapon(a: Avatar, d: Drive) {
 }
 
 // Mitspieler als Figur: Zielwerte (aus dem Netz) weich nachführen, Tempo aus der Bewegung, gleiche Clips wie die eigene Figur
-export interface RemoteFig extends NetAct { av: Avatar | null; x: number; y: number; z: number; tx: number; ty: number; tz: number; yaw: number; vx: number; vz: number; gear: FigGear; wid: string; init: boolean }
-export const newRemoteFig = (): RemoteFig => ({ av: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, vx: 0, vz: 0, gear: {}, wid: 'k12', init: false, crouch: false, hit: 0, fire: 0, fl: '' });
-// Netzfeld g: [Helm, Anzug, Rucksack, Waffe, Haltung/Ereignisse, Aussehen „Kopf,Farbe“] (Aussehen seit 2026-11-20; fehlt es, gilt das Standardaussehen)
+export interface RemoteFig extends NetAct { av: Avatar | null; x: number; y: number; z: number; tx: number; ty: number; tz: number; yaw: number; vx: number; vz: number; gear: FigGear; wid: string; init: boolean; tracht: Tracht | null }
+export const newRemoteFig = (): RemoteFig => ({ av: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, vx: 0, vz: 0, gear: {}, wid: 'k12', init: false, crouch: false, hit: 0, fire: 0, fl: '', tracht: null });
+// Netzfeld g: [Helm, Anzug, Rucksack, Waffe, Haltung/Ereignisse, Aussehen „Kopf,Farbe“, Figur, Weste, Handschuhe, Stiefel]
+// (Aussehen seit 2026-11-20, Figur und die drei Teile seit 2026-11-24; fehlen sie – älteres Spiel –, gilt Figur 1 mit Helm und Anzug)
 export const lookToNet = () => { const l = normLook(P.look); return l.kopf + ',' + l.farbe; };
 export function gearFromNet(g: string[] | null | undefined) {
   const lk = String(g?.[5] || '').split(','), look = normLook({ kopf: +lk[0], farbe: +lk[1] });
-  return { gear: { helm: g?.[0] || undefined, anzug: g?.[1] || undefined, rucksack: g?.[2] || undefined, look } as FigGear, wid: g?.[3] || viewModelId() };
+  const tracht = trachtOf(g?.[6] ? +g[6] : 1, { helm: g?.[0], anzug: g?.[1], weste: g?.[7], handschuh: g?.[8], stiefel: g?.[9] });
+  return { gear: { helm: g?.[0] || undefined, anzug: g?.[1] || undefined, rucksack: g?.[2] || undefined, look } as FigGear, wid: g?.[3] || viewModelId(), tracht };
 }
 export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {
-  f.av = syncAvatar(holder, f.av, f.gear);
+  f.av = syncAvatar(holder, f.av, f.gear, false);
   if (!f.av) return;
+  f.av.tracht = f.tracht;
   if (!f.init) { f.x = f.tx; f.y = f.ty; f.z = f.tz; f.init = true; f.av.body = f.yaw; f.av.first = false; }
   const k = Math.min(1, dt * 10), ox = f.x, oz = f.z;
   f.x += (f.tx - f.x) * k; f.y += (f.ty - f.y) * k; f.z += (f.tz - f.z) * k;
   const ivx = (f.x - ox) / Math.max(dt, 1e-3), ivz = (f.z - oz) / Math.max(dt, 1e-3), kv = Math.min(1, dt * 6);
   f.vx += (ivx - f.vx) * kv; f.vz += (ivz - f.vz) * kv;
   f.fire -= dt;
-  driveAvatar(f.av, dt, { x: f.x, y: f.y, z: f.z, yaw: f.yaw, pitch: 0, vx: Math.abs(f.vx) < 0.05 ? 0 : f.vx, vz: Math.abs(f.vz) < 0.05 ? 0 : f.vz, wid: f.wid, crouch: f.crouch, hit: f.hit, fire: f.fire > 0 });
+  driveAvatar(f.av, dt, { x: f.x, y: f.y, z: f.z, yaw: f.yaw, pitch: 0, vx: Math.abs(f.vx) < 0.05 ? 0 : f.vx, vz: Math.abs(f.vz) < 0.05 ? 0 : f.vz, wid: f.wid, crouch: f.crouch, hit: f.hit, fire: f.fire > 0, shots: f.shots, armed: true });      // Planet und Mine: bewaffnet
 }
-export function dropRemote(f: RemoteFig) { if (f.av) f.av.s.g.removeFromParent(); f.av = null; f.init = false; }
+/** fremde Figur abbauen (Mitspieler weg, Stadt verlassen): auch die neue Figur freigeben */
+export function freeAvatar(a: Avatar) { a.fremd?.dispose(); a.fremd = null; a.s.g.removeFromParent(); }
+export function dropRemote(f: RemoteFig) { if (f.av) freeAvatar(f.av); f.av = null; f.init = false; }
 
 // Kamera der Außensicht: über der rechten Schulter, Blick wie in der Ich-Sicht. clear(x, y, z) meldet, ob dort Platz ist;
 // die Kamera rückt bis vor das erste Hindernis vor (sofort), zurück geht sie weich.

@@ -86,6 +86,7 @@ export interface MannyDrive {
 // einer Waffe aus, deren Lauf rund 9 cm über der Handfläche liegt (BORE): Jede Waffe wird so weit verschoben, dass ihr Lauf dort liegt
 // (Pistolen nur zu 70 %, ihr Griff ist kürzer) – dann sitzt der Griff in der Hand und das Visier vor dem Auge.
 type Kind = 'rifle' | 'pistol' | 'shotgun';
+export type MannyKind = Kind;
 const HOLD: Record<string, { kind: Kind; grip?: [number, number] }> = {
   ar39: { kind: 'rifle', grip: [0.42, -0.058] }, k12: { kind: 'rifle', grip: [0.5, -0.05] }, ig3: { kind: 'rifle', grip: [0.42, -0.05] },
   smg: { kind: 'rifle', grip: [0.45, -0.05] }, ef2: { kind: 'shotgun', grip: [0.6, -0.045] }, p9: { kind: 'pistol' }, sw: { kind: 'pistol' },
@@ -96,17 +97,27 @@ const GRIP_LEFT = 0.07;                                         // die linke Han
 const handGuns: Partial<Record<Kind, LyraGun>> = {};
 const lyraGun = (kind: Kind) => handGuns[kind] || (handGuns[kind] = makeLyraGun(kind) || undefined) || null;
 // sight: Punkt auf der Visierlinie im Raum des Waffenmodells (beim Zielen in der Ich-Sicht rückt er vor das Auge)
-const gun = { id: '', g: null as THREE.Object3D | null, muzzle: new THREE.Vector3(), shown: false, lyra: null as LyraGun | null, sight: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, -1) };
-function setGun(id: string, lyra?: Kind) {
-  if (!anim?.weapon) return;
+export interface GunState { id: string; g: THREE.Object3D | null; muzzle: THREE.Vector3; shown: boolean; lyra: LyraGun | null; sight: THREE.Vector3; fwd: THREE.Vector3 }
+export const newGun = (): GunState => ({ id: '', g: null, muzzle: new THREE.Vector3(), shown: false, lyra: null, sight: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, -1) });
+const gun = newGun();
+function setGun(id: string, lyra?: Kind) { mountGun(anim, gun, id, lyra, lyraGun); }
+/** Haltung (Art der Clips) zu einem Waffenmodell */
+export const weaponKind = (id: string, lyra?: Kind): Kind => lyra || (HOLD[id] || HOLD.k12).kind;
+/**
+ * Waffe id (bzw. Lyras Waffe lyra) in die Hand einer Figur legen: an = ihr Animator, gs = ihr Waffenstand, pick = woher Lyras Modelle
+ * kommen (jede Figur braucht eigene Kopien). Auch für Mitspieler und Wachen (fremdFigur.ts).
+ */
+export function mountGun(an: any, gs: GunState, id: string, lyra: Kind | undefined, pick: (k: Kind) => LyraGun | null) {
+  const gun = gs;
+  if (!an?.weapon) return;
   // Lyras Modell, sobald es geladen ist; bis dahin (und wenn es fehlt) das Modell des Spiels
-  const lg = lyra ? lyraGun(lyra) : null, key = lg ? 'lyra:' + lyra : id;
+  const lg = lyra ? pick(lyra) : null, key = lg ? 'lyra:' + lyra : id;
   if (gun.id === key) return;
   if (lg) {
     gun.g?.removeFromParent();
     gun.id = key; gun.g = lg.g; gun.lyra = lg; gun.muzzle.set(...LYRA_SPEC[lyra!].muzzle); lg.shots = -1;
     gun.sight.set(0, 0, -LYRA_SPEC[lyra!].ads[1]); gun.fwd.set(1, 0, 0);      // Rahmen der Waffe: x = Lauf, z = oben
-    anim.weapon.mount.add(lg.g); anim.weapon.grip = null;      // die Haltungen sind für diese Waffen gemacht: beide Hände wie im Clip
+    an.weapon.mount.add(lg.g); an.weapon.grip = null;      // die Haltungen sind für diese Waffen gemacht: beide Hände wie im Clip
     return;
   }
   const w = buildHandWeapon(id); if (!w) return;               // Vorlage noch nicht geladen: im nächsten Bild wieder
@@ -114,10 +125,10 @@ function setGun(id: string, lyra?: Kind) {
   gun.id = id; gun.g = w.g; gun.lyra = null; gun.muzzle.copy(w.muzzle); gun.fwd.set(0, 0, -1);
   // Visierlinie der Waffen des Spiels: knapp über ihrem höchsten Punkt (Zielfernrohr, Kimme), am Griff
   gun.sight.set(0, Math.max(w.muzzle.y + 0.036, new THREE.Box3().setFromObject(w.g).max.y + 0.012), 0);
-  anim.weapon.socket.add(w.g);
+  an.weapon.socket.add(w.g);
   const h = HOLD[id] || HOLD.k12, L = -w.muzzle.z, up = (BORE[h.kind] - w.muzzle.y) * (h.kind === 'pistol' ? 0.7 : 1);
   w.g.position.set(0, up, 0);
-  anim.weapon.grip = h.grip ? new THREE.Vector3(-GRIP_LEFT, w.muzzle.y + h.grip[1] + up, -L * h.grip[0]) : null;
+  an.weapon.grip = h.grip ? new THREE.Vector3(-GRIP_LEFT, w.muzzle.y + h.grip[1] + up, -L * h.grip[0]) : null;
 }
 /** Mündung der Waffe in der Hand der Figur (Weltkoordinaten); false, solange die Figur keine Waffe zeigt */
 export function mannyMuzzle(out: THREE.Vector3): boolean {
@@ -211,6 +222,8 @@ export function mannyPace(f: number, s: number, sprint: boolean, crouch: boolean
 }
 /** nur für Prüfskripte */
 export const mannyAnim = () => anim;
+/** Animator der eigenen Figur als Vorlage für fremde Figuren (fremdFigur.ts: teilen sich Bewegungssatz und Analyse); null solange er lädt */
+export function mannyBase(): any { if (!MANNY.on) return null; ensure(); return anim; }
 
 /**
  * Manny statt des Soldaten zeigen. holder: die Gruppe der Spielerfigur (Position und Drehung body + π setzt avatar.ts),

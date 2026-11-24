@@ -89,7 +89,7 @@ export function syncMinePilots(list: { id: number; name: string; e: string; x: n
     const isNew = !mates.has(o.id);
     const f = mates.get(o.id) || newRemoteFig(); mates.set(o.id, f);
     if (isNew) sendFull();
-    const ng = gearFromNet(o.g); f.gear = ng.gear; f.wid = ng.wid; readNetFlags(f, o.g?.[4]); f.tx = o.x; f.ty = 0; f.tz = o.z; f.yaw = o.yaw;
+    const ng = gearFromNet(o.g); f.gear = ng.gear; f.wid = ng.wid; f.tracht = ng.tracht; readNetFlags(f, o.g?.[4]); f.tx = o.x; f.ty = 0; f.tz = o.z; f.yaw = o.yaw;
     driveRemote(group, f, dt);
   }
   for (const [id, f] of mates) if (!seen.has(id)) { dropRemote(f); mates.delete(id); grp.since.delete(id); }

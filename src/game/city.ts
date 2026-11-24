@@ -9,7 +9,9 @@ import { collisionSpheres } from '../models/stationModels';
 import { hasChar, charInstance, animInit, animStep, animTalk, type CharAnim } from '../models/charModels';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { SHIPS, type ShipId } from '../data/ships';
-import { makeAvatar, driveAvatar, type Avatar } from './avatar';
+import { makeAvatar, driveAvatar, freeAvatar, type Avatar } from './avatar';
+import { FremdFigur } from './fremdFigur';
+import type { Tracht } from './figur';
 import { viewModelId } from './mineArt';
 import { staffBark } from './barks';
 import { world, type Station } from './world';
@@ -92,6 +94,7 @@ export function buildCityModel(name: string) {
 interface Walker { lc?: THREE.Color; c: ReturnType<typeof charInstance>; path: [number, number][]; i: number; dir: number; x: number; z: number; v: number; wait: number }
 interface Vendor { lc?: THREE.Color; c: ReturnType<typeof charInstance>; x: number; z: number }
 interface Guard { lc?: THREE.Color; a: Avatar; x: number; z: number; yaw: number }
+const wacheTracht = (i: number): Tracht => ({ figur: i % 2 ? 3 : 1, teile: { helm: 'helm_01', weste: 'weste_01', overall: 'overall_01', handschuh: 'handschuh_01', stiefel: 'stiefel_01' } });
 interface Flyer { m: ShipModel; t: number; dur: number; a: THREE.Vector3; b: THREE.Vector3; c: THREE.Vector3; out: boolean }
 export const CITY = { st: null as Station | null, name: '', walk: false };
 let life: THREE.Group | null = null, walkers: Walker[] = [], vendors: Vendor[] = [], guards: Guard[] = [], flyers: Flyer[] = [], flyT = 8;
@@ -163,11 +166,16 @@ export function initCity(st: Station) {
     c.g.position.set(x, 0.18, z); c.g.rotation.y = out < 0 ? Math.PI / 2 : -Math.PI / 2; life.add(c.g);
     vendors.push({ c, x, z, lc: lit ? probeLit(c.g) : undefined });
   }
-  // Wachen (Soldaten mit Gewehr)
-  for (const gd of m.guards || []) {
-    const a = makeAvatar({ helm: 'wache', anzug: 'panzer' }); if (!a) break;
-    life.add(a.s.g); guards.push({ a, x: gd[0], z: gd[1], yaw: gd[2], lc: lit ? probeLit(a.s.g) : undefined });
-  }
+  // Wachen mit Gewehr: seit 24.11.2026 die Figuren der Spieler (figur.ts) in voller Ausrüstung, abwechselnd Figur 1 und 3
+  // (fremdFigur.ts); der Soldat steht nur, solange sie laden
+  (m.guards || []).forEach((gd, i) => {
+    const a = makeAvatar({ helm: 'wache', anzug: 'panzer' }); if (!a) return;
+    a.tracht = wacheTracht(i);
+    const lc = lit ? probeLit(a.s.g) : undefined;
+    a.fremd = new FremdFigur();
+    if (lc) a.fremd.onDress = root => { probeLit(root, lc); };      // Netze der Figur kommen später dazu: dasselbe Stadtlicht
+    life!.add(a.s.g); guards.push({ a, x: gd[0], z: gd[1], yaw: gd[2], lc });
+  });
   if (m.style === 'neon') buildNeon(m);
   // Ansprechpunkte zu Fuß (Weltkoordinaten)
   cityTargets.length = 0;
@@ -193,6 +201,7 @@ export function clearCity() {
   setSkyDusk(0); scene.environmentIntensity = 1;
   atmoBase = null; fx = [];
   if (life) life.removeFromParent();
+  for (const g of guards) freeAvatar(g.a);
   life = null; walkers = []; vendors = []; guards = [];
   for (const f of flyers) { scene.remove(f.m.g); }
   flyers = []; cityTargets.length = 0; CITY.st = null; CITY.name = ''; CITY.walk = false; cb = null;
@@ -260,7 +269,7 @@ export function updateCity(dt: number) {
       // ab 45 m das einfache Netz (ein Viertel der Dreiecke; aus der Entfernung ist der Unterschied nicht zu sehen), mit 5 m Spielraum gegen Flackern
       const d2 = (pl.x - g.x) * (pl.x - g.x) + pl.y * pl.y + (pl.z - g.z) * (pl.z - g.z);
       if (d2 > 50 * 50) g.a.s.lod?.(true); else if (d2 < 45 * 45) g.a.s.lod?.(false);
-      driveAvatar(g.a, dt, { x: g.x, y: 0.18, z: g.z, yaw: g.yaw, pitch: 0, vx: 0, vz: 0, wid: viewModelId(), combat: false });
+      driveAvatar(g.a, dt, { x: g.x, y: 0.18, z: g.z, yaw: g.yaw, pitch: 0, vx: 0, vz: 0, wid: viewModelId(), combat: false, armed: true });
     }
   }
   // Verkehr: alle 25–45 s ein Schiff, abwechselnd hinein und hinaus

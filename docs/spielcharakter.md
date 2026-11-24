@@ -71,6 +71,28 @@ Drehbare Modelle haben die acht Teile und alle Waffen; alles andere zeigt sein B
   `asset-src/neu/spielcharakter_skripte/bilder.py`. Handschuhe und Stiefel werden dafür als Paar aufgestellt, Waffen schräg ins Bild
   gelegt. Welcher Gegenstand welches Bild zeigt: `gear.ts`, Feld `img`. Übersicht: `bilder/spielcharakter-itembilder.jpg`.
 
+## Mitspieler und Wachen (seit 24.11.2026)
+
+Mitspieler zu Fuß (Station, Mine, Planet) und die Wachen der Städte sind dieselben Figuren mit denselben Teilen und Bewegungen wie die
+eigene Figur (`game/fremdFigur.ts`):
+
+- **Je Figur** eine eigene Kopie des Skeletts (`neuesSkelett`) und ein eigener Animator. Der Bewegungssatz und seine Auswertung kommen
+  vom Animator der eigenen Figur (`MannyAnimator.spawn`): nichts wird ein zweites Mal geladen oder ausgewertet. Netze und Bilder
+  teilen sich alle Figuren. Solange das lädt, steht dort der alte Soldat.
+- **Gesteuert nach dem Tempo** (bei Mitspielern aus den Netzpositionen geglättet), nicht nach einer Absicht wie die eigene Figur.
+- **Waffe**: auf Planet und in der Mine die Waffe des Mitspielers mit denselben Haltungen (gesenkt, nach einem Schuss im Anschlag,
+  Rückstoß je Schuss); in Stationen unbewaffnet. Wachen tragen ein Gewehr gesenkt.
+- **Netz**: Das Feld `g` hat vier Einträge mehr: Figur, Weste, Handschuhe, Stiefel (`net.ts`, `avatar.ts gearFromNet`; der Server lässt
+  jetzt zehn statt sechs Einträge durch). Ein älteres Spiel ohne diese Einträge erscheint als Figur 1 mit seinem Helm und Anzug.
+- **Wachen**: abwechselnd Figur 1 und 3 in voller Ausrüstung (Gefechtshelm, Weste, Feldoverall, Handschuhe, Stiefel), mit dem Stadtlicht
+  ihres Standorts (`kit.ts probeLit`, auch für Netze, die erst später dazukommen).
+- **Kosten**: drei Mitspieler zusammen rund 1,7 ms je Bild im Testfenster (Bewegung und Zeichnen).
+- **Behoben dabei**: Mitspieler bekamen bisher `player = true` (`syncAvatar`) und zogen dadurch die eigene neue Figur zu sich herüber.
+  Mit einem Mitspieler in der Nähe sprang die eigene Figur zwischen beiden hin und her.
+
+Bilder: `bilder/spielcharakter-mitspieler.jpg` (Station: Figur 2 ausgerüstet, Figur 3, dahinter ein älteres Spiel),
+`bilder/spielcharakter-mitspieler-waffen.jpg` (Planet: KG-30 im Anschlag, SP-12 gesenkt), `bilder/spielcharakter-wache.jpg` (Talstadt).
+
 ## Neue Figur oder neues Teil einbauen
 
 1. Paket neu erzeugen (beim Spieler: `python Skripte\spiel_paket.py`) und nach `asset-src/neu/spielcharakter` entpacken.
@@ -86,7 +108,8 @@ Drehbare Modelle haben die acht Teile und alle Waffen; alles andere zeigt sein B
 - **Figur 2** ist eine Zusammenstellung (siehe oben). Sauber wäre ein eigener Körper im Unteranzug für den MetaHuman.
 - **Weste über dem Raumanzug**: geht, ist aber für den Feldoverall gemacht; an den Schultern liegt sie nicht überall auf.
 - **Rucksäcke** haben kein Modell an der Figur (im Paket gibt es den Platz, aber kein Teil).
-- **Mitspieler und Wachen** sind weiter die alte Soldatenfigur; Figur und Teile gehen noch nicht ins Netz.
+- **Mitspieler**: im echten Mehrspieler mit zwei Rechnern noch nicht ausprobiert (geprüft mit nachgestellten Netzdaten). Mitspieler
+  ducken, schießen und laufen, springen aber nicht sichtbar und fallen beim Tod nicht um (diese Zustände gehen nicht ins Netz).
 - **SM-4**: Das Modell hat noch keine eigenen Bilder (im Spiel schlichtes Grau), entsprechend dunkel ist ihr Bild im Laden.
 - Die Ausrüstung im Flottenband zeigt jetzt zehn Plätze in einer Spalte; die Liste ist lang.
 - Gefühl und Aussehen im laufenden Spiel (Bewegung mit Kleidung, Durchstoßen in Extremhaltungen wie Ducken oder Sprint) sind ungeprüft.

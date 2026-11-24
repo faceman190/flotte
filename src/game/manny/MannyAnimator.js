@@ -87,14 +87,6 @@ export class MannyAnimator {
     }
     const t0 = performance.now();
     const fx = new ClipFeatureExtractor(this.model);
-    this.mixer = new THREE.AnimationMixer(this.model);
-    // Actions are created when a clip is first needed and dropped again when it has not been used for a while (_act, _trim):
-    // with several hundred clips, one action each would mean a hundred thousand bound tracks.
-    this._acts = new Map();
-    this.actions = new Proxy({}, {
-      get: (_, n) => (typeof n === 'string' ? this._act(n) : undefined), has: (_, n) => this.clips.has(n),
-      ownKeys: () => this.clips.names, getOwnPropertyDescriptor: (_, n) => (this.clips.has(n) ? { enumerable: true, configurable: true } : undefined),
-    });
     this.feat = {};
     const legs = new Set(fx.restLocal.keys());
     let slice = performance.now(), work = 0;
@@ -106,6 +98,33 @@ export class MannyAnimator {
     this.analyseMs = Math.round(work + performance.now() - slice); this.loadMs = Math.round(performance.now() - t0);
     this._buildSets();
     this._buildCycles();
+    return this._initInstance();
+  }
+
+  /**
+   * A second figure on the same skeleton (other players, guards): shares the clip store and everything analysed from it (features,
+   * loop sets, cycles) with this animator – nothing is loaded or analysed again – and gets its own mixer, layers and state.
+   * model: a fresh copy of the skeleton (figur.ts neuesSkelett).
+   */
+  spawn(model) {
+    const a = new MannyAnimator({ tuning: this.tuning, turnRate: this.turnRate, heavyLandingSpeed: this.heavyLandingSpeed });
+    a.model = model;
+    model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    for (const k of ['clips', 'feat', 'loopSets', 'loopSetsAlt', 'groups', 'deathClips', 'turn', 'deathLie', 'cycles', 'missing']) a[k] = this[k];
+    a.alt = false; a.analyseMs = 0; a.loadMs = 0;
+    return a._initInstance();
+  }
+
+  /** everything that belongs to one figure (mixer, layers, state) */
+  _initInstance() {
+    this.mixer = new THREE.AnimationMixer(this.model);
+    // Actions are created when a clip is first needed and dropped again when it has not been used for a while (_act, _trim):
+    // with several hundred clips, one action each would mean a hundred thousand bound tracks.
+    this._acts = new Map();
+    this.actions = new Proxy({}, {
+      get: (_, n) => (typeof n === 'string' ? this._act(n) : undefined), has: (_, n) => this.clips.has(n),
+      ownKeys: () => this.clips.names, getOwnPropertyDescriptor: (_, n) => (this.clips.has(n) ? { enumerable: true, configurable: true } : undefined),
+    });
     this.layers = this.clips.pose ? new PoseLayers(this.model, this.clips) : null;
     this._look = { yaw: 0, pitch: 0, w: 0 }; this._lean = 0;
     this.weapon = this.clips._decode ? new WeaponLayer(this.model, this.clips) : null;      // upper body with a weapon in hand (Lyra clips)

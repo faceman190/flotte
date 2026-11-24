@@ -172,7 +172,7 @@ function sendState() {
   const s = myState(), p = s.m === 'schiff' ? P : s.o.position, q = s.o.quaternion;
   // zu Fuß in einer Station (nicht im eigenen Schiff): Position im Stationsraum mitschicken
   const w = DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [IN.station.id, IN.x, IN.z, IN.yaw] : null;
-  const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe), netFlags(), lookToNet()];
+  const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe), netFlags(), lookToNet(), String(P.figur ?? 1), gr.weste || '', gr.handschuh || '', gr.stiefel || ''];
   sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g });
 }
 setInterval(sendState, 100);
@@ -202,7 +202,7 @@ export function netUpdate(dt: number) {
     // zu Fuß auf dem Planeten: Soldat mit Laufclips
     if (r.m === 'fuss') {
       const f = r.fig || (r.fig = newRemoteFig()), ng = gearFromNet(r.g);
-      f.gear = ng.gear; f.wid = ng.wid; readNetFlags(f, r.g?.[4]); f.tx = r.tp.x; f.ty = r.tp.y; f.tz = r.tp.z;
+      f.gear = ng.gear; f.wid = ng.wid; f.tracht = ng.tracht; readNetFlags(f, r.g?.[4]); f.tx = r.tp.x; f.ty = r.tp.y; f.tz = r.tp.z;
       f.yaw = new THREE.Euler().setFromQuaternion(r.tq, 'YXZ').y;
       driveRemote(scene, f, dt);
     } else if (r.fig) dropRemote(r.fig);

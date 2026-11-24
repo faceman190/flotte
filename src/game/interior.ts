@@ -25,7 +25,7 @@ import { hasMeshRoom, meshRoomReady, loadMeshRoom, buildMeshRoom, interiorEnv } 
 import { stationTemplate } from '../models/stationModels';
 import { applyKit, kitMeta } from '../models/kit';
 import { HANGAR_BLOCKS } from '../data/hangarBlocks';
-import { VIEW, STANCE, footPace, footBrake, footAccel, setIntent, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, figGear, gearFromNet, type Avatar, type NetAct } from './avatar';
+import { VIEW, STANCE, footPace, footBrake, footAccel, setIntent, eyeH, syncAvatar, driveAvatar, freeAvatar, tpCamPos, resetTpCam, readNetFlags, figGear, gearFromNet, type Avatar, type NetAct } from './avatar';
 import { bodyView, fpBody } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
@@ -1598,21 +1598,21 @@ export function syncOtherPilots(list: { id: number; name: string; st: string; x:
     const ng = gearFromNet(o.g), gear = ng.gear, wid = ng.wid;   // mit Aussehen (Kopf, Farbe) des Mitspielers
     if (!r) {
       // Soldat wie die eigene Figur (src/game/avatar.ts); fehlt das Modell, die einfache Figur
-      const av = syncAvatar(stationGroup, null, gear);
+      const av = syncAvatar(stationGroup, null, gear, false);      // Mitspieler: eigene Figur aus figur.ts (fremdFigur.ts)
       const p = av ? null : buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, PAL[kind].accent, 'walk');
       if (p) { p.g.position.set(o.x, 0, o.z); p.g.rotation.y = o.yaw + Math.PI; stationGroup.add(p.g); }
       r = { p, av, x: o.x, z: o.z, ry: o.yaw + Math.PI, tx: o.x, tz: o.z, tyaw: o.yaw, name: o.name, speed: 0, vx: 0, vz: 0, gear, wid, crouch: false, hit: 0, fire: 0, fl: '' };
       others.set(o.id, r);
     }
     r.tx = o.x; r.tz = o.z; r.tyaw = o.yaw; r.name = o.name; r.wid = wid; readNetFlags(r, o.g?.[4]);
-    if (r.av) { r.gear = gear; r.av = syncAvatar(stationGroup, r.av, gear); }
+    if (r.av) { r.gear = gear; r.av = syncAvatar(stationGroup, r.av, gear, false); r.av.tracht = ng.tracht; }
   }
   for (const id of [...others.keys()]) if (!seen.has(id)) removeOther(id);
 }
 function removeOther(id: number) {
   const r = others.get(id); if (!r) return;
   if (r.p) { r.p.g.parent?.remove(r.p.g); r.p.g.traverse((c: any) => { if (c.isMesh && !c.userData.shared) c.geometry?.dispose(); }); }
-  if (r.av) r.av.s.g.removeFromParent();
+  if (r.av) freeAvatar(r.av);
   others.delete(id);
 }
 function clearOthers() { for (const id of [...others.keys()]) removeOther(id); }
@@ -1627,7 +1627,7 @@ function updateOthers(dt: number) {
     if (r.av) {
       // Laufrichtung relativ zur Blickrichtung des Piloten ergibt die Richtungsclips (vor, seitlich, zurück)
       r.fire -= dt;
-      driveAvatar(r.av, dt, { x: r.x, y: 0, z: r.z, yaw: r.tyaw, pitch: 0, vx: Math.abs(r.vx) < 0.05 ? 0 : r.vx, vz: Math.abs(r.vz) < 0.05 ? 0 : r.vz, wid: r.wid, crouch: r.crouch, hit: r.hit, fire: r.fire > 0 });
+      driveAvatar(r.av, dt, { x: r.x, y: 0, z: r.z, yaw: r.tyaw, pitch: 0, vx: Math.abs(r.vx) < 0.05 ? 0 : r.vx, vz: Math.abs(r.vz) < 0.05 ? 0 : r.vz, wid: r.wid, crouch: r.crouch, hit: r.hit, fire: r.fire > 0, shots: r.shots });
       continue;
     }
     if (!r.p) continue;
