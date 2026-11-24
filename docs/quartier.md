@@ -15,13 +15,13 @@ viel Mühe geben, kleine Details, schöne Beleuchtung.“
 
 ## Im Spiel
 
-- **Aufzug „QUARTIERE“** im Wandstück bei 90° (Nordseite der Halle, zwischen Handelskontor und Werft). [E] öffnet das Aufzugterminal:
+- **Aufzug „QUARTIERE“** im Wandstück bei 90° (Nordseite der Halle, zwischen Handelskontor und Werft), mit großem Leuchtschild wie über den Buchten und Bodenschrift an der Leitspur. Seit 25.11.2026 steht davor nichts mehr: Imbiss nach −90° (vor das Schott „DECK 2“), Baustelle nach −45°, Banner „Niemand kommt uns holen“ innen an die Kuppel, Kisten weg. [E] öffnet das Aufzugterminal:
   Quartier mieten (2.500 Cr, einmal), ins eigene Quartier fahren, Einladungen annehmen.
 - **Vorraum:** Aufzugtür mit Stockanzeige, Türschild mit Nummer und Name (vom Spiel gezeichnet), Waschplatz mit Spiegel, Garderobe,
   Feuerlöscher.
 - **Koje** in einer Nische: ausruhen (Hülle und Schild voll, Spielstand gesichert). Danach ist die Koje der Aufwachpunkt: Nach einem
   Abschuss wacht man in der Koje auf (main.ts, hooks.respawn → interior.ts inKojeAufwachen).
-- **Spind:** öffnet den Ausrüster gleich in der Spind-Ansicht.
+- **Spind:** nur einlagern und herausnehmen (Reiter „Im Spind“ und „Einlagern“), kein Kaufen und Verkaufen. Das geht nur beim Ausrüster auf Deck 3.
 - **Regal:** Sammlung (Schiffe, Kristalle, legendäre Stücke). Im Regal und auf dem Wandbord stehen bis zu vier Modelle der eigenen Schiffe
   und je ein Kristall jeder Sorte aus Rucksack und Spind.
 - **Bildschirm** am Schreibtisch: Pilotenübersicht, Ruf, Gäste einladen.

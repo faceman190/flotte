@@ -32,6 +32,7 @@ M['e_sig_a'] = mk('Schild Auftraege', (0.1, 1, 0.9), 0, 0.3, var=0, rvar=0, emit
 M['e_sig_h'] = mk('Schild Handel', (1, 0.55, 0.1), 0, 0.3, var=0, rvar=0, emit=(1.0, 0.5, 0.08), es=4.5, grime=False)
 M['e_sig_w'] = mk('Schild Werft', (0.8, 0.9, 1), 0, 0.3, var=0, rvar=0, emit=(0.75, 0.88, 1.0), es=5, grime=False)
 M['e_sig_r'] = mk('Schild Ausruester', (1, 0.25, 0.1), 0, 0.3, var=0, rvar=0, emit=(1.0, 0.22, 0.06), es=4.5, grime=False)
+M['e_sig_q'] = mk('Schild Quartiere', (1, 0.86, 0.62), 0, 0.3, var=0, rvar=0, emit=(1.0, 0.82, 0.55), es=5, grime=False)
 M['e_sig_k'] = mk('Schild Kantine', (1, 0.75, 0.4), 0, 0.3, var=0, rvar=0, emit=(1.0, 0.68, 0.32), es=4, grime=False)
 M['e_holo'] = mk('Holo', (0.3, 0.8, 1), 0, 0.3, var=0, rvar=0, emit=(0.25, 0.7, 1.0), es=6, grime=False)
 M['flasche'] = mk('Flaschenglas', (0.25, 0.12, 0.04), 0.0, 0.08, var=0.3, rvar=0, grime=False)
@@ -262,9 +263,16 @@ def sector_fill(L, kind, label=''):
         bx = tw / 2 + 0.42
         box('Rufpult', 0.2, 0.06, 0.38, bx, y - 0.08, 1.3, M['frame'], 0.008); box('Rufpultbild', 0.12, 0.008, 0.08, bx, y - 0.114, 1.42, M['screen'], 0)
         for (z, mm) in ((1.3, 'e_cool'), (1.19, 'e_amber')): cyl('Rufknopf', 0.03, 0.016, bx, y - 0.118, z, M[mm], 'Y', n=16, bev=0)
-        box('Türschild', len(label) * 0.11 + 0.9, 0.04, 0.3, 0, -0.14, nh + 0.42, M['wall4'], 0.01)
-        text('AUFZUG  ·  ' + label, 0.16, (0, -0.165, nh + 0.36), END_X, END_Y, M['txtw'], align='CENTER')
-        text(label, 0.2, (0, -1.0, 0.012), (1, 0, 0), (0, 1, 0), M['txto'], align='CENTER')
+        # großes Leuchtschild über dem Aufzug (seit 2026-11-25): Schildkasten vor dem oberen Wandband, leuchtende Schrift wie über den Buchten
+        sw, s0, s1, sy = 4.6, nh + 0.42, nh + 1.72, -0.48
+        box('Leuchtschild Kasten', sw, 0.16, s1 - s0, 0, sy + 0.08, (s0 + s1) / 2, M['frame'], 0.02)
+        box('Leuchtschild Grund', sw - 0.16, 0.01, s1 - s0 - 0.16, 0, sy - 0.002, (s0 + s1) / 2, M['wall4'], 0)
+        for zz in (s0 + 0.12, s1 - 0.12): box('Leuchtschild Linie', sw - 0.4, 0.012, 0.03, 0, sy - 0.01, zz, M['e_sig_q'], 0)
+        text(label, 0.5, (0.22, sy - 0.012, (s0 + s1) / 2 - 0.1), END_X, END_Y, M['e_sig_q'], align='CENTER')
+        text('AUFZUG  ·  WOHNDECK Q', 0.13, (0.22, sy - 0.012, s0 + 0.2), END_X, END_Y, M['txtw'], align='CENTER')
+        emblem((-sw / 2 + 0.6, sy - 0.012, (s0 + s1) / 2), END_X, END_Y, 0.36, M['e_sig_q'])
+        for sx in (-1, 1): box('Schildhalter', 0.08, 0.36, 0.08, sx * (sw / 2 - 0.4), sy + 0.25, s1 - 0.1, M['steel'], 0.006)
+        text(label, 0.32, (0, -1.1, 0.012), (1, 0, 0), (0, 1, 0), M['txto'], align='CENTER')
     elif kind == 'schott':
         y = nd - 0.02; tw = 3.6; th = 3.0
         box('Schottrahmen', tw + 0.5, 0.2, th + 0.3, 0, y - 0.05, (th + 0.3) / 2, M['frame'], 0.03)

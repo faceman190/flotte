@@ -227,13 +227,13 @@ def leben():
         if o.instance_collection and o.instance_collection.name in ('Objekt saeule', 'Objekt kisten', 'Objekt karre'):
             r = math.hypot(o.location.x, o.location.y); d = math.degrees(math.atan2(o.location.y, o.location.x))
             if r > 12.5 and (abs(abs(d) - 150) < 4 or abs(d - 100) < 4 or abs(d - 82) < 4): bpy.data.objects.remove(o, do_unlink=True)
-    for (deg, kind) in ((150, 'gemuese'), (-150, 'teile'), (100, 'imbiss')):
+    for (deg, kind) in ((150, 'gemuese'), (-150, 'teile'), (-90, 'imbiss')):      # Imbiss seit 2026-11-25 vor dem Schott „DECK 2“ (vorher bei 100°, verdeckte den Aufzug)
         r = 13.3 if kind != 'imbiss' else 13.6; x, y = polar(r, RAD(deg)); inst(prop('rh_stand_' + kind), (x, y, 0), RAD(deg))
-        stromleitung(r + STAND_D / 2 + 0.6, deg + (4 if deg > 0 else -4))
+        stromleitung(r + STAND_D / 2 + 0.6, deg - 10 if kind == 'imbiss' else deg + (4 if deg > 0 else -4))
     # Kisten und Säcke zwischen den Ständen und am Eingang
-    for (r, d, nm, ang) in ((14.6, 160, 'kisten', 0.4), (14.5, -160, 'fass', 0.0), (14.4, 108, 'kisten', 2.1), (12.0, 141, 'rh_kuebel', 0)):
+    for (r, d, nm, ang) in ((14.6, 160, 'kisten', 0.4), (14.5, -160, 'fass', 0.0), (12.0, 141, 'rh_kuebel', 0)):
         x, y = polar(r, RAD(d)); inst(prop(nm), (x, y, 0), RAD(d) + ang, C_DECK)
-    x, y = polar(11.8, RAD(73)); inst(prop('rh_arbeit'), (x, y, 0), RAD(73), C_DECK)      # seit dem Aufzug (90°) etwas zur Seite
+    x, y = polar(12.6, RAD(-45)); inst(prop('rh_arbeit'), (x, y, 0), RAD(-45), C_DECK)      # seit 2026-11-25 zwischen Ausrüster und Krankenstation (vorher vor dem Aufzug)
     # Fluter an allen Pfeilern
     for (deg, *_r) in BAYS + [(180,)]:
         t = th(deg)
@@ -241,7 +241,7 @@ def leben():
             a = RAD(deg) + sg * t; x, y = polar(R_, a); inst(prop('rh_fluter'), (x, y, 0), a, C_DECK)
     # Banner unter den Radialbalken (Balkenunterkante 7,375 m)
     for (deg, stoff, lines) in BANNER:
-        x, y = polar(10.2, RAD(deg)); inst(prop('rh_banner_%d' % deg), (x, y, RH_HW + 0.17), RAD(deg), C_CEIL)
+        x, y = polar(7.3 if deg == 90 else 10.2, RAD(deg)); inst(prop('rh_banner_%d' % deg), (x, y, RH_HW + 0.17), RAD(deg), C_CEIL)      # 90°: innen an der Kuppel, damit es den Aufzug nicht verdeckt
     # Spuren: abgetretene Laufwege zu den Läden und zum Hangar, Flecken vor den Ständen, Rost an den Pfeilerfüßen
     R = random.Random(23)
     for (deg, *_r) in BAYS + [(180,)]:
@@ -254,7 +254,7 @@ def leben():
         for q in range(2 if deg != 180 else 3):
             off = R.uniform(-1.6, 1.6); d = Vector((math.cos(RAD(deg)), math.sin(RAD(deg)), 0)); xd = Vector((d.y, -d.x, 0)); top = d * r0 + xd * off
             for sw in (-0.32, 0.32): streak(tuple(top + xd * sw), tuple(xd), tuple(d), 0.09, ln * R.uniform(0.7, 1.0), 'spur')
-    for (deg, kind) in ((150, 'gemuese'), (-150, 'teile'), (100, 'imbiss')):
+    for (deg, kind) in ((150, 'gemuese'), (-150, 'teile'), (-90, 'imbiss')):
         for k in range(5):
             x, y = polar(R.uniform(11.4, 12.4), RAD(deg) + R.uniform(-0.1, 0.1)); spot((x, y, 0.0), R.uniform(0.25, 0.6), 'fleck' if k % 2 else 'abrieb', R.uniform(0.8, 1.6))
     for (deg, *_r) in BAYS + [(180,)]:

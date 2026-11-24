@@ -108,7 +108,7 @@ def assemble():
         x, y = polar(r, RAD(d)); inst(prop(nm), (x, y, 0), RAD(d) + ang, C_DECK)
     # Bodenschrift an den Leitspuren
     prev = CUR[0]; CUR[0] = C_SIGN
-    for (deg, sig, title, sub) in BAYS + [(180, 'w', 'HANGAR', '')]:
+    for (deg, sig, title, sub) in BAYS + [(180, 'w', 'HANGAR', ''), (90, 'w', 'QUARTIERE', '')]:
         REC[0] = []; text(title, 0.36, (8.6, 0, 0.004), (0, -1, 0), (1, 0, 0), M['txto'], align='CENTER'); objs = REC[0]; REC[0] = None; rotz(objs, RAD(deg))
     CUR[0] = prev
 
@@ -278,7 +278,9 @@ def cameras():
     cam('eingang', (-15.6, 2.2, 1.7), (14.0, -2.5, 3.0), 15)
     cam('treffpunkt', (-7.0, -5.6, 1.7), (3.0, 4.0, 2.6), 17)
     cam('kuppel', (-10.5, 5.5, 1.6), (1.5, -1.5, 7.0), 13)
-    cam('aufzug', (1.6, 9.5, 1.65), (0.0, 17.2, 1.7), 20)
+    cam('aufzug', (2.5, 4.0, 1.65), (0.0, 17.2, 2.6), 20)
+    cam('aufzug_fern', (-4.0, -6.0, 1.7), (0.0, 16.5, 2.8), 17)
+    cam('aufzug_gang', (-15.0, -2.0, 1.7), (0.0, 16.5, 3.0), 18)
     bay_cam('auftraege', 0); bay_cam('handel', 60); bay_cam('werft', 120); bay_cam('kantine', -120); bay_cam('ausruester', -60)
     F = Frame(120, D0); cam('werft_innen', F.p(1.0, -3.7, 1.65), F.p(6.6, 1.2, 1.5), 17)
     F = Frame(-120, D0); cam('kantine_innen', F.p(1.0, 3.8, 1.65), F.p(7.2, -1.4, 1.6), 17)
@@ -291,7 +293,7 @@ def cameras():
     (a1, b1), (a2, b2) = SHEETS
     cam('baukasten1', (BX0 - 28, (a1 + b1) / 2, 7.5), (BX0, (a1 + b1) / 2, 3.0), 24)
     cam('baukasten2', (BX0 - 19, 88.0, 5.6), (BX0 - 3.0, 88.0, 1.4), 26)
-VIEWS = ['aufzug', 'baukasten1', 'baukasten2', 'plan', 'vogel', 'gang', 'eingang', 'treffpunkt', 'kuppel', 'auftraege', 'handel', 'werft', 'kantine', 'ausruester', 'werft_innen', 'kantine_innen', 'auftraege_innen', 'flur', 'besprechung', 'krankenstation']
+VIEWS = ['aufzug', 'aufzug_fern', 'aufzug_gang', 'baukasten1', 'baukasten2', 'plan', 'vogel', 'gang', 'eingang', 'treffpunkt', 'kuppel', 'auftraege', 'handel', 'werft', 'kantine', 'ausruester', 'werft_innen', 'kantine_innen', 'auftraege_innen', 'flur', 'besprechung', 'krankenstation']
 def setp(o, k, v):
     try: setattr(o, k, v)
     except Exception: pass

@@ -43,7 +43,7 @@ let launched = false;   // der Startablauf im Hangar ist durch: jetzt wirklich a
 const cart = { sell: {} as Partial<Record<ItemId, number>>, buy: {} as Partial<Record<ItemId, number>> };
 let refSel: Partial<Record<ItemId, number>> = {};      // Raffinerie: gewählte Chargen je Rohstoff
 let selShip: ShipId | null = null, selUp: UpgId | null = null, selFz: FzId | null = null;      // selFz: in der Werft ein Bodenfahrzeug gewählt (statt eines Schiffs)
-const resetSel = () => { cart.sell = {}; cart.buy = {}; refSel = {}; selShip = null; selUp = null; selFz = null; shop.mode = 'kauf'; shop.cat = 'alle'; shop.sub = ''; shop.q = ''; shop.sel = ''; shop.probe = false; };
+const resetSel = () => { cart.sell = {}; cart.buy = {}; refSel = {}; selShip = null; selUp = null; selFz = null; shop.mode = 'kauf'; shop.cat = 'alle'; shop.sub = ''; shop.q = ''; shop.sel = ''; shop.probe = false; shop.nurSpind = false; };
 
 const CHARGE_COST = 40, PAINT_COST = 250;
 // Servicepreise (Flottenrat-Rang gibt Rabatt, Misstrauen kostet Aufschlag)
@@ -75,7 +75,7 @@ export function showMenu(t?: string, n?: string, sub?: string) {
   if (!G.dockedAt || !t || (!tabs().includes(t as Tab) && !quart)) return;
   tab = t as Tab; note = n || '';
   resetSel(); opening = true;
-  if (t === 'ausruester' && sub === 'spind') shop.mode = 'spind';      // Spind im Quartier: gleich die Spind-Ansicht
+  if (t === 'ausruester' && sub === 'spind') { shop.mode = 'spind'; shop.nurSpind = true; }      // Spind im Quartier: nur der Spind, kein Ausrüster
   G.mode = 'dock';
   if (document.pointerLockElement) document.exitPointerLock();
   releaseAll();
@@ -380,7 +380,7 @@ const SHOP_CATS: { k: string; n: string; kinds: GearKind[] }[] = [
   { k: 'schiff', n: 'Schiffsmodule', kinds: ['schiffswaffe', 'schiffsabwehr', 'schiffsantrieb', 'schiffssystem'] },
 ];
 const KIND_ORDER = SHOP_CATS.flatMap(c => c.kinds);
-const shop = { mode: 'kauf' as ShopMode, cat: 'alle', sub: '', q: '', sel: '', ziel: 'rucksack' as 'rucksack' | 'spind', probe: false };
+const shop = { mode: 'kauf' as ShopMode, cat: 'alle', sub: '', q: '', sel: '', ziel: 'rucksack' as 'rucksack' | 'spind', probe: false, nurSpind: false };      // nurSpind: Spind im Quartier (nur einlagern und herausnehmen, kein Handel)
 interface ShopRow { key: string; id: string; n: number }
 function shopRows(): ShopRow[] {
   const rows: ShopRow[] = shop.mode === 'kauf'
@@ -403,18 +403,19 @@ function vAusruester(): View {
     const lock = buy ? gearLock(d, st().id, secId()) : null;
     const ok = buy ? !lock && P.credits >= pr && (shop.ziel === 'spind' ? canStore(r.id) : canAdd(r.id)) : true;
     const quick = buy ? `<button class="shQ" data-a="gbuy" data-k="${r.id}" ${ok ? '' : 'disabled'}>${lock ? '🔒 Rang nötig' : 'Sofort kaufen'}</button>`
+      : shop.mode === 'verkauf' && shop.nurSpind ? `<button class="shQ" data-a="gstore" data-n="${r.key}" ${canStore(r.id) ? '' : 'disabled'}>Einlagern</button>`
       : shop.mode === 'verkauf' ? `<button class="shQ" data-a="${r.n > 1 ? 'gsellall' : 'gsell'}" data-n="${r.key}">Verkaufen</button>`
       : `<button class="shQ" data-a="gtake" data-n="${r.key}">Nehmen</button>`;
     return `<div class="shCard${r.key === shop.sel ? ' on' : ''}" data-n="${esc(d.n.toLowerCase())}" style="--rc:${RARITY[d.rar].c}">
       <button class="shPic" data-a="shsel" data-k="${r.key}" aria-label="${esc(d.n)}">${gearIcon(r.id, 98)}${r.n > 1 ? `<em>${r.n}</em>` : ''}</button>
       <button class="shInfo" data-a="shsel" data-k="${r.key}"><b>${esc(d.n)}</b><small>${KIND_N[d.kind]} · ${RARITY[d.rar].n}</small>
-        <span class="shPr${buy && P.credits < pr ? ' dn' : ''}">${shop.mode === 'spind' ? 'Im Spind' : `¤ ${shortCr(pr)}`}</span></button>
+        <span class="shPr${buy && P.credits < pr ? ' dn' : ''}">${shop.mode === 'spind' ? 'Im Spind' : shop.nurSpind ? 'Im Rucksack' : `¤ ${shortCr(pr)}`}</span></button>
       ${quick}</div>`;
   };
-  const empty = buy ? 'In dieser Auswahl führt der Ausrüster nichts.' : shop.mode === 'verkauf' ? 'Im Rucksack liegt nichts aus dieser Auswahl.' : 'Im Spind liegt nichts aus dieser Auswahl. Er ist von jedem Ausrüster aus erreichbar.';
+  const empty = buy ? 'In dieser Auswahl führt der Ausrüster nichts.' : shop.mode === 'verkauf' ? (shop.nurSpind ? 'Im Rucksack liegt nichts zum Einlagern. Angelegtes musst du erst ablegen.' : 'Im Rucksack liegt nichts aus dieser Auswahl.') : 'Im Spind liegt nichts aus dieser Auswahl. Er ist von jedem Ausrüster aus erreichbar.';
   let h = `<section class="pn sh">
-    <div class="shTop"><div class="shTabs">${(['kauf', 'verkauf', 'spind'] as ShopMode[]).map(m => `<button data-a="shmode" data-k="${m}" class="${m === shop.mode ? 'on' : ''}">${m === 'kauf' ? 'Kaufen' : m === 'verkauf' ? 'Verkaufen' : 'Spind'}</button>`).join('')}</div>
-      <p class="hint">${buy ? 'Angelegt wird Gekauftes im Flottenband unter „Ausrüstung“ (Taste I).' : shop.mode === 'verkauf' ? 'Händler zahlen 45 % des Werts. Angelegtes musst du erst ablegen.' : 'Der Spind ist von jedem Ausrüster aus erreichbar.'}</p></div>
+    <div class="shTop"><div class="shTabs">${(shop.nurSpind ? ['spind', 'verkauf'] as ShopMode[] : ['kauf', 'verkauf', 'spind'] as ShopMode[]).map(m => `<button data-a="shmode" data-k="${m}" class="${m === shop.mode ? 'on' : ''}">${m === 'kauf' ? 'Kaufen' : m === 'verkauf' ? (shop.nurSpind ? 'Einlagern' : 'Verkaufen') : shop.nurSpind ? 'Im Spind' : 'Spind'}</button>`).join('')}</div>
+      <p class="hint">${shop.nurSpind ? 'Dein Spind im Quartier. Kaufen und verkaufen kannst du beim Ausrüster auf Deck 3.' : buy ? 'Angelegt wird Gekauftes im Flottenband unter „Ausrüstung“ (Taste I).' : shop.mode === 'verkauf' ? 'Händler zahlen 45 % des Werts. Angelegtes musst du erst ablegen.' : 'Der Spind ist von jedem Ausrüster aus erreichbar.'}</p></div>
     <div class="shFilt">
       ${buy ? `<label><span class="lb">Ziel</span><select data-f="ziel">${opt('rucksack', `Rucksack · ${P.inv.length}/${invCap()}`, shop.ziel)}${opt('spind', `Spind · ${P.locker.length}/${LOCKER_SLOTS}`, shop.ziel)}</select></label>` : ''}
       <label><span class="lb">Kategorie</span><select data-f="cat">${opt('alle', 'Alle Kategorien', shop.cat)}${SHOP_CATS.map(c => opt(c.k, c.n, shop.cat)).join('')}</select></label>
@@ -440,11 +441,13 @@ function vAusruester(): View {
     const glock = buy ? gearLock(d, st().id, secId()) : null;
     if (glock) h += `<p class="dn">Gesperrt: ${glock}.</p><button class="pri big" disabled><span>Rang nötig</span><span class="mo">${fmtN(pr)} Cr</span></button>`;
     else if (buy) h += `<button class="pri big" data-a="gbuy" data-k="${id}" ${P.credits >= pr && room ? '' : 'disabled'}><span>${P.credits < pr ? 'Zu wenig Credits' : !room ? (shop.ziel === 'spind' ? 'Spind voll' : 'Rucksack voll') : 'Kaufen'}</span><span class="mo">${fmtN(pr)} Cr</span></button>`;
+    else if (shop.mode === 'verkauf' && shop.nurSpind) h += `<button class="pri big" data-a="gstore" data-n="${sel.key}" ${canStore(id) ? '' : 'disabled'}><span>${canStore(id) ? 'In den Spind legen' : 'Spind voll'}</span><span class="mo">${P.locker.length}/${LOCKER_SLOTS}</span></button>`;
     else if (shop.mode === 'verkauf') h += `<div class="shActs"><button data-a="gstore" data-n="${sel.key}">In den Spind</button>${sel.n > 1 ? `<button data-a="gsell" data-n="${sel.key}">Eins verkaufen · ${fmtN(sp)}</button>` : ''}</div>
       <button class="pri big" data-a="${sel.n > 1 ? 'gsellall' : 'gsell'}" data-n="${sel.key}"><span>${sel.n > 1 ? `Alle ${sel.n} verkaufen` : 'Verkaufen'}</span><span class="mo">+${fmtN(sp * sel.n)} Cr</span></button>`;
     else h += `<button class="pri big" data-a="gtake" data-n="${sel.key}"><span>In den Rucksack</span><span class="mo">${P.inv.length}/${invCap()}</span></button>`;
   }
   h += '</aside>';
+  if (shop.nurSpind) return { k: kpi('Rucksack', `${P.inv.length} / ${invCap()}`) + kpi('Spind', `${P.locker.length} / ${LOCKER_SLOTS}`), cols: 'minmax(0,1fr) 400px', h };
   return { k: kpi('Guthaben', `${fmtN(P.credits)} Cr`) + kpi('Rucksack', `${P.inv.length} / ${invCap()}`) + kpi('Spind', `${P.locker.length} / ${LOCKER_SLOTS}`), cols: 'minmax(0,1fr) 400px', h };
 }
 // Suche: Kacheln ein- und ausblenden, ohne das Terminal neu aufzubauen (das Eingabefeld behält den Cursor)
@@ -607,7 +610,7 @@ function render() {
   const v = VIEWS[tab](), others = tabs().filter(t => t !== tab).map(t => TAB_N[t]);
   $('dockCard').innerHTML = `<div class="tm${opening ? ' in' : ''}">
     <header class="tmH"><div class="tmPlate">${esc(plate(s.name))}</div>
-      <div class="tmT"><h1>${TAB_T[tab]}</h1><p class="lb">${esc(s.name)} · Sektor ${esc(def.name)} · ${FACTION[def.faction].n}</p></div>
+      <div class="tmT"><h1>${tab === 'ausruester' && shop.nurSpind ? 'Spind · Quartier' : TAB_T[tab]}</h1><p class="lb">${esc(s.name)} · Sektor ${esc(def.name)} · ${FACTION[def.faction].n}</p></div>
       <div class="tmK">${v.k}</div><button class="tmX" data-a="close">Terminal verlassen · Esc</button></header>
     ${note ? `<div class="tmN">${esc(note)}</div>` : ''}
     <div class="tmB" style="grid-template-columns:${v.cols}">${v.h}</div>
@@ -697,6 +700,7 @@ $('dockCard').addEventListener('click', e => {
   }
   if (a === 'usefz') { P.fahrzeug = normFz(k); note = `Beim Landen wird der ${FZ[normFz(k)].kurz} ausgesetzt.`; snd(500, 0.2, 'triangle', 0.04, 200); }
   if (a === 'upsel') selUp = k as UpgId;
+  if (a === 'shmode' && shop.nurSpind && k === 'kauf') return;
   if (a === 'shmode') { shop.mode = k; shop.sel = ''; shop.probe = false; snd(700, 0.04, 'sine', 0.025, 200); }
   if (a === 'shsel') { shop.sel = k; snd(800, 0.05, 'sine', 0.03, 200); }
   if (a === 'shprobe') shop.probe = !shop.probe;
