@@ -14,6 +14,7 @@ import { begegnungJetzt } from './begegnungen';
 import { mannyAnim } from './mannyAvatar';
 import { devMode } from './cheats';
 import { TESTF } from './testflags';
+import { WETTER, naechsterSturm } from './wetter';
 import { FZ, FZ_IDS } from '../models/rover';
 import { scene } from '../core/engine';
 import { world } from './world';
@@ -120,6 +121,10 @@ function html(): string {
       : '<p class="h">Der Bewegungssatz ist noch nicht geladen (erst einmal zu Fuß gehen).</p>'}`;
   } else {
     h += `<h3>Schalter</h3><label><input type="checkbox" id="tlGott"${TESTF.gott ? ' checked' : ''}> Unverwundbar (Schiff, zu Fuß, Mine)</label>
+      <h3>Tageszeit und Wetter (Planeten)</h3>
+      <div class="row">${[['uhr', 'Uhr'], ['0.3', 'Tag'], ['0.625', 'Dämmerung'], ['0.8', 'Nacht']].map(([k, n]) => `<button class="b${String(WETTER.force.zeit ?? 'uhr') === k ? ' p' : ''}" data-a="zeitT" data-k="${k}">${n}</button>`).join('')}</div>
+      <div class="row">${[['uhr', 'Uhr'], ['1', 'Sturm'], ['0', 'Klar']].map(([k, n]) => `<button class="b${String(WETTER.force.sturm ?? 'uhr') === k ? ' p' : ''}" data-a="sturmT" data-k="${k}">${n}</button>`).join('')}</div>
+      <p class="h">${WETTER.planet ? `Gerade: ${WETTER.tag > 0.99 ? 'Tag' : WETTER.tag < 0.01 ? 'Nacht' : 'Dämmerung'}${WETTER.sturm > 0 ? `, ${WETTER.art?.n} ${Math.round(WETTER.sturm * 100)} %` : ''}. ${WETTER.art ? (() => { const s = naechsterSturm(WETTER.planet, WETTER.typ); return s === null ? 'Kein Sturm in den nächsten Stunden.' : s === 0 ? 'Sturm läuft.' : `Nächster Sturm in ${Math.round(s / 60)} min.`; })() : 'Hier gibt es kein Wetter.'}` : 'Wirkt auf Planeten.'}</p>
       <h3>Begegnung unterwegs (im Flug)</h3><div class="row">${[['kapsel', 'Rettungskapsel'], ['treibgut', 'Treibgut'], ['panne', 'Panne'], ['angriff', 'Angriff']].map(([k, n]) => `<button class="b" data-a="beg" data-k="${k}">${n}</button>`).join('')}</div>
       <h3>Geschichte</h3><div class="row"><button class="b" data-a="story">Kapitel 1–5 abschließen</button></div>
       <p class="h">Danach stören keine Geschichtsszenen mehr beim Testen. Nicht rückgängig zu machen (Spielstand auf dem Testserver).</p>
@@ -176,6 +181,8 @@ function act(a: string, k: string) {
   if (a === 'clip') { const n = v('tlClip'); if (n) void vorfuehren(n); return; }
   if (a === 'clipweg') vorWeg();
   if (a === 'rate') { VOR.rate = +k; if (VOR.act) VOR.act.timeScale = VOR.rate; }
+  if (a === 'zeitT') WETTER.force.zeit = k === 'uhr' ? null : +k;
+  if (a === 'sturmT') WETTER.force.sturm = k === 'uhr' ? null : +k;
   if (a === 'beg') { const r = begegnungJetzt(k as any); say(r ? `Begegnung gestartet: ${r}. Marke im HUD.` : 'Begegnungen gibt es nur im Flug (Angriff nicht in Heimstatt).'); }
   if (a === 'story') { Object.assign(P.story, { prolog: 'done', ch1: 'done', ch2: 'done', ch3: 'done', ch4: 'done', ch5: 'done' }); say('Kapitel 1–5 als abgeschlossen markiert.'); }
   if (a === 'aufg') { P.aufgabenZuletzt = {}; say('Pause der Stationsaufgaben zurückgesetzt.'); }

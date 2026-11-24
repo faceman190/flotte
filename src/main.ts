@@ -41,6 +41,7 @@ import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, r
 import { wieselScan } from './game/wiesel';
 import { initTestlabor, updateTestlabor, testHooks } from './game/testlabor';
 import { mannyHooks } from './game/mannyAvatar';
+import { updateWetter } from './game/wetter';
 import { TESTF } from './game/testflags';
 import { PLANETS, PTYPE, planetBaseId } from './data/planets';
 import { d3 } from './core/util';
@@ -804,6 +805,7 @@ function simulate(dt: number) {
   if (world.surface && !IN.active && !DUN.active) updateSalvage(dt, (x, y, z) => puff(x, y, z, (Math.random() - 0.5) * 1.5, 2 + Math.random() * 2, (Math.random() - 0.5) * 1.5, '#2a2622', 2.2));
   if (live) updateMissions(dt);
   updateAufgaben();      // Fristen der Stationsaufgaben
+  hook('Wetter', () => updateWetter(dt, camera.position));      // Tag, Nacht und Wetter auf Planeten (wetter.ts)
   if (world.surface && G.mode === 'rover') hook('Bodenaufgaben', () => updateBoden(dt, FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z));
   if (live) updateBegegnungen(dt);      // Begegnungen unterwegs
   updateAsteroids(dt);

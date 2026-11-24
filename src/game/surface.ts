@@ -16,6 +16,7 @@ import { buildFahrzeug, fzLaden, fzBereit, FZ, normFz, type FzId, type RoverNeu,
 import { updateFahrer, fahrerWeg } from './fahrer';
 import { updateWieselScan, drawWieselScan, wieselScanWeg, WSCAN } from './wiesel';
 import { BODEN_OBST, bodenHooks } from './bodenaufgaben';
+import { wetterStart, WETTER } from './wetter';
 import { buildFlora, updateFlora } from './flora';
 import { gearFactor } from './inventory';
 import { buildDungeonEntrances } from './dungeon';
@@ -198,6 +199,7 @@ export function buildSurface(sector: string) {
   const SL = SKYLOOK[pd.type];
   setSurfaceSky({ horizon: T.sky[0], zenith: T.sky[1], fog: T.fog, fogDensity: T.fogDensity, clouds: SL.clouds, cloudCol: SL.cloudCol, stars: SL.stars, body: skyBody(sector),
     ...(pd.type === 'mond' ? { air: 0.15, moon: { dir: [-0.86, 0.5, -0.1] as [number, number, number], rad: 0.036, col: 0xb8bcc4 } } : {}) });
+  wetterStart(sector, pd.type, { fog: T.fog, fogDensity: T.fogDensity, clouds: SL.clouds, stars: SL.stars, air: pd.type === 'mond' ? 0.15 : 1 });      // Tag, Nacht, Wetter (wetter.ts)
   setAmbience({ id: sector + ':oberflaeche', neb: sec.neb, faction: sec.faction, fields: [] }, 0);
   // Bodenstation
   // Staub bzw. Schnee auf waagrechten Flächen des Außenpostens in der Bodenfarbe des Planeten
@@ -667,7 +669,7 @@ export function updateRover(dt: number) {
     const hold = th === 0 && Math.abs(vF) < 1.2 && Math.abs(slopeF) < 0.45 && Math.abs(slopeL) < 0.5;
     if (!hold) { vF -= GR * slopeF * dt; vL -= GR * slopeL * dt * 0.6; } else { vF *= Math.pow(0.02, dt); }
     // Seitenführung: Quertempo wird von den Reifen aufgefangen (auf Eis deutlich weniger: der Rover rutscht in Kurven)
-    const grip = ice ? F.gripEis : F.grip;
+    const grip = (ice ? F.gripEis : F.grip) * (1 - 0.3 * WETTER.sturm);      // im Sturm (wetter.ts) halten die Reifen schlechter
     R.slip = Math.abs(vL);
     vL *= Math.exp(-grip * dt);
     // Lenkung: Einschlag nimmt mit dem Tempo ab; Drehrate nach Einspurmodell, weich nachgeführt

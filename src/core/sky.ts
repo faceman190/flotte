@@ -368,3 +368,6 @@ export function updateSky(camPos: THREE.Vector3) {
     if (e) scene.environment = e;
   }
 }
+// Tag, Nacht und Wetter auf Planeten (game/wetter.ts): Sterne am Himmel (0–1) und Wolkenmenge (0–1) nachführen
+export function setSkyStars(v: number) { atmMat.uniforms.stars.value = v; }
+export function setSkyClouds(v: number) { atmMat.uniforms.cloud.value = v; }
