@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { scene, camera, ambient, rim, sun, view, ux, gl, overlay } from '../core/engine';
+import { scene, camera, ambient, rim, sun, view, ux, gl, overlay, BODY_LAYER, bodyOnly } from '../core/engine';
 import { keys, mouse, releaseAll } from '../core/input';
 import { clamp, rng, hashStr } from '../core/util';
 import { snd, sfx, shotSfx, gunShot, type GunKind } from '../core/audio';
@@ -69,6 +69,7 @@ let group: THREE.Group | null = null, lamps: THREE.Vector3[] = [], pool: THREE.P
 let tracer: THREE.Line | null = null, tracerT = 0, lampT = 0, pathT = 0, stepT = 0, grabT = 0;
 let shotsN = 0, vmShotsN = 0;
 let vm: ViewModel | null = null, mflash: THREE.PointLight | null = null, WALL_R = 0.42;     // Waffe im Bild (eigene Ebene), Mündungslicht in der Welt, Abstand zur Wand
+let bodyLamp: THREE.PointLight | null = null, bodyFlash: THREE.PointLight | null = null;      // Licht nur für den eigenen Körper in der Ich-Sicht
 const sway = { x: 0, y: 0, yaw: 0, pitch: 0 };
 let me: Avatar | null = null;                                              // eigene Figur (Außensicht, src/game/avatar.ts)
 let fpOn = false;                                                          // Ich-Sicht zeigt gerade den ganzen Körper (avatar.ts fpBody)
@@ -886,6 +887,11 @@ export function enterDungeon(e: Entrance) {
   for (let k = 0; k < 5; k++) { const l = new THREE.PointLight(TH.lamp, 0, 13, 1.6); group.add(l); pool.push(l); }
   head = new THREE.SpotLight(0xe6eeff, 18, 38, 0.6, 0.55, 1.0); scene.add(head); scene.add(head.target);
   mflash = new THREE.PointLight(0xffb060, 0, 9, 1.6); scene.add(mflash);
+  // Ich-Sicht mit ganzem Körper: Lampe und Mündungsblitz sitzen an der Kamera, also mitten in Hand und Waffe – aus der Nähe beleuchten sie
+  // beides ungleichmäßig, und jede kleine Bewegung lässt es flackern. Der Körper bekommt stattdessen zwei eigene Lichter.
+  head.userData.noBody = true; mflash.userData.noBody = true; head.layers.disable(BODY_LAYER); mflash.layers.disable(BODY_LAYER);
+  bodyLamp = bodyOnly(new THREE.PointLight(0xdfe8f5, 1.5, 4, 1.2)); scene.add(bodyLamp);
+  bodyFlash = bodyOnly(new THREE.PointLight(0xffb060, 0, 3, 1.4)); scene.add(bodyFlash);
   vm = buildViewModel(viewModelId(P.gear?.waffe));
   me = makeAvatar(figGear(), true); if (me) { me.s.g.visible = VIEW.tp; group.add(me.s.g); } resetTpCam();
   if (vm) { overlay.scene = vm.scene; overlay.camera = vm.cam; } else { gun = buildGun(); scene.add(gun); }
@@ -910,6 +916,8 @@ export function leaveDungeon(died = false) {
   if (head) { scene.remove(head); scene.remove(head.target); head.dispose(); head = null; }
   if (gun) { scene.remove(gun); gun = null; }
   if (mflash) { scene.remove(mflash); mflash.dispose(); mflash = null; }
+  if (bodyLamp) { scene.remove(bodyLamp); bodyLamp.dispose(); bodyLamp = null; }
+  if (bodyFlash) { scene.remove(bodyFlash); bodyFlash.dispose(); bodyFlash = null; }
   overlay.scene = null; overlay.camera = null; vm = null; me = null;
   if (tracer) { scene.remove(tracer); tracer.geometry.dispose(); tracer = null; }
   for (const b of DUN.bolts) scene.remove(b.m);
@@ -1195,6 +1203,9 @@ export function dungeonCamera() {
     head.target.position.copy(camera.position).add(_v.set(0, -0.04, -1).applyQuaternion(camera.quaternion).multiplyScalar(8)); head.target.updateMatrixWorld();
   }
   if (mflash) { mflash.position.copy(camera.localToWorld(_w.set(0.1, -0.08, -0.7))); mflash.intensity = DUN.flash > 0 ? 34 : 0; }
+  // Licht für den eigenen Körper: über und hinter dem Auge (gleichmäßig auf Arme und Waffe), der Blitz ein Stück vor der Mündung
+  if (bodyLamp) bodyLamp.position.copy(camera.localToWorld(_w.set(-0.25, 0.45, 0.35)));
+  if (bodyFlash) { bodyFlash.position.copy(camera.localToWorld(_w.set(0.12, 0.05, -1.25))); bodyFlash.intensity = DUN.flash > 0 ? 3.2 : 0; }
   fpOn = !VIEW.tp && !!me && fpBody(camera, aimK());      // Ich-Sicht: der eigene Körper statt der Waffe allein
   if (vm) { const want = VIEW.tp || fpOn ? null : vm.scene; if (overlay.scene !== want) { overlay.scene = want; overlay.camera = want ? vm.cam : null; } }
   if (vm && !VIEW.tp && !fpOn) {

@@ -794,6 +794,7 @@ export class MannyAnimator {
     this.weapon.apply(dt, {
       armed: !!wi, kind: wi ? wi.kind : undefined, aim: !!(wi && wi.aim) && sprint < 0.5, shots: wi ? wi.shots : undefined, hits: wi ? wi.hits : undefined, toss: wi ? wi.toss : undefined,
       reload: wi && wi.reload !== undefined ? wi.reload : -1, crouchW: this.crouchW, yaw: lk.yaw, pitch: lk.pitch / (T.lookPitch || 1), ms: this._ms, snap: this._wSnap,
+      move: clamp(((this._realSpeed ?? this.planarVel.length()) - 0.7) / 1.1, 0, 1) * (['fall', 'jumpStart', 'land'].includes(this.state) ? 0 : 1), sprint, fp: !!this.fpView,
     });
     this._wSnap = false;
   }

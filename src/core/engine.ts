@@ -131,12 +131,16 @@ export const overlay: { scene: THREE.Scene | null; camera: THREE.Camera | null }
 // So ragen Arme und Waffe nie in Wände (wie Unreals „First Person Rendering“), die Figur steht trotzdem im Licht der Szene, und die
 // Nahgrenze des Hauptbilds (0,5 m auf Planeten) schneidet die Hände nicht ab. on setzt die Figur in jedem Bild neu.
 export const BODY_LAYER = 7;
-export const bodyPass = { on: false, was: false, near: 0.03, far: 30 };      // was: im letzten gezeichneten Bild an (für renderStill)
+export const bodyPass = { on: false, was: false, near: 0.03, far: 30 };
+/** Licht nur für den Körper der Ich-Sicht (beleuchtet die Welt nicht) */
+export function bodyOnly<T extends THREE.Light>(l: T): T { l.layers.set(BODY_LAYER); return l; }      // was: im letzten gezeichneten Bild an (für renderStill)
 let bodyLightT = 0;
 function renderBody() {
   // Lichter gelten nur für Ebenen, auf denen sie selbst liegen: alle auch auf die Körper-Ebene legen (neue Lichter spätestens nach 0,4 s)
   const now = performance.now();
-  if (now - bodyLightT > 400) { bodyLightT = now; scene.traverse(o => { if ((o as any).isLight) o.layers.enable(BODY_LAYER); }); }
+  // Ausnahme userData.noBody: Lichter, die an der Kamera sitzen (Waffenlampe der Mine) – aus wenigen Zentimetern beleuchten sie Hand und
+  // Waffe ungleichmäßig und flackernd; der Körper bekommt dort ein eigenes Licht (dungeon.ts).
+  if (now - bodyLightT > 400) { bodyLightT = now; scene.traverse(o => { if ((o as any).isLight) { if (o.userData.noBody) o.layers.disable(BODY_LAYER); else o.layers.enable(BODY_LAYER); } }); }
   const n = camera.near, f = camera.far, mask = camera.layers.mask, bg = scene.background, au = renderer.shadowMap.autoUpdate, mw = scene.matrixWorldAutoUpdate;
   camera.near = bodyPass.near; camera.far = bodyPass.far; camera.layers.set(BODY_LAYER); camera.updateProjectionMatrix();
   scene.background = null; renderer.shadowMap.autoUpdate = false; scene.matrixWorldAutoUpdate = false;      // Himmel nicht noch einmal, Schatten und Lagen vom Hauptbild

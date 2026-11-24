@@ -4,7 +4,9 @@
 // stances of Epic's Lyra Starter Game on top of it: everything from spine_01 upwards comes from the Lyra clips, the legs and the
 // pelvis stay with the locomotion (in Unreal: "layered blend per bone" with a mesh space rotation blend).
 //
-//   base      hip (weapon lowered) <-> ads (aiming), crouched its own stance · reload and equip replace the base while they play
+//   base      hip (weapon ready) <-> ads (aiming), crouched its own stance · reload and equip replace the base while they play
+//   carry     while moving without aiming: Lyra's jog clip (rifle across the body, about 20° down) – for jogging and sprinting alike,
+//             Lyra has no sprint clips. Standing relaxed, the hip stance sinks a little (aim offset pitched down: TUNE.lowReady)
 //   aim       the aim offset poses of Lyra (…_AO_LU, _CC, _RD …) as deltas on top: weapon and chest follow the view
 //   additive  recoil (…_Fire against its last frame) and hit reactions (MM_HitReact_… against their first frame)
 //   left hand two bone IK onto the fore grip of the weapon actually carried (the game's weapons are shorter than Lyra's rifle)
@@ -21,11 +23,11 @@ import { TwoBoneIK } from './FootIK.js';
 
 const R = 'MM_Rifle_', P = 'MM_Pistol_', S = 'MM_Shotgun_';
 const KINDS = {
-  rifle: { hip: R + 'Idle_Hipfire', ads: R + 'Idle_ADS', crouch: R + 'Crouch_Idle', fire: R + 'Fire', reload: R + 'Reload', equip: R + 'Equip',
+  rifle: { hip: R + 'Idle_Hipfire', ads: R + 'Idle_ADS', crouch: R + 'Crouch_Idle', carry: R + 'Jog_Fwd', fire: R + 'Fire', reload: R + 'Reload', equip: R + 'Equip',
     ao: { hip: R + 'Idle_Hipfire_AO_', ads: R + 'Idle_ADS_AO_', crouch: R + 'Crouch_Idle_AO_' }, ik: 1 },
-  pistol: { hip: P + 'Idle_Hipfire', ads: P + 'Idle_ADS', crouch: P + 'Crouch_Idle', fire: P + 'Fire', reload: P + 'Reload', equip: P + 'Equip',
+  pistol: { hip: P + 'Idle_Hipfire', ads: P + 'Idle_ADS', crouch: P + 'Crouch_Idle', carry: P + 'Jog_Fwd', fire: P + 'Fire', reload: P + 'Reload', equip: P + 'Equip',
     ao: { hip: P + 'Idle_ADS_AO_', ads: P + 'Idle_ADS_AO_', crouch: P + 'Idle_ADS_AO_' }, ik: 0 },      // two hands on one grip: as animated
-  shotgun: { hip: S + 'Idle_Hipfire', ads: S + 'Idle_ADS', crouch: R + 'Crouch_Idle', fire: S + 'Fire', reload: S + 'Reload', equip: R + 'Equip',
+  shotgun: { hip: S + 'Idle_Hipfire', ads: S + 'Idle_ADS', crouch: R + 'Crouch_Idle', carry: R + 'Jog_Fwd', fire: S + 'Fire', reload: S + 'Reload', equip: R + 'Equip',
     ao: { hip: R + 'Idle_Hipfire_AO_', ads: R + 'Idle_ADS_AO_', crouch: R + 'Crouch_Idle_AO_' }, ik: 1 },
 };
 const TOSS = 'MM_Rifle_GrenadeToss';
@@ -45,6 +47,16 @@ export const TUNE = {
   hitGain: 1,           // strength of the hit reaction
   equipOut: 0.25,       // s – blend from the end of the equip clip into the stance
   reloadBlend: 0.14,    // s – into and out of the reload clip
+  carryIn: 3.2,         // 1/s – weapon down into the carry stance once the figure moves
+  carryOut: 11,         // 1/s – weapon up again (aiming, firing, stopping): fast, the shot must not wait for the arms
+  carryAfterFire: 0.9,  // s – after a shot the weapon stays up this long, even while moving
+  carryAim: 0.35,       // share of the aim offsets (weapon follows the view) that stays while carrying
+  carryRate: [0.85, 1.3],// playback speed of the carry clip: jogging … sprinting
+  carryFp: [0.5, 0.68], // first person: share of the carry stance while jogging … sprinting (fully carried, the weapon leaves the picture)
+  lowReady: 16,         // deg – standing relaxed: the hip stance points this far below the view
+  lowReadyFp: 7,        // deg – the same in first person
+  lowReadyIn: 1.6,      // 1/s – sinking into it (after lowReadyAfter s without a shot)
+  lowReadyAfter: 1.4,
 };
 
 export class WeaponLayer {
@@ -75,6 +87,7 @@ export class WeaponLayer {
     this.fireT = 9; this.shots = -1; this.hitT = 9; this.hits = -1; this.hitClip = HITS[0];
     this.equipT = 9; this.reloadW = 0; this.reloadP = 0; this.ikW = 0; this.armed = false;
     this.tossT = 9; this.tosses = -1;
+    this.carryW = 0; this.carryT = 0; this.lowW = 0;
   }
 
   _buf() { return { q: new Float32Array(this.N * 4), pel: new Float32Array([0, 0, 0, 1]), wp: new Float32Array(3) }; }
@@ -175,7 +188,7 @@ export class WeaponLayer {
   /** make sure the clips of a kind are decoded (a few ms); call when the weapon is taken, not in the middle of a fight */
   warm(kind) {
     const K = KINDS[kind] || KINDS.rifle;
-    for (const n of [K.hip, K.ads, K.crouch, K.fire, K.reload, K.equip, TOSS]) this._clip(n);
+    for (const n of [K.hip, K.ads, K.crouch, K.carry, K.fire, K.reload, K.equip, TOSS]) this._clip(n);
     for (const p of new Set(Object.values(K.ao))) this._grid(p);
   }
 
@@ -183,7 +196,8 @@ export class WeaponLayer {
    * o.armed · o.kind 'rifle' | 'pistol' | 'shotgun' · o.aim (weapon up) · o.crouchW 0..1 · o.yaw / o.pitch: where the view points
    * relative to the body, deg (yaw + = right, pitch + = up) · o.shots / o.hits: counters (a change starts recoil / a hit reaction) ·
    * o.reload: progress 0..1, otherwise −1 · o.ms 0..1: share of the mesh space blend at spine_01 (1 = the chest ignores what the
-   * hips do, 0 = it follows them) · o.snap: no blending this frame (teleport)
+   * hips do, 0 = it follows them) · o.snap: no blending this frame (teleport) · o.move 0..1: the figure is on the move · o.sprint 0..1 ·
+   * o.fp: seen from the figure's own eyes (the weapon is lowered less, so that it stays in the picture)
    */
   apply(dt, o) {
     if (!this.ready) return;
@@ -198,7 +212,7 @@ export class WeaponLayer {
     if (o.hits !== undefined) { if (this.hits >= 0 && o.hits !== this.hits && this.hitT > 0.25) { this.hitT = 0; this.hitClip = HITS[Math.floor(Math.random() * HITS.length)]; } this.hits = o.hits; }
     if (o.toss !== undefined) { if (this.tosses >= 0 && o.toss !== this.tosses) this.tossT = 0; this.tosses = o.toss; }
     this.t += dt; this.fireT += dt; this.hitT += dt; this.equipT += dt; this.tossT += dt;
-    if (this.w <= 0.001) { this.ikW = 0; this.aimW = 0; return; }
+    if (this.w <= 0.001) { this.ikW = 0; this.aimW = 0; this.carryW = 0; this.lowW = 0; return; }
     const K = KINDS[this.kind], cw = clamp(o.crouchW || 0, 0, 1);
     const reloading = o.reload !== undefined && o.reload >= 0;
     this.aimW = o.snap ? (o.aim ? 1 : 0) : this.aimW + ((o.aim && !reloading ? 1 : 0) - this.aimW) * Math.min(1, dt * T.aimRate);
@@ -207,6 +221,17 @@ export class WeaponLayer {
     if (!this._loop(K.hip, pose)) return;
     if (this.aimW > 0.001 && this._loop(K.ads, this._tmp)) this._mix(pose, this._tmp, this.aimW);
     if (cw > 0.001 && this._loop(K.crouch, this._tmp)) this._mix(pose, this._tmp, cw);
+    // carry: on the move without aiming the weapon comes down across the body; a shot, aiming, reloading or a throw bring it up at once
+    const calm = !o.aim && !reloading && this.fireT > T.carryAfterFire && this.tossT > 1.2 && this.equipT > 1.2;
+    const mv = clamp(o.move || 0, 0, 1), sprintW = clamp(o.sprint || 0, 0, 1);
+    const wantCarry = calm && cw < 0.5 ? mv * (o.fp ? T.carryFp[0] + (T.carryFp[1] - T.carryFp[0]) * sprintW : 1) : 0;
+    this.carryW = o.snap ? wantCarry : this.carryW + (wantCarry - this.carryW) * Math.min(1, dt * (wantCarry > this.carryW ? T.carryIn : T.carryOut));
+    this.carryT += dt * (T.carryRate[0] + (T.carryRate[1] - T.carryRate[0]) * sprintW);
+    const cr = this.carryW > 0.001 ? this._clip(K.carry) : null;
+    if (cr) this._mix(pose, this._sample(cr, cr.dur > 0 ? this.carryT % cr.dur : 0, this._tmp), this.carryW);
+    // standing relaxed: the weapon sinks a little (through the aim offsets below)
+    const wantLow = calm && this.fireT > T.lowReadyAfter && mv < 0.3 ? 1 : 0;
+    this.lowW = o.snap ? wantLow : this.lowW + (wantLow - this.lowW) * Math.min(1, dt * (wantLow > this.lowW ? T.lowReadyIn : T.carryOut));
     // equip: once when the weapon is taken, then into the stance
     const eq = this._clip(K.equip);
     let busy = 0;
@@ -236,13 +261,13 @@ export class WeaponLayer {
     for (let b = 1; b < this.N; b++) this.B[b].quaternion.slerp(_a.fromArray(q, b * 4), W);
     this.wr.position.lerp(_v1.fromArray(pose.wp, 0), W);
     // ---- aim: deltas of the aim offset poses, blended between the stances like the stances themselves
-    const yaw = clamp(o.yaw || 0, -180, 180), pitch = clamp(o.pitch || 0, -90, 90);
+    const yaw = clamp(o.yaw || 0, -180, 180), pitch = clamp((o.pitch || 0) - (o.fp ? T.lowReadyFp : T.lowReady) * this.lowW * (1 - this.aimW) * (1 - cw), -90, 90);
     const ix = clamp(Math.floor((yaw + 180) / 90), 0, AO_COLS.length - 2), fx = (yaw - AO_COLS[ix][1]) / 90;
     const iy = pitch < 0 ? 0 : 1, fy = (pitch - AO_ROWS[iy][1]) / 90;
     if (Math.abs(yaw) > 0.2 || Math.abs(pitch) > 0.2) {
       const src = [[this._grid(K.ao.hip), (1 - this.aimW) * (1 - cw)], [this._grid(K.ao.ads), this.aimW * (1 - cw)], [this._grid(K.ao.crouch), cw]];
       const cor = [[ix, iy, (1 - fx) * (1 - fy)], [ix + 1, iy, fx * (1 - fy)], [ix, iy + 1, (1 - fx) * fy], [ix + 1, iy + 1, fx * fy]];
-      const kA = W * (1 - busy * 0.5);
+      const kA = W * (1 - busy * 0.5) * (1 - this.carryW * (1 - T.carryAim));
       for (let b = 0; b < this.N; b++) {
         if (b === this.iW) continue;
         let X = 0, Y = 0, Z = 0, Wq = 0;

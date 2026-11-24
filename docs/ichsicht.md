@@ -54,6 +54,9 @@ Weste, Beine und Stiefel. Helm, Kopf und Haare hängen am Kopfknochen und versch
 - **Kamera wippt nicht mit dem Kopf der Figur**, sondern wie bisher mit der Laufbewegung der Kapsel; Arme und Waffe bewegen sich
   dagegen. Gefühl im Spiel ungeprüft.
 - **Zielen mit den älteren Waffen**: Blick über das Modell hinweg, keine echte Kimme. Bräuchte je Waffe einen Visierpunkt.
-- **Mündungslicht der Mine** beleuchtet jetzt die eigenen Hände stark.
+- ~~Mündungslicht und Waffenlampe der Mine~~ (behoben am 24.11.2026): Beide sitzen an der Kamera, also mitten in Hand und Waffe der
+  Figur, und überstrahlten sie aus wenigen Zentimetern; die hellen Flecken wanderten mit jeder kleinen Bewegung (Flackern). Lichter mit
+  `userData.noBody` beleuchten den Körper der Ich-Sicht nicht mehr (`engine.ts` `renderBody`); in der Mine bekommt er zwei eigene
+  Lichter (`dungeon.ts` `bodyLamp`, `bodyFlash`; `engine.ts` `bodyOnly`).
 - **Hülsenauswurf** gibt es nur in der alten Ich-Sicht.
 - Tod in der Ich-Sicht: Die Figur wird ausgeblendet, die Kamera sinkt wie bisher.

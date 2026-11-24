@@ -250,6 +250,7 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
   // Lyras Waffe bewegt sich selbst: Verschluss bei jedem Schuss, Magazin beim Nachladen (im Takt der Nachladebewegung der Figur)
   const LG = gun.shown ? gun.lyra : null;
   if (LG && wp) driveLyraGun(LG, wp.shots, wp.reload, dtc);
+  anim.fpView = st.fp;      // Ich-Sicht: die Waffe sinkt weniger tief (WeaponLayer), sonst verschwindet sie aus dem Bild
   const out = anim.update(dtc, {
     moveDir: _mv, gait, crouch: !!d.crouch, strafe: true, facing: face,
     jump, grounded: !air, verticalSpeed: vy, look: { pitch: d.pitch || 0 }, dead: !!d.dead,

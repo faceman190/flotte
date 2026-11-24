@@ -45,6 +45,18 @@ Die älteren Waffen (Dienstpistole, Sturmgewehr AR-39, SM-4, Enterflinte, Impuls
 beiden Ansichten und ihre Werte; die Figur trägt sie mit Lyras Haltungen (`mannyAvatar.ts`, `HOLD`). Pistole, AR-39 und Enterflinte
 schießen und laden mit Lyras Aufnahmen, die SM-4 behält die eigene Schussaufnahme, die Energiewaffen den Laserton.
 
+### Waffe gesenkt, wenn nicht gezielt wird (seit 24.11.2026)
+
+| Lage | Haltung |
+|---|---|
+| Stehen, ruhig | Hüfthaltung, nach 1,4 s ohne Schuss um 16° gesenkt (Ich-Sicht 7°) |
+| Joggen und Sprinten | Tragehaltung: Waffe quer vor dem Körper, rund 20° nach unten (`MM_Rifle_Jog_Fwd`, `MM_Pistol_Jog_Fwd`) |
+| Zielen, Schuss, Nachladen, Granatwurf | Waffe sofort oben; nach einem Schuss bleibt sie 0,9 s oben, auch im Lauf |
+
+Eigene Sprint-Clips mit Waffe hat das Paket nicht: Der Sprint nutzt denselben Clip, etwas schneller abgespielt. In der Ich-Sicht wird
+die Tragehaltung nur zu 50 % (Joggen) bis 68 % (Sprint) eingemischt – voll getragen läge die Waffe unter dem Bildrand.
+Einstellwerte: `WeaponLayer.js` `TUNE` (`carry…`, `lowReady…`).
+
 ## Wie es gebaut ist
 
 - **Lyras Waffen** (`src/game/lyraGuns.ts`): Zuordnung Gegenstand → Waffe (`LYRA_ITEM`), Lage und Mündung (`LYRA_SPEC`), Laden beim
@@ -69,7 +81,7 @@ schießen und laden mit Lyras Aufnahmen, die SM-4 behält die eigene Schussaufna
 
 ## Packen
 
-- Clips: `scripts/clipset.mjs` (`LYRA`) wählt 92 Clips, `node scripts/build-clips.mjs` packt sie in `asset-src/lazy/Bewegungen.lca`
+- Clips: `scripts/clipset.mjs` (`LYRA`) wählt 94 Clips, `node scripts/build-clips.mjs` packt sie in `asset-src/lazy/Bewegungen.lca`
   (nur Oberkörper, zusammen 0,4 MB).
 - Waffen: `asset-src/glb/lazy/Lyra*.glb`, `node scripts/build-manny.mjs LyraGewehr LyraPistole LyraFlinte LyraGranate`.
 - Geräusche, Effekte, Symbole: `node scripts/build-lyra.mjs` (67 Aufnahmen nach `asset-src/sound-lazy`, 14 Bilder nach
