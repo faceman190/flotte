@@ -4,7 +4,7 @@ kurz: Vom ersten Start bis zum ersten verdienten Credit – Steuerung, Bastion, 
 reihe: 1
 stufe: Einsteiger
 bild: ../../assets/bilder/bastion2-spiel.jpg
-stand: Alpha 1.54
+stand: Alpha 1.58
 ---
 
 Letzte Crew läuft direkt im Browser. Öffne [spielen.letztecrew.de](https://spielen.letztecrew.de/) in Chrome, Edge oder Firefox. Beim ersten
@@ -83,8 +83,22 @@ Mitte liegt der Treffpunkt, ringsum die Läden, jeder mit eigenem Leuchtschild. 
 
 Zum Ablegen gehst du zurück zu deinem Schiff und steigst ein.
 
-Auf Planeten und in Minen trägst du eine Handwaffe. Klick schießt, <kbd>R</kbd> lädt nach, ein leeres Magazin lädt von selbst nach.
+Auf Planeten und in Minen trägst du eine Handwaffe. Klick schießt, die **rechte Maustaste** zielt, <kbd>R</kbd> lädt nach, ein leeres
+Magazin lädt von selbst nach. <kbd>G</kbd> wirft eine Splittergranate, wenn du eine im Rucksack hast, <kbd>C</kbd> duckt dich.
 Unten rechts zeigt ein Ring dein Leben, daneben stehen Waffe, Magazin und Schussmodus.
+
+Mit <kbd>V</kbd> wechselst du überall zu Fuß zwischen Ich-Sicht und Außensicht. In beiden siehst du dieselbe Figur mit allem, was
+sie trägt.
+
+## Deine Figur und ihre Ausrüstung
+
+Beim Anlegen des Piloten wählst du eine von drei Figuren. Du beginnst nur im Unteranzug, mit einer Maschinenpistole SM-4 und
+300 Credits. Kleidung kaufst du beim **Ausrüster**: Helm, Weste, Anzug, Handschuhe und Stiefel. Im Terminal dreht sich das Modell des
+gewählten Gegenstands, und **Anprobieren** zeigt ihn an deiner Figur.
+
+Gekauftes liegt im Rucksack. Angelegt wird es im Flottenband unter **Ausrüstung** (<kbd>I</kbd>). Jedes Teil bringt Schutz, manche
+machen dich etwas schneller oder langsamer. Der günstige Einstieg sind Feldoverall (350), Kampfstiefel (260) und Handschuhe (180).
+Die Figur wechselst du später an der Garderobe, ebenfalls im Fenster Ausrüstung.
 
 ## Die ersten Credits
 
