@@ -196,7 +196,7 @@ function retireShips(p: Player) {
 }
 
 // ---------------- Laufzeitzustand (nicht gespeichert) ----------------
-export type Mode = 'menu' | 'play' | 'pause' | 'dock' | 'map' | 'jump' | 'walk' | 'rover' | 'entry' | 'intro' | 'scene' | 'launch' | 'dungeon';   // dungeon: zu Fuß in einer Mine (game/dungeon.ts)   // launch: Start- oder Landeablauf im Hangar
+export type Mode = 'menu' | 'play' | 'pause' | 'dock' | 'map' | 'jump' | 'walk' | 'rover' | 'entry' | 'intro' | 'scene' | 'launch' | 'dungeon' | 'eva';   // dungeon: zu Fuß in einer Mine (game/dungeon.ts)   // launch: Start- oder Landeablauf im Hangar
 export const G = {
   mode: 'menu' as Mode,
   dead: 0,            // Sekunden bis zum Neustart (0 = lebt)

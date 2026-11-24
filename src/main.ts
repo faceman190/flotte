@@ -42,6 +42,7 @@ import { wieselScan } from './game/wiesel';
 import { initTestlabor, updateTestlabor, testHooks } from './game/testlabor';
 import { mannyHooks } from './game/mannyAvatar';
 import { updateWetter } from './game/wetter';
+import { EVA, startEva, updateEva, evaCamera, evaE, evaF, drawEva } from './game/eva';
 import { updateRecht, drawRecht, rechtDock, rechtZahlen } from './game/recht';
 import { stationFaction } from './game/reputation';
 import { TESTF } from './game/testflags';
@@ -395,7 +396,7 @@ function toMenu() {
 let pausedFrom: Mode = 'play';
 dunHooks.unlock = () => pause();
 footHooks.unlock = () => pause();
-function pause() { if (G.mode !== 'play' && G.mode !== 'walk' && G.mode !== 'rover' && G.mode !== 'dungeon') return; pausedFrom = G.mode; G.mode = 'pause'; if (document.pointerLockElement) document.exitPointerLock(); releaseAll(); $('pSkip').classList.toggle('hidden', !prologActive()); showPause(); duckMusic(0.5); document.body.classList.remove('playing'); }
+function pause() { if (G.mode !== 'play' && G.mode !== 'walk' && G.mode !== 'rover' && G.mode !== 'dungeon' && G.mode !== 'eva') return; pausedFrom = G.mode; G.mode = 'pause'; if (document.pointerLockElement) document.exitPointerLock(); releaseAll(); $('pSkip').classList.toggle('hidden', !prologActive()); showPause(); duckMusic(0.5); document.body.classList.remove('playing'); }
 function resume() { hidePause(); G.mode = pausedFrom; duckMusic(1); document.body.classList.add('playing'); centerMouse(); }
 
 $('pSkip').onclick = () => { skipPrologue(); resume(); };
@@ -479,7 +480,7 @@ onKey(code => {
   if (G.mode === 'scene') { if (code === 'Space' || code === 'Enter' || code === 'NumpadEnter' || code === 'Escape') sceneNext(); return; }
   if (code === 'Escape') {
     if (G.mode === 'map') closeMap();
-    else if (G.mode === 'play' || G.mode === 'walk' || G.mode === 'rover' || G.mode === 'dungeon') pause();
+    else if (G.mode === 'play' || G.mode === 'walk' || G.mode === 'rover' || G.mode === 'dungeon' || G.mode === 'eva') pause();
     else if (G.mode === 'dock') closeMenu();
     else if (G.mode === 'pause') { if (pauseSubOpen()) closePauseSub(); else resume(); }
     return;
@@ -525,6 +526,9 @@ onKey(code => {
   if (code === 'KeyV' && (G.mode === 'walk' || G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { toggleView(); return; }
   if (G.mode === 'rover' && FOOT.active && code === 'Space') { footJump(); return; }
   if (code === 'KeyC' && (G.mode === 'walk' || G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { toggleCrouch(); return; }
+  // Außenbordeinsatz (eva.ts): F im All bei stehendem Schiff aussteigen, an der Schleuse einsteigen; E birgt Container
+  if (code === 'KeyF' && G.mode === 'play' && !world.surface && !G.dead && !nearDock()) { startEva(); return; }
+  if (G.mode === 'eva') { if (code === 'KeyF') evaF(); else if (code === 'KeyE') evaE(); return; }
   // F: aus dem Rover aussteigen / wieder einsteigen
   if (code === 'KeyF' && G.mode === 'rover' && !G.dead) { if (FOOT.active) { if (footNearRover()) enterRover(); } else leaveRover(); return; }
   if (code === 'KeyV' && G.mode === 'play') { CAM.lock = !CAM.lock; if (CAM.lock) radio('SYSTEM', 'Freie Kamera: Maus schaut um das Schiff, Pfeiltasten lenken. V beendet sie.'); return; }
@@ -728,6 +732,7 @@ function updateCamera(dt: number) {
   freeCamera(dt);
   if (G.mode === 'intro') { camera.position.copy(INTRO.pos); camera.lookAt(INTRO.look); setFov(50); return; }
   if (DUN.active) { dungeonCamera(); return; }
+  if (G.mode === 'eva' || (G.mode === 'pause' && EVA.active)) { evaCamera(); return; }
   if (IN.active) { applyWalkCamera(); return; }
   if (G.mode === 'rover' || (G.mode === 'pause' && ROVER.active) || (G.mode === 'map' && ROVER.active)) { if (FOOT.active) footCamera(dt); else roverCamera(dt); return; }
   if (G.mode === 'menu' || (G.mode === 'dock' && G.dockedAt) || (G.mode === 'map' && G.dockedAt)) {
@@ -780,7 +785,7 @@ function animateStructures(dt: number) {
 
 // Ein Simulationsschritt der Spielwelt
 function simulate(dt: number) {
-  const m = G.mode, live = m === 'play' || m === 'jump' || m === 'dock' || m === 'walk' || m === 'rover' || m === 'entry' || m === 'launch' || m === 'dungeon';
+  const m = G.mode, live = m === 'play' || m === 'jump' || m === 'dock' || m === 'walk' || m === 'rover' || m === 'entry' || m === 'launch' || m === 'dungeon' || m === 'eva';
   outside.muted = IN.active || DUN.active;   // zu Fuß in Station, Schiff oder Wrack: kein Gefechtslärm von draußen
   outside.k = world.surface && (m === 'rover' || m === 'walk') ? 0.3 : 1;   // zu Fuß oder im Rover auf dem Planeten: das Gefecht ist oben am Himmel
   outside.at.x = camera.position.x; outside.at.y = camera.position.y; outside.at.z = camera.position.z;
@@ -800,6 +805,7 @@ function simulate(dt: number) {
   } else if (m === 'jump') updateJump(dt);
   else if (m === 'walk') updateWalk(dt);
   else if (m === 'dungeon') updateDungeon(dt);
+  else if (m === 'eva') updateEva(dt);      // Außenbordeinsatz (eva.ts)
   else if ((m as string) === 'launch') { updateHangarSequence(dt); updateRoomLife(dt); }
   else if (m === 'dock' && IN.active) updateRoomLife(dt);
   else if (m === 'entry') updateEntry(dt);
@@ -900,9 +906,9 @@ function loop(now: number, manual = false) {
     if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); setDoors(SHIP.g, hangarGearDown() && RAMP.want, dt); }
     else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); setDoors(SHIP.g, true, dt); }
     else {
-      SHIP.g.visible = (G.mode === 'play' || G.mode === 'jump' || G.mode === 'pause' || G.mode === 'entry') && !G.dead;
+      SHIP.g.visible = (G.mode === 'play' || G.mode === 'jump' || G.mode === 'pause' || G.mode === 'entry' || G.mode === 'eva') && !G.dead;
       setGear(SHIP.g, G.mode === 'entry');   // im Flug eingezogen, beim Landeanflug ausgefahren
-      setDoors(SHIP.g, false, dt);
+      setDoors(SHIP.g, G.mode === 'eva' || (G.mode === 'pause' && EVA.active), dt);      // Außenbord: Heckrampe offen
       if (SHIP.g.visible) syncShip();
     }
     setDustVisible(!IN.active);
@@ -931,7 +937,8 @@ function loop(now: number, manual = false) {
   if (world.def && G.mode !== 'map' && !IN.active && !DUN.active) drawFlare(ux, dt, flareOccluders());
   if (!(FOOT.active && world.surface && G.mode === 'rover')) hideFieldViewModel();   // Waffe der Ich-Sicht nur zu Fuß auf einem Planeten (blieb nach Sektorwechsel sonst im Bild, auch in der Station)
   drawWalkHUD();
-  if (G.mode === 'play' || G.mode === 'rover') drawRecht();      // Fahndung (recht.ts)
+  if (G.mode === 'play' || G.mode === 'rover') drawRecht();
+  if (G.mode === 'eva') drawEva();      // Fahndung (recht.ts)
   if (!FOOT.active) { drawRoverHUD(); if (G.mode === 'rover' && ROVER.active) { drawSalvageHUD(ROVER.x, ROVER.z); drawGroundMarkers(); } } else drawFootHUD();
   if (G.mode === 'rover' && world.surface) drawBodenHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, !FOOT.active && ROVER.active);
   drawDungeonHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, ROVER.active);

@@ -181,4 +181,15 @@ export function begegnungMarkers() {
   return out;
 }
 /** nur für Tests: sofort eine Begegnung (Art wählbar) */
+/** Außenbordeinsatz (eva.ts): treibender Container in Griffweite (4 m)? take = von Hand bergen (anderthalbmal so viel Ware) */
+export function evaContainer(x: number, y: number, z: number, take: boolean): boolean {
+  const ev = S.ev; if (!ev || ev.kind !== 'treibgut' || ev.done) return false;
+  const o = ev.objs.find(q => !q.got && d3(q.x, q.y, q.z, x, y, z) < 4); if (!o) return false;
+  if (!take) return true;
+  o.got = true; o.g.visible = false; burst(o.x, o.y, o.z, '#ffc860', 22, 20, 0.5);
+  const room = stats().cargo - cargoUsed(), k = pick(WAREN), n = Math.min(room, Math.round((2 + Math.floor(Math.random() * 4)) * 1.5));
+  if (n > 0) { P.cargo[k] += n; radio('SYSTEM', `Container von Hand geborgen: ${n} Einheiten an Bord.`, '#cfd6e3'); } else radio('SYSTEM', 'Container geborgen, aber der Frachtraum ist voll.', '#ff9b7a');
+  if (ev.objs.every(q => q.got)) { ev.done = true; ev.leave = 1; saveGame(); }
+  return true;
+}
 export function begegnungJetzt(kind?: Kind) { if (S.ev) end(); start(kind); return S.ev?.kind || null; }
