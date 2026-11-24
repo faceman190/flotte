@@ -36,7 +36,8 @@ import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs
 import { startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
-import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, ROVER, SURF } from './game/surface';
+import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, ROVER, SURF } from './game/surface';
+import { wieselScan } from './game/wiesel';
 import { PLANETS, PTYPE } from './data/planets';
 import { d3 } from './core/util';
 import { openBand, closeBand, drawBand, bandHooks } from './ui/band';
@@ -457,6 +458,9 @@ onKey(code => {
     return;
   }
   if (code === 'KeyR' && G.mode === 'play') { scan(); noteScan(); return; }
+  // Erkundungsbuggy „Wiesel“: R tastet ab (wiesel.ts); X am Schiff: das andere Fahrzeug nehmen (surface.ts fahrzeugTauschen)
+  if (code === 'KeyR' && G.mode === 'rover' && !FOOT.active && ROVER.active && ROVER.kind === 'wiesel' && !G.dead) { wieselScan(ROVER.x, ROVER.y, ROVER.z); return; }
+  if (code === 'KeyX' && G.mode === 'rover' && !G.dead && (FOOT.active ? footNearShip() : nearShip())) { const t = fahrzeugTauschen(); if (t) radio('SYSTEM', t); return; }
   if (code === 'KeyR' && (G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { gunReload(); return; }   // zu Fuß: nachladen (footgun.ts)
   if (code === 'KeyG' && G.mode === 'rover' && FOOT.active) { footGrenade(); return; }      // zu Fuß: Granate werfen (in der Mine: dungeonKey)
   if (code === 'KeyJ' && G.mode === 'play') { toggleJumpDrive(); return; }

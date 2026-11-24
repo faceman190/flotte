@@ -24,7 +24,8 @@ import { statRows } from './invApp';
 import { showItem, hideItem, itemHasModel } from './teilPreview';
 import { trachtOf } from '../game/avatar';
 import { radio } from './radio';
-import { showShip, hideShip } from './shipPreview';
+import { showShip, hideShip, showModel } from './shipPreview';
+import { FZ, FZ_IDS, buildFahrzeug, fzLaden, normFz, type FzId } from '../models/rover';
 
 // Stationsterminals (seit Alpha 1.25): Jeder Dienst hat seinen eigenen Ort auf der Station und sein eigenes Terminal.
 // Es gibt keine Leiste mehr, über die man von einem Dienst zum nächsten springt: Wer etwas anderes will, läuft hin.
@@ -38,8 +39,8 @@ let launched = false;   // der Startablauf im Hangar ist durch: jetzt wirklich a
 // Auswahl in den Terminals: gilt, solange ein Terminal offen ist
 const cart = { sell: {} as Partial<Record<ItemId, number>>, buy: {} as Partial<Record<ItemId, number>> };
 let refSel: Partial<Record<ItemId, number>> = {};      // Raffinerie: gewählte Chargen je Rohstoff
-let selShip: ShipId | null = null, selUp: UpgId | null = null;
-const resetSel = () => { cart.sell = {}; cart.buy = {}; refSel = {}; selShip = null; selUp = null; shop.mode = 'kauf'; shop.cat = 'alle'; shop.sub = ''; shop.q = ''; shop.sel = ''; shop.probe = false; };
+let selShip: ShipId | null = null, selUp: UpgId | null = null, selFz: FzId | null = null;      // selFz: in der Werft ein Bodenfahrzeug gewählt (statt eines Schiffs)
+const resetSel = () => { cart.sell = {}; cart.buy = {}; refSel = {}; selShip = null; selUp = null; selFz = null; shop.mode = 'kauf'; shop.cat = 'alle'; shop.sub = ''; shop.q = ''; shop.sel = ''; shop.probe = false; };
 
 const CHARGE_COST = 40, PAINT_COST = 250;
 // Servicepreise (Flottenrat-Rang gibt Rabatt, Misstrauen kostet Aufschlag)
@@ -278,10 +279,17 @@ function vWerft(): View {
   const sel = selShip, c = SHIPS[sel], b = computeStats(sel, emptyUp() as Up), pr = shipPrice(sel), M = shipMax;
   let h = `<nav class="pn" aria-label="Schiffe"><p class="lb">Im Angebot</p>`;
   for (const id of ids) {
-    const p = shipPrice(id), own = id === P.cls ? 'dein Schiff' : here.some(r => r.cls === id) ? 'im Hangar' : '';
-    h += `<button class="row ${id === sel ? 'sel' : ''}" data-a="ship" data-k="${id}" ${id === sel ? 'aria-current="true"' : ''}><span><b>${SHIPS[id].n}</b><small>${SHIPS[id].role}${own ? ` · <i class="up">${own}</i>` : ''}</small></span><span class="mo ${P.credits < p ? 'dn' : 'hi'}">${fmtN(p)} Cr</span></button>`;
+    const p = shipPrice(id), own = id === P.cls ? 'dein Schiff' : here.some(r => r.cls === id) ? 'im Hangar' : '', on = id === sel && !selFz;
+    h += `<button class="row ${on ? 'sel' : ''}" data-a="ship" data-k="${id}" ${on ? 'aria-current="true"' : ''}><span><b>${SHIPS[id].n}</b><small>${SHIPS[id].role}${own ? ` · <i class="up">${own}</i>` : ''}</small></span><span class="mo ${P.credits < p ? 'dn' : 'hi'}">${fmtN(p)} Cr</span></button>`;
+  }
+  // Bodenfahrzeuge (seit 2026-11-24): fahren im Schiff mit, eins davon wird beim Landen ausgesetzt
+  h += `<p class="lb">Bodenfahrzeuge</p>`;
+  for (const k of FZ_IDS) {
+    const f = FZ[k], have = k === 'dachs' || (P.fahrzeuge || []).includes(k), on = selFz === k;
+    h += `<button class="row ${on ? 'sel' : ''}" data-a="fz" data-k="${k}" ${on ? 'aria-current="true"' : ''}><span><b>${f.kurz}</b><small>${k === 'dachs' ? 'Bergbaurover' : 'Erkundungsbuggy'}${have ? ` · <i class="up">${fzAktiv() === k ? 'wird ausgesetzt' : 'im Schiff'}</i>` : ''}</small></span><span class="mo ${have ? 'dim' : P.credits < f.price ? 'dn' : 'hi'}">${have ? 'gehört dir' : fmtN(f.price) + ' Cr'}</span></button>`;
   }
   h += `<p class="hint end">Rot: Dafür reichen deine Credits nicht.</p></nav>`;
+  if (selFz) return vWerftFz(h, selFz);
   h += `<section class="pn deep flush"><div class="prev"><canvas id="tmShip" width="900" height="420"></canvas></div><div class="pd"><div class="pt"><h2>${c.n}</h2><p class="lb">${c.role}</p></div><p>${c.desc}</p><p class="hint">Ausbauten gelten pro Schiff. Ein neues Schiff steht nach dem Kauf im Hangar; dein jetziges behältst du.</p></div></section>`;
   const cmp = (label: string, v: number, cur: number, max: number, unit = '') => {
     const d = Math.round(v - cur);
@@ -294,6 +302,25 @@ function vWerft(): View {
     <div class="act">${line('Credits danach', `${fmtN(P.credits - pr)} Cr`, P.credits < pr ? 'dn' : '')}
     <button class="pri big" data-a="buy" data-k="${sel}" ${P.credits >= pr ? '' : 'disabled'}><span>Kaufen</span><span class="mo">${pr < c.price ? `<s>${fmtN(c.price)}</s> ` : ''}${fmtN(pr)} Cr</span></button></div></aside>`;
   return { k: kpi('Credits', `${fmtN(P.credits)} Cr`) + kpi('Deine Schiffe hier', String(1 + here.length)), cols: '300px minmax(0,1fr) 370px', h };
+}
+
+// Werft, Bodenfahrzeug gewählt: Ansicht, Beschreibung, Werte im Vergleich, Kaufen bzw. „beim Landen aussetzen“
+const fzAktiv = (): FzId => { const k = normFz(P.fahrzeug); return k === 'wiesel' && !(P.fahrzeuge || []).includes('wiesel') ? 'dachs' : k; };
+function vWerftFz(nav: string, k: FzId): View {
+  const f = FZ[k], have = k === 'dachs' || (P.fahrzeuge || []).includes(k), aktiv = fzAktiv() === k, o = FZ[k === 'dachs' ? 'wiesel' : 'dachs'];
+  let h = nav;
+  h += `<section class="pn deep flush"><div class="prev"><canvas id="tmShip" width="900" height="420"></canvas></div><div class="pd"><div class="pt"><h2>${f.n}</h2><p class="lb">${k === 'dachs' ? 'Bergbaurover' : 'Erkundungsbuggy'}</p></div><p>${f.d}</p><p class="hint">Beide Fahrzeuge fahren im Schiff mit. Am gelandeten Schiff tauschst du mit [X]; hier legst du fest, welches beim Landen ausgesetzt wird.</p></div></section>`;
+  const row = (label: string, v: number, ov: number, max: number, unit: string) => {
+    const d = Math.round(v - ov);
+    return `<div class="cp"><div><span>${label}</span><span class="mo"><b>${fmtN(Math.round(v))}${unit}</b>${d ? ` <i class="${d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : '−'}${fmtN(Math.abs(d))}</i>` : ''}</span></div><div class="br"><i class="${d < 0 ? 'dn' : ''}" style="width:${Math.round(Math.min(1, v / max) * 100)}%"></i></div></div>`;
+  };
+  h += `<aside class="pn"><p class="lb">Werte · Vergleich mit dem ${o.kurz}</p>
+    ${row('Tempo', f.v * 3.6, o.v * 3.6, 170, ' km/h')}${row('Mit Umschalt', f.vB * 3.6, o.vB * 3.6, 170, ' km/h')}${row('Anzug', f.eng * 10, o.eng * 10, 140, ' %')}${row('Erzladung', f.cap, o.cap, 40, ' E')}
+    <div class="sep"></div><p class="lb">Ausrüstung</p><p>${k === 'dachs' ? 'Schneckenbohrer · Erzmulde 40 E · Druckkabine · sechs Räder' : 'Sensormast 1,6 km ([R]) · Lichtleiste · zwei Sitze · Ersatzrad · kein Bohrer'}</p>
+    <div class="act">${have ? line('Beim Landen', aktiv ? 'wird ausgesetzt' : 'bleibt im Schiff') : line('Credits danach', `${fmtN(P.credits - f.price)} Cr`, P.credits < f.price ? 'dn' : '')}
+    ${have ? `<button class="pri big" data-a="usefz" data-k="${k}" ${aktiv ? 'disabled' : ''}><span>${aktiv ? 'Wird beim Landen ausgesetzt' : 'Beim Landen aussetzen'}</span><span class="mo"></span></button>`
+      : `<button class="pri big" data-a="buyfz" data-k="${k}" ${P.credits >= f.price ? '' : 'disabled'}><span>Kaufen</span><span class="mo">${fmtN(f.price)} Cr</span></button>`}</div></aside>`;
+  return { k: kpi('Credits', `${fmtN(P.credits)} Cr`) + kpi('Fahrzeuge', String(1 + (P.fahrzeuge || []).length)), cols: '300px minmax(0,1fr) 370px', h };
 }
 
 // ---------- Werkstatt: Ausbaustufen ----------
@@ -521,7 +548,8 @@ function render() {
     <div class="tmB" style="grid-template-columns:${v.cols}">${v.h}</div>
     <footer class="tmF"><p class="lb acc">Zu Fuß erreichbar</p><p>${others.join(' · ')} · Galaxiekarte (M)</p></footer></div>`;
   opening = false;
-  if (tab === 'werft' && selShip) showShip($('tmShip') as HTMLCanvasElement, selShip); else hideShip();
+  if (tab === 'werft' && selFz) { const k = selFz; showModel($('tmShip') as HTMLCanvasElement, 'fz:' + k, () => { fzLaden(k); const m = buildFahrzeug(k); return m ? m.g : null; }); }
+  else if (tab === 'werft' && selShip) showShip($('tmShip') as HTMLCanvasElement, selShip); else hideShip();
   if (tab === 'ausruester') shopAfter(); else hideItem();
 }
 function stationName(id: string) {
@@ -589,7 +617,13 @@ $('dockCard').addEventListener('click', e => {
     note = m ? `${m} ${nm} ${k === 'store' ? 'ins Lager gelegt' : 'ins Schiff geladen'}.` : 'Kein Platz im Frachtraum.';
     if (m) sfx('ui_confirm', 0.5, 1, () => snd(700, 0.12, 'sine', 0.05, 300));
   }
-  if (a === 'ship') selShip = k as ShipId;
+  if (a === 'ship') { selShip = k as ShipId; selFz = null; }
+  if (a === 'fz') selFz = normFz(k);
+  if (a === 'buyfz' && k === 'wiesel' && !(P.fahrzeuge || []).includes(k) && P.credits >= FZ.wiesel.price) {
+    P.credits -= FZ.wiesel.price; (P.fahrzeuge ||= []).push(k); P.fahrzeug = k;
+    note = `${FZ.wiesel.n} gekauft. Er fährt ab jetzt im Schiff mit und wird beim nächsten Landen ausgesetzt; am Schiff tauschst du mit [X].`; snd(600, 0.5, 'triangle', 0.06, 600);
+  }
+  if (a === 'usefz') { P.fahrzeug = normFz(k); note = `Beim Landen wird der ${FZ[normFz(k)].kurz} ausgesetzt.`; snd(500, 0.2, 'triangle', 0.04, 200); }
   if (a === 'upsel') selUp = k as UpgId;
   if (a === 'shmode') { shop.mode = k; shop.sel = ''; shop.probe = false; snd(700, 0.04, 'sine', 0.025, 200); }
   if (a === 'shsel') { shop.sel = k; snd(800, 0.05, 'sine', 0.03, 200); }

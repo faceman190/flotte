@@ -47,6 +47,8 @@ export interface Player {
   savedAt?: number;                // Zeitpunkt des letzten Speicherns (ms), entscheidet bei Konto-Ständen, welcher neuer ist
   surface?: boolean;               // gespeichert auf der Planetenoberfläche
   rover?: Partial<Record<ItemId, number>>; // Ladung des Rovers
+  fahrzeug?: string;                        // Bodenfahrzeug, das beim Landen ausgesetzt wird: 'dachs' (Vorgabe) | 'wiesel' (models/rover.ts FZ)
+  fahrzeuge?: string[];                     // gekaufte Bodenfahrzeuge (der Dachs gehört jedem Piloten und steht hier nicht)
   rep?: Record<string, number>;    // Ruf bei den Fraktionen (siehe reputation.ts)
   missions?: import('./missions').Mission[];   // angenommene Fraktionsmissionen
   story?: import('./story').StoryState;        // Fortschritt der Geschichte (Prolog)

@@ -63,6 +63,7 @@ export const DUN = {
   msg: [] as { t: string; c: string; life: number }[], danger: 1, kills: 0, left: 0,
 };
 let ENTR: Entrance[] = [];
+export const stollenEingaenge = (): readonly Entrance[] => ENTR;      // für den Sensormast des Wiesel (wiesel.ts)
 const WR = () => DUN.e?.kind === 'wrack' || DUN.e?.kind === 'schiff';
 const SH = () => DUN.e?.kind === 'schiff';
 const AR = () => DUN.e?.kind === 'archiv';

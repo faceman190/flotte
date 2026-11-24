@@ -12,7 +12,9 @@ import { SECTOR, type StationDef } from '../data/galaxy';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { PLANETS, PTYPE, planetBaseId, type PlanetDef } from '../data/planets';
 import { buildGate } from '../models/structures';
-import { buildRoverNeu, roverLaden, roverBereit, RAD_R, type RoverNeu, type RoverRad } from '../models/rover';
+import { buildFahrzeug, fzLaden, fzBereit, FZ, normFz, type FzId, type RoverNeu, type RoverRad } from '../models/rover';
+import { updateFahrer, fahrerWeg } from './fahrer';
+import { updateWieselScan, drawWieselScan, wieselScanWeg, WSCAN } from './wiesel';
 import { buildFlora, updateFlora } from './flora';
 import { gearFactor } from './inventory';
 import { buildDungeonEntrances } from './dungeon';
@@ -500,8 +502,10 @@ export function landInfo() {
 }
 
 // ---------------- Rover ----------------
-// Seit 2026-11-24 der Bergbaurover „Dachs“ aus Blender (models/rover.ts); solange er lädt (und als Rückfall) der alte Rover aus Grundformen.
-export function buildRover(): RoverModel { roverLaden(); return buildRoverNeu() || buildRoverAlt(); }
+// Seit 2026-11-24 die Fahrzeuge aus Blender (models/rover.ts): Bergbaurover „Dachs“ oder Erkundungsbuggy „Wiesel“ (P.fahrzeug).
+// Solange das Modell lädt (und als Rückfall), steht der alte Rover aus Grundformen da; updateRover tauscht, sobald es geladen ist.
+export const fzWahl = (): FzId => { const k = normFz(P.fahrzeug); return k === 'wiesel' && !(P.fahrzeuge || []).includes('wiesel') ? 'dachs' : k; };
+export function buildRover(kind: FzId = fzWahl()): RoverModel { fzLaden(kind); return buildFahrzeug(kind) || buildRoverAlt(); }
 function buildRoverAlt() {
   const g = new THREE.Group(), body = new THREE.Group();
   g.add(body);
@@ -530,13 +534,13 @@ function buildRoverAlt() {
   // Materialien neue Shader (Standbild). Die Leuchtpunkte oben bleiben.
   const head = { intensity: 0 };
   boxUV(g, 1 / 3);
-  return { g, body, wheels, drill, beacon, head, rads: [] as RoverRad[], neu: false as const };
+  return { g, body, wheels, drill, beacon, head, rads: [] as RoverRad[], neu: false as const, kind: 'dachs' as FzId, sensor: null, seat: null, wheel: null };
 }
 type RoverModel = ReturnType<typeof buildRoverAlt> | RoverNeu;
 // Fahrzustand (seit 2026-11-24 mit Schwung, Federung und Seitenführung): vx/vz Tempo über Grund, vy senkrecht (Sprünge über Kuppen),
 // spd Tempo längs, yr Drehrate, steer Lenkeinschlag (rad), pitch/roll Lage der Karosserie, air in der Luft, susp Einfederung je Rad
 export const ROVER = {
-  active: false, x: 0, y: 0, z: 0, yaw: 0, speed: 0, model: null as RoverModel | null,
+  active: false, x: 0, y: 0, z: 0, yaw: 0, speed: 0, model: null as RoverModel | null, kind: 'dachs' as FzId,
   ship: { x: 0, y: 0, z: 0, yaw: 0 }, target: null as Asteroid | null, acc: 0, drilling: false, prompt: '',
   cap: 40, warn: 0,
   vx: 0, vy: 0, vz: 0, yr: 0, steer: 0, pitch: 0, roll: 0, air: false, susp: [0, 0, 0, 0, 0, 0], slip: 0,
@@ -551,8 +555,11 @@ export function landShip(quiet = false) {
   ROVER.ship = { x: P.x, y: heightAt(P.x, P.z) + r * 0.55, z: P.z, yaw: P.yaw };
   P.vx = P.vy = P.vz = 0; P.pitch = 0;
   if (!P.rover) P.rover = {};
-  const m = ROVER.model || buildRover();
-  ROVER.model = m;
+  const kind = fzWahl();
+  if (ROVER.model && ROVER.model.kind !== kind && ROVER.model.neu) { scene.remove(ROVER.model.g); ROVER.model = null; }
+  const m = ROVER.model || buildRover(kind);
+  ROVER.model = m; ROVER.kind = kind; ROVER.cap = FZ[kind].cap;
+  ROVER.vx = ROVER.vz = ROVER.vy = 0; ROVER.air = false; ROVER.yr = ROVER.steer = 0;
   scene.add(m.g);
   const rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
   ROVER.x = P.x + rx * (r + 7); ROVER.z = P.z + rz * (r + 7); ROVER.yaw = P.yaw; ROVER.speed = 0;
@@ -562,7 +569,8 @@ export function landShip(quiet = false) {
   if (quiet) return true;
   burst(ROVER.x, ROVER.y + 1, ROVER.z, '#4a4238', 30, 14, 1.0);
   snd(180, 0.6, 'sawtooth', 0.04, -80);
-  radio('SYSTEM', 'Gelandet. Rover ausgesetzt: WASD fahren, Klick halten zum Bohren, [E] am Schiff einsteigen.');
+  radio('SYSTEM', kind === 'wiesel' ? 'Gelandet. Buggy ausgesetzt: WASD fahren, [R] Umgebung abtasten, [E] am Schiff einsteigen, [X] am Schiff Fahrzeug tauschen.'
+    : `Gelandet. Rover ausgesetzt: WASD fahren, Klick halten zum Bohren, [E] am Schiff einsteigen.${(P.fahrzeuge || []).includes('wiesel') ? ' [X] am Schiff: Buggy nehmen.' : ''}`);
   return true;
 }
 
@@ -588,10 +596,26 @@ export function unloadRover() {
   }
   return { moved, left };
 }
+// Am Schiff das andere Fahrzeug nehmen (Taste X, main.ts): Der Dachs lädt vorher seine Ladung ins Schiff. null: kein zweites Fahrzeug.
+export function fahrzeugTauschen(): string | null {
+  if (!ROVER.model || !(P.fahrzeuge || []).includes('wiesel')) return null;
+  const neu: FzId = ROVER.kind === 'dachs' ? 'wiesel' : 'dachs';
+  let msg = '';
+  if (ROVER.kind === 'dachs' && roverLoad()) { const { moved, left } = unloadRover(); msg = moved ? ` ${moved} Einheiten Erz in den Frachtraum verladen.${left ? ` ${left} bleiben im Dachs.` : ''}` : ''; }
+  scene.remove(ROVER.model.g); fahrerWeg(); laserSound(false);
+  P.fahrzeug = neu; ROVER.kind = neu; ROVER.cap = FZ[neu].cap;
+  const m = buildRover(neu); ROVER.model = m; scene.add(m.g);
+  const r = stats().radius, rx = Math.cos(ROVER.ship.yaw), rz = -Math.sin(ROVER.ship.yaw);
+  ROVER.x = ROVER.ship.x + rx * (r + 7); ROVER.z = ROVER.ship.z + rz * (r + 7); ROVER.yaw = ROVER.ship.yaw; ROVER.y = heightAt(ROVER.x, ROVER.z);
+  ROVER.vx = ROVER.vz = ROVER.vy = 0; ROVER.speed = 0; ROVER.air = false; ROVER.yr = ROVER.steer = 0; ROVER.drilling = false; ROVER.target = null;
+  camInit = false;
+  snd(220, 0.5, 'sawtooth', 0.04, 120);
+  return (neu === 'wiesel' ? 'Buggy „Wiesel“ ausgeladen, der Dachs bleibt im Schiff. [R] tastet die Umgebung ab.' : 'Rover „Dachs“ ausgeladen, der Buggy bleibt im Schiff.') + msg;
+}
 export function boardShip() {
   const { moved, left } = unloadRover();
   ROVER.active = false;
-  laserSound(false);
+  laserSound(false); fahrerWeg(); wieselScanWeg();
   if (ROVER.model) scene.remove(ROVER.model.g);
   P.x = ROVER.ship.x; P.y = ROVER.ship.y + 14; P.z = ROVER.ship.z; P.yaw = ROVER.ship.yaw; P.pitch = 0;
   P.vx = P.vy = P.vz = 0;
@@ -607,18 +631,25 @@ export function updateRover(dt: number) {
   const m = ROVER.model, R = ROVER;
   R.warn -= dt;
   // Modell aus Blender nachgeladen: austauschen
-  if (!m.neu && roverBereit()) { const n = buildRoverNeu(); if (n) { scene.remove(m.g); ROVER.model = n; scene.add(n.g); return; } }
+  if (!m.neu || m.kind !== R.kind) {
+    if (!fzBereit(R.kind)) fzLaden(R.kind);
+    else { const n = buildFahrzeug(R.kind); if (n) { scene.remove(m.g); fahrerWeg(); ROVER.model = n; scene.add(n.g); return; } }
+  }
   // ---------- Fahren (seit 2026-11-24): Schwung, Hangabtrieb, Seitenführung, Federung, Sprünge über Kuppen ----------
   // Vorher wurde der Rover einfach auf die Geländehöhe gesetzt und fuhr wie auf Schienen (Tempo längs, keine Trägheit, keine Federung).
+  // Die Werte je Fahrzeug stehen in models/rover.ts (FZ): der schwere Dachs, der leichte, schnelle Wiesel.
+  const F = FZ[R.kind];
   const th = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), stIn = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
   const boost = !!(keys.ShiftLeft || keys.ShiftRight), ice = curType === PTYPE.eis || (curType as any)?.rock === 'ice';
-  const GR = 9.0, VMAX = boost ? 33 : 24, ENG = boost ? 9.0 : 7.0, BRAKE = 15, ROLL = 0.35, WB = 4.1, DRAG = 0.0045;
+  const GR = 9.0, VMAX = boost ? F.vB : F.v, ENG = boost ? F.engB : F.eng, BRAKE = F.brake, ROLL = 0.35, WB = F.wb, DRAG = F.drag, RADR = F.radR;
   const fx = -Math.sin(R.yaw), fz = -Math.cos(R.yaw), rx0 = Math.cos(R.yaw), rz0 = -Math.sin(R.yaw);
-  // Gelände unter den sechs Rädern: Ebene durch die Radpunkte (vorn/hinten, links/rechts)
+  // Gelände unter den Rädern: Ebene durch die Radpunkte (vorn/hinten, links/rechts)
   const hAt = (lx: number, lz: number) => heightAt(R.x + rx0 * lx - fx * lz, R.z + rz0 * lx - fz * lz);      // lz: −vorn … +hinten (Spielachsen)
-  const RW = [[-1.6, -2.05], [1.6, -2.05], [-1.6, 0], [1.6, 0], [-1.6, 2.05], [1.6, 2.05]], gh = RW.map(([lx, lz]) => hAt(lx, lz));
-  const front = (gh[0] + gh[1]) / 2, back = (gh[4] + gh[5]) / 2, left = (gh[0] + gh[2] + gh[4]) / 3, right = (gh[1] + gh[3] + gh[5]) / 3;
-  const ground = (front + back + (gh[2] + gh[3]) / 2 * 2) / 4, gPitch = Math.atan2(front - back, WB), gRoll = Math.atan2(right - left, 3.2);
+  const ht = F.trk / 2, axF = F.ax[0], axB = F.ax[F.ax.length - 1];
+  const gh = F.ax.map(z => [hAt(-ht, z), hAt(ht, z)]);
+  const front = (gh[0][0] + gh[0][1]) / 2, back = (gh[gh.length - 1][0] + gh[gh.length - 1][1]) / 2;
+  const left = gh.reduce((a, h) => a + h[0], 0) / gh.length, right = gh.reduce((a, h) => a + h[1], 0) / gh.length;
+  const gPitch = Math.atan2(front - back, axB - axF), gRoll = Math.atan2(right - left, F.trk);
   // Tempo längs und quer im Bezug des Fahrzeugs
   let vF = R.vx * fx + R.vz * fz, vL = R.vx * rx0 + R.vz * rz0;
   const onGround = !R.air;
@@ -635,14 +666,14 @@ export function updateRover(dt: number) {
     const hold = th === 0 && Math.abs(vF) < 1.2 && Math.abs(slopeF) < 0.45 && Math.abs(slopeL) < 0.5;
     if (!hold) { vF -= GR * slopeF * dt; vL -= GR * slopeL * dt * 0.6; } else { vF *= Math.pow(0.02, dt); }
     // Seitenführung: Quertempo wird von den Reifen aufgefangen (auf Eis deutlich weniger: der Rover rutscht in Kurven)
-    const grip = ice ? 3.5 : 7.5;
+    const grip = ice ? F.gripEis : F.grip;
     R.slip = Math.abs(vL);
     vL *= Math.exp(-grip * dt);
     // Lenkung: Einschlag nimmt mit dem Tempo ab; Drehrate nach Einspurmodell, weich nachgeführt
-    const maxSt = 0.55 - 0.45 * clamp(Math.abs(vF) / 24, 0, 1);
+    const maxSt = F.steer - F.steerFade * clamp(Math.abs(vF) / F.steerRef, 0, 1);
     R.steer += (stIn * maxSt - R.steer) * Math.min(1, dt * 6);
-    // Querbeschleunigung begrenzt (Reifen halten so viel, wie sie halten: normal 8 m/s², auf Eis 4): schnelle Kurven werden weiter
-    const yrMax = (ice ? 5.5 : 8) / Math.max(2, Math.abs(vF));
+    // Querbeschleunigung begrenzt (Reifen halten so viel, wie sie halten: Dachs 8 m/s², Wiesel 10, auf Eis weniger): schnelle Kurven werden weiter
+    const yrMax = (ice ? F.latEis : F.lat) / Math.max(2, Math.abs(vF));
     const wantYr = clamp((vF * Math.tan(R.steer)) / WB, -yrMax, yrMax) + (Math.abs(vF) < 0.8 ? stIn * 0.35 : 0);      // im Stand ein wenig auf der Stelle drehen
     R.yr += (wantYr - R.yr) * Math.min(1, dt * (ice ? 4.5 : 8));
   } else { R.steer *= Math.pow(0.3, dt); R.yr *= Math.pow(0.6, dt); }
@@ -674,14 +705,14 @@ export function updateRover(dt: number) {
   R.x = nx; R.z = nz;
   // Senkrecht: am Boden folgt der Rover dem Gelände (das Tempo nach oben bleibt erhalten); fällt der Boden schneller weg als die Schwerkraft
   // zieht, hebt er ab und landet mit Federschlag
-  const gNow = (heightAt(R.x - fx2 * 2.05, R.z - fz2 * 2.05) + heightAt(R.x + fx2 * 2.05, R.z + fz2 * 2.05) + 2 * heightAt(R.x, R.z)) / 4;
+  const gNow = (heightAt(R.x - fx2 * axF, R.z - fz2 * axF) + heightAt(R.x - fx2 * axB, R.z - fz2 * axB) + 2 * heightAt(R.x, R.z)) / 4;
   if (!R.air) {
-    const vyG = dt > 0 ? (gNow - R.y) / dt : 0;
-    if (vyG < R.vy - GR * dt * 4 && vyG < -5 && Math.abs(vF) > 14) { R.air = true; R.vy = Math.max(R.vy, 0) * 0.6; }      // Kuppe: der Boden fällt weg
+    const vyG = dt > 0 ? (gNow - R.y) / dt : 0, J = F.jump;
+    if (vyG < R.vy - GR * dt * J.k - J.abs && vyG < J.vy && Math.abs(vF) > J.v) { R.air = true; R.vy = Math.min(Math.max(R.vy, 0) * 0.6, 5); }      // Kuppe: der Boden fällt weg (Schwung nach oben begrenzt)
     else { R.vy = clamp(vyG, -30, 30); R.y = gNow; }
   }
   if (R.air) {
-    const hAir = R.y - gNow; R.vy -= (GR * 1.8 + (hAir > 3 ? 8 : 0)) * dt; R.y += R.vy * dt;      // in der Luft schwerer als am Boden: kurze Sprünge statt Segeln
+    const hAir = R.y - gNow; R.vy -= (GR * 1.8 + Math.max(0, hAir - 2) * 5) * dt; R.y += R.vy * dt;      // in der Luft schwerer als am Boden, je höher desto mehr: kurze Sprünge statt Segeln über Hänge
     if (R.y <= gNow) {
       const hard = -R.vy; R.y = gNow; R.vy = 0; R.air = false;
       if (hard > 4) { snd(60 + Math.random() * 20, 0.3, 'triangle', clamp(hard / 60, 0.03, 0.12), -30); for (let i = 0; i < 10; i++) puff(R.x + rand(-2, 2), R.y + 0.3, R.z + rand(-2, 2), rand(-4, 4), rand(1, 4), rand(-4, 4), '#3a342c', 1.2); R.pitch -= clamp(hard * 0.008, 0, 0.12); }
@@ -689,17 +720,17 @@ export function updateRover(dt: number) {
   }
   // Karosserie: Lage aus der Geländeebene, dazu Einnicken beim Bremsen/Beschleunigen und Neigen in der Kurve (gefedert, weich)
   const aF = th > 0 ? 1 : th < 0 ? -1 : 0, aL = vF * R.yr;
-  const wantP = (R.air ? R.pitch : gPitch) - aF * 0.025 * (onGround ? 1 : 0), wantR = (R.air ? R.roll : gRoll) - clamp(aL * 0.006, -0.08, 0.08);
+  const wantP = (R.air ? R.pitch : gPitch) - aF * F.squat * (onGround ? 1 : 0), wantR = (R.air ? R.roll : gRoll) - clamp(aL * F.lean, -0.1, 0.1);
   R.pitch += (wantP - R.pitch) * Math.min(1, dt * (R.air ? 1.5 : 9)); R.roll += (wantR - R.roll) * Math.min(1, dt * (R.air ? 1.5 : 9));
   m.g.position.set(R.x, R.y, R.z);
   m.g.rotation.order = 'YXZ';
   m.g.rotation.set(R.pitch, R.yaw, R.roll);
   // Räder: einfedern bis zum Boden unter jedem Rad (in Senken aus-, auf Buckeln einfedern), drehen mit dem Tempo, vorn lenken
   m.g.updateMatrixWorld(true);
-  const spinD = vF * dt / RAD_R;
+  const spinD = vF * dt / RADR, [s0, s1] = F.susp;
   if (m.rads.length) m.rads.forEach((w, i) => {
     const lx = w.rest.x, lz = w.rest.z, hub = _f.set(lx, w.rest.y, lz).applyMatrix4(m.g.matrixWorld);
-    const want = R.air ? -0.32 : clamp(heightAt(hub.x, hub.z) + RAD_R - hub.y, -0.32, 0.26);
+    const want = R.air ? s0 : clamp(heightAt(hub.x, hub.z) + RADR - hub.y, s0, s1);
     R.susp[i] += (want - R.susp[i]) * Math.min(1, dt * 18);
     w.mount.position.set(w.rest.x, w.rest.y + R.susp[i], w.rest.z);
     w.mount.rotation.y = w.front ? R.steer : 0;
@@ -710,13 +741,18 @@ export function updateRover(dt: number) {
   // Staub hinter den Rädern: mit dem Tempo, mehr beim Rutschen
   if (!R.air && (Math.abs(vF) > 4 || R.slip > 2) && Math.random() < 0.18 + Math.min(0.5, R.slip * 0.08)) {
     const side = Math.random() < 0.5 ? -1 : 1;
-    puff(R.x - fx2 * 2.4 + rx2 * side * 1.6 + rand(-0.4, 0.4), R.y + 0.3, R.z - fz2 * 2.4 + rz2 * side * 1.6 + rand(-0.4, 0.4), -R.vx * 0.15 + rand(-1.5, 1.5), rand(0.8, 2.5), -R.vz * 0.15 + rand(-1.5, 1.5), ice ? '#cfd8e0' : '#3a342c', 1.0);
+    const back = axB + RADR * 0.5;
+    puff(R.x - fx2 * back + rx2 * side * ht + rand(-0.4, 0.4), R.y + 0.3, R.z - fz2 * back + rz2 * side * ht + rand(-0.4, 0.4), -R.vx * 0.15 + rand(-1.5, 1.5), rand(0.8, 2.5), -R.vz * 0.15 + rand(-1.5, 1.5), ice ? '#cfd8e0' : '#3a342c', R.kind === 'wiesel' ? 0.8 : 1.0);
   }
-  // Bohren
+  // Wiesel: Radarleiste dreht, Fahrer im Sitz, Abtasten der Umgebung (wiesel.ts); kein Bohrer
+  if (m.sensor) m.sensor.rotation.y += (WSCAN.t >= 0 ? 9 : 2.2) * dt;
+  updateFahrer(m, dt);
+  if (R.kind === 'wiesel') updateWieselScan(dt);
+  // Bohren (nur der Dachs)
   const dpx = R.x + fx2 * 4.2, dpz = R.z + fz2 * 4.2, dpy = R.y + 1.1;
   R.target = null;
   let bd = 1e9;
-  for (const a of world.asteroids) { const d = d3(dpx, dpy, dpz, a.x, a.y, a.z) - a.r; if (d < 3.5 && d < bd) { bd = d; R.target = a; } }
+  if (F.cap > 0) for (const a of world.asteroids) { const d = d3(dpx, dpy, dpz, a.x, a.y, a.z) - a.r; if (d < 3.5 && d < bd) { bd = d; R.target = a; } }
   R.drilling = !!(mouse.down || keys.Space) && !!R.target && !G.dead;
   if (m.neu) m.drill.rotation.z += (R.drilling ? 30 : 2) * dt; else m.drill.rotation.y += (R.drilling ? 30 : 2) * dt;
   if (R.drilling && R.target) {
@@ -745,7 +781,8 @@ export function updateRover(dt: number) {
   } else laserSound(false);
   // Hinweise
   const dShip = Math.hypot(R.x - R.ship.x, R.z - R.ship.z);
-  R.prompt = dShip < stats().radius + 12 ? `[E] ${settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`}${roverLoad() ? ` und ${roverLoad()} E verladen` : ''}` : R.target ? (roverLoad() >= R.cap ? 'Rover voll' : 'Klick halten: bohren') : '';
+  const tausch = (P.fahrzeuge || []).includes('wiesel') ? ` · [X] ${R.kind === 'dachs' ? 'Buggy nehmen' : 'Dachs nehmen'}` : '';
+  R.prompt = dShip < stats().radius + 12 ? `[E] ${settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`}${R.kind === 'dachs' && roverLoad() ? ` und ${roverLoad()} E verladen` : ''}${tausch}` : R.target ? (roverLoad() >= R.cap ? 'Rover voll' : 'Klick halten: bohren') : '';
 }
 export const nearShip = () => ROVER.active && Math.hypot(ROVER.x - ROVER.ship.x, ROVER.z - ROVER.ship.z) < stats().radius + 12;
 
@@ -762,8 +799,8 @@ const _cam = new THREE.Vector3(), _look = new THREE.Vector3();
 let camInit = false;
 export function roverCamera(dt: number) {
   const R = ROVER, fx = -Math.sin(R.yaw), fz = -Math.cos(R.yaw);
-  const want = new THREE.Vector3(R.x - fx * 13, 0, R.z - fz * 13);
-  want.y = Math.max(R.y + 5.5, heightAt(want.x, want.z) + 2.5);
+  const [cb, cu] = FZ[R.kind].cam, want = new THREE.Vector3(R.x - fx * cb, 0, R.z - fz * cb);
+  want.y = Math.max(R.y + cu, heightAt(want.x, want.z) + 2.5);
   if (!camInit) { _cam.copy(want); camInit = true; }
   _cam.lerp(want, 1 - Math.exp(-dt * 5));
   camera.position.copy(_cam);
@@ -792,6 +829,7 @@ export function drawRoverHUD() {
     ux.fillText(`◆ ${ITEMS[m.k].n} ${Math.round(m.p * 100)}%${a.comp[1] ? ' + ' + ITEMS[a.comp[1].k].short : ''} · ${a.yld} E`, x + 6, y);
   }
   ux.globalAlpha = 1;
+  if (R.kind === 'wiesel') drawWieselScan(R.x, R.z);      // Funde des Sensormasts (wiesel.ts)
   // Richtung zum Schiff
   _p.set(R.ship.x, R.ship.y + 10, R.ship.z).project(camera);
   const dShip = Math.hypot(R.x - R.ship.x, R.z - R.ship.z);
@@ -810,8 +848,22 @@ export function drawRoverHUD() {
   ux.translate(W - 14 - w * k, H - 14 - h * k); ux.scale(k, k);
   ux.fillStyle = 'rgba(10,12,14,.86)'; ux.strokeStyle = '#1e3a4a'; ux.lineWidth = 1; ux.beginPath(); ux.rect(0, 0, w, h); ux.fill(); ux.stroke();
   ux.strokeStyle = '#e09030'; ux.lineWidth = 2; ux.beginPath(); ux.moveTo(0, 1); ux.lineTo(100, 1); ux.stroke();
-  ux.textAlign = 'left'; ux.font = '700 11px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = '#e09030'; ux.fillText('BERGBAU-ROVER', 14, 20);
+  ux.textAlign = 'left'; ux.font = '700 11px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = '#e09030'; ux.fillText(R.kind === 'wiesel' ? 'ERKUNDUNGSBUGGY' : 'BERGBAU-ROVER', 14, 20);
   ux.textAlign = 'right'; ux.font = '11px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = '#e4eef5'; ux.fillText(`${Math.abs(Math.round(R.speed * 3.6))} km/h`, w - 14, 20);
+  if (R.kind === 'wiesel') {
+    // Sensormast: Bereitschaft, letzter Scan, Funde in der Anzeige
+    const S = WSCAN, n = S.funde.length, cool = S.cool > 0;
+    ux.textAlign = 'left'; ux.fillStyle = '#8aa0b0'; ux.fillText('SENSORMAST', 14, 46);
+    ux.textAlign = 'right'; ux.fillStyle = cool ? '#8aa0b0' : '#7fe0c0'; ux.fillText(cool ? `lädt · ${Math.ceil(S.cool)} s` : '[R] bereit', w - 14, 46);
+    ux.fillStyle = '#0e1e28'; ux.fillRect(14, 52, w - 28, 6); ux.fillStyle = '#4fd6c4'; ux.fillRect(14, 52, (w - 28) * (1 - clamp(S.cool / S.coolMax, 0, 1)), 6);
+    ux.textAlign = 'left'; ux.fillStyle = n ? '#e4eef5' : '#4a5c6a';
+    ux.fillText(n ? S.zeile : 'Noch nichts abgetastet: [R] drücken', 14, 76);
+    ux.fillStyle = '#8aa0b0'; ux.fillText(n ? `Anzeige noch ${Math.ceil(S.life)} s · Reichweite ${fmtN(S.range)} m` : `Reichweite ${fmtN(S.range)} m`, 14, 98);
+    ux.fillText(`Schiff: ${Math.round(dShip)} m · Fracht ${cargoUsed()}/${stats().cargo}`, 14, 120);
+    ux.restore();
+    drawRoverPrompt(W, H);
+    return;
+  }
   const load = roverLoad();
   ux.textAlign = 'left'; ux.fillStyle = '#8aa0b0'; ux.fillText('LADUNG', 14, 46);
   ux.textAlign = 'right'; ux.fillStyle = load >= R.cap ? '#ff6b5b' : '#e4eef5'; ux.fillText(`${load}/${R.cap}`, w - 14, 46);
@@ -824,16 +876,17 @@ export function drawRoverHUD() {
   ux.fillStyle = R.drilling ? '#ffd27a' : R.target ? '#e4eef5' : '#4a5c6a';
   ux.fillText(R.drilling ? '● BOHRT' : R.target ? '○ Lagerstätte erreicht' : '○ keine Lagerstätte vor dem Bohrer', 14, 98);
   ux.fillStyle = '#8aa0b0'; ux.fillText(`Schiff: ${Math.round(dShip)} m · Fracht ${cargoUsed()}/${stats().cargo}`, 14, 120);
-  
   ux.restore();
-  // Hinweis
-  if (R.prompt) {
-    ux.save(); ux.font = '600 14px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'center';
-    const tw = ux.measureText(R.prompt).width + 30, y = H * 0.66;
-    ux.fillStyle = 'rgba(6,16,26,.88)'; ux.strokeStyle = '#e09030'; ux.lineWidth = 1;
-    ux.beginPath(); ux.rect(W / 2 - tw / 2, y - 20, tw, 32); ux.fill(); ux.stroke();
-    ux.fillStyle = '#e09030'; ux.fillText(R.prompt, W / 2, y + 1);
-    ux.restore();
-  }
+  drawRoverPrompt(W, H);
 }
-export function hideRover() { if (ROVER.model) scene.remove(ROVER.model.g); ROVER.active = false; }
+function drawRoverPrompt(W: number, H: number) {
+  const R = ROVER;
+  if (!R.prompt) return;
+  ux.save(); ux.font = '600 14px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'center';
+  const tw = ux.measureText(R.prompt).width + 30, y = H * 0.66;
+  ux.fillStyle = 'rgba(6,16,26,.88)'; ux.strokeStyle = '#e09030'; ux.lineWidth = 1;
+  ux.beginPath(); ux.rect(W / 2 - tw / 2, y - 20, tw, 32); ux.fill(); ux.stroke();
+  ux.fillStyle = '#e09030'; ux.fillText(R.prompt, W / 2, y + 1);
+  ux.restore();
+}
+export function hideRover() { if (ROVER.model) scene.remove(ROVER.model.g); ROVER.active = false; fahrerWeg(); wieselScanWeg(); }

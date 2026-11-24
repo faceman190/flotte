@@ -20,9 +20,25 @@ const pivot = new THREE.Group(); sc.add(pivot);
 const cache = new Map<string, { g: THREE.Object3D; r: number; c: THREE.Vector3 }>();
 let cv: HTMLCanvasElement | null = null, cur: { g: THREE.Object3D; r: number; c: THREE.Vector3 } | null = null, last = 0, t0 = 0;
 
+// Beliebiges Modell (Bodenfahrzeuge in der Werft, seit 2026-11-24): build liefert es oder null, solange es lädt – dann wird jedes Bild neu versucht
+let pending: { key: string; build: () => THREE.Object3D | null } | null = null;
+export function showModel(canvas: HTMLCanvasElement | null, key: string, build: () => THREE.Object3D | null) {
+  if (!canvas) { hideShip(); return; }
+  cv = canvas; pending = null;
+  let m = cache.get(key);
+  if (!m) {
+    const g = build();
+    if (!g) { if (cur) { pivot.remove(cur.g); cur = null; } pending = { key, build }; prePass.fn = draw; return; }
+    const box = new THREE.Box3().setFromObject(g), sph = box.getBoundingSphere(new THREE.Sphere());
+    m = { g, r: Math.max(1, sph.radius), c: sph.center.clone() }; cache.set(key, m);
+  }
+  if (cur !== m) { if (cur) pivot.remove(cur.g); cur = m; m.g.position.copy(m.c).multiplyScalar(-1); pivot.add(m.g); }
+  if (!t0) t0 = performance.now();
+  last = 0; prePass.fn = draw;
+}
 export function showShip(canvas: HTMLCanvasElement | null, cls: ShipId) {
   if (!canvas) { hideShip(); return; }
-  cv = canvas;
+  cv = canvas; pending = null;
   let m = cache.get(cls);
   if (!m) {
     const b = buildShipModel(cls);
@@ -47,10 +63,11 @@ export function showShip(canvas: HTMLCanvasElement | null, cls: ShipId) {
   prePass.fn = draw;
 }
 export function hideShip() {
-  prePass.fn = null; cv = null;
+  prePass.fn = null; cv = null; pending = null;
   if (cur) { pivot.remove(cur.g); cur = null; }
 }
 function draw() {
+  if (pending && cv && cv.isConnected) { const p = pending; showModel(cv, p.key, p.build); if (!cur) return; }
   if (!cv || !cv.isConnected || !cur) { hideShip(); return; }
   const now = performance.now();
   if (now - last < 33) return;

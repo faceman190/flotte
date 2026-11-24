@@ -25,6 +25,7 @@ import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
 import { FIGHT, updateFieldFight, fieldDown, fieldViewModel, hideFieldViewModel, drawFieldHUD } from './fieldfight';
 import { storyMarkers } from './story';
 import { landShip } from './surface';
+import { fahrerZeigen } from './fahrer';
 import type { Station } from './world';
 
 // =====================================================================================
@@ -75,7 +76,7 @@ function place(x: number, z: number, yaw: number) {
 // Aussteigen: links neben dem Rover
 export function leaveRover() {
   if (Math.abs(ROVER.speed) > 3) { radio('SYSTEM', 'Erst anhalten, dann aussteigen.'); return false; }
-  ROVER.speed = 0; ROVER.drilling = false;
+  ROVER.speed = 0; ROVER.drilling = false; ROVER.vx = ROVER.vz = 0; fahrerZeigen(false);
   // auf der Seite, die vom Schiff wegzeigt
   let lx = Math.cos(ROVER.yaw), lz = -Math.sin(ROVER.yaw);
   if ((ROVER.x + lx - ROVER.ship.x) ** 2 + (ROVER.z + lz - ROVER.ship.z) ** 2 < (ROVER.x - ROVER.ship.x) ** 2 + (ROVER.z - ROVER.ship.z) ** 2) { lx = -lx; lz = -lz; }
@@ -108,7 +109,7 @@ export function leaveBaseOnFoot() {
   if (p) place(p.door.x - Math.sin(p.door.yaw) * 2.0, p.door.z - Math.cos(p.door.yaw) * 2.0, p.door.yaw);
   else place(ROVER.ship.x + 8, ROVER.ship.z, 0);
 }
-export function enterRover() { hideFieldViewModel(); FOOT.active = false; FOOT.act = ''; resetRoverCamera(); if (me) me.s.g.visible = false; sfx('door_close', 0.4, 1.2, () => snd(200, 0.2, 'triangle', 0.03, 60)); }
+export function enterRover() { fahrerZeigen(true); hideFieldViewModel(); FOOT.active = false; FOOT.act = ''; resetRoverCamera(); if (me) me.s.g.visible = false; sfx('door_close', 0.4, 1.2, () => snd(200, 0.2, 'triangle', 0.03, 60)); }
 export function footOff() { hideFieldViewModel(); FOOT.active = false; FOOT.act = ''; if (me) me.s.g.visible = false; if (document.pointerLockElement === gl && settings.steer === 'zeiger') document.exitPointerLock(); }   // direkte Lenkung: eingefangen lassen
 export function footJump() { if (!FOOT.active || FOOT.jy > 0 || FOOT.jv !== 0) return; FOOT.jv = 4.6; snd(95, 0.05, 'triangle', 0.02, 40); }
 
@@ -130,6 +131,7 @@ function blocked(x: number, z: number, ox: number, oz: number) {
 }
 
 export function updateFoot(dt: number) {
+  fahrerZeigen(false);      // zu Fuß: der Buggy steht leer (fahrer.ts)
   if (CITY.walk) cityBark(FOOT.x, FOOT.y, FOOT.z);   // Stimmen der Crew in der Stadt
   if (!FOOT.active) return;
   updateFlora(camera.position);

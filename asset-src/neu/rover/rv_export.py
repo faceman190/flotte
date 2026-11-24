@@ -18,7 +18,8 @@ OUT = os.path.join(B, '..', '..', 'glb', 'deco')      # Hintergrund-Paket (deco/
 CFG = {
     'Navigationsboje': {'near': 0.25, 'far': 0.12, 'drop_near': {'Schraube'}, 'schrift': 1.0, 'res': 4, 'far_min': 0.35},
     'Gedenkboje': {'near': 0.22, 'far': 0.08, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 0.4},
-    'Rover': {'near': 0.55, 'far': 0.12, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 0.25},
+    'Rover': {'near': 0.55, 'far': 0.12, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 0.25, 'fern': False},
+    'Wiesel': {'near': 0.4, 'far': 0.12, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 0.25, 'fern': False},
     'Torwache': {'near': 0.4, 'far': 0.05, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 2.5},
     'Fernohr': {'near': 0.4, 'far': 0.05, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 3.0},
     'Pumpwerk': {'near': 0.4, 'far': 0.05, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 2.5},
@@ -77,7 +78,7 @@ def in_coll(o, names): return any(c.name in names for c in o.users_collection)
 dg = bpy.context.evaluated_depsgraph_get()
 parts = {}                       # (gruppe) -> bmesh, Material je Gruppe
 srcmat = {}
-TEILE = ('Aufbau', 'Rad_VL', 'Rad_VR', 'Rad_ML', 'Rad_MR', 'Rad_HL', 'Rad_HR', 'Bohrer')
+TEILE = ('Aufbau', 'Rad_VL', 'Rad_VR', 'Rad_ML', 'Rad_MR', 'Rad_HL', 'Rad_HR', 'Bohrer', 'Sensor')
 def teil_of(o): return next((c.name for c in o.users_collection if c.name in TEILE), 'Aufbau')
 def add(me, drop, teil='Aufbau'):
     src = list(me.materials) or [None]
@@ -176,6 +177,6 @@ def build(fname, drop, ratio, far):
 
 os.makedirs(OUT, exist_ok=True)
 build(NAME + '.glb', CFG['drop_near'], CFG['near'], False)
-build(NAME + 'Fern.glb', CFG['drop_near'] | {'Schraube', 'Taste', 'Gummi'}, CFG['far'], True)
-open(os.path.join(B, 'rv-export.txt'), 'w', encoding='utf-8').write('\n'.join(log))
+if CFG.get('fern', True): build(NAME + 'Fern.glb', CFG['drop_near'] | {'Schraube', 'Taste', 'Gummi'}, CFG['far'], True)
+open(os.path.join(B, NAME.lower()[:2] + '-export.txt'), 'w', encoding='utf-8').write('\n'.join(log))
 print('\n'.join(log))
