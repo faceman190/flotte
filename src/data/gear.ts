@@ -110,6 +110,15 @@ export const GEAR = {
   waffe_tf8: { n: 'Trommelflinte TF-8', kind: 'waffe', rar: 2, val: 2800, desc: 'Acht Schuss in der Trommel, neun Kugeln je Schuss. Auf wenige Meter verheerend, danach schnell schwächer.', st: { schaden: 22 }, shop: 0, immer: true, img: 'aus_tf8' },
   waffe_splitter: { n: 'Splitterwerfer', kind: 'waffe', rar: 3, val: 9000, desc: 'Ferrox-Technik. Niemand weiß genau, wie er arbeitet.', st: { schaden: 44 }, img: 'aus_sw' },
   // ----- Werkzeuge -----
+  // Bergbau mit der Hand (seit 2026-11-24, dungeon.ts): Kristalladern in den Minen; ohne Handbohrer geht es nicht
+  werk_handbohrer: { n: 'Handbohrer HB-1', kind: 'werkzeug', rar: 0, val: 650, desc: 'Akkubohrer mit Hartmetallkrone. Löst Kristalle aus den Adern der Minen (E halten an einer Ader).', st: { abbau: 3 }, shop: 0, immer: true },
+  fund_k_eisen: { n: 'Eisenkristall', kind: 'fund', rar: 0, val: 95, desc: 'Rostrote Kristallstufe aus einer Mine. Sammler und Labore kaufen sie.', stack: 30 },
+  fund_k_kupfer: { n: 'Kupferkristall', kind: 'fund', rar: 0, val: 130, desc: 'Kupferfarbene Nadeln, frisch aus der Wand gelöst.', stack: 30 },
+  fund_k_titan: { n: 'Titankristall', kind: 'fund', rar: 1, val: 280, desc: 'Silbergraue, harte Prismen. Begehrt in den Werkstätten.', stack: 30 },
+  fund_k_iridium: { n: 'Iridiumkristall', kind: 'fund', rar: 1, val: 520, desc: 'Schwer, mit bläulichem Schimmer. Selten und teuer.', stack: 30 },
+  fund_k_erden: { n: 'Seltenerd-Kristall', kind: 'fund', rar: 1, val: 360, desc: 'Grünlich, fast durchsichtig. Die Elektronikwerkstätten zahlen gut.', stack: 30 },
+  fund_k_eis: { n: 'Klareis-Kristall', kind: 'fund', rar: 0, val: 80, desc: 'Uraltes, glasklares Eis aus der Tiefe. Taut nur langsam.', stack: 30 },
+  fund_k_ferrit: { n: 'Ferritsplitter', kind: 'fund', rar: 2, val: 950, desc: 'Ein Splitter aus einer Ferrit-Ader. Er summt in der Hand.', stack: 20 },
   werk_scanner: { n: 'Handscanner', kind: 'werkzeug', rar: 0, val: 150, desc: 'Findet die ergiebigsten Stellen einer Ader.', st: { abbau: 5 }, shop: 0 },
   werk_bohrkopf: { n: 'Gehärteter Bohrkopf', kind: 'werkzeug', rar: 1, val: 700, desc: 'Ersatzkopf für den Rover-Bohrer, hält länger scharf.', st: { abbau: 12 }, shop: 0 },
   werk_resonanz: { n: 'Resonanzbohrer', kind: 'werkzeug', rar: 2, val: 2600, desc: 'Lockert das Gestein, bevor der Bohrer ansetzt.', st: { abbau: 22 }, shop: 1 },

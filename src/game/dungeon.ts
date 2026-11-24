@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { scene, camera, ambient, rim, sun, view, ux, gl, overlay, BODY_LAYER, bodyOnly } from '../core/engine';
 import { keys, mouse, releaseAll } from '../core/input';
 import { clamp, rng, hashStr } from '../core/util';
-import { snd, sfx, shotSfx, gunShot, type GunKind } from '../core/audio';
+import { snd, sfx, shotSfx, gunShot, loopVol, type GunKind } from '../core/audio';
 import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, clearFootFx, SHELL_PORT } from './footfx';
 import { texMat, std } from '../core/textures';
 import { P, G, settings, saveGame } from './state';
@@ -54,7 +54,7 @@ export const DUN = {
   W: 0, H: 0, t: new Uint8Array(0), ceil: new Float32Array(0), seen: new Uint8Array(0), dist: new Int16Array(0),
   x: 0, z: 0, yaw: 0, pitch: 0, bob: 0, walked: 0, vx: 0, vz: 0, locked: false,
   hp: 100, maxHp: 100, hurt: 0, dead: 0, cool: 0, kick: 0, flash: 0,
-  crates: [] as Crate[], foes: [] as Foe[], bolts: [] as Bolt[],
+  crates: [] as Crate[], foes: [] as Foe[], bolts: [] as Bolt[], adern: [] as { idx: number; x: number; z: number; g: THREE.Group; ore: string; done: boolean }[],
   door: null as null | { tx: number; tz: number; open: boolean; k: number; g: THREE.Group; ax: boolean },
   sw: null as null | { tx: number; tz: number; on: boolean; scr: THREE.MeshBasicMaterial },
   sws: [] as { tx: number; tz: number; on: boolean; scr: THREE.MeshBasicMaterial; g: THREE.Group }[],   // alle Schalter (das Tor öffnet, wenn alle umgelegt sind)
@@ -674,6 +674,67 @@ function lootId(R: () => number, big: boolean): string {
   const poolIds = GEAR_IDS.filter(id => { const d = gearDef(id)!; return d.rar === tier && !['sw_lanze', 'sy_orakel', 'waffe_splitter', 'helm_kristall'].includes(id); });
   return poolIds[Math.floor(R() * poolIds.length)] || 'fund_datenkern';
 }
+// ---------- Bergbau mit der Hand (seit 2026-11-24, Konzept docs/konzept-welt-und-leben.md Punkt 8) ----------
+// Kristalladern an den Stollenwänden, je Mine fest (Zufall aus der Kennung), in der Erzart des Planeten (selten Ferrit, je gefährlicher desto
+// öfter). Mit dem Handbohrer im Werkzeugplatz E halten: 3 s (Abbau-Ausrüstung beschleunigt), dann 1–3 Kristalle in den Rucksack.
+// Abgebaute Adern bleiben eine Stunde leer (P.adern: Zeitpunkt je Ader).
+interface Ader { idx: number; x: number; z: number; g: THREE.Group; ore: string; done: boolean }
+const KRISTALL: Record<string, [string, number]> = { erz: ['fund_k_eisen', 0xb0583a], kupfer: ['fund_k_kupfer', 0xd08040], titan: ['fund_k_titan', 0xa8b8c8], iridium: ['fund_k_iridium', 0x7a8aff],
+  erden: ['fund_k_erden', 0x5ad0a0], eis: ['fund_k_eis', 0x9ad8ff], helium: ['fund_k_eis', 0x9ad8ff], ferrit: ['fund_k_ferrit', 0xff4a6a] };
+let mineAt: Ader | null = null, mineT = 0, sparkT = 0;
+function buildAdern(e: Entrance, n: number, frei: Vec2[] = []) {
+  DUN.adern = [];
+  if (!n || !group) return;
+  const W = DUN.W, H = DUN.H, t = DUN.t, R = rng(hashStr(e.id + ':adern')), sector = e.id.split(':')[0], pl = PLANETS[sector];
+  const tab = Object.entries((pl && PTYPE[pl.type].ore) || { erz: 1 }) as [string, number][], sum = tab.reduce((s, [, w]) => s + w, 0);
+  const pick = () => { if (R.next() < 0.04 + 0.03 * DUN.danger) return 'ferrit'; let r = R.next() * sum; for (const [k, w] of tab) { r -= w; if (r <= 0) return k; } return tab[0][0]; };
+  // Gangfelder mit Fels daneben, weit genug vom Eingang und voneinander
+  const cand: [number, number, number, number][] = [];
+  for (let z = 1; z < H - 1; z++) for (let x = 1; x < W - 1; x++) {
+    if (t[z * W + x] !== 1 || Math.hypot(x - 1, z - 1) < 4 || frei.some(q => Math.abs(q[0] - x) + Math.abs(q[1] - z) <= 2)) continue;      // nicht an Kisten, Schaltern, Tor
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (t[(z + dz) * W + x + dx] === 0) { cand.push([x, z, dx, dz]); break; }
+  }
+  const got: [number, number, number, number][] = [];
+  for (let k = 0; k < cand.length * 3 && got.length < n; k++) { const c = cand[Math.floor(R.next() * cand.length)]; if (got.every(q => Math.abs(q[0] - c[0]) + Math.abs(q[1] - c[1]) > 5)) got.push(c); }
+  const now = Date.now(), st = (P.adern ||= {});
+  got.forEach(([x, z, dx, dz], idx) => {
+    const k = pick(), [ore, col] = KRISTALL[k] || KRISTALL.erz;
+    const mat = std(col, { roughness: 0.22, metalness: 0.15, emissive: col, emissiveIntensity: 0.35, flatShading: true });
+    const base = std(0x3a3632, { roughness: 0.9, metalness: 0.05, flatShading: true });
+    const g = new THREE.Group(), wx = x * TS + dx * (TS / 2 - 0.15), wz = z * TS + dz * (TS / 2 - 0.15), y0 = 0.5 + R.next() * 0.9;
+    g.position.set(wx, y0, wz); g.rotation.y = Math.atan2(-dx, -dz);      // schaut in den Gang
+    const sockel = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 0), base); sockel.scale.set(1.2, 0.8, 0.5); g.add(sockel);
+    for (let i = 0; i < 7; i++) {
+      const len = 0.25 + R.next() * 0.55, r = 0.05 + R.next() * 0.07;
+      const pr = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.25, r, len, 6), mat);
+      pr.geometry.translate(0, len / 2, 0);
+      pr.position.set((R.next() - 0.5) * 0.55, (R.next() - 0.5) * 0.4, 0.12);
+      pr.rotation.set(Math.PI / 2 - 0.5 + R.next() * 0.6, 0, (R.next() - 0.5) * 1.6);
+      g.add(pr);
+    }
+    g.traverse((o: any) => { if (o.isMesh) o.castShadow = true; });
+    group!.add(g);
+    const key = e.id + ':' + idx, done = now - (st[key] || 0) < 3600000;
+    if (done) g.scale.setScalar(0.35);
+    DUN.adern.push({ idx, x: wx - dx * 0.6, z: wz - dz * 0.6, g, ore, done });
+  });
+}
+function updateAbbau(dt: number) {
+  const a = mineAt;
+  if (!a) return;
+  const on = keys.KeyE && !a.done && Math.hypot(a.x - DUN.x, a.z - DUN.z) < 2.2 && !DUN.dead;
+  if (!on) { mineAt = null; loopVol('rover_drill', 0); return; }
+  mineT += dt * gearFactor('abbau');
+  loopVol('rover_drill', 0.28);
+  if ((sparkT -= dt) <= 0) { sparkT = 0.07; const p = a.g.getWorldPosition(new THREE.Vector3()); impact(p.add(new THREE.Vector3((Math.random() - 0.5) * 0.4, (Math.random() - 0.3) * 0.4, (Math.random() - 0.5) * 0.4)), new THREE.Vector3(0, 0, 1), 'boden'); }
+  DUN.prompt = 'Abbau … ' + Math.min(100, Math.round(mineT / 3 * 100)) + ' %';
+  if (mineT < 3) return;
+  const n = 1 + Math.floor(Math.random() * 3) + (gearFactor('abbau') > 1.2 && Math.random() < 0.5 ? 1 : 0), d = gearDef(a.ore)!;
+  const put = addItem(a.ore, n);
+  if (!put) say('Rucksack voll. Die Kristalle bleiben in der Wand.', '#ff6b5b');
+  else { say('+' + put + ' ' + d.n, RARITY[d.rar].c); a.done = true; a.g.scale.setScalar(0.35); (P.adern ||= {})[DUN.e!.id + ':' + a.idx] = Date.now(); sfx('pickup', 0.6, 1.2, () => snd(900, 0.15, 'triangle', 0.05, 300)); saveGame(); }
+  mineAt = null; loopVol('rover_drill', 0);
+}
 function say(t: string, c = '#dfe8f0') { DUN.msg.unshift({ t, c, life: 6 }); if (DUN.msg.length > 5) DUN.msg.pop(); }
 export const dungeonSay = say;
 export const dungeonHurt = (d: number) => hurtPlayer(d);
@@ -799,6 +860,8 @@ export function enterDungeon(e: Entrance) {
   DUN.crates = calm ? [] : plan.crates.map((c, i) => buildCrate(c[0], c[1], false, i, R.next() * 6.28, i === 1));
   if (!calm) DUN.crates.push(buildCrate(plan.vault[0], plan.vault[1] + 1, true, 99, Math.PI));
   for (const c of DUN.crates) if (st.open.includes(c.idx)) { c.open = true; c.lid.rotation.x = -1.9; }
+  // Kristalladern an den Wänden (Bergbau mit der Hand), nicht in Wracks und Schiffen
+  buildAdern(e, wr ? 0 : 6, [...plan.crates, plan.vault, ...plan.sws, plan.door]);
   // Tor und Schalter
   {
     const g = new THREE.Group(), fr = std(0x4a4f57, { roughness: 0.5, metalness: 0.85 }), dk = std(0x23262b, { roughness: 0.6, metalness: 0.7 });
@@ -924,7 +987,7 @@ export function leaveDungeon(died = false) {
   overlay.scene = null; overlay.camera = null; vm = null; me = null;
   if (tracer) { scene.remove(tracer); tracer.geometry.dispose(); tracer = null; }
   for (const b of DUN.bolts) scene.remove(b.m);
-  DUN.bolts = []; DUN.foes = []; DUN.crates = []; pool = []; chunks = []; coEv = []; coSynced = 0; clearFootFx();
+  DUN.bolts = []; DUN.foes = []; DUN.crates = []; DUN.adern = []; mineAt = null; loopVol('rover_drill', 0); pool = []; chunks = []; coEv = []; coSynced = 0; clearFootFx();
   ambient.intensity = saved.amb; sun.intensity = saved.sun; rim.intensity = saved.rim;
   const fog = scene.fog as THREE.FogExp2 | null; if (fog) { fog.color.setHex(saved.fogC); fog.density = saved.fogD; }
   camera.near = saved.near; camera.far = saved.far; camera.updateProjectionMatrix();
@@ -1004,6 +1067,7 @@ export function dungeonKey(code: string) {
 }
 export function updateDungeon(dt: number) {
   if (!DUN.active || !group) return;
+  updateAbbau(dt);
   DUN.locked = document.pointerLockElement === gl;
   if (!vm || vm.id !== viewModelId(P.gear?.waffe)) { const n = buildViewModel(viewModelId(P.gear?.waffe)); if (n) { vm = n; overlay.scene = n.scene; overlay.camera = n.cam; } }
   if (!DUN.locked && (grabT -= dt) <= 0) { grabT = 0.4; const ua = (navigator as any).userActivation; if (!ua || ua.isActive) { try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* bleibt bei Zeigersteuerung */ } } }
@@ -1042,6 +1106,11 @@ export function updateDungeon(dt: number) {
   // Was liegt vor mir? (Kiste, Schalter, Förderkorb)
   DUN.prompt = ''; DUN.act = null;
   const near = (tx: number, tz: number, r = 2.2) => Math.hypot(tx * TS - DUN.x, tz * TS - DUN.z) < r;
+  for (const a of DUN.adern) if (!a.done && Math.hypot(a.x - DUN.x, a.z - DUN.z) < 2.0) {
+    const tool = P.gear?.werkzeug === 'werk_handbohrer';
+    DUN.prompt = tool ? `${gearDef(a.ore)!.n}-Ader abbauen (E halten)` : `${gearDef(a.ore)!.n}-Ader · Handbohrer nötig (Ausrüster, Werkzeug)`;
+    DUN.act = () => { if (tool) { mineAt = a; mineT = 0; } else say('Dafür brauchst du einen Handbohrer HB-1 im Werkzeugplatz (Ausrüster).', '#ffb347'); };
+  }
   for (const c of DUN.crates) if (!c.open && near(c.tx, c.tz)) { DUN.prompt = c.med ? 'Verbandskasten öffnen' : c.big ? (AR() ? 'Großen Behälter öffnen' : WR() ? 'Spind der Kommandantin öffnen' : 'Tresorkiste öffnen') : AR() ? 'Behälter öffnen' : WR() ? 'Spind öffnen' : 'Kiste öffnen'; DUN.act = () => openCrate(c); }
   DUN.sws.forEach((sw, si) => {
     if (sw.on || !near(sw.tx, sw.tz)) return;
