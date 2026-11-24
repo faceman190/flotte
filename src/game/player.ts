@@ -17,6 +17,7 @@ import { gearDef } from '../data/gear';
 import { radio } from '../ui/radio';
 import { updateMining, throwCharge } from './mining';
 import { updateSchnellflug, SF, schnellflugHit } from './schnellflug';
+import { TESTF } from './testflags';
 
 // Das Modell des aktiven Schiffs (wird beim Umsteigen ausgetauscht)
 export let SHIP: ShipModel = buildShipModel('venom');
@@ -52,7 +53,7 @@ export function placePlayer(x: number, y: number, z: number, yaw: number, speed 
 }
 
 export function hurtPlayer(d: number) {
-  if (!playerTargetable()) return;
+  if (!playerTargetable() || TESTF.gott) return;
   G.sinceHit = 0;
   schnellflugHit();
   if (G.cruise) { G.cruise = false; radio('SYSTEM', 'Treffer: Reiseflug abgebrochen.'); }

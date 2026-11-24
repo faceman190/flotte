@@ -23,6 +23,7 @@ import { throwGrenade, updateGrenades } from './granate';
 import { noteToss, bodyView, fpBody } from './avatar';
 import { noteFoot } from './avatar';
 import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, footPace, footBrake, footAccel, setIntent, makeAvatar, driveAvatar, avatarMuzzle, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, figGear, type Avatar, type RemoteFig } from './avatar';
+import { TESTF } from './testflags';
 
 // =====================================================================================
 // Dungeons auf Planeten: verlassene Minen als Labyrinth.
@@ -945,7 +946,7 @@ function reveal() {
   }
 }
 function hurtPlayer(d: number) {
-  if (DUN.dead) return;
+  if (DUN.dead || TESTF.gott) return;
   const dmg = d * 100 / (100 + gearStat('schutz') * 3);
   DUN.hp -= dmg; DUN.hurt = 1; flinch(); hurtSound(d);
   if (DUN.hp <= 0) { DUN.hp = 0; DUN.dead = 2.2; say('Du bist zusammengebrochen. Der Förderkorb bringt dich nach oben.', '#ff6b5b'); }

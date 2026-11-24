@@ -21,6 +21,7 @@ import { burst, flash } from './fx';
 import { radio } from '../ui/radio';
 import { SALV, salvageFull } from './salvage';
 import { onCoop, coopSend, coopNet, pack, CoopGroup } from './coop';
+import { TESTF } from './testflags';
 
 // =====================================================================================
 // Kampf zu Fuß auf Planeten (Alpha 0.85): Ferrox-Wachdrohnen an den Wracks und auf Streife.
@@ -132,7 +133,7 @@ function los(ax: number, ay: number, az: number, bx: number, by: number, bz: num
 }
 
 function hurt(d: number) {
-  if (FIGHT.down > 0) return;
+  if (FIGHT.down > 0 || TESTF.gott) return;
   FIGHT.hp -= d * 100 / (100 + gearStat('schutz') * 3); FIGHT.hurt = 1; flinch();
   hurtSound(d);
   if (FIGHT.hp <= 0) { FIGHT.hp = 0; FIGHT.down = 3; say('Du bist zusammengebrochen …', '#ff6b5b'); }

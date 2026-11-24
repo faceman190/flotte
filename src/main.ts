@@ -36,9 +36,11 @@ import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs
 import { startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
-import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, ROVER, SURF } from './game/surface';
+import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, liquidAt, ROVER, SURF } from './game/surface';
 import { wieselScan } from './game/wiesel';
-import { PLANETS, PTYPE } from './data/planets';
+import { initTestlabor, updateTestlabor, testHooks } from './game/testlabor';
+import { TESTF } from './game/testflags';
+import { PLANETS, PTYPE, planetBaseId } from './data/planets';
 import { d3 } from './core/util';
 import { openBand, closeBand, drawBand, bandHooks } from './ui/band';
 import { updateControls } from './ui/controls';
@@ -207,6 +209,48 @@ function resumeLanded(land: Extract<PlayerAt, { k: 'land' }>) {
   G.mode = 'rover'; resetRoverCamera(); releaseAll();
 }
 // Im All: vor der nächsten Station des Sektors, mit stehendem Schiff
+// Testlabor (game/testlabor.ts): sofort an einen Ort, über denselben Weg wie „Weiterspielen“ (resumeAt)
+testHooks.reise = (ziel: string) => {
+  const [typ, sec, a, b] = ziel.split(':');
+  if (!SECTOR[sec]) return;
+  if (G.mode === 'map') closeMap();
+  if (DUN.active) leaveDungeon(false);
+  $('dock').classList.add('hidden');
+  footOff(); CITY.walk = false;
+  Object.assign(G, { mode: 'play', dead: 0, shake: 0, dockedAt: null, baseWalk: false, cityWalk: false, cruise: false });
+  P.vx = P.vy = P.vz = 0;
+  let inside = false;
+  if (typ === 'st') {
+    P.surface = false; P.sector = sec;
+    if (b === 'in') inside = resumeAt({ k: 'st', id: a });
+    else { enterSector(sec, { station: a }); resumeNearStation(); }
+  } else if (typ === 'pl' && PLANETS[sec]) {
+    P.sector = sec; P.surface = true;
+    if (a === 'basis') { P.x = 0; P.y = 600; P.z = 0; inside = resumeAt({ k: 'st', id: planetBaseId(sec), base: true }); }
+    else {
+      P.fahrzeug = a;
+      void enterSurface(sec, { x: 300, y: 600, z: 0, yaw: 0 });
+      // trockene, flache Stelle neben der Basis (die liegt in der Mitte)
+      let x = 300, z = 0;
+      for (const d of [300, 450, 650, 900]) {
+        let ok = false;
+        for (let k = 0; k < 12 && !ok; k++) {
+          const ang = k / 12 * Math.PI * 2, px = Math.cos(ang) * d, pz = Math.sin(ang) * d, h = (q: number, w: number) => world.ground ? world.ground(q, w) : 0;
+          if (!liquidAt(px, pz) && !liquidAt(px + 12, pz) && Math.abs(h(px + 8, pz) - h(px - 8, pz)) + Math.abs(h(px, pz + 8) - h(px, pz - 8)) < 3) { x = px; z = pz; ok = true; }
+        }
+        if (ok) break;
+      }
+      const r = stats().radius, gy = world.ground ? world.ground(x, z) : 0;
+      P.x = x; P.z = z; P.y = gy + 40;
+      resumeLanded({ k: 'land', ship: { x, y: gy + r * 0.55, z, yaw: 0 }, rover: { x: x + r + 7, z, yaw: 0 } });
+    }
+  }
+  if (!inside) $('hud').classList.remove('hidden');
+  document.body.classList.add('playing');
+  saveGame();
+};
+testHooks.fuss = () => (FOOT.active && !IN.active ? { x: FOOT.x, y: FOOT.y, z: FOOT.z, yaw: FOOT.yaw } : null);
+testHooks.schiffGewechselt = () => { G.camInit = false; refreshHangarShips(); };
 function resumeNearStation() {
   let best: Station | null = null, bd = Infinity;
   for (const s of world.stations) { const d = Math.hypot(s.x - P.x, s.y - P.y, s.z - P.z); if (d < bd) { bd = d; best = s; } }
@@ -785,12 +829,13 @@ function hook(name: string, f: () => void) { try { f(); } catch (e) { if (!hookE
 let ekHail = false, ekOut = false;      // Funkgruß der Eisenkrone schon gesendet; Schiff war seit dem letzten Ablegen schon weiter draußen
 function loop(now: number, manual = false) {
   if (!manual) requestAnimationFrame(t => loop(t));      // zuerst das nächste Bild anmelden: Ein Fehler weiter unten beendet die Schleife nicht
-  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)) * TESTF.zeit;      // TESTF.zeit: Zeitlupe aus dem Testlabor (sonst 1)
   last = now;
   perfFrameStart();
   // Vorwärmen (engine.ts, warmScene): Solange die Shader eines neuen Innenraums übersetzt werden, steht das Spiel hinter der Blende
   if ((warm.hold || warm.wait) && (!manual || warm.strict)) { perfFrameEnd(); return; }
   simulate(dt);
+  hook('Testlabor', () => updateTestlabor(dt));
   if (G.mode === 'scene' && IN.active) updateRoomLife(dt);   // in Kinoszenen steht die Welt, die Figuren im Raum sprechen aber weiter
   hook('Vorspann', () => updateIntro(dt));
   hook('Geschichte', () => updateStory(dt));
@@ -929,7 +974,8 @@ try {
 
 // Testserver (test.letztecrew.de, Zweig test): kleiner Hinweis oben links, damit niemand Test und echtes Spiel verwechselt
 if (location.hostname.startsWith('test.')) {
-  const b = document.createElement('div'); b.textContent = 'TESTSERVER';
+  const b = document.createElement('div'); b.textContent = 'TESTSERVER · F8 TESTLABOR';
   b.style.cssText = 'position:fixed;left:8px;top:6px;z-index:9999;font:700 11px "Share Tech Mono",Consolas,monospace;color:#ffb347;background:rgba(8,12,16,.65);padding:2px 8px;letter-spacing:2px;pointer-events:none';
   document.body.appendChild(b);
 }
+initTestlabor();      // F8: Testlabor (nur Testserver, Entwicklungsserver, ?dev=1), game/testlabor.ts
