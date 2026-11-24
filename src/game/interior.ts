@@ -1586,9 +1586,9 @@ document.addEventListener('pointerlockchange', () => {
 // Sie stehen im Stationsraum (auch wenn man selbst gerade im eigenen Schiff ist: dann sieht man sie durch die Kanzel).
 // Positionen kommen vom Netzcode in Raum-Koordinaten (x, z, Blickrichtung) und werden weich nachgeführt.
 // =====================================================================================
-interface Other extends NetAct { p: Person | null; av: Avatar | null; x: number; z: number; ry: number; tx: number; tz: number; tyaw: number; name: string; speed: number; vx: number; vz: number; gear: { helm?: string; anzug?: string; rucksack?: string }; wid: string }
+interface Other extends NetAct { p: Person | null; av: Avatar | null; x: number; y: number; ty: number; z: number; ry: number; tx: number; tz: number; tyaw: number; name: string; speed: number; vx: number; vz: number; gear: { helm?: string; anzug?: string; rucksack?: string }; wid: string }
 const others = new Map<number, Other>();
-export function syncOtherPilots(list: { id: number; name: string; st: string; x: number; z: number; yaw: number; g?: string[] | null }[]) {
+export function syncOtherPilots(list: { id: number; name: string; st: string; x: number; z: number; yaw: number; y?: number; g?: string[] | null }[]) {
   if (!IN.active || !IN.station || !stationGroup) { if (others.size) clearOthers(); return; }
   const here = IN.station.id, seen = new Set<number>();
   for (const o of list) {
@@ -1601,10 +1601,10 @@ export function syncOtherPilots(list: { id: number; name: string; st: string; x:
       const av = syncAvatar(stationGroup, null, gear, false);      // Mitspieler: eigene Figur aus figur.ts (fremdFigur.ts)
       const p = av ? null : buildPerson(0x4a5a6a, 0xd8a888, 0x2a2018, PAL[kind].accent, 'walk');
       if (p) { p.g.position.set(o.x, 0, o.z); p.g.rotation.y = o.yaw + Math.PI; stationGroup.add(p.g); }
-      r = { p, av, x: o.x, z: o.z, ry: o.yaw + Math.PI, tx: o.x, tz: o.z, tyaw: o.yaw, name: o.name, speed: 0, vx: 0, vz: 0, gear, wid, crouch: false, hit: 0, fire: 0, fl: '' };
+      r = { p, av, x: o.x, y: o.y || 0, ty: o.y || 0, z: o.z, ry: o.yaw + Math.PI, tx: o.x, tz: o.z, tyaw: o.yaw, name: o.name, speed: 0, vx: 0, vz: 0, gear, wid, crouch: false, hit: 0, fire: 0, fl: '' };
       others.set(o.id, r);
     }
-    r.tx = o.x; r.tz = o.z; r.tyaw = o.yaw; r.name = o.name; r.wid = wid; readNetFlags(r, o.g?.[4]);
+    r.tx = o.x; r.tz = o.z; r.ty = o.y || 0; r.tyaw = o.yaw; r.name = o.name; r.wid = wid; readNetFlags(r, o.g?.[4]);
     if (r.av) { r.gear = gear; r.av = syncAvatar(stationGroup, r.av, gear, false); r.av.tracht = ng.tracht; }
   }
   for (const id of [...others.keys()]) if (!seen.has(id)) removeOther(id);
@@ -1620,14 +1620,14 @@ function updateOthers(dt: number) {
   const k = Math.min(1, dt * 10);
   for (const r of others.values()) {
     const ox = r.x, oz = r.z;
-    r.x += (r.tx - r.x) * k; r.z += (r.tz - r.z) * k;
+    r.x += (r.tx - r.x) * k; r.z += (r.tz - r.z) * k; r.y += (r.ty - r.y) * Math.min(1, dt * 14);
     const ivx = (r.x - ox) / Math.max(dt, 1e-3), ivz = (r.z - oz) / Math.max(dt, 1e-3), v = Math.hypot(ivx, ivz);
     r.speed += (v - r.speed) * Math.min(1, dt * 6);
     r.vx += (ivx - r.vx) * Math.min(1, dt * 6); r.vz += (ivz - r.vz) * Math.min(1, dt * 6);
     if (r.av) {
       // Laufrichtung relativ zur Blickrichtung des Piloten ergibt die Richtungsclips (vor, seitlich, zurück)
       r.fire -= dt;
-      driveAvatar(r.av, dt, { x: r.x, y: 0, z: r.z, yaw: r.tyaw, pitch: 0, vx: Math.abs(r.vx) < 0.05 ? 0 : r.vx, vz: Math.abs(r.vz) < 0.05 ? 0 : r.vz, wid: r.wid, crouch: r.crouch, hit: r.hit, fire: r.fire > 0, shots: r.shots });
+      driveAvatar(r.av, dt, { x: r.x, y: r.y, air: r.air, dead: r.dead, z: r.z, yaw: r.tyaw, pitch: 0, vx: Math.abs(r.vx) < 0.05 ? 0 : r.vx, vz: Math.abs(r.vz) < 0.05 ? 0 : r.vz, wid: r.wid, crouch: r.crouch, hit: r.hit, fire: r.fire > 0, shots: r.shots });
       continue;
     }
     if (!r.p) continue;

@@ -19,7 +19,7 @@ import { AIM, aimUpdate, aimFov, aimShake, aimK } from './footgun';
 import { bodyView, fpBody } from './avatar';
 import { drawFootCross } from '../ui/footHud';
 import { fieldGrenade } from './fieldfight';
-import { noteToss } from './avatar';
+import { noteToss, noteFoot } from './avatar';
 import { basePad, padGround, baseBlocked, nearDoor, surfaceAt, wallBetween } from './basewalk';
 import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
 import { FIGHT, updateFieldFight, fieldDown, fieldViewModel, hideFieldViewModel, drawFieldHUD } from './fieldfight';
@@ -135,6 +135,7 @@ export function updateFoot(dt: number) {
   updateFlora(camera.position);
   // zusammengebrochen (Ferrox-Drohnen): kurz liegen bleiben, dann am Schiff aufwachen
   if (FIGHT.down > 0) {
+    noteFoot(false, true);      // auch in der Ich-Sicht: Mitspieler sehen die Figur fallen
     if (fieldDown(dt)) { leaveShipOnFoot(); radio('SYSTEM', 'Du kommst am Schiff wieder zu dir.'); }
     if (me) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y, z: FOOT.z, yaw: FOOT.yaw, pitch: 0, vx: 0, vz: 0, dead: FIGHT.down > 0, crouch: STANCE.crouch });
     updateFieldFight(dt, { x: FOOT.x, y: FOOT.y, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH(), active: false, tp: VIEW.tp, muzzle: null });

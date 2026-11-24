@@ -171,7 +171,7 @@ function sendState() {
   // im Flug die Flugposition (das Modell wird nur beim Zeichnen nachgeführt), sonst die Lage des Modells
   const s = myState(), p = s.m === 'schiff' ? P : s.o.position, q = s.o.quaternion;
   // zu Fuß in einer Station (nicht im eigenen Schiff): Position im Stationsraum mitschicken
-  const w = DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [IN.station.id, IN.x, IN.z, IN.yaw] : null;
+  const w = DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [IN.station.id, IN.x, IN.z, IN.yaw, IN.fy + IN.jy] : null;      // Station: fünfter Eintrag = Höhe (Rampen, Sprung)
   const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe), netFlags(), lookToNet(), String(P.figur ?? 1), gr.weste || '', gr.handschuh || '', gr.stiefel || ''];
   sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g });
 }
@@ -181,7 +181,7 @@ export function netUpdate(dt: number) {
   SHARED.pilots = [...remotes.values()].filter(r => r.m === 'schiff' && r.ship).map(r => ({ id: r.id, x: r.ship!.g.position.x, y: r.ship!.g.position.y, z: r.ship!.g.position.z, vx: 0, vy: 0, vz: 0 }));
   if (SHARED.client) moveFoes(dt);
   // andere Piloten zu Fuß in derselben Station
-  syncOtherPilots([...remotes.values()].filter(r => r.m === 'innen' && r.w).map(r => ({ id: r.id, name: r.name, st: String(r.w![0]), x: +r.w![1], z: +r.w![2], yaw: +r.w![3], g: r.g })));
+  syncOtherPilots([...remotes.values()].filter(r => r.m === 'innen' && r.w).map(r => ({ id: r.id, name: r.name, st: String(r.w![0]), x: +r.w![1], z: +r.w![2], yaw: +r.w![3], y: +(r.w![4] || 0), g: r.g })));
   // andere Piloten in derselben Mine
   syncMinePilots([...remotes.values()].filter(r => r.m === 'mine' && r.w).map(r => ({ id: r.id, name: r.name, e: String(r.w![0]), x: +r.w![1], z: +r.w![2], yaw: +r.w![3], g: r.g })), dt);
   // Mitspieler zu Fuß oder im Rover auf demselben Planeten (Koop gegen die Felddrohnen)

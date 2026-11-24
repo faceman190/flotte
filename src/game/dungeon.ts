@@ -21,6 +21,7 @@ import { gunReady, gunFired, gunUpdate, GUN, AIM, aimUpdate, aimFov, aimShake, a
 import { drawFootRing, drawPrompt, drawFootCross } from '../ui/footHud';
 import { throwGrenade, updateGrenades } from './granate';
 import { noteToss, bodyView, fpBody } from './avatar';
+import { noteFoot } from './avatar';
 import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, footPace, footBrake, footAccel, setIntent, makeAvatar, driveAvatar, avatarMuzzle, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, figGear, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
@@ -1006,6 +1007,7 @@ export function updateDungeon(dt: number) {
   if (!DUN.locked && (grabT -= dt) <= 0) { grabT = 0.4; const ua = (navigator as any).userActivation; if (!ua || ua.isActive) { try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* bleibt bei Zeigersteuerung */ } } }
   if (DUN.dead > 0) {
     DUN.dead -= dt;
+    noteFoot(false, true);      // auch in der Ich-Sicht: Mitspieler sehen die Figur fallen
     if (VIEW.tp && me) { DUN.pitch += (-0.35 - DUN.pitch) * dt * 2; driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: 0, vx: 0, vz: 0, dead: true, crouch: STANCE.crouch }); }
     else DUN.pitch += (-1.2 - DUN.pitch) * dt * 2;
     if (DUN.dead <= 0) leaveDungeon(true);

@@ -15,6 +15,7 @@ import { makeLyraGun, driveLyraGun, type LyraGun } from './lyraGuns';
 
 export interface FremdDrive {
   x: number; y: number; z: number; yaw: number; vx: number; vz: number; pitch?: number; crouch?: boolean; dead?: boolean;
+  air?: boolean;                                     // im Sprung (Mitspieler: aus den Netzdaten)
   tracht: Tracht;
   ground?: ((x: number, z: number) => number | null) | null;
   // Waffe in der Hand (null = unbewaffnet): id = Modell (mineArt WDEFS), lyra = eine der Waffen aus dem Lyra-Paket, aim = im Anschlag,
@@ -32,7 +33,7 @@ export class FremdFigur {
   private gone = false;
   private gun: GunState = newGun();
   private guns: Partial<Record<MannyKind, LyraGun>> = {};
-  private st = { first: true, lx: 0, lz: 0, lastY: 0 };
+  private st = { first: true, lx: 0, lz: 0, lastY: 0, air: false };
   /** neue Netze an der Figur (Körper oder Teil gewechselt): z. B. für das Stadtlicht (city.ts probeLit) */
   onDress: ((root: THREE.Object3D) => void) | null = null;
   /** Skelett mit Körper und Teilen (null, solange es lädt) */
@@ -62,11 +63,13 @@ export class FremdFigur {
     if (!this.fig.bereit) { an.model.visible = false; return false; }
     const st = this.st, dtc = Math.min(dt, 0.1), spd = Math.hypot(d.vx, d.vz), face = d.yaw + Math.PI;
     const fresh = an.model.parent !== holder || st.first;
-    if (fresh || Math.hypot(d.x - st.lx, d.z - st.lz) > Math.max(1.5, spd * dtc * 4)) { an.teleport(face); st.lastY = d.y; }
+    if (fresh || Math.hypot(d.x - st.lx, d.z - st.lz) > Math.max(1.5, spd * dtc * 4)) { an.teleport(face); st.lastY = d.y; st.air = !!d.air; }
     if (an.model.parent !== holder) holder.add(an.model);
     soldier.visible = false; an.model.visible = true;
     const vy = fresh || dt <= 0 ? 0 : (d.y - st.lastY) / dt;
     st.lastY = d.y; st.lx = d.x; st.lz = d.z; st.first = false;
+    // Sprung: der Absprung, sobald die Netzdaten „in der Luft“ melden (Höhe und Tempo nach oben kommen erst mit den nächsten Positionen)
+    const air = !!d.air && !d.dead, jump = air && !st.air; st.air = air;
     if (spd > 0.3) _mv.set(d.vx / spd, d.vz / spd); else _mv.set(0, 0);
     const wp = d.dead ? null : d.weapon || null;
     if (wp) mountGun(an, this.gun, wp.id, wp.lyra, k => this.guns[k] || (this.guns[k] = makeLyraGun(k) || undefined) || null);
@@ -75,7 +78,7 @@ export class FremdFigur {
     if (G.shown && G.lyra && wp) driveLyraGun(G.lyra, wp.shots, wp.reload ?? -1, dtc);
     const out = an.update(dtc, {
       moveDir: _mv, gait: gaitOf(spd), crouch: !!d.crouch, strafe: true, facing: face,
-      jump: false, grounded: true, verticalSpeed: Math.abs(vy) < 20 ? vy : 0, look: { pitch: d.pitch || 0 }, dead: !!d.dead,
+      jump, grounded: !air, verticalSpeed: jump ? Math.max(vy, 3) : Math.abs(vy) < 20 ? vy : 0, look: { pitch: d.pitch || 0 }, dead: !!d.dead,
       weapon: wp ? { kind: weaponKind(wp.id, wp.lyra), aim: wp.aim, shots: wp.shots, hits: wp.hits, reload: wp.reload ?? -1 } : null,
       stopDist: spd * 0.08,
     });

@@ -68,16 +68,20 @@ export const eyeH = () => (STANCE.crouch ? 1.12 : 1.7);
 export function toggleCrouch() { STANCE.crouch = !STANCE.crouch; }
 export function toggleView() { VIEW.tp = !VIEW.tp; try { localStorage.setItem('lf_tp', VIEW.tp ? '1' : '0'); } catch (e) { /* egal */ } }
 // Ereignisse der eigenen Figur (zählen hoch): Treffer → Zucken, Schüsse → Anschlag. Gehen auch ins Netz.
-export const ACT = { hit: 0, shot: 0, toss: 0 };
+// air / dead: Sprung bzw. gefallen (für Mitspieler, netFlags); t: wann zuletzt gemeldet (die eigene Figur meldet sich in driveAvatar)
+export const ACT = { hit: 0, shot: 0, toss: 0, air: false, dead: false, t: 0 };
+export function noteFoot(air: boolean, dead: boolean) { ACT.air = air; ACT.dead = dead; ACT.t = performance.now(); }
 export function noteToss() { ACT.toss++; }      // Granate geworfen (granate.ts)
 export function flinch() { ACT.hit++; }
 export function noteShot() { ACT.shot++; }
 // Netzfeld g[4]: drei Zeichen [geduckt 0/1][Treffer mod 10][Schüsse mod 10]
-export const netFlags = () => (STANCE.crouch ? '1' : '0') + (ACT.hit % 10) + (ACT.shot % 10);
-export interface NetAct { crouch: boolean; hit: number; fire: number; fl: string; shots?: number }      // shots: Schüsse gezählt (für den Rückstoß der neuen Figur)
+// vierte Stelle seit 24.11.2026: 0 am Boden, 1 im Sprung, 2 gefallen (ältere Spiele lesen nur die ersten drei)
+export const netFlags = () => (STANCE.crouch ? '1' : '0') + (ACT.hit % 10) + (ACT.shot % 10) + (performance.now() - ACT.t > 600 ? '0' : ACT.dead ? '2' : ACT.air ? '1' : '0');
+export interface NetAct { crouch: boolean; hit: number; fire: number; fl: string; shots?: number; air?: boolean; dead?: boolean }      // shots: Schüsse gezählt (für den Rückstoß der neuen Figur)
 export function readNetFlags(n: NetAct, s?: string | null) {
   if (!s || s.length < 3) return;
   n.crouch = s[0] === '1';
+  n.air = s[3] === '1'; n.dead = s[3] === '2';
   if (n.fl && s[1] !== n.fl[1]) n.hit++;
   if (n.fl && s[2] !== n.fl[2]) { n.fire = 0.25; n.shots = (n.shots || 0) + ((+s[2] - +n.fl[2] + 10) % 10 || 1); }
   n.fl = s;
@@ -157,6 +161,7 @@ function setup(a: Avatar) {
 const _pq = new THREE.Quaternion(), _sq = new THREE.Quaternion(), _r = new THREE.Quaternion(), _t = new THREE.Quaternion(), _ax = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _gq = new THREE.Quaternion();
 export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   const s = a.s;
+  if (a.player) noteFoot(!!d.air, !!d.dead);
   if (!a.ready) setup(a);
   if (d.wid) soldierWeapon(s, d.wid);
   s.g.position.set(d.x, d.y, d.z);
@@ -180,7 +185,7 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   if (!a.player && a.tracht) {
     const f = a.fremd || (a.fremd = new FremdFigur());
     const weapon = d.armed && d.wid ? { id: d.wid, lyra: LYRA_OF_VM[d.wid], aim: combat || !!d.ads, shots: d.shots ?? 0, hits: d.hit ?? 0, reload: d.reload ?? -1 } : null;
-    if (f.drive(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, dead: d.dead, ground: d.ground, tracht: a.tracht, weapon })) return;
+    if (f.drive(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, dead: d.dead, air: d.air, ground: d.ground, tracht: a.tracht, weapon })) return;
     s.root.visible = true;
   }
   // Testfigur Manny (?manny=1): eigene Bewegungslogik, der Soldat bleibt unsichtbar im Halter
@@ -359,7 +364,7 @@ export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {
   const ivx = (f.x - ox) / Math.max(dt, 1e-3), ivz = (f.z - oz) / Math.max(dt, 1e-3), kv = Math.min(1, dt * 6);
   f.vx += (ivx - f.vx) * kv; f.vz += (ivz - f.vz) * kv;
   f.fire -= dt;
-  driveAvatar(f.av, dt, { x: f.x, y: f.y, z: f.z, yaw: f.yaw, pitch: 0, vx: Math.abs(f.vx) < 0.05 ? 0 : f.vx, vz: Math.abs(f.vz) < 0.05 ? 0 : f.vz, wid: f.wid, crouch: f.crouch, hit: f.hit, fire: f.fire > 0, shots: f.shots, armed: true });      // Planet und Mine: bewaffnet
+  driveAvatar(f.av, dt, { x: f.x, y: f.y, z: f.z, yaw: f.yaw, pitch: 0, vx: Math.abs(f.vx) < 0.05 ? 0 : f.vx, vz: Math.abs(f.vz) < 0.05 ? 0 : f.vz, wid: f.wid, crouch: f.crouch, hit: f.hit, fire: f.fire > 0, shots: f.shots, armed: true, air: f.air, dead: f.dead });      // Planet und Mine: bewaffnet
 }
 /** fremde Figur abbauen (Mitspieler weg, Stadt verlassen): auch die neue Figur freigeben */
 export function freeAvatar(a: Avatar) { a.fremd?.dispose(); a.fremd = null; a.s.g.removeFromParent(); }
