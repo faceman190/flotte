@@ -10,6 +10,7 @@ import { SHARED } from './shared';
 import type { ItemId, RockKind } from '../data/items';
 import { SHIP } from './player';
 import { ROVER, buildRover } from './surface';
+import { buildFahrzeug, fzLaden, fzBereit, normFz, FZ, type FzId, type RoverNeu } from '../models/rover';
 import { IN, syncOtherPilots } from './interior';
 import { viewModelId } from './mineArt';
 import { FOOT } from './onfoot';
@@ -34,7 +35,9 @@ export const NET = {
 export const netHooks = { changed: () => {}, trade: (_m: any) => {}, lost: () => {} };   // Status oder Online-Liste geändert (Menüs neu zeichnen)
 export interface Remote {
   id: number; name: string; cls: string; paint: string; m: string; s: number; w: any[] | null; d: string; g: string[] | null;   // g: Aussehen zu Fuß [Helm, Anzug, Rucksack, Waffe]   // d: Station, an der er angedockt ist   // w: zu Fuß in einer Station [Station, x, z, Blick]
-  ship: ShipModel | null; rover: THREE.Group | null; tp: THREE.Vector3; tq: THREE.Quaternion; seen: number; fig?: RemoteFig;   // fig: Figur zu Fuß auf dem Planeten
+  ship: ShipModel | null; rover: THREE.Group | null;
+  rv?: RoverNeu | null; rk?: string; vv?: (string | number)[] | null;      // Bodenfahrzeug aus Blender (Art, Lage, Tempo, Lenkung; seit 2026-11-24)
+  tp: THREE.Vector3; tq: THREE.Quaternion; seen: number; fig?: RemoteFig;   // fig: Figur zu Fuß auf dem Planeten
 }
 export const remotes = new Map<number, Remote>();
 let room = '', retry = 0, wantOnline = false, sentName = '';
@@ -112,7 +115,8 @@ function onMsg(m: any) {
       r.ship.g.position.copy(r.tp); r.ship.g.quaternion.copy(r.tq);
       scene.add(r.ship.g);
     }
-    if (r.m === 'rover' && !r.rover) { r.rover = buildRover().g; r.rover.position.copy(r.tp); scene.add(r.rover); }
+    r.vv = Array.isArray(m.v) && m.v.length === 10 ? m.v : null;
+    if (r.m === 'rover' && !r.rover && !r.vv) { r.rover = buildRover('dachs').g; r.rover.position.copy(r.tp); scene.add(r.rover); }      // ältere Fassung ohne Fahrzeugdaten
     r.seen = performance.now();
   } else if (m.t === 'leave') {
     removeRemote(m.id);
@@ -172,8 +176,11 @@ function sendState() {
   const s = myState(), p = s.m === 'schiff' ? P : s.o.position, q = s.o.quaternion;
   // zu Fuß in einer Station (nicht im eigenen Schiff): Position im Stationsraum mitschicken
   const w = DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [IN.station.id, IN.x, IN.z, IN.yaw, IN.fy + IN.jy] : null;      // Station: fünfter Eintrag = Höhe (Rampen, Sprung)
+  // Bodenfahrzeug: Art, Tempo, Lenkung, Lage und Drehung des Modells (auch wenn der Pilot daneben zu Fuß ist)
+  const rm = world.surface && ROVER.active && ROVER.model ? ROVER.model.g : null;
+  const v = rm ? [ROVER.kind, ROVER.speed, ROVER.steer, rm.position.x, rm.position.y, rm.position.z, rm.quaternion.x, rm.quaternion.y, rm.quaternion.z, rm.quaternion.w] : undefined;
   const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe), netFlags(), lookToNet(), String(P.figur ?? 1), gr.weste || '', gr.handschuh || '', gr.stiefel || ''];
-  sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g });
+  sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g, v });
 }
 setInterval(sendState, 100);
 export function netUpdate(dt: number) {
@@ -197,7 +204,8 @@ export function netUpdate(dt: number) {
     ship.g.visible = onShip || r.m === 'rover';   // im Rover-Modus steht das Schiff gelandet daneben (letzter Stand)
     if (onShip) { ship.g.position.lerp(r.tp, k); ship.g.quaternion.slerp(r.tq, k); }
     for (const gl of ship.glows) gl.scale.setScalar((gl.userData.base || 1) * (0.5 + Math.min(1, r.s / 200) * 1.3) * (onShip ? 1 : 0.4));
-    if (r.rover) { r.rover.visible = r.m === 'rover' || r.m === 'fuss'; if (r.m === 'rover') { r.rover.position.lerp(r.tp, k); r.rover.quaternion.slerp(r.tq, k); } }
+    if (r.vv) driveRemoteRover(r, dt, k);
+    else if (r.rover) { r.rover.visible = r.m === 'rover' || r.m === 'fuss'; if (r.m === 'rover') { r.rover.position.lerp(r.tp, k); r.rover.quaternion.slerp(r.tq, k); } }
     if (r.m === 'fuss' || r.m === 'rover' || r.m === 'mine') ship.g.visible = true;   // Schiff bleibt gelandet stehen
     // zu Fuß auf dem Planeten: Soldat mit Laufclips
     if (r.m === 'fuss') {
@@ -207,6 +215,32 @@ export function netUpdate(dt: number) {
       driveRemote(scene, f, dt);
     } else if (r.fig) dropRemote(r.fig);
   }
+}
+// Bodenfahrzeug eines Mitspielers: das richtige Modell (Dachs oder Wiesel), weich nachgeführt, Räder drehen und lenken, Sensor dreht.
+// Solange das Modell lädt, steht nichts da (es kommt mit dem Hintergrund-Paket).
+const _rp = new THREE.Vector3(), _rq = new THREE.Quaternion(), _hub = new THREE.Vector3();
+function driveRemoteRover(r: Remote, dt: number, k: number) {
+  const vv = r.vv!, kind = normFz(vv[0]) as FzId;
+  if (!r.rv || r.rk !== kind) {
+    if (!fzBereit(kind)) { fzLaden(kind); return; }
+    if (r.rover) disposeObj(r.rover);
+    r.rv = buildFahrzeug(kind); r.rk = kind; if (!r.rv) return;
+    r.rover = r.rv.g; r.rover.position.set(+vv[3], +vv[4], +vv[5]); r.rover.quaternion.set(+vv[6], +vv[7], +vv[8], +vv[9]); scene.add(r.rover);
+  }
+  const m = r.rv!, g = m.g, F = FZ[kind], spd = +vv[1] || 0, steer = +vv[2] || 0;
+  g.visible = true;
+  _rp.set(+vv[3], +vv[4], +vv[5]); _rq.set(+vv[6], +vv[7], +vv[8], +vv[9]).normalize();
+  if (g.position.distanceTo(_rp) > 40) g.position.copy(_rp); else g.position.lerp(_rp, k);
+  g.quaternion.slerp(_rq, k); g.updateMatrixWorld(true);
+  for (const w of m.rads) {
+    _hub.copy(w.rest).applyMatrix4(g.matrixWorld);
+    const gy = world.ground ? world.ground(_hub.x, _hub.z) : _hub.y - F.radR;
+    const want = Math.max(F.susp[0], Math.min(F.susp[1], gy + F.radR - _hub.y));
+    w.mount.position.set(w.rest.x, w.rest.y + want, w.rest.z); w.mount.rotation.y = w.front ? steer : 0;
+    w.spin.rotation.x -= spd * dt / F.radR;
+  }
+  if (m.sensor) m.sensor.rotation.y += 2.2 * dt;
+  (m.beacon.material as THREE.SpriteMaterial).opacity = Math.sin(performance.now() / 160) > 0 ? 1 : 0.2;
 }
 // Für Anzeigen: wo sind die anderen gerade sichtbar?
 export function remoteMarkers() {
