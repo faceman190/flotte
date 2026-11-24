@@ -157,7 +157,7 @@ Jedes Kapitel verbindet Hauptmissionen mit dem, was das Spiel schon kann: Bergba
 | 5 | Die Narbe | Der **Kranich** ist in ein Trümmerfeld gefallen und gebrochen. Achterberg und Staffel Vier kämpfen am Wrack. An der Bresche langsam anlegen. |
 | 6 | Im Wrack | Notstrom, Wächterkern, dann den Schlafkern ziehen (E). |
 | 7 | Im Wrack, Narbe | Rückweg unter Druck: Drei Wächter erscheinen zwischen Pilot und Schleuse, der Rumpf bricht in 150 Sekunden; danach entweicht die Luft (Schaden in Schüben). Draußen vier Angreifer; aus der Narbe springen. |
-| 8 | Bastion, Hangar | Szene „Sanders Rechnung“ mit Sander, Varga, Hollweg, Achterberg: Die übrigen acht kommen zusammen, am alten Ankunftspunkt der Flotte, fünf Kilometer von der Bastion. Eine Zeile je nach Leitkristall. |
+| 8 | Bastion, Hangar | Szene „Sanders Rechnung“ mit Sander, Varga, Hollweg, Achterberg: Die übrigen acht kommen zusammen, am alten Ankerplatz der Flotte, fünf Kilometer von der Bastion (dort warf die Bastion nach dem Tor in Sonnenfeld ihren ersten Anker; seit 24.11.2026, vorher hieß es, sie sei dort herausgefallen – Widerspruch zur Gedenkboje). Eine Zeile je nach Leitkristall. |
 | 9 | Heimstatt | Zum Sammelpunkt fliegen. Je Fraktion kommt ein Jäger ab Rufstufe 1, zwei ab Stufe 3. Achterberg und Staffel Vier sind immer dabei. |
 | 10 | Heimstatt | **Die Schlacht um Heimstatt.** Acht Schiffe fallen im Abstand von 34 Sekunden aus dem Sprung und fliegen zu ihrem Ankerplatz. Der Schwarm kommt in sechs Wellen. Mindestens sechs müssen ankommen. |
 | 11 | Bastion, Hangar | Szene „Vollzählig“. Brummer zählt (drei Fassungen je nach Ausgang), dann Sanders elfte Kennung. |

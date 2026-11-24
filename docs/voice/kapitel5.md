@@ -42,7 +42,7 @@ Stand: 2026-11-14, Alpha 1.10. **Noch nicht aufgenommen.** Die Texte stehen in `
 | f27_achterberg | Hauptfrau Achterberg | `[over comms, under fire]` | Wir halten draußen. Leg den Notstrom um, dann kommst du an den Schlafkern. Zieh ihn, und die Schlafmodule sprengen sich ab. Beeil dich. |
 | f28_achterberg | Hauptfrau Achterberg | `[over comms, fierce relief]` | Dreitausend Schläfer im Schlepp, und kein einziger fehlt. Der Kranich bleibt hier. Spring, Pilot. Wir sind direkt hinter dir. |
 | f29_sander | Navigator Emil Sander | `[over comms, uneasy]` | Sander an Pilot. Kommen Sie zur Bastion. Ich habe den Schreiber des Kranich ausgewertet, und das Ergebnis gefällt mir nicht. |
-| f30_brummer | Lotse Brummer | `[over comms, all hands, grave]` | Bastion an alle Piloten. Der Schwarm kommt nach Heimstatt. Wer fliegen kann, sammelt sich am alten Ankunftspunkt. Der Pilot führt. |
+| f30_brummer | Lotse Brummer | `[over comms, all hands, grave]` | Bastion an alle Piloten. Der Schwarm kommt nach Heimstatt. Wer fliegen kann, sammelt sich am alten Ankerplatz. Der Pilot führt. |
 | f31_achterberg | Hauptfrau Achterberg | `[over comms, warm, proud]` | Staffel Vier steht. Und sieh dich um, Pilot. Die anderen sind deinetwegen hier. |
 | f32_achterberg | Hauptfrau Achterberg | `[over comms, grim]` | Staffel Vier steht. Mehr sind wir nicht. Es muss reichen. |
 | f33_hollweg | Ratsherr Hollweg | `[measured, resolute]` | Der Kristall hat uns ein Wort gelehrt. Die Bastion legt daraus einen Schirm. Wer darin ist, den rührt der Schwarm nicht an. |
@@ -50,7 +50,7 @@ Stand: 2026-11-14, Alpha 1.10. **Noch nicht aufgenommen.** Die Texte stehen in `
 | f35_krull | Gildemeisterin Krull | `[over comms, dry, quick]` | Krull an Bastion. Im Kristall steht, wie ein Ruf gebaut ist. Abstellen kann ich ihn nicht, aber stören. Das kauft euch Zeit. |
 | f36_sander | Navigator Emil Sander | `[precise, troubled]` | Ich habe Tamms Aufzeichnungen neben den Schreiber des Kranich gelegt. Die übrigen acht fallen nicht einzeln heraus. Sie kommen zusammen. |
 | f37_hollweg | Ratsherr Hollweg | `[quiet]` | Wo? |
-| f38_sander | Navigator Emil Sander | `[flat, exact]` | Am alten Ankunftspunkt der Flotte. Dort, wo vor achtunddreißig Jahren die Bastion herausfiel. Fünf Kilometer von diesem Hangar. |
+| f38_sander | Navigator Emil Sander | `[flat, exact]` | Am alten Ankerplatz, fünf Kilometer von diesem Hangar. Dort hat die Bastion vor achtunddreißig Jahren ihren ersten Anker geworfen. Der Sprung zieht sie zu ihr, nicht zum Tor. |
 | f39_varga | Kapitän Varga (im Hangar) | `[low, counting]` | Acht Schiffe. Acht Rufe auf einmal. Vierundzwanzigtausend Schläfer. |
 | f40_achterberg | Hauptfrau Achterberg | `[grim]` | Dann kommt der Schwarm zum ersten Mal nach Heimstatt. |
 | f41_hollweg | Ratsherr Hollweg | `[quiet, resolute]` | Meine Mutter hat geschworen, dass das nie geschieht. Ich schwöre etwas anderes: Wenn er kommt, findet er uns wach. |

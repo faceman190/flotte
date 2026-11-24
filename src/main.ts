@@ -55,6 +55,7 @@ import { updateAkademie } from './game/akademie';
 import { updateAlteWerft } from './game/altewerft';
 import { updateLeitbojen } from './game/leitbojen';
 import { updateGedenkboje } from './game/gedenkboje';
+import { updateSektor3 } from './game/sektor3';
 import { gunReload } from './game/footgun';
 import { hideFieldViewModel } from './game/fieldfight';
 import { toggleSchnellflug, pickNav, bigSectorHint } from './game/schnellflug';
@@ -749,7 +750,7 @@ function simulate(dt: number) {
   if (m === 'play') updateApproachPrime();   // erstes Andocken an Stationen mit Deck beim Anflug vorbereiten (approachPrime.ts)
   updateTraffic(dt);
   updateWeltLeben(dt);   // Funkverkehr, Schürfer, Frachtkisten, Notrufe (weltLeben.ts)
-  if (m !== 'menu' && m !== 'intro') { hook('akademie', () => updateAkademie(dt)); hook('altewerft', () => updateAlteWerft(dt)); hook('gedenkboje', () => updateGedenkboje(dt)); }   // Orte in Heimstatt (Phase 2), Gedenkboje im Sonnenfeld
+  if (m !== 'menu' && m !== 'intro') { hook('akademie', () => updateAkademie(dt)); hook('altewerft', () => updateAlteWerft(dt)); hook('gedenkboje', () => updateGedenkboje(dt)); hook('sektor3', () => updateSektor3(dt)); }   // Orte in Heimstatt (Phase 2), Gedenkboje im Sonnenfeld
   updateAllies(dt);
   updateParticles(dt);
   if (live) updateScan(dt);

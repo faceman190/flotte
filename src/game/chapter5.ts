@@ -23,7 +23,7 @@ import type { CivType } from '../models/ships';
 // Sekunden). Navigator Emil Sander (von Varga als Erster geweckt) rechnet aus, wo und wann. Die „Anna“ kommt im Lichtwall an: an Bord gehen und
 // den Sprungkern von Hand abschalten, bevor die Frist um ist. Krull weckt in Talstadt die ersten Schläfer (Eis und Helium-3). Der „Kranich“ fällt
 // in die Narbe und ist verloren; der Pilot zieht den Schlafkern, die Schlafmodule sprengen sich ab, Staffel Vier schleppt sie heraus. Die übrigen
-// acht kommen zusammen am alten Ankunftspunkt der Flotte, neben der Bastion: Zum ersten Mal kommt der Schwarm nach Heimstatt. Wer den Leitkristall
+// acht kommen zusammen am alten Ankerplatz der Flotte, fünf Kilometer von der Bastion (dort warf sie nach dem Tor in Sonnenfeld ihren ersten Anker): Zum ersten Mal kommt der Schwarm nach Heimstatt. Wer den Leitkristall
 // hat (Kapitel 4), hilft: Der Rat legt einen Schirm um die Bastion, die Wacht eine Falle an den Ankunftspunkt, die Gilde stört den Ruf.
 // Mindestens sechs der acht müssen ihren Ankerplatz erreichen. Am Ende meldet sich eine elfte Kennung: „Halden hört euch.“
 // Keine Aufgabe „drei Punkte scannen“: Botenflug, zu Fuß auf Zeit, Liefern, Wrack mit Rückweg unter Druck, großes Gefecht mit Verbündeten.
@@ -34,7 +34,7 @@ const T = 'Kapitel 5 · Die Zehn';
 const EIS = 12, HE = 6;                                               // Kühlmittel und Brennstoff für Krulls Weckanlage
 const AN = [-1100, 260, 2400];                                        // Ankunftspunkt der Anna im Lichtwall
 const KR = [-2600, -260, 2700];                                        // Wrack des Kranich in der Narbe
-const AP = [-4300, 320, -2500];                                       // alter Ankunftspunkt der Flotte, relativ zur Bastion
+const AP = [-4300, 320, -2500];                                       // alter Ankerplatz der Flotte (Ankunftspunkt der acht), relativ zur Bastion
 const MEET = [-1900, 200, -1150];                                     // Sammelpunkt der Piloten, relativ zur Bastion
 const SHIELD = 2200;                                                  // Schirm des Rats um die Bastion (Meter)
 // Ankerplätze relativ zur Bastion: acht für die Schiffe der Schlacht, der neunte für die Anna (nach dem Kapitel)
@@ -380,7 +380,7 @@ const STEPS: Step[] = [
     title: 'Kapitel 5 · Heimstatt rüstet',
     enter: () => {
       route(HOME);
-      if (!c5().call) talk(['BRUMMER', 'Bastion an alle Piloten. Der Schwarm kommt nach Heimstatt. Wer fliegen kann, sammelt sich am alten Ankunftspunkt. Der Pilot führt.']);
+      if (!c5().call) talk(['BRUMMER', 'Bastion an alle Piloten. Der Schwarm kommt nach Heimstatt. Wer fliegen kann, sammelt sich am alten Ankerplatz. Der Pilot führt.']);
     },
     lines: () => {
       if (!inSpace(HOME)) return [lineSpace(HOME, 'Heimstatt')];
@@ -453,7 +453,7 @@ function rechnung() {
   playScene([
     { who: 'SANDER', text: 'Ich habe Tamms Aufzeichnungen neben den Schreiber des Kranich gelegt. Die übrigen acht fallen nicht einzeln heraus. Sie kommen zusammen.' },
     { who: 'HOLLWEG', text: 'Wo?', t: 2.2 },
-    { who: 'SANDER', text: 'Am alten Ankunftspunkt der Flotte. Dort, wo vor achtunddreißig Jahren die Bastion herausfiel. Fünf Kilometer von diesem Hangar.' },
+    { who: 'SANDER', text: 'Am alten Ankerplatz, fünf Kilometer von diesem Hangar. Dort hat die Bastion vor achtunddreißig Jahren ihren ersten Anker geworfen. Der Sprung zieht sie zu ihr, nicht zum Tor.' },
     { who: 'KAPITÄN VARGA', text: 'Acht Schiffe. Acht Rufe auf einmal. Vierundzwanzigtausend Schläfer.' },
     { who: 'ACHTERBERG', text: 'Dann kommt der Schwarm zum ersten Mal nach Heimstatt.' },
     { who: 'HOLLWEG', text: 'Meine Mutter hat geschworen, dass das nie geschieht. Ich schwöre etwas anderes: Wenn er kommt, findet er uns wach.' },

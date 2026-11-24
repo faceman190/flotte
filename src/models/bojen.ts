@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { stationTemplate } from './stationModels';
 
 // =====================================================================================
@@ -58,10 +60,24 @@ function floatGeo(g: THREE.BufferGeometry) {
   return out;
 }
 
+// Bauten aus dem Hintergrund-Paket (deco/<Name>, seit 24.11.2026: Torwache, Fernohr, Pumpwerk aus asset-src/neu/sektor3): gleiche Machart wie die
+// Bojen, aber erst bei Bedarf geladen (nicht vor dem Menü). decoLaden(name) lädt; danach liefern bojeTeile/bojeGruppe das Modell.
+const DECO: Record<string, THREE.Group> = {}, DECO_P: Record<string, Promise<boolean>> = {};
+export function decoLaden(name: string): Promise<boolean> {
+  if (DECO[name]) return Promise.resolve(true);
+  if (name in DECO_P) return DECO_P[name];
+  const url = (window as any).DECODATA?.[name] as string | undefined;
+  if (!url) return Promise.resolve(false);
+  return (DECO_P[name] = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url).then(g => {
+    const wrap = new THREE.Group(); wrap.add(g.scene); DECO[name] = wrap; return true;
+  }, e => { console.warn('Bau nicht geladen:', name, e); delete DECO_P[name]; return false; }));
+}
+export const decoBereit = (name: string) => !!DECO[name];
+
 // Netze einer Bojendatei in Dateikoordinaten (null, solange das Modell nicht geladen ist)
 export function bojeTeile(name: string): BojeTeil[] | null {
   if (name in CACHE) return CACHE[name];
-  const t = stationTemplate(name);
+  const t = stationTemplate(name) || DECO[name] || null;
   if (!t || !t.children[0]) return null;
   const inner = t.children[0];
   t.updateMatrixWorld(true);

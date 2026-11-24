@@ -91,16 +91,42 @@ Alles aus vorhandenen Teilen (Außenposten-Modell, Schiffsmodelle, Geometrie aus
   keine Fehler. Nicht geprüft: Bildrate auf echter Grafikkarte, Mehrspieler.
 - Testhelfer: `scripts/ph2test.js` (nach `probelauf.js`: `await __ph2()`, dann `T.place`, `T.snap`, `T.game`).
 
+## Phase 3 (gebaut am 24.11.2026, nur auf dem Testserver)
+
+Drei neue Bauten, eigene Entwürfe nach den Beschreibungen in `docs/heimstatt-bildprompts.md` (Abschnitte 8–10, Konzeptbilder gab es nicht),
+in Blender aus dem Plattform- und Orbitalwerft-Baukasten: `asset-src/neu/sektor3/` (`s3_bau.py`, `s3_lauf.py -- <Modell> [ansichten|alle]`,
+`s3_export.py` = abgewandelter Bojen-Export). Nah- und Fernmodell je Bau im **Hintergrund-Paket** (`asset-src/glb/deco` → `deco/<Name>`, zusammen 1,5 MB,
+nicht vor dem Menü geladen; `models/bojen.ts` `decoLaden`).
+
+| Bau | Lage | Art | Datei |
+|---|---|---|---|
+| Torwache (≈ 100 m, Flotte) | an jedem der drei Tore, 300 m daneben, 120 m weiter innen, Leitturm zum Tor | Ort | `src/game/sektor3.ts` |
+| Horchposten „Fernohr“ (≈ 200 m, Flotte) | 55 000, 400, 2 500 (55 km O), Schüsseln nach Osten | Ort | `src/game/sektor3.ts` |
+| Pumpwerk Reifschleier (≈ 150 m, Gilde) | 24 600, −60, 9 460 (am Eisfeld auf der Seite zur Bastion), Tor zur Bastion | Station | `src/models/pumpwerk.ts`, `galaxy.ts` |
+
+- **Torwache:** Leitturm mit Verkehrsleitung (Fensterband), Sensormast, Radarschüssel, zwei Scheinwerfer zum Tor, Andockarm mit zwei Liegeplätzen
+  für Patrouillenjäger (leer), Prüfrahmen am Heck, Geschützgehäuse, Mannschaftsmodul. Funkspruch beim ersten Anflug (je Tor ein fester Satz).
+- **Fernohr:** Fachwerkrücken 190 m, drei Parabolantennen (30, 21, 13 m Radius) auf Lafetten, Dipolfeld darunter, Drahtantennen, Wohnmodul mit zwei
+  hellen Fenstern, Energiemodul mit Kühlflügeln, Andockport (ohne Andocken). Beim ersten Besuch ein Funkspruch, mit **E** das Abhörprotokoll
+  (drei Einträge, nach Kapitel 5 ein vierter: ein zweiter Träger im Rauschen seit dem Ruf aus Halden – Aufhänger für später). `P.fernohr`.
+- **Pumpwerk:** Schmelze mit Wärmetauschern und Dampfventilen, Tankreihe (sechs liegende Tanks), zwei Ansaugarme mit Förderröhre und Greifschaufel
+  zum Eisfeld, Kühlflügel, Andockklammern, Hangar mit Leitstand, Natrium-Flutlichter, Reif und Eiszapfen auf der kalten Seite. Andockbar, innen
+  das übliche Stationsdeck; Markt mit Eis ×1,3 und Helium ×0,9, Gilde-Ruf, keine Werft/Werkstatt/Ausrüster. Solange das Modell lädt, steht dort
+  die übliche Station (wird danach ausgetauscht, wie bei der Eisenkrone).
+- Geprüft: Entwicklungsserver (alle vier Orte gebaut, Bilder aus der Nähe, Andocken am Pumpwerk mit Stationsdeck), Story-Bot vom Prolog bis
+  Kapitel 5 ohne Fehler, gebaute Fassung (Spielstand am Pumpwerk, Modelle aus dem Hintergrund-Paket geladen, Andock-Hinweis, keine Fehler).
+  Nicht geprüft: Bildrate auf echter Grafikkarte, Mehrspieler, die Funksprüche sind noch nicht vertont.
+- Bilder: `asset-src/neu/sektor3/<modell>-schraeg.jpg`.
+
 ## Weiter (Konzept, abgestimmt am 18.11.2026)
 
-- ~~Phase 2~~ siehe oben.
-- **Phase 3**, neue Modelle: Pumpwerk am Reifschleier, Torwachen, Horchposten „Fernohr“ (55 km O).
+- ~~Phase 2~~ und ~~Phase 3~~ siehe oben.
 - **Gedenkboje (im Spiel seit 23.11.2026, `src/game/gedenkboje.ts`, `docs/gedenkboje.md`): nicht in Heimstatt, sondern im Sonnenfeld** an den Trümmern des Halden-Tors (Wunsch des Spielers). Dort kam die Bastion durch,
   dort brach das Tor zusammen. Sie trägt die Namen der elf Schiffe, die nicht ankamen: Weitsicht, Anna, Kranich, Sirius, Ida, Bussard, Wega, Emma,
   Reiher, Atair, Klara. Nach Kapitel 5 werden die geretteten markiert. Dazu ein Archiv mit Funksprüchen aus Jahr 0 und Sätzen aus dem Eid.
   Ein Ort ohne Kampf und ohne Auftrag.
 - **Ankunftspunkt in Heimstatt** (5 km NW der Bastion, `AP` in chapter5.ts) bleibt der Ort, an dem in Kapitel 5 die acht Schiffe aus dem
-  zerbrochenen Sprung fallen (der Sprung spuckt sie an verschiedenen Orten aus: Anna im Lichtwall, Kranich in der Narbe). Offen: Sanders Satz
-  „Dort, wo vor achtunddreißig Jahren die Bastion herausfiel“ widerspricht Intro und Story (die Bastion kam im Sonnenfeld durch). Vorschlag:
-  „Dort, wo die Bastion damals vor Anker ging.“ Kostet nichts, solange Kapitel 5 noch nicht vertont ist.
+  zerbrochenen Sprung fallen (der Sprung spuckt sie an verschiedenen Orten aus: Anna im Lichtwall, Kranich in der Narbe). Sanders Satz ist
+  seit 24.11.2026 berichtigt: „Am alten Ankerplatz … Dort hat die Bastion vor achtunddreißig Jahren ihren ersten Anker geworfen. Der Sprung
+  zieht sie zu ihr, nicht zum Tor.“ (vorher: „wo die Bastion herausfiel“, Widerspruch zur Gedenkboje).
 - Bildprompts für die neuen Modelle (GPT Image): `docs/heimstatt-bildprompts.md`.

@@ -61,6 +61,9 @@ export const SECTORS: SectorDef[] = [
       // Werft, Ausrüster und Werkstatt bleiben auf der Bastion. Lage: am Ostrand des Eisengürtels, das Hangartor zeigt nach Norden Richtung Bastion.
       // Nicht in die Ankerbucht westlich oder nordwestlich der Bastion legen: Dort liegen die Ankerplätze der Flotte aus Kapitel 5 (SLOTS in chapter5.ts).
       { id: 'eisenkrone', kind: 'station', name: 'Eisenkrone', pos: [1200, 60, 20500], prices: { erz: 1.1, kupfer: 1.1, stahl: 0.95, kupferb: 0.95 }, refinery: true, gilde: true, no: ['ausruester', 'werft', 'werkstatt'] },
+      // Pumpwerk am Reifschleier (Phase 3, 24.11.2026): zweite Gildestation, schmilzt Eis. Am Rand des Eisfelds auf der Seite zur Bastion, Tor zur Bastion
+      // (src/models/pumpwerk.ts, PUMPWERK_YAW in world.ts). Kauft Eis gut an, Helium ab Lager günstig.
+      { id: 'pumpwerk', kind: 'station', name: 'Pumpwerk Reifschleier', pos: [24600, -60, 9460], prices: { eis: 1.3, helium: 0.9 }, gilde: true, no: ['ausruester', 'werft', 'werkstatt'] },
     ],
     fields: [{ kind: 'metal', pos: [-1700, 0, 22500], r: 2500, n: 110 }, { kind: 'ice', pos: [26000, -100, 10000], r: 1100, n: 34 }],
   },
