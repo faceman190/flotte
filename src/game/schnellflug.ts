@@ -8,6 +8,7 @@ import { radio } from '../ui/radio';
 import { storyMarkers } from './story';
 import { missionMarkers } from './missions';
 import { aufgabenMarkers } from './aufgaben';
+import { begegnungMarkers } from './begegnungen';
 import { ORTE } from './orte';
 
 // Schnellflug und Kurzsprung (seit Alpha 1.50, für große Sektoren wie Heimstatt mit 60 km Radius; geht in jedem Sektor)
@@ -42,7 +43,7 @@ export function navPoints(): NavPoint[] {
   for (const o of ORTE) out.push({ kind: 'ort', id: o.id, name: o.name, x: o.x, y: o.y, z: o.z, R: o.R });   // Übungsgelände, Werft (orte.ts)
   if (world.orbit) out.push({ kind: 'orbit', id: 'orbit', name: 'Anflug → ' + world.orbit.name, x: world.orbit.x, y: world.orbit.y, z: world.orbit.z, R: 300 });
   // Ziele aus Geschichte und Aufträgen (ohne die, die nur eine Station markieren)
-  for (const m of [...storyMarkers(), ...missionMarkers(), ...aufgabenMarkers()]) {
+  for (const m of [...storyMarkers(), ...missionMarkers(), ...aufgabenMarkers(), ...begegnungMarkers()]) {
     if (world.stations.some(s => d3(m.x, m.y, m.z, s.x, s.y, s.z) < s.R + 1500)) continue;
     const name = m.label.charAt(0) + m.label.slice(1).toLowerCase();
     out.push({ kind: 'mark', id: m.label, name, x: m.x, y: m.y, z: m.z, R: 200 });

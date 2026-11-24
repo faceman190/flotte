@@ -171,7 +171,7 @@ export function updateFoot(dt: number) {
     FOOT.jy += FOOT.jv * dt; FOOT.jv -= 15 * dt;
     if (FOOT.jy <= 0) { FOOT.jy = 0; FOOT.jv = 0; stepT = 0; }
   }
-  FOOT.y += (g - FOOT.y) * Math.min(1, dt * 18);
+  FOOT.y += (g - FOOT.y) * Math.min(1, dt * (g > FOOT.y ? 45 : 18));      // bergauf fast sofort (sonst steckt man beim Aufstieg im Hang), bergab weich
   const moved = Math.hypot(FOOT.x - ox, FOOT.z - oz), v = dt > 0 ? moved / dt : 0;
   FOOT.walked += moved; stepT -= moved;
   if (stepT <= 0 && moved > 0 && FOOT.jy === 0) { stepT = v > 5 ? 2.1 : 1.6; sfx('step' + Math.floor(Math.random() * 5), v > 5 ? 0.45 : 0.3, 0.75 + Math.random() * 0.2); }

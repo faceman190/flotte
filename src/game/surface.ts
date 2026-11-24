@@ -54,7 +54,10 @@ function heightAt(x: number, z: number) {
   const gx = clamp((x + half) / cell, 0, N - 1.001), gz = clamp((z + half) / cell, 0, N - 1.001);
   const ix = Math.floor(gx), iz = Math.floor(gz), fx = gx - ix, fz = gz - iz;
   const a = HM[iz * N + ix], b = HM[iz * N + ix + 1], c = HM[(iz + 1) * N + ix], d = HM[(iz + 1) * N + ix + 1];
-  return (a * (1 - fx) + b * fx) * (1 - fz) + (c * (1 - fx) + d * fx) * fz;
+  // Genau die Dreiecke des Geländenetzes (PlaneGeometry teilt jedes Feld an der Diagonale von (ix, iz + 1) nach (ix + 1, iz)). Bis 24.11.2026
+  // stand hier eine bilineare Mitte über die vier Ecken: Bei 31 m Feldern lag sie bis zu 4 m neben dem sichtbaren Boden – Figuren sanken ein,
+  // der Rover kippte gegen die Fläche.
+  return fx + fz <= 1 ? a + (b - a) * fx + (c - a) * fz : d + (c - d) * (1 - fx) + (b - d) * (1 - fz);
 }
 export const groundAt = (x: number, z: number) => Math.max(heightAt(x, z), liquidLevel);
 export const terrainAt = heightAt;
@@ -626,7 +629,9 @@ export function updateRover(dt: number) {
   const rx = Math.cos(R.yaw), rz = -Math.sin(R.yaw), hr = heightAt(R.x + rx * s, R.z + rz * s), hl = heightAt(R.x - rx * s, R.z - rz * s);
   m.g.position.set(R.x, R.y, R.z);
   m.g.rotation.order = 'YXZ';
-  m.g.rotation.set(Math.atan2(hf - hb, 2 * s), R.yaw, Math.atan2(hl - hr, 2 * s));
+  // Neigung um die Querachse (Bug hoch, wenn vorn höher) und um die Längsachse: +z hebt die rechte Seite, also hoch, wenn rechts der Boden
+  // höher liegt (bis 24.11.2026 stand hier hl − hr: Auf Querhängen kippte der Rover gegen den Hang)
+  m.g.rotation.set(Math.atan2(hf - hb, 2 * s), R.yaw, Math.atan2(hr - hl, 2 * s));
   for (const w of m.wheels) w.rotation.x += R.speed * dt / 0.75;
   (m.beacon.material as THREE.SpriteMaterial).opacity = Math.sin(G.time * 6) > 0 ? 1 : 0.2;
   if (Math.abs(R.speed) > 4 && Math.random() < 0.25) puff(R.x - fx * 2.6 + rand(-1, 1), R.y + 0.4, R.z - fz * 2.6 + rand(-1, 1), rand(-2, 2), rand(1, 3), rand(-2, 2), '#3a342c', 1.0);

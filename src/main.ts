@@ -18,6 +18,7 @@ import { initFerrox, updateSpawning, updateEnemies, updateProjectiles, updateSta
 import { initTraffic, updateTraffic, initAllies, updateAllies } from './game/npc';
 import { updateMissions } from './game/missions';
 import { updateAufgaben } from './game/aufgaben';
+import { updateBegegnungen } from './game/begegnungen';
 import { playIntro, updateIntro, skipIntro, INTRO } from './game/intro';
 import { updateGroundShade } from './game/groundShade';
 import { updateStory, startPrologue, resumePrologue, skipPrologue, prologActive, sceneNext, storyHooks, noteScan, dialogBusy, sceneActive } from './game/story';
@@ -747,6 +748,7 @@ function simulate(dt: number) {
   if (world.surface && !IN.active && !DUN.active) updateSalvage(dt, (x, y, z) => puff(x, y, z, (Math.random() - 0.5) * 1.5, 2 + Math.random() * 2, (Math.random() - 0.5) * 1.5, '#2a2622', 2.2));
   if (live) updateMissions(dt);
   updateAufgaben();      // Fristen der Stationsaufgaben
+  if (live) updateBegegnungen(dt);      // Begegnungen unterwegs
   updateAsteroids(dt);
   if (m !== 'menu') { updateSpawning(dt); updateEnemies(dt); updateProjectiles(dt); updateStationDefense(dt); }
   if (m === 'play') updateApproachPrime();   // erstes Andocken an Stationen mit Deck beim Anflug vorbereiten (approachPrime.ts)
