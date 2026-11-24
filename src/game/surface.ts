@@ -12,6 +12,7 @@ import { SECTOR, type StationDef } from '../data/galaxy';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { PLANETS, PTYPE, planetBaseId, type PlanetDef } from '../data/planets';
 import { buildGate } from '../models/structures';
+import { buildRoverNeu, roverLaden, roverBereit, RAD_R, type RoverNeu, type RoverRad } from '../models/rover';
 import { buildFlora, updateFlora } from './flora';
 import { gearFactor } from './inventory';
 import { buildDungeonEntrances } from './dungeon';
@@ -499,7 +500,9 @@ export function landInfo() {
 }
 
 // ---------------- Rover ----------------
-export function buildRover() {
+// Seit 2026-11-24 der Bergbaurover „Dachs“ aus Blender (models/rover.ts); solange er lädt (und als Rückfall) der alte Rover aus Grundformen.
+export function buildRover(): RoverModel { roverLaden(); return buildRoverNeu() || buildRoverAlt(); }
+function buildRoverAlt() {
   const g = new THREE.Group(), body = new THREE.Group();
   g.add(body);
   const hull = texMat(0xd8c8a0, 'hull_mil', { roughness: 0.6 }, 0.8), dark = texMat(0x4a4e56, 'hull_mil', { roughness: 0.6, metalness: 0.6 });
@@ -527,13 +530,16 @@ export function buildRover() {
   // Materialien neue Shader (Standbild). Die Leuchtpunkte oben bleiben.
   const head = { intensity: 0 };
   boxUV(g, 1 / 3);
-  return { g, body, wheels, drill, beacon, head };
+  return { g, body, wheels, drill, beacon, head, rads: [] as RoverRad[], neu: false as const };
 }
-type RoverModel = ReturnType<typeof buildRover>;
+type RoverModel = ReturnType<typeof buildRoverAlt> | RoverNeu;
+// Fahrzustand (seit 2026-11-24 mit Schwung, Federung und Seitenführung): vx/vz Tempo über Grund, vy senkrecht (Sprünge über Kuppen),
+// spd Tempo längs, yr Drehrate, steer Lenkeinschlag (rad), pitch/roll Lage der Karosserie, air in der Luft, susp Einfederung je Rad
 export const ROVER = {
   active: false, x: 0, y: 0, z: 0, yaw: 0, speed: 0, model: null as RoverModel | null,
   ship: { x: 0, y: 0, z: 0, yaw: 0 }, target: null as Asteroid | null, acc: 0, drilling: false, prompt: '',
   cap: 40, warn: 0,
+  vx: 0, vy: 0, vz: 0, yr: 0, steer: 0, pitch: 0, roll: 0, air: false, susp: [0, 0, 0, 0, 0, 0], slip: 0,
 };
 export const roverLoad = () => ITEM_IDS.reduce((a, k) => a + (P.rover?.[k] || 0), 0);
 
@@ -600,48 +606,119 @@ export function updateRover(dt: number) {
   if (!ROVER.active || !ROVER.model) return;
   const m = ROVER.model, R = ROVER;
   R.warn -= dt;
-  // Steuerung
-  const th = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), steer = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
-  if (th > 0) R.speed += 16 * dt; else if (th < 0) R.speed -= (R.speed > 0 ? 26 : 10) * dt; else R.speed *= Math.pow(0.35, dt);
-  R.speed = clamp(R.speed, -9, keys.ShiftLeft || keys.ShiftRight ? 36 : 26);
-  R.yaw += steer * 1.25 * dt * clamp(Math.abs(R.speed) / 8, 0.25, 1) * Math.sign(R.speed || 1);
-  const fx = -Math.sin(R.yaw), fz = -Math.cos(R.yaw);
-  let nx = R.x + fx * R.speed * dt, nz = R.z + fz * R.speed * dt;
-  // Steigung bremst, Wasser/Lava ist eine Grenze
-  const climb = (heightAt(nx, nz) - heightAt(R.x, R.z)) / Math.max(0.01, Math.abs(R.speed * dt));
-  if (climb > 0.75) { R.speed *= 0.85; nx = R.x; nz = R.z; }
+  // Modell aus Blender nachgeladen: austauschen
+  if (!m.neu && roverBereit()) { const n = buildRoverNeu(); if (n) { scene.remove(m.g); ROVER.model = n; scene.add(n.g); return; } }
+  // ---------- Fahren (seit 2026-11-24): Schwung, Hangabtrieb, Seitenführung, Federung, Sprünge über Kuppen ----------
+  // Vorher wurde der Rover einfach auf die Geländehöhe gesetzt und fuhr wie auf Schienen (Tempo längs, keine Trägheit, keine Federung).
+  const th = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), stIn = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
+  const boost = !!(keys.ShiftLeft || keys.ShiftRight), ice = curType === PTYPE.eis || (curType as any)?.rock === 'ice';
+  const GR = 9.0, VMAX = boost ? 33 : 24, ENG = boost ? 9.0 : 7.0, BRAKE = 15, ROLL = 0.35, WB = 4.1, DRAG = 0.0045;
+  const fx = -Math.sin(R.yaw), fz = -Math.cos(R.yaw), rx0 = Math.cos(R.yaw), rz0 = -Math.sin(R.yaw);
+  // Gelände unter den sechs Rädern: Ebene durch die Radpunkte (vorn/hinten, links/rechts)
+  const hAt = (lx: number, lz: number) => heightAt(R.x + rx0 * lx - fx * lz, R.z + rz0 * lx - fz * lz);      // lz: −vorn … +hinten (Spielachsen)
+  const RW = [[-1.6, -2.05], [1.6, -2.05], [-1.6, 0], [1.6, 0], [-1.6, 2.05], [1.6, 2.05]], gh = RW.map(([lx, lz]) => hAt(lx, lz));
+  const front = (gh[0] + gh[1]) / 2, back = (gh[4] + gh[5]) / 2, left = (gh[0] + gh[2] + gh[4]) / 3, right = (gh[1] + gh[3] + gh[5]) / 3;
+  const ground = (front + back + (gh[2] + gh[3]) / 2 * 2) / 4, gPitch = Math.atan2(front - back, WB), gRoll = Math.atan2(right - left, 3.2);
+  // Tempo längs und quer im Bezug des Fahrzeugs
+  let vF = R.vx * fx + R.vz * fz, vL = R.vx * rx0 + R.vz * rz0;
+  const onGround = !R.air;
+  if (onGround) {
+    // Antrieb und Bremse
+    if (th > 0) vF += (vF < -0.5 ? BRAKE : vF < VMAX ? ENG * (1 - 0.6 * clamp(vF / VMAX, 0, 1)) : 0) * dt;      // Zugkraft nimmt mit dem Tempo ab
+    else if (th < 0) vF -= (vF > 0.5 ? BRAKE : ENG * 0.6) * dt;
+    vF -= Math.sign(vF) * Math.min(Math.abs(vF), (ROLL + (th === 0 ? 0.5 : 0)) * dt);      // Rollwiderstand, ohne Gas etwas mehr (Motorbremse)
+    vF -= vF * Math.abs(vF) * DRAG * dt;                                                 // Luft- und Bodenwiderstand
+    vF = clamp(vF, -9, VMAX + 4);
+    // Hangabtrieb: Schwerkraft längs der Fläche (bergab schneller, bergauf langsamer; zu steil = kein Hochkommen). Steht der Rover ohne Gas
+    // langsam auf flachem Hang, hält die Feststellbremse.
+    const slopeF = Math.sin(gPitch), slopeL = Math.sin(gRoll);
+    const hold = th === 0 && Math.abs(vF) < 1.2 && Math.abs(slopeF) < 0.45 && Math.abs(slopeL) < 0.5;
+    if (!hold) { vF -= GR * slopeF * dt; vL -= GR * slopeL * dt * 0.6; } else { vF *= Math.pow(0.02, dt); }
+    // Seitenführung: Quertempo wird von den Reifen aufgefangen (auf Eis deutlich weniger: der Rover rutscht in Kurven)
+    const grip = ice ? 3.5 : 7.5;
+    R.slip = Math.abs(vL);
+    vL *= Math.exp(-grip * dt);
+    // Lenkung: Einschlag nimmt mit dem Tempo ab; Drehrate nach Einspurmodell, weich nachgeführt
+    const maxSt = 0.55 - 0.45 * clamp(Math.abs(vF) / 24, 0, 1);
+    R.steer += (stIn * maxSt - R.steer) * Math.min(1, dt * 6);
+    // Querbeschleunigung begrenzt (Reifen halten so viel, wie sie halten: normal 8 m/s², auf Eis 4): schnelle Kurven werden weiter
+    const yrMax = (ice ? 5.5 : 8) / Math.max(2, Math.abs(vF));
+    const wantYr = clamp((vF * Math.tan(R.steer)) / WB, -yrMax, yrMax) + (Math.abs(vF) < 0.8 ? stIn * 0.35 : 0);      // im Stand ein wenig auf der Stelle drehen
+    R.yr += (wantYr - R.yr) * Math.min(1, dt * (ice ? 4.5 : 8));
+  } else { R.steer *= Math.pow(0.3, dt); R.yr *= Math.pow(0.6, dt); }
+  R.yaw += R.yr * dt;
+  const fx2 = -Math.sin(R.yaw), fz2 = -Math.cos(R.yaw), rx2 = Math.cos(R.yaw), rz2 = -Math.sin(R.yaw);
+  // Bewegung bleibt in der alten Richtung: Hat sich das Fahrzeug gedreht, erscheint das im nächsten Bild als Quertempo, das die Reifen
+  // abbauen (normal schnell, auf Eis langsam: der Rover driftet)
+  R.vx = fx * vF + rx0 * vL; R.vz = fz * vF + rz0 * vL; R.speed = vF;
+  let nx = R.x + R.vx * dt, nz = R.z + R.vz * dt;
+  // Wasser und Lava sind eine Grenze, ebenso der Kartenrand
   if (liquidAt(nx, nz)) {
     const L = curType?.liquid;
     if (R.warn <= 0) { radio('SYSTEM', L?.deadly ? 'Lava! Zu heiß für den Rover.' : `${L?.n || 'Wasser'}: Der Rover kann hier nicht weiter.`); R.warn = 3; }
-    nx = R.x; nz = R.z; R.speed *= 0.3;
+    nx = R.x; nz = R.z; R.vx *= -0.2; R.vz *= -0.2;
   }
-  if (Math.abs(nx) > SURF.limit || Math.abs(nz) > SURF.limit) { nx = R.x; nz = R.z; R.speed = 0; }
-  // Kollision mit Lagerstätten, Station, Schiff
-  const obst: { x: number; z: number; r: number }[] = world.asteroids.map(a => ({ x: a.x, z: a.z, r: a.r * 0.85 + 1.6 }));
+  if (Math.abs(nx) > SURF.limit || Math.abs(nz) > SURF.limit) { nx = R.x; nz = R.z; R.vx = R.vz = 0; }
+  // Kollision mit Lagerstätten, Station, Schiff, Wracks: hinausschieben, Tempo in die Wand weg (mit etwas Rückprall)
+  const obst: { x: number; z: number; r: number }[] = world.asteroids.map(a => ({ x: a.x, z: a.z, r: a.r * 0.85 + 2.0 }));
   for (const s of world.stations) obst.push({ x: s.x, z: s.z, r: 34 }, { x: s.dock.x, z: s.dock.z, r: 6 });
-  obst.push({ x: R.ship.x, z: R.ship.z, r: stats().radius * 0.75 + 1.6 });
-  for (const w of SALV.wrecks) obst.push({ x: w.x, z: w.z, r: w.r + 2 });
-  for (const o of obst) { const d = Math.hypot(nx - o.x, nz - o.z); if (d < o.r) { nx = o.x + (nx - o.x) / d * o.r; nz = o.z + (nz - o.z) / d * o.r; R.speed *= 0.6; } }
+  obst.push({ x: R.ship.x, z: R.ship.z, r: stats().radius * 0.75 + 2.0 });
+  for (const w of SALV.wrecks) obst.push({ x: w.x, z: w.z, r: w.r + 2.4 });
+  for (const o of obst) {
+    const d = Math.hypot(nx - o.x, nz - o.z);
+    if (d >= o.r) continue;
+    const ux = (nx - o.x) / d, uz = (nz - o.z) / d, vn = R.vx * ux + R.vz * uz;
+    nx = o.x + ux * o.r; nz = o.z + uz * o.r;
+    if (vn < 0) { R.vx -= ux * vn * 1.3; R.vz -= uz * vn * 1.3; if (vn < -6) { snd(70, 0.25, 'triangle', 0.06, -30); burst(nx - ux * 2, R.y + 1, nz - uz * 2, '#6a6058', 12, 6, 0.6); } }
+  }
   R.x = nx; R.z = nz;
-  R.y = heightAt(R.x, R.z);
-  // Lage am Gelände ausrichten
-  const s = 2.2, hf = heightAt(R.x + fx * s, R.z + fz * s), hb = heightAt(R.x - fx * s, R.z - fz * s);
-  const rx = Math.cos(R.yaw), rz = -Math.sin(R.yaw), hr = heightAt(R.x + rx * s, R.z + rz * s), hl = heightAt(R.x - rx * s, R.z - rz * s);
+  // Senkrecht: am Boden folgt der Rover dem Gelände (das Tempo nach oben bleibt erhalten); fällt der Boden schneller weg als die Schwerkraft
+  // zieht, hebt er ab und landet mit Federschlag
+  const gNow = (heightAt(R.x - fx2 * 2.05, R.z - fz2 * 2.05) + heightAt(R.x + fx2 * 2.05, R.z + fz2 * 2.05) + 2 * heightAt(R.x, R.z)) / 4;
+  if (!R.air) {
+    const vyG = dt > 0 ? (gNow - R.y) / dt : 0;
+    if (vyG < R.vy - GR * dt * 4 && vyG < -5 && Math.abs(vF) > 14) { R.air = true; R.vy = Math.max(R.vy, 0) * 0.6; }      // Kuppe: der Boden fällt weg
+    else { R.vy = clamp(vyG, -30, 30); R.y = gNow; }
+  }
+  if (R.air) {
+    const hAir = R.y - gNow; R.vy -= (GR * 1.8 + (hAir > 3 ? 8 : 0)) * dt; R.y += R.vy * dt;      // in der Luft schwerer als am Boden: kurze Sprünge statt Segeln
+    if (R.y <= gNow) {
+      const hard = -R.vy; R.y = gNow; R.vy = 0; R.air = false;
+      if (hard > 4) { snd(60 + Math.random() * 20, 0.3, 'triangle', clamp(hard / 60, 0.03, 0.12), -30); for (let i = 0; i < 10; i++) puff(R.x + rand(-2, 2), R.y + 0.3, R.z + rand(-2, 2), rand(-4, 4), rand(1, 4), rand(-4, 4), '#3a342c', 1.2); R.pitch -= clamp(hard * 0.008, 0, 0.12); }
+    }
+  }
+  // Karosserie: Lage aus der Geländeebene, dazu Einnicken beim Bremsen/Beschleunigen und Neigen in der Kurve (gefedert, weich)
+  const aF = th > 0 ? 1 : th < 0 ? -1 : 0, aL = vF * R.yr;
+  const wantP = (R.air ? R.pitch : gPitch) - aF * 0.025 * (onGround ? 1 : 0), wantR = (R.air ? R.roll : gRoll) - clamp(aL * 0.006, -0.08, 0.08);
+  R.pitch += (wantP - R.pitch) * Math.min(1, dt * (R.air ? 1.5 : 9)); R.roll += (wantR - R.roll) * Math.min(1, dt * (R.air ? 1.5 : 9));
   m.g.position.set(R.x, R.y, R.z);
   m.g.rotation.order = 'YXZ';
-  // Neigung um die Querachse (Bug hoch, wenn vorn höher) und um die Längsachse: +z hebt die rechte Seite, also hoch, wenn rechts der Boden
-  // höher liegt (bis 24.11.2026 stand hier hl − hr: Auf Querhängen kippte der Rover gegen den Hang)
-  m.g.rotation.set(Math.atan2(hf - hb, 2 * s), R.yaw, Math.atan2(hr - hl, 2 * s));
-  for (const w of m.wheels) w.rotation.x += R.speed * dt / 0.75;
+  m.g.rotation.set(R.pitch, R.yaw, R.roll);
+  // Räder: einfedern bis zum Boden unter jedem Rad (in Senken aus-, auf Buckeln einfedern), drehen mit dem Tempo, vorn lenken
+  m.g.updateMatrixWorld(true);
+  const spinD = vF * dt / RAD_R;
+  if (m.rads.length) m.rads.forEach((w, i) => {
+    const lx = w.rest.x, lz = w.rest.z, hub = _f.set(lx, w.rest.y, lz).applyMatrix4(m.g.matrixWorld);
+    const want = R.air ? -0.32 : clamp(heightAt(hub.x, hub.z) + RAD_R - hub.y, -0.32, 0.26);
+    R.susp[i] += (want - R.susp[i]) * Math.min(1, dt * 18);
+    w.mount.position.set(w.rest.x, w.rest.y + R.susp[i], w.rest.z);
+    w.mount.rotation.y = w.front ? R.steer : 0;
+    w.spin.rotation.x -= spinD;
+  });
+  else for (const w of m.wheels) w.rotation.x += vF * dt / 0.75;
   (m.beacon.material as THREE.SpriteMaterial).opacity = Math.sin(G.time * 6) > 0 ? 1 : 0.2;
-  if (Math.abs(R.speed) > 4 && Math.random() < 0.25) puff(R.x - fx * 2.6 + rand(-1, 1), R.y + 0.4, R.z - fz * 2.6 + rand(-1, 1), rand(-2, 2), rand(1, 3), rand(-2, 2), '#3a342c', 1.0);
+  // Staub hinter den Rädern: mit dem Tempo, mehr beim Rutschen
+  if (!R.air && (Math.abs(vF) > 4 || R.slip > 2) && Math.random() < 0.18 + Math.min(0.5, R.slip * 0.08)) {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    puff(R.x - fx2 * 2.4 + rx2 * side * 1.6 + rand(-0.4, 0.4), R.y + 0.3, R.z - fz2 * 2.4 + rz2 * side * 1.6 + rand(-0.4, 0.4), -R.vx * 0.15 + rand(-1.5, 1.5), rand(0.8, 2.5), -R.vz * 0.15 + rand(-1.5, 1.5), ice ? '#cfd8e0' : '#3a342c', 1.0);
+  }
   // Bohren
-  const dpx = R.x + fx * 4.2, dpz = R.z + fz * 4.2, dpy = R.y + 1.1;
+  const dpx = R.x + fx2 * 4.2, dpz = R.z + fz2 * 4.2, dpy = R.y + 1.1;
   R.target = null;
   let bd = 1e9;
   for (const a of world.asteroids) { const d = d3(dpx, dpy, dpz, a.x, a.y, a.z) - a.r; if (d < 3.5 && d < bd) { bd = d; R.target = a; } }
   R.drilling = !!(mouse.down || keys.Space) && !!R.target && !G.dead;
-  m.drill.rotation.y += (R.drilling ? 30 : 2) * dt;
+  if (m.neu) m.drill.rotation.z += (R.drilling ? 30 : 2) * dt; else m.drill.rotation.y += (R.drilling ? 30 : 2) * dt;
   if (R.drilling && R.target) {
     const a = R.target;
     laserSound(true, 30);

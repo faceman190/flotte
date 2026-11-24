@@ -25,7 +25,7 @@ float bjN(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f)
 
 // Lack und Stahl: leichte Flecken und Laufspuren aus der Lage im Modell (wie die Blender-Materialien, nur ohne Texturen);
 // Warnband: diagonale schwarze Streifen
-function prep(src: THREE.MeshStandardMaterial): THREE.Material {
+export function prep(src: THREE.MeshStandardMaterial): THREE.Material {
   const key = src.name.replace(/\.\d+$/, '');
   if (MATS[key]) return MATS[key];
   const m = src.clone();
@@ -73,6 +73,8 @@ export function decoLaden(name: string): Promise<boolean> {
   }, e => { console.warn('Bau nicht geladen:', name, e); delete DECO_P[name]; return false; }));
 }
 export const decoBereit = (name: string) => !!DECO[name];
+/** Vorlage eines geladenen Baus (erstes Kind = Szene der Datei), z. B. für Modelle mit beweglichen Teilen (models/rover.ts) */
+export const decoVorlage = (name: string) => DECO[name] || null;
 
 // Netze einer Bojendatei in Dateikoordinaten (null, solange das Modell nicht geladen ist)
 export function bojeTeile(name: string): BojeTeil[] | null {
