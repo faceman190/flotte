@@ -32,6 +32,8 @@ interface DeckJson {
   // für die Sichtprüfung, Schott (halbe Öffnung, halbe Dicke), Ecksäule ab Zellmitte, Decke (Gang, Raum), Strahler (Höhe, Reichweite)
   masse?: { wand?: number; tuer?: number; tuerSicht?: number; schott?: number[]; eck?: number; decke?: number[]; spot?: number[] };
   typ?: string; licht2?: [string, string];      // typ 'rund': Rundhalle (seit 2026-11-19), eigene Daten (RundJson), kein Zellraster
+  fenster?: number[][][];      // Fensterwände zwischen zwei Räumen (Zellpaare, seit 2026-11-24 im Pumpwerk): Die Sichtprüfung sieht hindurch
+  hoch?: Record<string, number>;      // Räume mit eigener Deckenhöhe (Buchstabe → m, Schmelzhalle des Pumpwerks): Kamera und Sprung reichen höher
 }
 // Rundhalle (asset-src/neu/bastion/rh_spiel.py, docs/rundhalle.md): Laufflächen und Standflächen als Vielecke, Orte mit Deckenhöhe; alles in
 // Plankoordinaten (Hallenmitte im Ursprung, x nach Osten, y nach Norden, Hangartor bei x = kx0)
@@ -72,7 +74,8 @@ const LMCAP = { value: 1 }, LMSHADE = { value: 0 }, LMSPEC = { value: 1 };      
 // dem Hütten-Baukasten (6-m-Raster, asset-src/neu/huette): nur Daten, ohne Bausteinmodell (es steht ganz im Lichtraum 2). Die Artifact-Fassung,
 // in die dessen Modell nicht passt, nimmt das alte Hüttendeck aus dem Bastion-Baukasten.
 // Bastion seit 2026-11-19: Rundhalle (nur Daten, ganz im Lichtraum 2); ohne deren Dateien (Artifact-Fassung) das alte Deck 3 nach Plan D
-const DECKS: Record<string, [string, string][]> = { bastion: [['deck_rund', ''], ['deck_bastion', 'BastionDeck']], eisenkrone: [['deck_huette_ek', ''], ['deck_eisenkrone', 'EisenkroneDeck']] };
+// Pumpwerk Reifschleier seit 2026-11-24: Deck aus dem Eiswerk-Baukasten (asset-src/neu/eiswerk, docs/eiswerk-baukasten.md), ganz im Lichtraum 2
+const DECKS: Record<string, [string, string][]> = { bastion: [['deck_rund', ''], ['deck_bastion', 'BastionDeck']], eisenkrone: [['deck_huette_ek', ''], ['deck_eisenkrone', 'EisenkroneDeck']], pumpwerk: [['deck_pumpwerk', '']] };
 const LOADED: Record<string, { data: DeckJson; parts: Record<string, Part[]>; neu: boolean }> = {}, LOADING: Record<string, Promise<boolean>> = {};
 function pickDeck(id: string): [string, string, boolean] | null {
   const W = window as any;
@@ -205,7 +208,7 @@ async function lmMaterials(prefix: string) {
 // die Marke „schmaler Streifen“ (Fase an einer Kante: dort sitzt der Kantenabrieb).
 interface L2Mat { kind: string; col?: number[]; metal?: number; rough?: number; var?: number; rvar?: number; scale?: number; emit?: number[] | null; es?: number; grime?: boolean; wear?: number; bump?: number; bscale?: number; streak?: number; studs?: boolean; stripes?: boolean; a?: number[]; c?: number[]; duty?: number; dir?: string; k?: number; spot?: boolean }
 interface L2Json { raeume: { name: string; zellen: number[][]; lit: string }[]; mats: Record<string, L2Mat> }
-const LICHT2: Record<string, [string, string][]> = { bastion: [['lichtraum2_bastion', 'Lichtraum2Bastion']], eisenkrone: [['lichtraum2_huette_ek', 'Lichtraum2HuetteEk']] };
+const LICHT2: Record<string, [string, string][]> = { bastion: [['lichtraum2_bastion', 'Lichtraum2Bastion']], eisenkrone: [['lichtraum2_huette_ek', 'Lichtraum2HuetteEk']], pumpwerk: [['lichtraum2_pumpwerk', 'Lichtraum2Pumpwerk']] };
 let L2NOISE: [THREE.DataTexture, THREE.DataTexture] | null = null;
 // Rauschbilder (kachelbar, 256 Punkte): A = zwei unabhängige Fleckenmuster (r, g) und das Korn (b); N = Gefälle des Korns für das Relief
 function l2Noise() {
@@ -821,6 +824,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
   // Ein Strahl läuft durch das Zellraster; an jeder Zellgrenze muss die Seite offen sein (derselbe Raum, Gang an Gang) oder eine Tür haben,
   // durch deren Öffnung er geht. Geprüft werden je Zelle die Mitte und vier Punkte nahe den Ecken.
   const doors = new Set<string>(); for (const [[r1, c1], [r2, c2]] of D.tueren) { doors.add(`${r1},${c1},${r2},${c2}`); doors.add(`${r2},${c2},${r1},${c1}`); }
+  const wins = new Set<string>(); for (const [[r1, c1], [r2, c2]] of D.fenster || []) { wins.add(`${r1},${c1},${r2},${c2}`); wins.add(`${r2},${c2},${r1},${c1}`); }      // Fenster: über die ganze Zellbreite durchsichtig
   const sees = (x: number, y: number, tx: number, ty: number) => {
     let c = Math.round(x / C), r = Math.round(-y / C); const tc = Math.round(tx / C), tr = Math.round(-ty / C), dx = tx - x, dy = ty - y;
     for (let n = 0; n < 64; n++) {
@@ -828,6 +832,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
       const t1 = dx > 0 ? ((c + 0.5) * C - x) / dx : dx < 0 ? ((c - 0.5) * C - x) / dx : 1e9, t2 = dy > 0 ? ((-r + 0.5) * C - y) / dy : dy < 0 ? ((-r - 0.5) * C - y) / dy : 1e9;
       const ew = t1 < t2, t = Math.min(t1, t2), nr = ew ? r : r + (dy > 0 ? -1 : 1), nc2 = ew ? c + (dx > 0 ? 1 : -1) : c, a = at(r, c), b = at(nr, nc2);
       if (b === '.') return false;
+      if (up(a) !== up(b) && wins.has(`${r},${c},${nr},${nc2}`)) { r = nr; c = nc2; continue; }
       if (up(a) !== up(b)) {
         if (!doors.has(`${r},${c},${nr},${nc2}`)) return false;
         const off = ew ? y + dy * t - (-r * C) : x + dx * t - c * C;      // Abstand von der Türmitte
@@ -871,7 +876,7 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     group, rects, blocks, spots, routes, chats, tris, map: { x: gx(D.karte_xy[1]), z: gz(D.karte_xy[0]) }, name: D.ort.G,
     inside: (z: number) => z < hz0 - 0.2 && z > zMin,
     area: (x, z) => D.ort[up(cellCh(x, z))] || D.ort.G,
-    ceil: (x, z) => (isG(cellCh(x, z)) ? MS.decke[0] : MS.decke[1]),
+    ceil: (x, z) => { const ch = cellCh(x, z); return isG(ch) ? MS.decke[0] : D.hoch?.[up(ch)] ? D.hoch[up(ch)] - 1.4 : MS.decke[1]; },
     view: (x, z) => { camX = x; camZ = z; },      // Kamera der Außensicht (Innenraum); fern = keine
     update: (x, z) => {
       if (Math.hypot(x - lastX, z - lastZ) > 0.6 || Math.hypot(camX - lookCX, camZ - lookCZ) > 0.6) look(x, z);

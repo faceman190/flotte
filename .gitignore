@@ -37,6 +37,8 @@ Thumbs.db
 
 # Rohes Hüttendeck der Eisenkrone im Lichtraum 2 (81 MB); neu erzeugen: asset-src/neu/huette/hk_deck_lauf.py -- backen
 /asset-src/glb/base/Lichtraum2HuetteEk.glb
+# Rohes Deck des Pumpwerks im Lichtraum 2 (147 MB); neu erzeugen: asset-src/neu/eiswerk/ew_lauf.py -- backen
+/asset-src/glb/base/Lichtraum2Pumpwerk.glb
 
 # Rohe Rundhalle der Bastion im Lichtraum 2 (80 MB); neu erzeugen: asset-src/neu/bastion/rh_back_lauf.py (docs/rundhalle.md)
 /asset-src/glb/base/Lichtraum2Rund.glb

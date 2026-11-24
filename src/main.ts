@@ -895,7 +895,7 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() => false), loadCharModels().catch(() => false), loadDeck('bastion').catch(() => false), loadHangar().catch(() => false), loadEisenkrone().catch(() => false),
   loadRockModel().catch(() => false)]).then(async () => {     // Felsmodell vor dem Aufbau der Menüszene (sonst stehen dort die alten berechneten Brocken)
   // Hintergrund-Pakete gleich auspacken, solange der Ladebildschirm steht. Was beim ersten Besuch noch aus dem Netz kommt, wartet nicht länger als 6 s.
-  const bg = Promise.all([hangarBgLoad().catch(() => false), loadDeck('eisenkrone').catch(() => false), preloadMeshRooms(), preloadBases(), preloadCities()]).catch(() => false);
+  const bg = Promise.all([hangarBgLoad().catch(() => false), loadDeck('eisenkrone').catch(() => false), loadDeck('pumpwerk').catch(() => false), preloadMeshRooms(), preloadBases(), preloadCities()]).catch(() => false);
   setTimeout(preloadSfx, 1500);   // Schritte, Klicks, Türen (Klänge entpackt der Browser nebenher)
   setShipModel('venom', 'Orange', true);
   showMainMenu();
