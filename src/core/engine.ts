@@ -126,6 +126,27 @@ export function setQuality(hi: boolean) {
 // Zweite Ebene über dem Bild (eigene Szene, eigene Kamera, eigenes Licht): die Waffe in der Ich-Sicht. Sie wird nach dem Bild mit leerem
 // Tiefenpuffer gezeichnet und kann deshalb nie in Wände ragen; ihr Licht hängt nicht an den Lampen der Welt.
 export const overlay: { scene: THREE.Scene | null; camera: THREE.Camera | null } = { scene: null, camera: null };
+// Eigener Körper in der Ich-Sicht (seit 2026-11-24, game/mannyAvatar.ts): Die Spielerfigur liegt dann auf der Ebene BODY_LAYER. Das Hauptbild
+// zeichnet sie nicht; danach wird dieselbe Szene noch einmal nur mit dieser Ebene gezeichnet – mit gelöschter Tiefe und eigener Nahgrenze.
+// So ragen Arme und Waffe nie in Wände (wie Unreals „First Person Rendering“), die Figur steht trotzdem im Licht der Szene, und die
+// Nahgrenze des Hauptbilds (0,5 m auf Planeten) schneidet die Hände nicht ab. on setzt die Figur in jedem Bild neu.
+export const BODY_LAYER = 7;
+export const bodyPass = { on: false, near: 0.03, far: 30 };
+let bodyLightT = 0;
+function renderBody() {
+  // Lichter gelten nur für Ebenen, auf denen sie selbst liegen: alle auch auf die Körper-Ebene legen (neue Lichter spätestens nach 0,4 s)
+  const now = performance.now();
+  if (now - bodyLightT > 400) { bodyLightT = now; scene.traverse(o => { if ((o as any).isLight) o.layers.enable(BODY_LAYER); }); }
+  const n = camera.near, f = camera.far, mask = camera.layers.mask, bg = scene.background, au = renderer.shadowMap.autoUpdate, mw = scene.matrixWorldAutoUpdate;
+  camera.near = bodyPass.near; camera.far = bodyPass.far; camera.layers.set(BODY_LAYER); camera.updateProjectionMatrix();
+  scene.background = null; renderer.shadowMap.autoUpdate = false; scene.matrixWorldAutoUpdate = false;      // Himmel nicht noch einmal, Schatten und Lagen vom Hauptbild
+  renderer.autoClear = false; renderer.setRenderTarget(null); renderer.clearDepth();
+  try { renderer.render(scene, camera); }
+  finally {
+    renderer.autoClear = true; scene.background = bg; renderer.shadowMap.autoUpdate = au; scene.matrixWorldAutoUpdate = mw;
+    camera.near = n; camera.far = f; camera.layers.mask = mask; camera.updateProjectionMatrix();
+  }
+}
 // Vor dem Bild: Wer hier eine Funktion einträgt, darf erst selbst etwas zeichnen (Schiffsansicht im Werft-Terminal, src/ui/shipPreview.ts).
 // Das Spielbild übermalt es danach wieder.
 export const prePass: { fn: null | (() => void) } = { fn: null };
@@ -235,6 +256,7 @@ export function render() {
   if (vignettePass) vignettePass.uniforms.time.value = (performance.now() % 10000) / 1000;
   if (view.hiQ && composer) composer.render();
   else renderer.render(scene, camera);
+  if (bodyPass.on) { bodyPass.on = false; renderBody(); }
   if (overlay.scene && overlay.camera) {
     renderer.autoClear = false; renderer.setRenderTarget(null); renderer.clearDepth();
     renderer.render(overlay.scene, overlay.camera);

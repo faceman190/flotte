@@ -20,7 +20,7 @@ import { onCoop, coopSend, coopNow, pack, CoopGroup } from './coop';
 import { gunReady, gunFired, gunUpdate, GUN, AIM, aimUpdate, aimFov, aimShake, aimK, gunSpread, gunFalloff, camShake, hurtSound, noteKill, whiz } from './footgun';
 import { drawFootRing, drawPrompt, drawFootCross } from '../ui/footHud';
 import { throwGrenade, updateGrenades } from './granate';
-import { noteToss } from './avatar';
+import { noteToss, bodyView, fpBody } from './avatar';
 import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, footPace, footBrake, footAccel, setIntent, makeAvatar, driveAvatar, avatarMuzzle, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, figGear, type Avatar, type RemoteFig } from './avatar';
 
 // =====================================================================================
@@ -71,6 +71,7 @@ let shotsN = 0, vmShotsN = 0;
 let vm: ViewModel | null = null, mflash: THREE.PointLight | null = null, WALL_R = 0.42;     // Waffe im Bild (eigene Ebene), Mündungslicht in der Welt, Abstand zur Wand
 const sway = { x: 0, y: 0, yaw: 0, pitch: 0 };
 let me: Avatar | null = null;                                              // eigene Figur (Außensicht, src/game/avatar.ts)
+let fpOn = false;                                                          // Ich-Sicht zeigt gerade den ganzen Körper (avatar.ts fpBody)
 export { VIEW };
 // Mitspieler in derselben Mine (Netz: Eingang, Lage, Blick). Koop (src/game/coop.ts): der Gastgeber steuert die Wächter,
 // Schalter, Tor und Kisten gelten für alle, aus jeder Kiste bekommt jeder seinen eigenen Fund.
@@ -945,7 +946,7 @@ function shoot() {
   shotSound(w); if (w.n > 1) camShake(0.32);
   const sp = gunSpread(w.spread);
   const cp = camera.getWorldPosition(_v).clone();
-  const tpm = VIEW.tp ? avatarMuzzle(me) : null;
+  const tpm = VIEW.tp || fpOn ? avatarMuzzle(me) : null;
   const a = tpm || (vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : gun ? gun.localToWorld(_w.set(0, 0.008, -0.6)).clone() : cp.clone());
   if (tpm) flash(tpm.x, tpm.y, tpm.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);
   let end: THREE.Vector3 | null = null;
@@ -1169,8 +1170,9 @@ export function updateDungeon(dt: number) {
   }
   // eigene Figur (Außensicht): Laufen nach Richtung, Anschlag nach Schüssen, Neigung mit dem Blick
   if (me) {
-    me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on });
+    const body = VIEW.tp || bodyView();      // Figur zeigen: Außensicht, oder Ich-Sicht mit ganzem Körper
+    me.s.g.visible = body && (VIEW.tp || DUN.dead <= 0);
+    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on });
   }
   for (const m of DUN.msg) m.life -= dt;
   DUN.msg = DUN.msg.filter(m => m.life > 0);
@@ -1193,8 +1195,9 @@ export function dungeonCamera() {
     head.target.position.copy(camera.position).add(_v.set(0, -0.04, -1).applyQuaternion(camera.quaternion).multiplyScalar(8)); head.target.updateMatrixWorld();
   }
   if (mflash) { mflash.position.copy(camera.localToWorld(_w.set(0.1, -0.08, -0.7))); mflash.intensity = DUN.flash > 0 ? 34 : 0; }
-  if (vm) { const want = VIEW.tp ? null : vm.scene; if (overlay.scene !== want) { overlay.scene = want; overlay.camera = want ? vm.cam : null; } }
-  if (vm && !VIEW.tp) {
+  fpOn = !VIEW.tp && !!me && fpBody(camera, aimK());      // Ich-Sicht: der eigene Körper statt der Waffe allein
+  if (vm) { const want = VIEW.tp || fpOn ? null : vm.scene; if (overlay.scene !== want) { overlay.scene = want; overlay.camera = want ? vm.cam : null; } }
+  if (vm && !VIEW.tp && !fpOn) {
     vm.cam.aspect = view.W / view.H; vm.cam.updateProjectionMatrix();
     // Pendeln: die Waffe bleibt bei schnellen Drehungen kurz zurück
     const dyaw = DUN.yaw - sway.yaw, dp = DUN.pitch - sway.pitch; sway.yaw = DUN.yaw; sway.pitch = DUN.pitch;

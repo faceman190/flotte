@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MANIFEST, whenIdle } from '../core/assets';
+import { BODY_LAYER, bodyPass } from '../core/engine';
 // @ts-ignore – reines JavaScript (aus der Manny-Demo übernommen), ohne Typen
 import { MannyAnimator } from './manny/MannyAnimator.js';
 import { buildHandWeapon } from './mineArt';
@@ -27,6 +28,9 @@ import { makeLyraGun, driveLyraGun, LYRA_SPEC, type LyraGun } from './lyraGuns';
 //    nach oben und unten, Rückstoß, Nachladen und Treffer kommen aus den Clips des Lyra-Pakets (manny/WeaponLayer.js: nur der
 //    Oberkörper, die Beine laufen weiter wie ohne Waffe). In Stationen und Schiffen bleibt die Figur unbewaffnet.
 //    Die Soldatenfigur bleibt unsichtbar im Halter.
+//  - Ich-Sicht mit ganzem Körper (seit 2026-11-24, nach Unreals First-Person-Vorlage): dieselbe Figur, dieselben Bewegungen wie in der
+//    Außensicht, die Kamera sitzt im Kopf (mannyFirstPerson unten). Die alte Ich-Sicht (Waffe allein vor der Kamera) bleibt nur, solange
+//    die Figur noch lädt oder abgeschaltet ist.
 //  - Tod: Die Figur fällt mit einem der Sturz-Clips um und bleibt liegen (seit 2026-11-23, vorher wechselte das Bild zum Soldaten).
 // =====================================================================================
 // brake / accel: Brems- und Anlaufrate der Spielphysik mit der Figur (1/s, 0 = Wert der Laufstelle) · url, body: nur für Tests
@@ -73,6 +77,7 @@ export interface MannyDrive {
   // löst Rückstoß bzw. Zucken aus), reload = Fortschritt des Nachladens 0..1, sonst −1
   // lyra: statt des Modells id eine der drei Waffen aus dem Lyra-Paket (mit eigenen Knochen: Verschluss, Magazin)
   weapon?: { id: string; lyra?: Kind; aim: boolean; shots: number; hits: number; reload: number; toss?: number } | null;      // toss: Zähler der Granatwürfe
+  fp?: boolean;                                      // Ich-Sicht: die Kamera sitzt im Kopf (danach mannyFirstPerson mit der Kamera aufrufen)
 }
 // Welche Haltung zu welcher Waffe gehört und wo die linke Hand greift (grip): Anteil der Strecke Griff → Mündung und Höhe unter der
 // Laufachse in Metern. Pistolen: beide Hände am Griff, wie der Clip sie hält. Gemessen am 23.11.2026 im Testfenster an der Figur.
@@ -89,7 +94,8 @@ const GRIP_LEFT = 0.07;                                         // die linke Han
 // Lyras Waffen (lyraGuns.ts): Modell im Rahmen des Waffenknochens, mit eigenen Clips für Verschluss und Magazin. Eine Kopie je Art für die Hand der Figur.
 const handGuns: Partial<Record<Kind, LyraGun>> = {};
 const lyraGun = (kind: Kind) => handGuns[kind] || (handGuns[kind] = makeLyraGun(kind) || undefined) || null;
-const gun = { id: '', g: null as THREE.Object3D | null, muzzle: new THREE.Vector3(), shown: false, lyra: null as LyraGun | null };
+// sight: Punkt auf der Visierlinie im Raum des Waffenmodells (beim Zielen in der Ich-Sicht rückt er vor das Auge)
+const gun = { id: '', g: null as THREE.Object3D | null, muzzle: new THREE.Vector3(), shown: false, lyra: null as LyraGun | null, sight: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, -1) };
 function setGun(id: string, lyra?: Kind) {
   if (!anim?.weapon) return;
   // Lyras Modell, sobald es geladen ist; bis dahin (und wenn es fehlt) das Modell des Spiels
@@ -98,12 +104,15 @@ function setGun(id: string, lyra?: Kind) {
   if (lg) {
     gun.g?.removeFromParent();
     gun.id = key; gun.g = lg.g; gun.lyra = lg; gun.muzzle.set(...LYRA_SPEC[lyra!].muzzle); lg.shots = -1;
+    gun.sight.set(0, 0, -LYRA_SPEC[lyra!].ads[1]); gun.fwd.set(1, 0, 0);      // Rahmen der Waffe: x = Lauf, z = oben
     anim.weapon.mount.add(lg.g); anim.weapon.grip = null;      // die Haltungen sind für diese Waffen gemacht: beide Hände wie im Clip
     return;
   }
   const w = buildHandWeapon(id); if (!w) return;               // Vorlage noch nicht geladen: im nächsten Bild wieder
   gun.g?.removeFromParent();
-  gun.id = id; gun.g = w.g; gun.lyra = null; gun.muzzle.copy(w.muzzle);
+  gun.id = id; gun.g = w.g; gun.lyra = null; gun.muzzle.copy(w.muzzle); gun.fwd.set(0, 0, -1);
+  // Visierlinie der Waffen des Spiels: knapp über ihrem höchsten Punkt (Zielfernrohr, Kimme), am Griff
+  gun.sight.set(0, Math.max(w.muzzle.y + 0.036, new THREE.Box3().setFromObject(w.g).max.y + 0.012), 0);
   anim.weapon.socket.add(w.g);
   const h = HOLD[id] || HOLD.k12, L = -w.muzzle.z, up = (BORE[h.kind] - w.muzzle.y) * (h.kind === 'pistol' ? 0.7 : 1);
   w.g.position.set(0, up, 0);
@@ -114,9 +123,64 @@ export function mannyMuzzle(out: THREE.Vector3): boolean {
   if (!gun.shown || !gun.g || !anim?.weapon?.mount.visible) return false;
   gun.g.updateWorldMatrix(true, false);
   gun.g.localToWorld(out.copy(gun.muzzle));
+  if (st.fp && anim.model.position.lengthSq() < 1e-8) out.add(fpShift);      // Ich-Sicht: die Figur steht in diesem Bild noch unverschoben (die Kamera kommt erst)
   return true;
 }
-const st = { lastY: 0, lx: 0, lz: 0, air: false, first: true, blocked: 0 };
+const st = { lastY: 0, lx: 0, lz: 0, air: false, first: true, blocked: 0, fp: false, layer: 0 };
+/** ist die Figur geladen und eingeschaltet? (dann zeigt auch die Ich-Sicht den ganzen Körper) */
+export const mannyReady = () => MANNY.on && !!anim;
+// Ich-Sicht: Wo der Halsansatz (neck_01) relativ zum Auge liegt, im Raum der Kamera: back dahinter, down darunter. Die Kamera neigt sich
+// mit dem Blick um den Hals wie ein Kopf – beim Blick nach unten wandert sie über die Brust, man sieht Bauch, Beine und Füße.
+// Unreals Vorlage zieht dafür die Wirbelsäule zurück und bindet den Kopf an die Kamera; hier wird die ganze Figur verschoben (die Füße
+// weichen dabei um wenige Zentimeter vom Boden ab) und der Kopf ausgeblendet.
+// adsFwd: beim Zielen rückt das Auge so weit an die Kimme heran (m), damit nicht der Schaft das Bild füllt
+export const FP = { back: 0.075, down: 0.165, ads: 1, adsFwd: 0.02 };
+const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _b = new THREE.Vector3();
+const _h = new THREE.Vector3(), _d = new THREE.Vector3(), _t = new THREE.Vector3(), _s = new THREE.Vector3(), _m = new THREE.Vector3();
+let headBone: THREE.Object3D | null = null, neckBone: THREE.Object3D | null = null;
+const fpShift = new THREE.Vector3();      // um so viel hat die Ich-Sicht die Figur im letzten Bild verschoben (Welt)
+function setLayer(l: number) { if (st.layer === l || !anim) return; st.layer = l; anim.model.traverse((o: THREE.Object3D) => o.layers.set(l)); }
+/**
+ * Ich-Sicht mit ganzem Körper: nach driveManny (mit fp) und nachdem die Kamera dieses Bildes steht. Schiebt die Figur so, dass ihr Kopf an
+ * der Kamera sitzt, blendet den Kopf aus und legt die Figur auf die Körper-Ebene (eigener Durchgang, engine.ts bodyPass).
+ * aim 0..1: Beim Zielen rückt die Visierlinie der Waffe vor das Auge. Gibt false zurück, wenn die Figur gerade nicht so gezeigt wird.
+ */
+export function mannyFirstPerson(cam: THREE.Camera, aim = 0): boolean {
+  if (!anim || !st.fp || !anim.model.parent || !anim.model.parent.visible) return false;
+  const model = anim.model as THREE.Object3D, holder = model.parent!, head = headBone || (headBone = model.getObjectByName('head') || null);
+  if (!head) return false;
+  head.scale.setScalar(0.001);                                  // Kopf weg (Haut und Haare hängen an diesem Knochen); der Animator setzt ihn im nächsten Bild zurück
+  holder.updateWorldMatrix(true, false); model.updateMatrixWorld(true); cam.updateMatrixWorld();
+  cam.getWorldDirection(_d);
+  const ads = aim > 0.001 && gun.shown && !!gun.g;
+  // Zielen: Der Lauf zeigt in den Haltungen nur ungefähr in Blickrichtung (wenige Grad daneben). Die ganze Figur so weit drehen, dass er genau
+  // dorthin zeigt – sonst stehen Kimme und Korn nicht hintereinander.
+  if (ads) {
+    _b.copy(gun.fwd).transformDirection(gun.g!.matrixWorld);
+    if (_b.dot(_d) > 0.8) {
+      _q.setFromUnitVectors(_b, _d); _q2.identity().slerp(_q, aim);
+      holder.getWorldQuaternion(_q); model.quaternion.premultiply(_q.clone().invert().multiply(_q2).multiply(_q));
+      model.updateMatrixWorld(true);
+    }
+  } _t.set(_d.x, 0, _d.z); if (_t.lengthSq() < 1e-6) _t.set(0, 0, -1); _t.normalize();
+  (neckBone || (neckBone = model.getObjectByName('neck_01') || head)).getWorldPosition(_h);
+  // Halsansatz hinter und unter das Auge, im Raum der Kamera (sie blickt nach −z)
+  _m.set(0, -FP.down, FP.back).applyQuaternion(cam.getWorldQuaternion(_q)).add(_s.setFromMatrixPosition(cam.matrixWorld)).sub(_h);
+  // Zielen: Visier auf die Blickachse (nur der Anteil quer zur Blickrichtung)
+  if (ads) {
+    _m.addScaledVector(_d, -FP.adsFwd * aim);
+    gun.g!.localToWorld(_s.copy(gun.sight)).add(_m);
+    _s.subVectors(_h.setFromMatrixPosition(cam.matrixWorld), _s); _s.addScaledVector(_d, -_s.dot(_d));
+    _m.addScaledVector(_s, aim * FP.ads);
+  }
+  fpShift.copy(_m);
+  model.getWorldPosition(_h).add(_m); holder.worldToLocal(_h); model.position.copy(_h);
+  model.updateMatrixWorld(true);
+  if (gun.g && st.layer === BODY_LAYER && gun.g.layers.mask !== (1 << BODY_LAYER)) st.layer = 0;      // neue Waffe in der Hand: Ebene neu setzen
+  setLayer(BODY_LAYER);
+  bodyPass.on = true;
+  return true;
+}
 const _mv = new THREE.Vector2(), _vel = new THREE.Vector2();
 // Bremsweg der Spielphysik nach dem Loslassen: Das Tempo fällt in allen drei Laufstellen mit rund 12–13 pro Sekunde
 // (interior.ts 12, onfoot.ts und dungeon.ts 13), der Rest des Wegs ist also Tempo × 0,08 s.
@@ -177,6 +241,8 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
     if (spd > 0.3) _mv.set(d.vx / spd, d.vz / spd); else _mv.set(0, 0);
     gait = gaitOf(spd);
   }
+  st.fp = !!d.fp && !d.dead;
+  if (!st.fp) setLayer(0);                                      // Außensicht: wieder im Hauptbild
   const wp = d.dead ? null : d.weapon || MANNY.test;
   if (wp) setGun(wp.id, wp.lyra);
   gun.shown = !!wp && !!gun.g && (gun.id === wp.id || gun.id === 'lyra:' + wp.lyra);
@@ -204,7 +270,7 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
 }
 /** Manny aus dem Halter nehmen (Schalter aus oder Figur neu gebaut) */
 export function releaseManny(soldier?: THREE.Object3D) {
-  st.first = true; gun.shown = false;
+  st.first = true; gun.shown = false; st.fp = false; setLayer(0);
   if (anim?.model.parent) anim.model.removeFromParent();
   if (soldier) soldier.visible = true;
 }

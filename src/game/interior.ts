@@ -26,6 +26,7 @@ import { stationTemplate } from '../models/stationModels';
 import { applyKit, kitMeta } from '../models/kit';
 import { HANGAR_BLOCKS } from '../data/hangarBlocks';
 import { VIEW, STANCE, footPace, footBrake, footAccel, setIntent, eyeH, syncAvatar, driveAvatar, tpCamPos, resetTpCam, readNetFlags, figGear, gearFromNet, type Avatar, type NetAct } from './avatar';
+import { bodyView, fpBody } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
 import { crewBesuch, crewSpruch, crewFetzen, crewDurchsage, crewEile, crewHooks } from './crewStimmen';
@@ -1271,13 +1272,13 @@ export function updateWalk(dt: number) {
     for (const q of persons) q.p.g.visible = deck.seen(q.x, q.z);
     for (const w of walkers) w.p.g.visible = deck.seen(w.x, w.z);
   }
-  // eigene Figur (Außensicht)
-  const tpOn = VIEW.tp && SEQ.t < 0;
+  // eigene Figur: Außensicht, oder Ich-Sicht mit ganzem Körper (avatar.ts bodyView, seit 2026-11-24)
+  const tpOn = SEQ.t < 0 && (VIEW.tp || bodyView());
   if (tpOn) me = syncAvatar(meHolder, me, figGear());
   meHolder.visible = tpOn && !!me;
   if (me && tpOn) {
     meHolder.matrix.copy(group.matrixWorld); meHolder.matrixWorldNeedsUpdate = true;
-    driveAvatar(me, dt, { x: IN.x, y: IN.fy + IN.jy, z: IN.z, yaw: IN.yaw, pitch: IN.pitch, vx: walkV.x, vz: walkV.z, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: IN.jy > 0.05, ground: mesh ? footGround : null });
+    driveAvatar(me, dt, { x: IN.x, y: IN.fy + IN.jy, z: IN.z, yaw: IN.yaw, pitch: IN.pitch, vx: walkV.x, vz: walkV.z, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: IN.jy > 0.05, ground: mesh ? footGround : null, fp: !VIEW.tp });
   }
   if (IN.panel && Math.hypot(IN.x - IN.panel.x, IN.z - IN.panel.z) > 2.5) IN.panel = null;
   // Was liegt vor mir?
@@ -1504,6 +1505,7 @@ export function applyWalkCamera() {
   camera.position.copy(_c);
   camera.rotation.order = 'YXZ';
   camera.rotation.set(IN.pitch, group.rotation.y + IN.yaw, 0);
+  if (!VIEW.tp && me) fpBody(camera);      // Ich-Sicht: Kopf der Figur an die Kamera (mannyAvatar.ts)
   if (Math.abs(camera.fov - 72) > 0.05) { camera.fov = 72; camera.updateProjectionMatrix(); }
 }
 

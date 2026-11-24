@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { clamp } from '../core/util';
 import { buildSoldier, soldierWeapon, soldierMeta, soldierGearKey, viewModelId, normLook, type SoldierVis, type FigGear } from './mineArt';
-import { driveManny, releaseManny, mannyPace, mannyBrake, mannyAccel, mannyTurn, mannyMuzzle } from './mannyAvatar';
+import { driveManny, releaseManny, mannyPace, mannyBrake, mannyAccel, mannyTurn, mannyMuzzle, mannyReady, mannyFirstPerson } from './mannyAvatar';
+// Ich-Sicht mit ganzem Körper (mannyAvatar.ts): bodyView() = die Figur ist dafür bereit; fpBody(Kamera, Zielen 0..1) nach dem Setzen der Kamera
+export const bodyView = mannyReady, fpBody = mannyFirstPerson;
 // Richtungswechsel im Lauf: Zeit seit dem letzten Wechsel der gewünschten Laufrichtung um mehr als 50° (setIntent zählt mit).
 // Mit der neuen Spielerfigur setzt die Beschleunigung danach weich ein (mannyTurn): Ein Mensch muss erst einen Fuß aufsetzen,
 // bevor sein Körper die Richtung ändert – so passt der Setzschritt der Figur zur Bewegung des Spiels.
@@ -89,7 +91,7 @@ export interface Avatar {
   hitN: number; hitT: number; hitS: number; armL: THREE.Object3D[] | null;
   player?: boolean;                                            // eigene Spielerfigur: darf die Testfigur Manny zeigen (mannyAvatar.ts, ?manny=1)
 }
-export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null; armed?: boolean; ads?: boolean }   // ads: Zielen gehalten (rechte Maustaste) · reload: Fortschritt 0..1, sonst −1 · armed: hier kann geschossen werden (Planet, Mine) – die neue Spielerfigur trägt dann die Waffe wid
+export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null; armed?: boolean; ads?: boolean; fp?: boolean }   // ads: Zielen gehalten (rechte Maustaste) · reload: Fortschritt 0..1, sonst −1 · armed: hier kann geschossen werden (Planet, Mine) – die neue Spielerfigur trägt dann die Waffe wid
 
 export function makeAvatar(gear: FigGear, player = false): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
@@ -164,7 +166,8 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   if (a.player) {
     const mx = INTENT.mx, mz = INTENT.mz, sprint = INTENT.sprint; INTENT.mx = INTENT.mz = 0; INTENT.sprint = false;
     const weapon = d.armed && d.wid ? { id: d.wid, lyra: LYRA_ITEM[P.gear?.waffe || ''], aim: combat || !!d.ads, shots: ACT.shot, hits: ACT.hit, toss: ACT.toss, reload: d.reload ?? -1 } : null;
-    if (driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground, dead: !!d.dead, weapon })) return;
+    if (driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground, dead: !!d.dead, weapon, fp: d.fp })) return;
+    if (d.fp) { s.root.visible = false; return; }      // Ich-Sicht ohne die neue Figur: keinen Soldaten um die Kamera zeigen
     if (!s.root.visible) releaseManny(s.root);   // Schalter aus oder Figur nicht geladen: wieder der Soldat
   }
   if (a.ready) {

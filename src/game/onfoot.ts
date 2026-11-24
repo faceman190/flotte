@@ -15,7 +15,8 @@ import { radio } from '../ui/radio';
 import { nearEntrance } from './dungeon';
 import { VIEW, STANCE, ACT, footPace, footBrake, footAccel, setIntent, eyeH, syncAvatar, driveAvatar, avatarMuzzle, tpCamPos, resetTpCam, figGear, type Avatar } from './avatar';
 import { viewModelId } from './mineArt';
-import { AIM, aimUpdate, aimFov, aimShake } from './footgun';
+import { AIM, aimUpdate, aimFov, aimShake, aimK } from './footgun';
+import { bodyView, fpBody } from './avatar';
 import { drawFootCross } from '../ui/footHud';
 import { fieldGrenade } from './fieldfight';
 import { noteToss } from './avatar';
@@ -182,13 +183,14 @@ export function updateFoot(dt: number) {
   FOOT.prompt = FOOT.act === 'story' ? tgt!.label : FOOT.act === 'crate' ? (crate!.big ? 'Tresorkiste öffnen' : 'Kiste öffnen') : FOOT.act === 'base' ? `${door!.st.name} betreten` : FOOT.act === 'ship' ? (settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`) : FOOT.act === 'mine' ? `${mine!.name} betreten` : FOOT.act === 'rover' ? 'In den Rover steigen' : '';
   // eigene Figur
   aimUpdate(dt, FIGHT.down <= 0, { still: Math.hypot(FOOT.vx, FOOT.vz) < 0.4, crouch: STANCE.crouch, air: FOOT.jy > 0.05 });
-  if (VIEW.tp) me = syncAvatar(scene, me, figGear());
+  const body = VIEW.tp || bodyView();      // Figur zeigen: Außensicht, oder Ich-Sicht mit ganzem Körper
+  if (body) me = syncAvatar(scene, me, figGear());
   if (me) {
-    me.s.g.visible = VIEW.tp;
-    if (VIEW.tp) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, ground: footGround, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on });
+    me.s.g.visible = body && (VIEW.tp || FIGHT.down <= 0);
+    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, ground: footGround, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on });
   }
   // Kampf: Schießen (Klick), Drohnen, Geschosse; in der Außensicht kommt der Leuchtstrich aus der Mündung der Figur
-  const mz = VIEW.tp ? avatarMuzzle(me) : null;
+  const mz = body ? avatarMuzzle(me) : null;
   updateFieldFight(dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH(), active: true, tp: VIEW.tp, muzzle: mz });
 }
 
@@ -201,7 +203,8 @@ export function footCamera(dt: number) {
   camera.position.copy(_c);
   camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch + FIGHT.kick * 0.012, FOOT.yaw, 0); aimShake(camera.rotation);
   if (FIGHT.down > 0 && !VIEW.tp) camera.position.y -= (3 - FIGHT.down) * 0.4;
-  fieldViewModel(FOOT.active && !VIEW.tp, FOOT.bob, FOOT.walked);
+  const fpb = FOOT.active && !VIEW.tp && !!me && fpBody(camera, aimK());      // Ich-Sicht: der eigene Körper statt der Waffe allein
+  fieldViewModel(FOOT.active && !VIEW.tp && !fpb, FOOT.bob, FOOT.walked);
   { const f = aimFov(72); if (Math.abs(camera.fov - f) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } }
 }
 
