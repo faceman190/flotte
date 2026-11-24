@@ -42,6 +42,8 @@ import { wieselScan } from './game/wiesel';
 import { initTestlabor, updateTestlabor, testHooks } from './game/testlabor';
 import { mannyHooks } from './game/mannyAvatar';
 import { updateWetter } from './game/wetter';
+import { updateRecht, drawRecht, rechtDock, rechtZahlen } from './game/recht';
+import { stationFaction } from './game/reputation';
 import { TESTF } from './game/testflags';
 import { PLANETS, PTYPE, planetBaseId } from './data/planets';
 import { d3 } from './core/util';
@@ -554,7 +556,7 @@ onKey(code => {
     else if (G.mode === 'play') {
       const st = nearDock();
       if (st && world.surface && settings.walk && basePad(st)) { if (landAtBase(st)) { G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); } }   // Planetenbasis: aufs Landefeld, zu Fuß hinein
-      else if (st) openDock(st);
+      else if (st) { const rd = rechtDock(st.name, stationFaction(st.id, P.sector)); if (!rd.ok) radio(st.name.toUpperCase(), rd.text + '.', '#ff6b5b'); else { if (rd.text) rechtZahlen(rd.zahlen, st.name); openDock(st); } }      // Recht und Ordnung: Bußgeld
       else if (world.surface && landShip()) { footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); }
       else if (!world.surface && !G.dead) { for (const k of orteKey) if (k()) break; }   // Orte im Sektor (z. B. Bergung in der Alten Werft)
     }
@@ -805,7 +807,8 @@ function simulate(dt: number) {
   if (world.surface && !IN.active && !DUN.active) updateSalvage(dt, (x, y, z) => puff(x, y, z, (Math.random() - 0.5) * 1.5, 2 + Math.random() * 2, (Math.random() - 0.5) * 1.5, '#2a2622', 2.2));
   if (live) updateMissions(dt);
   updateAufgaben();      // Fristen der Stationsaufgaben
-  hook('Wetter', () => updateWetter(dt, camera.position));      // Tag, Nacht und Wetter auf Planeten (wetter.ts)
+  hook('Wetter', () => updateWetter(dt, camera.position));
+  hook('Recht', updateRecht);      // Tag, Nacht und Wetter auf Planeten (wetter.ts)
   if (world.surface && G.mode === 'rover') hook('Bodenaufgaben', () => updateBoden(dt, FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z));
   if (live) updateBegegnungen(dt);      // Begegnungen unterwegs
   updateAsteroids(dt);
@@ -928,6 +931,7 @@ function loop(now: number, manual = false) {
   if (world.def && G.mode !== 'map' && !IN.active && !DUN.active) drawFlare(ux, dt, flareOccluders());
   if (!(FOOT.active && world.surface && G.mode === 'rover')) hideFieldViewModel();   // Waffe der Ich-Sicht nur zu Fuß auf einem Planeten (blieb nach Sektorwechsel sonst im Bild, auch in der Station)
   drawWalkHUD();
+  if (G.mode === 'play' || G.mode === 'rover') drawRecht();      // Fahndung (recht.ts)
   if (!FOOT.active) { drawRoverHUD(); if (G.mode === 'rover' && ROVER.active) { drawSalvageHUD(ROVER.x, ROVER.z); drawGroundMarkers(); } } else drawFootHUD();
   if (G.mode === 'rover' && world.surface) drawBodenHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, !FOOT.active && ROVER.active);
   drawDungeonHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, ROVER.active);

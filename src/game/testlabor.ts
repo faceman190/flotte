@@ -125,6 +125,8 @@ function html(): string {
       <div class="row">${[['uhr', 'Uhr'], ['0.3', 'Tag'], ['0.625', 'Dämmerung'], ['0.8', 'Nacht']].map(([k, n]) => `<button class="b${String(WETTER.force.zeit ?? 'uhr') === k ? ' p' : ''}" data-a="zeitT" data-k="${k}">${n}</button>`).join('')}</div>
       <div class="row">${[['uhr', 'Uhr'], ['1', 'Sturm'], ['0', 'Klar']].map(([k, n]) => `<button class="b${String(WETTER.force.sturm ?? 'uhr') === k ? ' p' : ''}" data-a="sturmT" data-k="${k}">${n}</button>`).join('')}</div>
       <p class="h">${WETTER.planet ? `Gerade: ${WETTER.tag > 0.99 ? 'Tag' : WETTER.tag < 0.01 ? 'Nacht' : 'Dämmerung'}${WETTER.sturm > 0 ? `, ${WETTER.art?.n} ${Math.round(WETTER.sturm * 100)} %` : ''}. ${WETTER.art ? (() => { const s = naechsterSturm(WETTER.planet, WETTER.typ); return s === null ? 'Kein Sturm in den nächsten Stunden.' : s === 0 ? 'Sturm läuft.' : `Nächster Sturm in ${Math.round(s / 60)} min.`; })() : 'Hier gibt es kein Wetter.'}` : 'Wirkt auf Planeten.'}</p>
+      <h3>Fahndung</h3><div class="row">${[0, 1, 2, 3].map(n => `<button class="b${(P.fahndung?.s || 0) === n ? ' p' : ''}" data-a="fahnd" data-k="${n}">${n ? '★'.repeat(n) : 'keine'}</button>`).join('')}</div>
+      <p class="h">Ab zwei Sternen greifen Patrouillen an (nicht in Heimstatt), Andocken im Menschenraum nur gegen Bußgeld.</p>
       <h3>Begegnung unterwegs (im Flug)</h3><div class="row">${[['kapsel', 'Rettungskapsel'], ['treibgut', 'Treibgut'], ['panne', 'Panne'], ['angriff', 'Angriff']].map(([k, n]) => `<button class="b" data-a="beg" data-k="${k}">${n}</button>`).join('')}</div>
       <h3>Geschichte</h3><div class="row"><button class="b" data-a="story">Kapitel 1–5 abschließen</button></div>
       <p class="h">Danach stören keine Geschichtsszenen mehr beim Testen. Nicht rückgängig zu machen (Spielstand auf dem Testserver).</p>
@@ -181,6 +183,7 @@ function act(a: string, k: string) {
   if (a === 'clip') { const n = v('tlClip'); if (n) void vorfuehren(n); return; }
   if (a === 'clipweg') vorWeg();
   if (a === 'rate') { VOR.rate = +k; if (VOR.act) VOR.act.timeScale = VOR.rate; }
+  if (a === 'fahnd') { P.fahndung = { s: +k, t: Date.now() }; say(+k ? `Fahndungsstufe ${k} gesetzt.` : 'Fahndung aufgehoben.'); }
   if (a === 'zeitT') WETTER.force.zeit = k === 'uhr' ? null : +k;
   if (a === 'sturmT') WETTER.force.sturm = k === 'uhr' ? null : +k;
   if (a === 'beg') { const r = begegnungJetzt(k as any); say(r ? `Begegnung gestartet: ${r}. Marke im HUD.` : 'Begegnungen gibt es nur im Flug (Angriff nicht in Heimstatt).'); }

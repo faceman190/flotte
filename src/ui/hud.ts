@@ -12,6 +12,8 @@ import { landInfo } from '../game/surface';
 import { NET, remoteMarkers } from '../game/net';
 import { trackedMission, missionLines, missionMarkers } from '../game/missions';
 import { aufgabeObjective, aufgabenMarkers } from '../game/aufgaben';
+import { rechtDock } from '../game/recht';
+import { stationFaction } from '../game/reputation';
 import { begegnungMarkers } from '../game/begegnungen';
 import { storyObjective, storyMarkers } from '../game/story';
 import { floats } from '../game/fx';
@@ -592,7 +594,7 @@ export function updatePanels(dt: number) {
   $('objP').style.transform = `scale(${settings.hud})`;
   $('speed').textContent = `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} / ${flightMax()} m/s${G.cruise ? ' · REISE' : ''}${G.jd ? ` · SPRUNG ${G.jd.toFixed(1)} s` : ''}${SF.phase === 'fly' ? ' · SCHNELLFLUG' : ''}` + (world.ground ? ` · Höhe ${Math.round(P.y - world.ground(P.x, P.z))} m` : '');
   const pr = $('prompt'), st = G.mode === 'play' ? nearDock() : null, li = !st && G.mode === 'play' ? landInfo() : null;
-  if (st) { pr.textContent = `[E] An „${st.name}“ andocken`; pr.classList.remove('hidden'); }
+  if (st) { const rd = rechtDock(st.name, stationFaction(st.id, P.sector)); pr.textContent = rd.text ? (rd.ok ? `[E] An „${st.name}“ andocken · ${rd.text}` : rd.text) : `[E] An „${st.name}“ andocken`; pr.classList.remove('hidden'); }
   else if (li) { pr.textContent = li.text; pr.classList.remove('hidden'); }
   else {
     const t = G.mode === 'play' && !G.dead ? ortePrompt.reduce<string | null>((a, f) => a || f(), null) : null;

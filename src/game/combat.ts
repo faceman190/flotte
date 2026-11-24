@@ -12,6 +12,7 @@ import { NO_MESH, boltStyle } from './bolts';
 import { P, G, stats } from './state';
 import { hurtPlayer, playerTargetable, playerVisible, impactFx } from './player';
 import { damageTraffic, damageAlly } from './npc';
+import { rechtTat } from './recht';
 import { radio } from '../ui/radio';
 import { SHARED, hostEvent } from './shared';
 import { addRep, killFaction, bountyFactor } from './reputation';
@@ -506,7 +507,15 @@ export function updateProjectiles(dt: number) {
     }
     if (!hit) for (const s of world.stations) if (sphSeg(b, s)) { hit = true; break; }
     if (!hit) for (const s of world.solids) if (sphSeg(b, s)) { hit = true; break; }
-    if (!hit) for (const s of world.traffic) if (sphSeg(b, s)) { hit = true; break; }
+    // Recht und Ordnung (recht.ts): eigene Schüsse treffen friedliche Schiffe wirklich – und das hat Folgen
+    if (!hit) for (const s of world.traffic) if (sphSeg(b, s)) {
+      hit = true;
+      if (b.kind === 'p' && !b.remote && s.alive && !s.story) { damageTraffic(s, b.dmg * 0.6); burst(b.px, b.py, b.pz, '#ffb070', 6, 20, 0.3); rechtTat(s.hp > 0 ? 'treffer' : 'abschuss', `den Frachter „${s.name}“`); }
+      break;
+    }
+    if (!hit && b.kind === 'p' && !b.remote) for (const a of world.allies) if (a.alive && segHit(b, a.x, a.y, a.z, 7)) {
+      hit = true; damageAlly(a, b.dmg); burst(b.px, b.py, b.pz, '#ffb347', 8, 26, 0.35); rechtTat(a.alive ? 'treffer' : 'abschuss', `die Patrouille ${a.name}`); break;
+    }
     if (hit || b.life <= 0) { scene.remove(b.mesh); bullets.splice(i, 1); }
   }
   for (let i = rockets.length - 1; i >= 0; i--) {
@@ -551,7 +560,7 @@ export function updateProjectiles(dt: number) {
       hurtPlayer(b.dmgP);
       b.life = 0;
     }
-    if (b.life > 0) for (const a of world.allies) if (a.alive && segHit(b, a.x, a.y, a.z, 7)) {
+    if (b.life > 0 && !b.wacht) for (const a of world.allies) if (a.alive && segHit(b, a.x, a.y, a.z, 7)) {
       damageAlly(a, b.dmgP); burst(b.x, b.y, b.z, '#ffb347', 10, 30, 0.4); b.life = 0; break;
     }
     if (b.life > 0) for (const s of world.traffic) if (s.alive && sphSeg(b, s)) {

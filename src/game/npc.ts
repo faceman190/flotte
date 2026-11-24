@@ -11,6 +11,7 @@ import { fireBullet } from './combat';
 import { radio } from '../ui/radio';
 import { P, G } from './state';
 import { SHARED, hostEvent } from './shared';
+import { rechtFeind, stufe } from './recht';
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
 
@@ -223,6 +224,8 @@ function orientTraffic(t: any, dt: number) {
 
 // =============== Patrouillen (befreundete Jäger) ===============
 const CALLSIGNS = [['RABE', 0x8fd18f, '#8fd18f'], ['FUNKE', 0x7cc4ff, '#7cc4ff'], ['KOBALT', 0x7c9cff, '#9cb4ff'], ['WESPE', 0xf2d36b, '#f2d36b'], ['LUCHS', 0xd0a070, '#e0b080']] as const;
+const PILOT = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };      // Ziel der Patrouillen, wenn man gesucht wird
+let huntT = 0;
 function allyCap() {
   const d = world.def;
   if (!d || d.faction === 'ferrox' || !world.stations.length) return 0;
@@ -271,10 +274,16 @@ export function updateAllies(dt: number) {
     world.allies = world.allies.filter(a => a.alive);
     if (world.allies.length < allyCap()) spawnAlly();
   }
+  // Recht und Ordnung (recht.ts): Gesuchte ab Stufe 2 werden von den Patrouillen gestellt, ab Stufe 3 kommen zwei Kopfgeldjäger dazu
+  const feind = rechtFeind();
+  PILOT.x = P.x; PILOT.y = P.y; PILOT.z = P.z; PILOT.vx = P.vx; PILOT.vy = P.vy; PILOT.vz = P.vz;
+  if (feind && stufe() >= 3 && (huntT -= dt) <= 0) { huntT = 40; if (world.allies.filter(a => a.alive).length < allyCap() + 2 && world.stations.length) { spawnAlly(); spawnAlly(); } }
   for (const w of world.allies) {
     if (!w.alive) continue;
     w.rt -= dt;
-    if (w.rt <= 0 || (w.target && !world.enemies.includes(w.target))) {
+    if (feind && G.mode === 'play' && d3(P.x, P.y, P.z, w.x, w.y, w.z) < 3200) { if (w.target !== PILOT) { w.target = PILOT; w.rt = 3; } }
+    else if (w.target === PILOT) { w.target = null; w.rt = 0; }
+    if (w.target !== PILOT && (w.rt <= 0 || (w.target && !world.enemies.includes(w.target)))) {
       w.rt = rand(2, 4);
       let best = null, bd = 1800;
       for (const e of world.enemies) {
@@ -308,7 +317,13 @@ export function updateAllies(dt: number) {
       const dd = _v.length();
       _v.normalize();
       _v2.set(w.vx, w.vy, w.vz).normalize();
-      if (dd < 700 && _v.dot(_v2) > 0.94) {
+      if (dd < 700 && _v.dot(_v2) > 0.94 && e === PILOT) {      // auf den Gesuchten: Feindschuss (trifft das eigene Schiff)
+        w.cool = 0.45;
+        const lead = dd / 1300;
+        _v.set(e.x + e.vx * lead - w.x + rand(-10, 10), e.y + e.vy * lead - w.y + rand(-10, 10), e.z + e.vz * lead - w.z + rand(-10, 10)).normalize();
+        fireBullet(world.ebullets, w.x + _v.x * 8, w.y + _v.y * 8, w.z + _v.z * 8, _v.x, _v.y, _v.z, 1300, 0.8, 0, 'w', { dmgP: 3 + stufe(), dmgS: 0, wacht: true });
+        const ov = outVol(w.x, w.y, w.z, 250); if (ov > 0.04) gunSound(0.4 * ov);
+      } else if (dd < 700 && _v.dot(_v2) > 0.94) {
         w.cool = 0.5;   // Verbündete halten Gegner beschäftigt, statt sie abzuräumen: seltener, ungenauer, schwächer
         const lead = dd / 1300;
         _v.set(e.x + e.vx * lead - w.x + rand(-16, 16), e.y + e.vy * lead - w.y + rand(-16, 16), e.z + e.vz * lead - w.z + rand(-16, 16)).normalize();

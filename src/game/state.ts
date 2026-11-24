@@ -52,7 +52,8 @@ export interface Player {
   boden?: Record<string, import('./bodenaufgaben').BodenAkt>;   // laufende Bodenaufgaben auf Planeten (game/bodenaufgaben.ts)
   bodenGen?: Record<string, number>;        // je Bodenaufgabe: wie oft erledigt (neue Orte)
   bodenZuletzt?: Record<string, number>;
-  adern?: Record<string, number>;           // Kristalladern in Minen: wann abgebaut (ms), je '<Mine>:<Nummer>' (dungeon.ts)    // je Bodenaufgabe: wann zuletzt erledigt (ms), für die Pause                     // gekaufte Bodenfahrzeuge (der Dachs gehört jedem Piloten und steht hier nicht)
+  adern?: Record<string, number>;
+  fahndung?: { s: number; t: number };      // Fahndungsstufe 0–3 und letzte Tat (ms), game/recht.ts           // Kristalladern in Minen: wann abgebaut (ms), je '<Mine>:<Nummer>' (dungeon.ts)    // je Bodenaufgabe: wann zuletzt erledigt (ms), für die Pause                     // gekaufte Bodenfahrzeuge (der Dachs gehört jedem Piloten und steht hier nicht)
   rep?: Record<string, number>;    // Ruf bei den Fraktionen (siehe reputation.ts)
   missions?: import('./missions').Mission[];   // angenommene Fraktionsmissionen
   story?: import('./story').StoryState;        // Fortschritt der Geschichte (Prolog)
