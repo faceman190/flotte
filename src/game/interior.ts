@@ -146,6 +146,7 @@ function signTex(text: string, bg: string, fg = '#0c0d10') {
 function mat<T extends THREE.Material>(m: T) { disposables.push(m); if ((m as any).isMeshStandardMaterial) (m as any).envMapIntensity = 0.3; return m; }
 
 import { gearFactor, shipMods } from './inventory';
+import { aufgabeLabel, aufgabeTalk } from './aufgaben';
 const WALK_V = 1.5;   // Gehtempo der Leute in den Stationen (m/s)
 // KI-Figur mit Skelett, falls geladen (Händler stehen, Arbeiter laufen); sonst die einfache Figur aus Grundformen
 function buildPerson(suit: number, skin: number, hair: number, badge: number, role: 'idle' | 'walk' = 'idle', model?: string): Person {
@@ -601,7 +602,9 @@ function build(st: Station) {
       const q: Stand = { p, x: sp.x, z: sp.z, face: sp.face, name, span: 1.2 };
       persons.push(q); byTab[sp.tab] = q;
       labels.push({ p: new THREE.Vector3(sp.x, 2.0, sp.z), text: `${name} · ${title}`, col: pal.css });
-      inters.push({ x: sp.tx, z: sp.tz, r: 2.3, label: () => `${name} ansprechen · ${title}`, act: svc ? () => talk(name, sp.tab) : () => say(name, line) });
+      // Figuren ohne Dienst können eine Stationsaufgabe vergeben (aufgaben.ts); sonst sagen sie ihren Satz
+      const stId = st.id;
+      inters.push({ x: sp.tx, z: sp.tz, r: 2.3, label: () => (svc ? null : aufgabeLabel(stId, sp.tab, name)) || `${name} ansprechen · ${title}`, act: svc ? () => talk(name, sp.tab) : () => { if (!aufgabeTalk(stId, sp.tab, name, say)) say(name, line); } });
     }
     labels.push({ p: new THREE.Vector3(dk.map.x, 2.7, dk.map.z), text: 'Galaxiekarte', col: '#7cc4ff' });
     inters.push({ x: dk.map.x, z: dk.map.z, r: 2.6, label: () => 'Galaxiekarte öffnen', act: () => interiorHooks.openMap() });

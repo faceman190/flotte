@@ -11,6 +11,7 @@ import { SHIP, hurtPlayer } from './player';
 import { hitEnemy } from './combat';
 import { buildDrone } from '../models/playerShips';
 import { radio } from '../ui/radio';
+import { aufgabeAbbau } from './aufgaben';
 
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _h = new THREE.Vector3(), _y = new THREE.Vector3(0, 1, 0), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 const shipPos = () => new THREE.Vector3(P.x, P.y, P.z);
@@ -26,6 +27,7 @@ function extractOne(a: Asteroid, to: THREE.Vector3, from: THREE.Vector3) {
   P.cargo[k]++;
   P.mined++;
   a.yld--;
+  aufgabeAbbau(a);      // Kernproben der Laborantin (aufgaben.ts)
   if (SHARED.client) astHooks.yld(a);
   snd(1000 + Math.random() * 200, 0.05, 'sine', 0.02, 300);
   floatText(from.x, from.y, from.z, 1, ITEMS[k].short, ITEMS[k].c, 'ore:' + k);

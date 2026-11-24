@@ -6,6 +6,7 @@ import { world, sectorHooks } from './world';
 import { ORTE, orteHud, ortePrompt, orteKey, dropOrt, type HudKit } from './orte';
 import { P, G, saveGame, stats, cargoUsed } from './state';
 import { burst } from './fx';
+import { aufgabeWerft } from './aufgaben';
 import { radio } from '../ui/radio';
 import { buildModelStation } from '../models/stationModels';
 import { buildOutpost } from '../models/structures';
@@ -226,6 +227,7 @@ function reward(g: Gut) {
     const id = pool[Math.floor(R.next() * pool.length)];
     if (id && canAdd(id)) { addItem(id, 1); const d = gearDef(id)!; say(`${d.n} (${RARITY[d.rar].n})`, tier ? '#5fd0ff' : '#aab4c0'); }
   }
+  const au = aufgabeWerft(); if (au) say(au, '#9fd8ff');      // Stationsaufgabe des Pumpenmeisters
   (P.werft = P.werft || {})[g.i] = Date.now();
   sfx('pickup', 0.7, 1, () => snd(700, 0.2, 'triangle', 0.05, 300));
   saveGame();

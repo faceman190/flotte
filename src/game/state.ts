@@ -66,6 +66,8 @@ export interface Player {
   werft?: Record<string, number>;                           // Alte Werft: Bergungsgut → Zeitpunkt der Bergung (ms), kommt nach einer Weile wieder (src/game/altewerft.ts)   // je Mine: Zeitpunkt des letzten frischen Besuchs, geöffnete Kisten, Schalter
   gedenk?: number;                                          // Gedenkboje im Sonnenfeld schon besucht (src/game/gedenkboje.ts)
   fernohr?: number;                                         // Horchposten Fernohr schon besucht (src/game/sektor3.ts)
+  aufgaben?: Record<string, { n: number; t0: number }>;     // laufende Stationsaufgaben (src/game/aufgaben.ts): Fortschritt, Start (ms)
+  aufgabenZuletzt?: Record<string, number>;                 // wann eine Stationsaufgabe zuletzt erledigt wurde (ms), für die Pause
   at?: PlayerAt;                                            // wo der Pilot beim Speichern zu Fuß war (fehlt: im Schiff); main.ts, whereAmI und resumeAt
 }
 // Standort zu Fuß im Spielstand (seit 2026-11-23): „Weiterspielen“ setzt den Piloten dort wieder ab statt ins Cockpit vor der Station.

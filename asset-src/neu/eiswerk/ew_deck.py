@@ -199,7 +199,7 @@ def furnish():
     meister('gaertner', 60.0, -43.0, 90, 60.0, -41.6, 'Gärtner', 'Das Schmelzwasser aus Kessel eins geht zuerst hierher. Was hier wächst, isst die ganze Hütte.')
     # Pumpenraum (Zeilen 7–8, Spalten 13–15; x 75,7 … 92,3)
     put('pumpenblock', 80.0, -46.0, 0.0); put('pumpenblock', 88.0, -46.0, 0.0); put('tank', 78.0, -41.4, 0.0); put('tank', 90.0, -41.4, 0.0); put('teilekisten', 84.0, -49.4, 0.0)
-    meister('pumpenmeister', 84.0, -44.0, -90, 84.0, -42.2, 'Pumpenmeister', 'Pumpe drei klemmt wieder. Wenn du irgendwo Dichtungen findest, bring sie mir, ich zahle gut.')
+    meister('pumpenmeister', 84.0, -44.0, -90, 84.0, -42.2, 'Pumpenmeister', 'Die Pumpen laufen. Komm später wieder vorbei, irgendwas klemmt hier immer.')
     # Gänge
     put('eiswagen', 7.4, -21.0, 0.0); put('kanister', 4.4, -31.6, 0.0); put('teilekisten', 55.6, -21.6, PI / 2); put('heizer', 52.4, -27.6, 0.0); put('absperrung', 31.2, -14.1, 0.0)
     put('eisblock', 81.6, -13.8, 0.2); put('teilekisten', 66.0, -38.4, 0.0)

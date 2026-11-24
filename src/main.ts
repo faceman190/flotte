@@ -17,6 +17,7 @@ import { world, buildSector, stationById, gateTo, updateAsteroids } from './game
 import { initFerrox, updateSpawning, updateEnemies, updateProjectiles, updateStationDefense } from './game/combat';
 import { initTraffic, updateTraffic, initAllies, updateAllies } from './game/npc';
 import { updateMissions } from './game/missions';
+import { updateAufgaben } from './game/aufgaben';
 import { playIntro, updateIntro, skipIntro, INTRO } from './game/intro';
 import { updateGroundShade } from './game/groundShade';
 import { updateStory, startPrologue, resumePrologue, skipPrologue, prologActive, sceneNext, storyHooks, noteScan, dialogBusy, sceneActive } from './game/story';
@@ -745,6 +746,7 @@ function simulate(dt: number) {
   else if (m === 'rover') { if (G.dead) updatePlayer(dt); else if (FOOT.active) updateFoot(dt); else updateRover(dt); }
   if (world.surface && !IN.active && !DUN.active) updateSalvage(dt, (x, y, z) => puff(x, y, z, (Math.random() - 0.5) * 1.5, 2 + Math.random() * 2, (Math.random() - 0.5) * 1.5, '#2a2622', 2.2));
   if (live) updateMissions(dt);
+  updateAufgaben();      // Fristen der Stationsaufgaben
   updateAsteroids(dt);
   if (m !== 'menu') { updateSpawning(dt); updateEnemies(dt); updateProjectiles(dt); updateStationDefense(dt); }
   if (m === 'play') updateApproachPrime();   // erstes Andocken an Stationen mit Deck beim Anflug vorbereiten (approachPrime.ts)

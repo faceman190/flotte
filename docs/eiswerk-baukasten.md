@@ -70,5 +70,21 @@ HGGGGGGgGGGGGGG.     S Schmelzhalle 24 × 18 m, 11,6 m hoch, drei Türen
 ## Offen
 
 - Gesetzte Dreiecke rund 2,7 Mio. (einmalige 0,7 Mio.); der Nutzer zieht Detail vor, gemessen wird im Spiel.
-- Die Sätze der Leute sind nicht vertont; der Pumpenmeister fragt nach Dichtungen (Aufhänger für eine Nebenaufgabe, noch ohne Auftrag).
+- Die Sätze der Leute sind nicht vertont.
 - Hangar ist der Stationshangar.
+
+## Stationsaufgaben (seit 24.11.2026)
+
+Drei Figuren vergeben eigene Aufgaben (`src/game/aufgaben.ts`): ansprechen (E) hört das Angebot, noch einmal E nimmt an; die Aufgabe wird im HUD
+verfolgt (Aufgabenfeld im Flug, Marken in der Welt, Kurzsprung-Ziele) und steht im Flottenband unter Aufträge (Stationsaufgaben, mit Abbrechen).
+Abgabe bei derselben Figur; danach 20 Minuten Pause. Am Ansprechpunkt steht „hat Arbeit für dich“, solange es etwas gibt.
+
+| Figur | Aufgabe | Lohn |
+|---|---|---|
+| Pumpenmeister | vier Dichtungen aus den Bergungscontainern der Alten Werft (je Container 1–2, `altewerft.ts`) | 900 Cr, +15 Gilde |
+| Laborantin | drei Kernproben: drei markierte Eisbrocken im Reifschleier, je 5 Einheiten mit dem Laser (`mining.ts`) | 700 Cr, +12 Gilde |
+| Annahmemeister | 20 Eis in 15 Minuten; Eilbonus bis 400 Cr, fällt mit der Zeit; zu spät: Aufgabe vorbei, nach 5 Minuten wieder | 600–1000 Cr, +8 Gilde |
+
+Geprüft im Testfenster: Annehmen und Abgeben mit der echten Taste E, Laserabbau an einem markierten Brocken, Lohn und Ruf, Eilbonus,
+abgelaufene Frist, Flottenband, Aufgabenfeld im Flug. Weitere Figuren bekommen Aufgaben über einen Eintrag in `AUFGABEN` (Station, Figur
+= `tab` aus den Deckdaten) und eine Meldung an der Stelle, wo der Fortschritt passiert.

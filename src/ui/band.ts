@@ -21,6 +21,7 @@ import { TRADE, tradeHooks, requestTrade, acceptTrade, declineTrade, withdrawTra
 import { roomName } from './mp';
 import { REP, REP_IDS, RANKS, TRUST_LV, level, nextRank, rankName, repOf, repHooks, type RepId } from '../game/reputation';
 import { abandonMission, missionLines, missionTypeName, missionHooks } from '../game/missions';
+import { aufgabenListe, aufgabeAbbrechen } from '../game/aufgaben';
 import { storyObjective } from '../game/story';
 import { invApp, invAct } from './invApp';
 import { shipMods } from '../game/inventory';
@@ -151,6 +152,7 @@ export function bandRadioChanged() {
 }
 function act(a: string, k: string) {
   if (a === 'track') { P.track = k; snd(800, 0.06, 'sine', 0.03, 200); }
+  if (a === 'adrop') { if (confirmDrop('auf:' + k)) aufgabeAbbrechen(k); }
   if (a === 'route') { P.route = k === P.sector ? null : k; snd(700, 0.08, 'sine', 0.04, 200); }
   if (a === 'mdrop') { const m = (P.missions || []).find(x => x.id === k); if (m && confirmDrop(m.id)) { abandonMission(m); if (P.track === m.id) P.track = undefined; } }
   if (a === 'drop') { const c = P.contracts.find(x => x.id === k); if (c && confirmDrop(c.id)) { abandon(c); if (P.track === c.id) P.track = undefined; } }
@@ -205,6 +207,16 @@ function jobsApp() {
   // Hauptgeschichte (Prolog, Kapitel) ganz oben
   const so = storyObjective();
   const story = so ? `<div class="bcard" style="max-width:820px;margin-bottom:18px;border-left:3px solid #ffd27a"><h4 style="color:#ffd27a">Hauptgeschichte</h4><div class="bbig" style="font-size:20px">${esc(so.title.toUpperCase())}</div>${so.lines.map(([t, done, sub]) => `<div class="obj${done ? ' done' : ''}${sub ? ' sub' : ''}" style="margin-top:6px">${sub ? '' : '<i></i>'}<span>${t}</span></div>`).join('')}</div>` : '';
+  const al = aufgabenListe();
+  const auf = al.length ? `<h4 class="bh">STATIONSAUFGABEN</h4><div class="blist" style="margin-bottom:18px">${al.map(x => {
+    const on = P.track === 'auf:' + x.id;
+    return `<div class="bitem${on ? ' on' : ''}" style="cursor:default;align-items:flex-start;border-left:3px solid #9fd8ff">
+      <div style="flex:1;min-width:0"><div class="sm" style="color:#9fd8ff">Bergbaugilde · ${esc(x.ort)}</div><div class="nm">${esc(x.titel)}</div>
+        <div class="sm">${x.n}/${x.max}${x.rest !== null ? ` · noch ${Math.max(0, Math.ceil(x.rest / 60))} min` : ''}</div>${meter(x.n, x.max, '#9fd8ff')}
+        <div class="btnRow" style="justify-content:flex-start;margin-top:6px"><button data-a="track" data-k="auf:${x.id}" ${on ? 'disabled' : ''}>${on ? 'Wird verfolgt' : 'Im HUD verfolgen'}</button>
+          <button data-a="adrop" data-k="${x.id}">${dropArm === 'auf:' + x.id ? 'Wirklich abbrechen?' : 'Abbrechen'}</button></div></div>
+      <div style="text-align:right"><div class="amb" style="font-family:var(--mono);font-size:20px">${fmtN(x.lohn)} Cr</div><div class="sm">+${x.ruf} Ruf</div></div></div>`;
+  }).join('')}</div>` : '';
   const ms = P.missions || [];
   const mis = ms.length ? `<h4 class="bh">FRAKTIONSMISSIONEN (${ms.length}/2)</h4><div class="blist" style="margin-bottom:18px">${ms.map(m => {
     const on = P.track === m.id, ml = missionLines(m), r = findRoute(P.sector, m.tgt), j = r ? r.length - 1 : 0;
@@ -218,9 +230,9 @@ function jobsApp() {
           <button data-a="mdrop" data-k="${m.id}">${dropArm === m.id ? 'Wirklich abbrechen?' : 'Abbrechen'}</button></div></div>
       <div style="text-align:right"><div class="amb" style="font-family:var(--mono);font-size:20px">${fmtN(m.reward)} Cr</div><div class="sm">+${m.rep} Ruf</div></div></div>`;
   }).join('')}</div>` : '';
-  if (!P.contracts.length) return story + mis + (ms.length ? '' : `<div class="bcard" style="max-width:560px;margin-bottom:12px"><h4>Keine Missionen</h4><p>Fraktionsmissionen bekommst du an Stationen, am Tresen für Missionen. Sie bringen viel Ruf.</p></div>`) + `<div class="bcard" style="max-width:560px"><h4>Keine Aufträge</h4><p>Lieferaufträge nimmst du an Stationen an: Stationsmenü → Aufträge. Angenommene Aufträge erscheinen hier und rechts oben im HUD.</p></div>`;
+  if (!P.contracts.length) return story + auf + mis + (ms.length ? '' : `<div class="bcard" style="max-width:560px;margin-bottom:12px"><h4>Keine Missionen</h4><p>Fraktionsmissionen bekommst du an Stationen, am Tresen für Missionen. Sie bringen viel Ruf.</p></div>`) + `<div class="bcard" style="max-width:560px"><h4>Keine Aufträge</h4><p>Lieferaufträge nimmst du an Stationen an: Stationsmenü → Aufträge. Angenommene Aufträge erscheinen hier und rechts oben im HUD.</p></div>`;
   const tr = trackedContract();
-  return story + mis + `<h4 class="bh">LIEFERAUFTRÄGE</h4><div class="blist">${P.contracts.map(c => {
+  return story + auf + mis + `<h4 class="bh">LIEFERAUFTRÄGE</h4><div class="blist">${P.contracts.map(c => {
     const have = Math.min(P.cargo[c.item], c.amount), r = findRoute(P.sector, c.sector), j = r ? r.length - 1 : 0, on = tr === c;
     const st = c.sector === P.sector ? world.stations.find(s => s.id === c.station) : null;
     return `<div class="bitem${on ? ' on' : ''}" style="cursor:default;align-items:flex-start">
