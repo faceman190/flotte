@@ -21,5 +21,13 @@
   "l_sprung": "mud_cracked_dry_riverbed_002",
   "l_bruch": "rocks_ground_06",
   "l_einschlag": "moon_meteor_01",
-  "l_regolith": "moon_02"
+  "l_regolith": "moon_02",
+  "l_mw_erde": "../mw/erde",
+  "l_mw_fels": "../mw/fels",
+  "l_mw_steine": "../mw/steine",
+  "l_mw_sand": "../mw/sand",
+  "l_mw_sand2": "../mw/sand2",
+  "l_mw_schnee": "../mw/schnee",
+  "l_mw_deckfels": "../mw/deckfels",
+  "_info3": "l_mw_*: Böden aus dem Fab-Paket MW Landscape Auto Material (scripts/mw-import.mjs), genutzt vom neuen Gelände (?gelaende=neu)."
 }

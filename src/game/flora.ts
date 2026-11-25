@@ -3,6 +3,7 @@ import { KEEP } from './keep';
 import { scene } from '../core/engine';
 import { texMat, std } from '../core/textures';
 import { world, rockGeo } from './world';
+import { updateGrass } from './grass';
 
 // =====================================================================================
 // Bewuchs und Dekoration der Planetenoberflächen.
@@ -116,6 +117,11 @@ function treeGeo() {
 // ---------- Zustand ----------
 interface Layer { im: THREE.InstancedMesh; cell: number; rad: number; dens: number; h: [number, number]; w: number; lx: number; lz: number; salt: number; rock?: boolean }
 let layers: Layer[] = [], hAt: (x: number, z: number) => number = () => 0, liquid = -1e9, seed = 1;
+// Neues Gelände (?gelaende=neu): Masken aus der Erosion (terrain.ts). Steine liegen dann auf Schutthalden, am Hangfuß und an Kuppen,
+// Gras und Büsche wachsen auf Sediment und an Rinnen statt gleichmäßig verstreut.
+type MaskFn = (x: number, z: number) => { flow: number; sed: number; talus: number; curv: number };
+let msk: MaskFn | null = null;
+const ROCKCOL: Record<string, number> = { fels: 0x9a948a, wueste: 0xb08a60, eis: 0xc8d6e2, vulkan: 0x3e3430, asche: 0x5e525c, kristall: 0x6a5a8a, mond: 0xc4c4c8 };
 // Felsbrocken: alle Plätze werden gemerkt (m = Lage, p = Ort, far = Sichtweite je nach Größe). Gezeichnet werden nur die, die aus der
 // Entfernung der Kamera noch zu erkennen sind. Vorher lagen immer alle 900 im Bild (890.000 Dreiecke), auch die kilometerweit entfernten.
 let rocks: { im: THREE.InstancedMesh; m: Float32Array; p: Float32Array; far: Float32Array; n: number; lx: number; ly: number; lz: number } | null = null;
@@ -134,25 +140,38 @@ function updateRocks(cam: THREE.Vector3) {
 const hash = (ix: number, iz: number, k: number) => { const s = Math.sin(ix * 127.1 + iz * 311.7 + k * 74.7 + seed * 0.37) * 43758.5453; return s - Math.floor(s); };
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _c = new THREE.Color();
 
-export function buildFlora(type: string, R: { range: (a: number, b: number) => number; next: () => number }, heightAt: (x: number, z: number) => number, liquidLevel: number, sd: number) {
-  const F = FLORA[type] || FLORA.fels;
-  layers = []; rocks = null; hAt = heightAt; liquid = liquidLevel; seed = sd;
+export function buildFlora(type: string, R: { range: (a: number, b: number) => number; next: () => number }, heightAt: (x: number, z: number) => number, liquidLevel: number, sd: number, mask?: MaskFn) {
+  const F0 = FLORA[type] || FLORA.fels;
+  // mit Masken: Geröll auf jedem Planeten (bisher nur auf dem Mond), dafür nur dort, wo Schutt liegt
+  const F: FloraDef = mask && !F0.stones ? { ...F0, stones: 0.7, stoneCol: ROCKCOL[type] ?? 0xa0a0a4 } : F0;
+  layers = []; rocks = null; hAt = heightAt; liquid = liquidLevel; seed = sd; msk = mask || null;
   const add = (o: THREE.Object3D) => { scene.add(o); world.extras.push(o); };
   // ----- Felsbrocken (fest) -----
   {
-    const n = Math.round(900 * F.rock), mat = type === 'eis' ? std(0xd8ecff, { roughness: 0.3, metalness: 0.05 }) : texMat(type === 'kristall' ? 0x6a5a8a : type === 'mond' ? 0xa6a6aa : 0xb0a898, 'rock', { roughness: 0.92, metalness: 0.05 }, 1.3);
+    const n = Math.round((mask ? 1500 : 900) * F.rock), mat = type === 'eis' ? std(0xd8ecff, { roughness: 0.3, metalness: 0.05 }) : texMat(type === 'kristall' ? 0x6a5a8a : type === 'mond' ? 0xa6a6aa : 0xb0a898, 'rock', { roughness: 0.92, metalness: 0.05 }, 1.3);
+    // Das Felsbild ist sehr dunkel (Mittel ~0,07 linear): mit der Grundfarbe ergab das ~3 % Helligkeit, die Brocken wirkten in der Sonne schwarz.
+    // Im neuen Gelände auf natürliche Gesteinshelligkeit (~20–25 %) anheben.
+    if (mask && type !== 'eis') mat.color.multiplyScalar(3.4);
     const im = new THREE.InstancedMesh(rockGeo(1), mat, n); let k = 0;
     const far = new Float32Array(n), pos = new Float32Array(n * 3);
     for (let i = 0; i < n * 3 && k < n; i++) {
-      const cx = R.range(-3500, 3500), cz = R.range(-3500, 3500), cl = R.next() < 0.6 ? 1 + Math.floor(R.next() * 5) : 1;
+      const cx = R.range(-3500, 3500), cz = R.range(-3500, 3500);
+      let cl = R.next() < 0.6 ? 1 + Math.floor(R.next() * 5) : 1;
+      if (mask) {
+        // Felsbrocken dort, wo sie in der Natur liegen: Schutthalden, steile Hänge und Kuppen; in Talböden mit Sediment kaum
+        const q = mask(cx, cz), hh = heightAt(cx, cz), sl = Math.hypot(heightAt(cx + 6, cz) - hh, heightAt(cx, cz + 6) - hh) / 6;
+        const p = 0.06 + 1.2 * q.talus + 0.5 * Math.min(1, sl * 1.4) + 0.5 * Math.max(0, -q.curv) - 0.6 * q.sed;
+        if (R.next() > p) continue;
+        cl = 1 + Math.floor(R.next() * (2 + 6 * q.talus));
+      }
       for (let j = 0; j < cl && k < n; j++) {
         const x = cx + (j ? R.range(-22, 22) : 0), z = cz + (j ? R.range(-22, 22) : 0), h = heightAt(x, z);
         if (h < liquidLevel + 1 || Math.hypot(x, z) < 400) continue;
-        const big = R.next() < 0.1, s = big ? R.range(4, 11) : R.range(0.6, 2.8);
+        const big = R.next() < (mask ? 0.06 : 0.1), s = big ? R.range(4, 11) : R.range(0.6, 2.8);
         _s.set(s * R.range(0.8, 1.4), s * R.range(0.5, 1.0), s * R.range(0.8, 1.4));
         _e.set(R.range(0, 6.28), R.range(0, 6.28), R.range(0, 6.28));
         pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z; far[k] = 260 + s * 240;      // kleiner Brocken (1 m): 500 m, großer (10 m): 2,6 km
-        im.setMatrixAt(k++, _m.compose(_p.set(x, h - s * 0.2, z), _q.setFromEuler(_e), _s));
+        im.setMatrixAt(k++, _m.compose(_p.set(x, h - s * (mask ? 0.32 : 0.2), z), _q.setFromEuler(_e), _s));      // neues Gelände: tiefer eingesunken
       }
     }
     im.count = k; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.castShadow = true; add(im);   // Hüllkugel über alle Plätze, sie bleibt gültig
@@ -187,12 +206,14 @@ export function buildFlora(type: string, R: { range: (a: number, b: number) => n
     if (shadow) { im.castShadow = true; im.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: mat.map, alphaTest: 0.4 }); }
     layers.push({ im, cell, rad, dens, h, w, lx: 1e9, lz: 1e9, salt });
   };
-  if (F.grass > 0) layer(crossGeo(), card(tGrass, F.grassCol, F.glow || 0), 6000, 1.3, 50, F.grass, [0.25, 0.7], 1.8, 1);
+  if (F.grass > 0 && !mask) layer(      // mit Masken (neues Gelände) wächst das Gras als echte Halme (grass.ts)
+    crossGeo(), card(tGrass, F.grassCol, F.glow || 0), 6000, 1.3, 50, F.grass, [0.25, 0.7], 1.8, 1);
   if (F.shrub > 0) layer(crossGeo(), card(tShrub, F.shrubCol), 900, 13, 240, F.shrub, [0.9, 2.4], 1.25, 2, true);
   if (F.tree > 0) layer(treeGeo(), card(treeTex(), 0xffffff), 900, 26, 800, F.tree, [9, 21], 1, 3, true);
   // Geröll: kleine Steine dicht um die Kamera, größere Brocken weiter hinaus (halb im Boden, jeder etwas anders gefärbt)
   if (F.stones) {
     const sm = texMat(F.stoneCol ?? 0xa0a0a4, 'rock', { roughness: 0.95, metalness: 0.04 }, 1.2);
+    if (mask) sm.color.multiplyScalar(3.0);      // wie bei den Felsbrocken: sonst fast schwarz
     layer(rockGeo(1), sm, 3200, 2.0, 64, F.stones, [0.1, 0.42], 1.6, 4, false);
     layer(rockGeo(1), sm, 900, 8, 250, F.stones * 0.55, [0.5, 1.7], 1.35, 5, true);
     for (const L of layers) if (L.salt >= 4) L.rock = true;
@@ -218,7 +239,7 @@ export function treeNear(x: number, z: number, r: number) {
 
 // Pflanzen neu setzen, sobald sich die Kamera merklich bewegt hat
 export function updateFlora(cam: THREE.Vector3) {
-  updateRocks(cam);
+  updateRocks(cam); updateGrass(cam);
   for (const L of layers) {
     if (Math.abs(cam.x - L.lx) < L.cell * 1.5 && Math.abs(cam.z - L.lz) < L.cell * 1.5) continue;
     if (L.rad < 100 && cam.y - hAt(cam.x, cam.z) > 140) { if (L.im.count) { L.im.count = 0; L.lx = 1e9; } continue; }   // aus der Höhe ist Gras nicht zu sehen
@@ -228,8 +249,12 @@ export function updateFlora(cam: THREE.Vector3) {
     for (let iz = c0z; iz <= c1z && k < max; iz++) for (let ix = c0x; ix <= c1x && k < max; ix++) {
       // Bewuchs in Flecken: grobes Muster entscheidet über Wiese oder kahl
       const patch = hash(Math.floor(ix * L.cell / 70), Math.floor(iz * L.cell / 70), 9 + L.salt) * 0.6 + hash(Math.floor(ix * L.cell / 23), Math.floor(iz * L.cell / 23), 5 + L.salt) * 0.4;
-      if (hash(ix, iz, L.salt) > L.dens * (0.25 + 1.5 * patch)) continue;
       const x = (ix + hash(ix, iz, 11 + L.salt)) * L.cell, z = (iz + hash(ix, iz, 12 + L.salt)) * L.cell;
+      if (msk) {
+        // Dichte nach Masken: Geröll auf Schutt und Kuppen, Pflanzen auf Sediment und an Rinnen, wenig auf Schutt
+        const q = msk(x, z), w = L.rock ? 0.12 + 1.6 * q.talus + 0.5 * Math.max(0, -q.curv) - 0.4 * q.sed : (0.35 + 1.1 * q.sed + 0.5 * q.flow) * (1 - 0.75 * q.talus);
+        if (hash(ix, iz, L.salt) > L.dens * w * (0.4 + 1.2 * patch)) continue;
+      } else if (hash(ix, iz, L.salt) > L.dens * (0.25 + 1.5 * patch)) continue;
       const d = Math.hypot(x - cam.x, z - cam.z);
       if (d > L.rad || Math.hypot(x, z) < KEEP.r || Math.abs(x) > 3900 || Math.abs(z) > 3900) continue;
       const h = hAt(x, z);
