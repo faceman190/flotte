@@ -149,6 +149,9 @@ export function buildFlora(type: string, R: { range: (a: number, b: number) => n
   // ----- Felsbrocken (fest) -----
   {
     const n = Math.round((mask ? 1500 : 900) * F.rock), mat = type === 'eis' ? std(0xd8ecff, { roughness: 0.3, metalness: 0.05 }) : texMat(type === 'kristall' ? 0x6a5a8a : type === 'mond' ? 0xa6a6aa : 0xb0a898, 'rock', { roughness: 0.92, metalness: 0.05 }, 1.3);
+    // Das Felsbild ist sehr dunkel (Mittel ~0,07 linear): mit der Grundfarbe ergab das ~3 % Helligkeit, die Brocken wirkten in der Sonne schwarz.
+    // Im neuen Gelände auf natürliche Gesteinshelligkeit (~20–25 %) anheben.
+    if (mask && type !== 'eis') mat.color.multiplyScalar(3.4);
     const im = new THREE.InstancedMesh(rockGeo(1), mat, n); let k = 0;
     const far = new Float32Array(n), pos = new Float32Array(n * 3);
     for (let i = 0; i < n * 3 && k < n; i++) {
@@ -210,6 +213,7 @@ export function buildFlora(type: string, R: { range: (a: number, b: number) => n
   // Geröll: kleine Steine dicht um die Kamera, größere Brocken weiter hinaus (halb im Boden, jeder etwas anders gefärbt)
   if (F.stones) {
     const sm = texMat(F.stoneCol ?? 0xa0a0a4, 'rock', { roughness: 0.95, metalness: 0.04 }, 1.2);
+    if (mask) sm.color.multiplyScalar(3.0);      // wie bei den Felsbrocken: sonst fast schwarz
     layer(rockGeo(1), sm, 3200, 2.0, 64, F.stones, [0.1, 0.42], 1.6, 4, false);
     layer(rockGeo(1), sm, 900, 8, 250, F.stones * 0.55, [0.5, 1.7], 1.35, 5, true);
     for (const L of layers) if (L.salt >= 4) L.rock = true;
