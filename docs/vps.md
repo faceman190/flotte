@@ -104,3 +104,22 @@ Neue Stände gehen zuerst auf **https://test.letztecrew.de**; erst nach dem Test
 - **Passwort (offen):** Der Testserver ist ohne Passwort erreichbar (nur nicht in Suchmaschinen). Für einen Schutz kann der Spieler selbst
   mit `caddy hash-password` einen Zugang erzeugen und im Block `test.letztecrew.de` eine `basic_auth`-Zeile ergänzen.
 - DNS: A/AAAA `test` → wie `spielen` (über die Hostinger-Verbindung angelegt).
+
+## Discord-Meldungen (seit 2026-11-25)
+
+`deploy.sh` meldet nach erfolgreichem Ausrollen neue Stände an Discord, sobald eine Webhook-Adresse hinterlegt ist. Ohne Datei passiert
+nichts, ein Fehler beim Melden lässt das Ausrollen unberührt.
+
+- **Live** (`/etc/letzte-crew-discord.env`, Kanal #devlog): nur Commits, die mit `Alpha x.y:` beginnen.
+- **Test** (`/etc/letzte-crew-discord-test.env`, Kanal #testversion): jeder Commit des neuen Stands (höchstens 10 Zeilen).
+- **Einrichten** (als root auf dem VPS, Adresse aus Discord: Kanal bearbeiten → Integrationen → Webhooks → Webhook-URL kopieren):
+
+```bash
+printf 'DISCORD_WEBHOOK=%s\nDISCORD_NUR_VERSIONEN=1\n' 'https://discord.com/api/webhooks/…' > /etc/letzte-crew-discord.env
+printf 'DISCORD_WEBHOOK=%s\n' 'https://discord.com/api/webhooks/…' > /etc/letzte-crew-discord-test.env
+chown root:crew /etc/letzte-crew-discord*.env && chmod 640 /etc/letzte-crew-discord*.env
+```
+
+Die Dienste müssen nicht neu gestartet werden; der nächste Push wird gemeldet. Die Webhook-Adresse ist geheim (wer sie kennt, kann in den
+Kanal schreiben) und gehört nicht ins Repository. Commits aller Art landen zusätzlich über den GitHub-Webhook des Repositorys in #github
+(GitHub: Settings → Webhooks, Adresse mit `/github` am Ende, Content type `application/json`).

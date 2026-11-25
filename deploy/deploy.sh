@@ -97,3 +97,32 @@ fi
 echo "$NEW" > "$STATE"
 rm -f "$FAILED"
 echo "Fertig: ${NEW:0:7}"
+
+# Discord: neue Version melden (freiwillig). Ohne Datei passiert nichts; ein Fehler hier bricht das Ausrollen nie ab.
+# Live: /etc/letzte-crew-discord.env, Test (LC_BRANCH=test): /etc/letzte-crew-discord-test.env. Inhalt (root:crew, chmod 640):
+#   DISCORD_WEBHOOK=https://discord.com/api/webhooks/…   (Adresse aus Discord: Kanal bearbeiten → Integrationen → Webhooks)
+#   DISCORD_NUR_VERSIONEN=1                                (nur Commits „Alpha x.y: …“ melden; sonst jeder Commit)
+DISCORD_ENV=${LC_DISCORD_ENV:-/etc/letzte-crew-discord${LC_BRANCH:+-$LC_BRANCH}.env}
+if [[ -r "$DISCORD_ENV" ]]; then
+  (
+    trap - ERR
+    set +e
+    # shellcheck disable=SC1090
+    source "$DISCORD_ENV"
+    [[ -n "${DISCORD_WEBHOOK:-}" ]] || exit 0
+    if [[ -n "$OLD" ]] && git cat-file -e "$OLD^{commit}" 2>/dev/null; then BEREICH="$OLD..$NEW"; else BEREICH="-1 $NEW"; fi
+    # shellcheck disable=SC2086
+    ZEILEN=$(git log --no-merges --format=%s $BEREICH)
+    [[ "${DISCORD_NUR_VERSIONEN:-0}" == "1" ]] && ZEILEN=$(grep -E '^Alpha [0-9]+(\.[0-9]+)+:' <<<"$ZEILEN")
+    [[ -n "$ZEILEN" ]] || exit 0
+    if [[ "$BRANCH" == "main" ]]; then ADRESSE=https://spielen.letztecrew.de; TITEL="Neue Version ist live"
+    else ADRESSE=https://test.letztecrew.de; TITEL="Testserver aktualisiert"; fi
+    JSON=$(TITEL="$TITEL" ADRESSE="$ADRESSE" ZEILEN="$ZEILEN" node -e '
+      const z = process.env.ZEILEN.split("\n").filter(Boolean);
+      const liste = z.slice(0, 10).map(s => "• " + s).join("\n") + (z.length > 10 ? `\n… und ${z.length - 10} weitere` : "");
+      process.stdout.write(JSON.stringify({ username: "Letzte Crew", allowed_mentions: { parse: [] },
+        content: `🚀 **${process.env.TITEL}**: <${process.env.ADRESSE}>\n${liste}`.slice(0, 1990) }));')
+    curl -fsS -m 15 -H 'Content-Type: application/json' -d "$JSON" "$DISCORD_WEBHOOK" >/dev/null \
+      && echo "Discord: gemeldet" || echo "Discord: Meldung fehlgeschlagen (Ausrollen ist trotzdem fertig)" >&2
+  ) || true
+fi
