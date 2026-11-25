@@ -38,7 +38,7 @@ import { quartierFahrt, inKojeAufwachen, startLaunch, updateHangarSequence, hang
 import { quartierHooks } from './game/quartier';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
-import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, liquidAt, ROVER, SURF } from './game/surface';
+import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, roverView, liquidAt, ROVER, SURF } from './game/surface';
 import { wieselScan } from './game/wiesel';
 import { initTestlabor, updateTestlabor, testHooks } from './game/testlabor';
 import { mannyHooks } from './game/mannyAvatar';
@@ -526,6 +526,7 @@ onKey(code => {
   if ((code === 'ShiftLeft' || code === 'ShiftRight') && G.mode === 'play') { G.cruise = !G.cruise; return; }   // ohne Funkmeldung (Wunsch des Spielers): Ton und blaue Tempoanzeige reichen
   // Ich-Sicht / Außensicht: überall zu Fuß (Station, Hangar, Schiff, Mine, Planetenboden)
   if (code === 'KeyV' && (G.mode === 'walk' || G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { toggleView(); return; }
+  if (code === 'KeyV' && G.mode === 'rover' && ROVER.active && !G.dead) { roverView(); return; }      // im Fahrzeug: Verfolger ↔ Motorhaube/Fahrersitz
   if (G.mode === 'rover' && FOOT.active && code === 'Space') { footJump(); return; }
   if (code === 'KeyC' && (G.mode === 'walk' || G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { toggleCrouch(); return; }
   // Außenbordeinsatz (eva.ts): F im All bei stehendem Schiff aussteigen, an der Schleuse einsteigen; E birgt Container
@@ -895,7 +896,9 @@ function loop(now: number, manual = false) {
     ambience(DUN.active ? 'amb_hangar' : onFoot ? (IN.ship ? 'amb_ship' : IN.area === 'Hangardeck' || G.mode === 'launch' ? 'amb_hangar' : 'amb_station') : ground ? wind : null, onFoot ? (IN.ship ? 0.2 : 0.22) : 0.3);
     // weitere Schleifen: Rover, Bohrer, Drohnen, Mutterschiff in der Nähe, anfliegender Torpedo
     const rv = ROVER.active && G.mode === 'rover' && !FOOT.active;
-    loopVol('rover_engine', rv ? clamp(Math.abs((ROVER as any).speed || 0) / 26, 0, 1) * 0.35 : 0);
+    // Rovermotor (seit 2026-11-25): Tonhöhe folgt der Drehzahl, Lautstärke Drehzahl und Gas (vorher nur Lautstärke nach Tempo, im Stand stumm)
+    const rpmN = clamp((ROVER.rpm - 900) / 6100, 0, 1);
+    loopVol('rover_engine', rv ? 0.1 + rpmN * 0.17 + Math.abs(ROVER.thr) * 0.08 : 0, 0.6 + rpmN * 0.85);
     loopVol('rover_drill', rv && (ROVER as any).drilling ? 0.4 : 0);
     const fly = G.mode === 'play' && !G.dead;
     loopVol('drone_hum', fly && P.dronesOn && stats().drones ? 0.1 : 0);

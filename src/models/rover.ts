@@ -17,12 +17,20 @@ export const FZ_IDS: FzId[] = ['dachs', 'wiesel'];
 // lat/latEis: größte Querbeschleunigung, steer: größter Lenkeinschlag (nimmt bis steerRef um steerFade ab), wb: Radstand, trk: Spur,
 // ax: Achsen (Spiel-z), susp: Federweg (aus, ein), jump: Absprung an Kuppen (k: wie viel schneller als die Schwerkraft der Boden wegfallen muss,
 // vy: wie schnell, v: ab welchem Tempo, abs: was die Federung an Kanten schluckt, m/s), lean/squat: Neigen in der Kurve, Einnicken; cap: Erzladung (0 = kein Bohrer); cam: Abstand und Höhe der Kamera
+// Fahrgefühl (seit 2026-11-25, nach dem Vehicle-Template aus Unreal 5.8):
+//  hb: Handbremse (nur hinten): grip = Faktor auf die Seitenführung, yr = Faktor auf die größte Drehrate, brk = Bremswirkung längs (m/s²)
+//  rpmTop: Drehzahl bei Höchsttempo mit Umschalt im 5. Gang (daraus der Maßstab Spieltempo → Drehzahl); eng/engB bleiben die Zugkraft
+//  inp: Eingabe glätten [Gas steigt, Gas fällt, Lenkung steigt, Lenkung fällt] je Sekunde
+//  camLag: wie schnell die Kamera der Drehung nachschwenkt (1/s), fov: Sichtfeld im Stand und bei Höchsttempo, hood: Kamerapunkt der
+//  Motorhauben- bzw. Fahrersicht (Spielachsen, im body) und ihre Neigung nach unten (rad)
 export interface FzDef {
   n: string; kurz: string; glb: string; d: string; price: number;
   radR: number; wb: number; trk: number; ax: number[];
   v: number; vB: number; eng: number; engB: number; brake: number; grip: number; gripEis: number; lat: number; latEis: number;
   steer: number; steerFade: number; steerRef: number; susp: [number, number]; jump: { k: number; vy: number; v: number; abs: number };
   lean: number; squat: number; cap: number; cam: [number, number]; drag: number;
+  hb: { grip: number; yr: number; brk: number }; rpmTop: number; inp: [number, number, number, number];
+  camLag: number; fov: [number, number]; hood: [number, number, number, number];
 }
 export const FZ: Record<FzId, FzDef> = {
   dachs: {
@@ -32,6 +40,7 @@ export const FZ: Record<FzId, FzDef> = {
     v: 24, vB: 33, eng: 7, engB: 9, brake: 15, grip: 7.5, gripEis: 3.5, lat: 8, latEis: 5.5,
     steer: 0.55, steerFade: 0.45, steerRef: 24, susp: [-0.32, 0.26], jump: { k: 4, vy: -5, v: 14, abs: 2.0 },
     lean: 0.006, squat: 0.025, cap: 40, cam: [13, 5.5], drag: 0.0045,
+    hb: { grip: 0.3, yr: 1.5, brk: 6 }, rpmTop: 6900, inp: [5, 9, 2.1, 4.5], camLag: 3.2, fov: [70, 78], hood: [0, 3.75, -1.5, -0.13],
   },
   wiesel: {
     n: 'Erkundungsbuggy „Wiesel“ E-2', kurz: 'Wiesel', glb: 'Wiesel', price: 9500,
@@ -40,8 +49,17 @@ export const FZ: Record<FzId, FzDef> = {
     v: 33, vB: 44, eng: 10, engB: 13, brake: 19, grip: 9, gripEis: 4.2, lat: 10, latEis: 6.5,
     steer: 0.6, steerFade: 0.4, steerRef: 33, susp: [-0.28, 0.16], jump: { k: 3.5, vy: -4.5, v: 12, abs: 1.4 },
     lean: 0.009, squat: 0.035, cap: 0, cam: [9.5, 4.2], drag: 0.0035,
+    hb: { grip: 0.2, yr: 2.4, brk: 5 }, rpmTop: 6950, inp: [6.5, 10, 2.8, 5.5], camLag: 4.2, fov: [70, 82], hood: [-0.34, 1.5, 0.02, -0.06],
   },
 };
+// Getriebe (wie das Fahrzeug-Template): fünf Gänge, Achsübersetzung, Leerlauf, Begrenzer, Schaltpunkte, Schaltpause (s)
+export const GETRIEBE = { g: [4.25, 2.52, 1.66, 1.22, 1.0], achse: 2.81, idle: 900, max: 7000, hoch: 6000, runter: 2000, pause: 0.2 };
+// Drehmomentkurve (Drehzahl, Anteil an der Spitze): Spitze 1500–2500, darüber fällt sie ab
+const TQ: [number, number][] = [[0, 0.75], [900, 0.82], [1500, 1], [2500, 1], [4500, 0.92], [6000, 0.82], [7000, 0.7]];
+export function drehmoment(rpm: number) {
+  for (let i = 1; i < TQ.length; i++) if (rpm <= TQ[i][0]) { const [a, ta] = TQ[i - 1], [b, tb] = TQ[i]; return ta + (tb - ta) * (rpm - a) / (b - a); }
+  return TQ[TQ.length - 1][1];
+}
 export const normFz = (k: unknown): FzId => (k === 'wiesel' ? 'wiesel' : 'dachs');
 
 export interface RoverRad { mount: THREE.Object3D; spin: THREE.Object3D; rest: THREE.Vector3; front: boolean; side: number }
@@ -106,7 +124,7 @@ export function buildFahrzeug(kind: FzId): RoverNeu | null {
   let sensor: THREE.Group | null = null;
   if (parts.Sensor) { sensor = new THREE.Group(); sensor.position.copy(pivot(parts.Sensor, sensor)); body.add(sensor); }
   const L = LICHT[kind];
-  for (const [x, y, z, s] of L.w) { const l = new THREE.Sprite(glowMat(0xfff0d0, 0.85)); l.position.set(x, y, z); l.scale.setScalar(s); body.add(l); }
+  for (const [x, y, z, s] of L.w) { const l = new THREE.Sprite(glowMat(0xfff0d0, 0.85)); l.position.set(x, y, z); l.scale.setScalar(s); l.userData.vorn = true; body.add(l); }      // vorn: in der Fahrersicht ausgeblendet (blenden sonst)
   for (const [x, y, z, s] of L.r) { const l = new THREE.Sprite(glowMat(0xff2a18, 0.8)); l.position.set(x, y, z); l.scale.setScalar(s); body.add(l); }
   const beacon = new THREE.Sprite(glowMat(0xffa030, 1)); beacon.position.set(L.b[0], L.b[1], L.b[2]); beacon.scale.setScalar(L.b[3]); body.add(beacon);
   const wz = kind === 'wiesel';
