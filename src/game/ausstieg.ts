@@ -26,30 +26,34 @@ export function schiffZuWelt(p: THREE.Vector3, lage?: { x: number; y: number; z:
   SHIP.g.updateMatrixWorld(true); return p.applyMatrix4(SHIP.g.matrixWorld);
 }
 /** Kanzel: Rand der Kanzel an der linken Seite (wo die Leiter hängt) und Punkt über der Kanzel (Außenbord) in Schiffskoordinaten */
-export function kanzelPunkte() {
-  const k = kanzelInfo(SHIP.g); if (!k) return null;
+export function kanzelPunkte(root: THREE.Object3D = SHIP.g) {
+  const k = kanzelInfo(root); if (!k) return null;
   const b = k.box, cz = (b.min.z + b.max.z) / 2;
   return { rand: new THREE.Vector3(b.min.x - 0.25, b.min.y + 0.05, cz + 0.3), oben: new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y + 1.0, cz), seite: -1 };
 }
 /** Fuß der Bordleiter in der Welt (Boden), mit Blick vom Schiff weg */
-export function leiterFuss(lage: { x: number; y: number; z: number; yaw: number }) {
-  const k = kanzelPunkte(); if (!k) return null;
+export function leiterFuss(lage: { x: number; y: number; z: number; yaw: number }, root: THREE.Object3D = SHIP.g) {
+  const k = kanzelPunkte(root); if (!k) return null;
   const top = schiffZuWelt(k.rand.clone(), lage), out = schiffZuWelt(k.rand.clone().add(new THREE.Vector3(-1, 0, 0)), lage).sub(top).setY(0).normalize();
   const x = top.x + out.x * 0.75, z = top.z + out.z * 0.75;
   return { x, z, top, yaw: Math.atan2(-out.x, -out.z) };      // Blick vom Schiff weg (yaw wie die Figur: vorwärts −sin, −cos)
 }
 
 // ---------- Bordleiter (am Planeten): zwei Holme mit Sprossen vom Kanzelrand schräg zum Boden ----------
-let leiter: THREE.Group | null = null;
+const eigene = { g: null as THREE.Group | null };
+export const LEITER = { an: false };      // eigene Leiter steht (Mehrspieler: net.ts schickt es mit)
 const LM = new THREE.MeshStandardMaterial({ color: 0x9aa1a8, metalness: 0.85, roughness: 0.35 });
 const LG = new THREE.MeshStandardMaterial({ color: 0xd9a020, metalness: 0.2, roughness: 0.5 });
-export function leiterZeigen(on: boolean, lage?: { x: number; y: number; z: number; yaw: number }) {
+export function leiterZeigen(on: boolean, lage?: { x: number; y: number; z: number; yaw: number }) { LEITER.an = on && !!lage; leiterSetzen(eigene, on, lage); }
+/** Leiter an einem beliebigen Schiff (ref hält die Leiter; Mitspieler: je Schiff eine eigene, net.ts) */
+export function leiterSetzen(ref: { g: THREE.Group | null }, on: boolean, lage?: { x: number; y: number; z: number; yaw: number }, root: THREE.Object3D = SHIP.g) {
+  let leiter = ref.g;
   if (!on || !lage) { leiter?.removeFromParent(); return; }
-  const f = leiterFuss(lage); if (!f) return;
+  const f = leiterFuss(lage, root); if (!f) return;
   const gy = world.ground ? world.ground(f.x, f.z) : lage.y - 3;
   const top = f.top, foot = new THREE.Vector3(f.x, gy, f.z), len = top.distanceTo(foot);
   if (!leiter || Math.abs((leiter.userData.len || 0) - len) > 0.05) {
-    leiter?.removeFromParent(); leiter = new THREE.Group(); leiter.userData.len = len;
+    leiter?.removeFromParent(); leiter = ref.g = new THREE.Group(); leiter.userData.len = len;
     const rail = new THREE.CylinderGeometry(0.022, 0.022, len, 8), rung = new THREE.CylinderGeometry(0.014, 0.014, 0.42, 8);
     for (const s of [-1, 1]) { const r = new THREE.Mesh(rail, LM); r.position.set(s * 0.21, len / 2, 0); leiter.add(r); }
     for (let y = 0.3; y < len - 0.1; y += 0.3) { const g = new THREE.Mesh(rung, LM); g.rotation.z = Math.PI / 2; g.position.set(0, y, 0); leiter.add(g); }

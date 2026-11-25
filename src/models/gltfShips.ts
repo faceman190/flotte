@@ -135,6 +135,7 @@ export function modelInstance(name: string, length: number, paint: Paint = 'Oran
 
 // Fahrwerk und Rampe (Meshes mit dem Material „gear“) zeigen oder verbergen: im Flug eingezogen, am Boden ausgefahren
 export function setGear(root: THREE.Object3D, down: boolean) {
+  root.userData.zGear = down;      // gewünschter Zustand (Mehrspieler: net.ts schickt ihn mit)
   let list = root.userData.gear as THREE.Object3D[] | undefined;
   if (!list) { list = []; root.traverse((o: any) => { if (o.isMesh && o.material?.name === 'gear') list!.push(o); }); root.userData.gear = list; }
   for (const o of list) o.visible = down;
@@ -196,6 +197,7 @@ export const RAMP_ENTRY: Record<string, { door: number; foot: number; hw: number
 export const RAMP = { want: true };
 // Öffnen oder schließen (jedes Bild aufrufen, dt = Spielzeit des Bildes): beim ersten Aufruf sofort im Zielzustand, danach mit der Dauer aus DOORS
 export function setDoors(root: THREE.Object3D, open: boolean, dt = 0) {
+  root.userData.zDoors = open;
   let rig = root.userData.doors as DoorRig | null | undefined;
   if (rig === undefined) rig = root.userData.doors = rigDoors(root);
   if (!rig) return;
@@ -299,6 +301,7 @@ function kanzelStreben(root: THREE.Object3D, glas: THREE.Mesh[], sb: THREE.Box3,
 const kRig = (root: THREE.Object3D) => { let r = root.userData.kanzel as KanzelRig | null | undefined; if (r === undefined) r = root.userData.kanzel = rigKanzel(root); return r; };
 /** Kanzel öffnen oder schließen (jedes Bild, dt = Spielzeit); 1,2 s für den ganzen Weg */
 export function setKanzel(root: THREE.Object3D, open: boolean, dt = 0) {
+  root.userData.zKanzel = open;
   const r = kRig(root); if (!r) return;
   r.p = Math.max(0, Math.min(1, r.p + (open ? 1 : -1) * Math.min(0.1, dt) / 1.2));
   r.pivot.rotation.x = r.angle * ease(r.p);
