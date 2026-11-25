@@ -108,7 +108,8 @@ function moveTeilchen(dt: number, cam: THREE.Vector3, k: number, art: Art) {
 export function updateWetter(dt: number, cam: THREE.Vector3) {
   const surf = world.surface;
   if (!surf || !base || surf.planet !== WETTER.planet) { if (applied || pts?.parent) wetterEnde(); return; }
-  if (IN.active || G.cityWalk) { if (pts) pts.visible = false; if (WETTER.art) loopVol(WETTER.art.snd, 0); return; }      // Innenraum, Stadt: eigenes Licht
+  // Innenraum, Stadt, Mine (seit 2026-11-26: Sturm und Regen liefen unter Tage weiter, laut und ohne Pause): eigenes Licht, kein Wetter
+  if (IN.active || G.cityWalk || G.mode === 'dungeon') { if (pts) pts.visible = false; if (WETTER.art) loopVol(WETTER.art.snd, 0); return; }
   const ph = WETTER.force.zeit ?? phase(WETTER.planet), L = licht(ph), art = WETTER.art;
   const st = WETTER.force.sturm ?? sturmAus(WETTER.planet, art);
   WETTER.tag = L.k; WETTER.warm = L.warm; WETTER.sturm = art ? st : 0;

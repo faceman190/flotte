@@ -912,7 +912,8 @@ function loop(now: number, manual = false) {
     const ground = !onFoot && !!world.surface && (G.mode === 'rover' || G.mode === 'play');
     const kind = ground ? JSON.stringify([(world.surface as any)?.kind, (world.surface as any)?.type, (world.surface as any)?.ground, (world.def as any)?.id]).toLowerCase() : '';
     const wind = /eis|ice|frost/.test(kind) ? 'amb_planet_ice' : /vulkan|lava|asche/.test(kind) ? 'amb_planet_lava' : 'amb_planet_wind';
-    ambience(DUN.active ? 'amb_hangar' : onFoot ? (IN.ship ? 'amb_ship' : IN.area === 'Hangardeck' || G.mode === 'launch' ? 'amb_hangar' : 'amb_station') : ground ? wind : null, onFoot ? (IN.ship ? 0.2 : 0.22) : 0.3);
+    // Mine (seit 2026-11-26): leiser Luftzug statt des Hangar-Brummens (Nutzer: „durchgehend nerviges Geräusch“ in den Minen)
+    ambience(DUN.active ? 'amb_planet_wind' : onFoot ? (IN.ship ? 'amb_ship' : IN.area === 'Hangardeck' || G.mode === 'launch' ? 'amb_hangar' : 'amb_station') : ground ? wind : null, DUN.active ? 0.09 : onFoot ? (IN.ship ? 0.2 : 0.22) : 0.3);
     // weitere Schleifen: Rover, Bohrer, Drohnen, Mutterschiff in der Nähe, anfliegender Torpedo
     const rv = ROVER.active && G.mode === 'rover' && !FOOT.active;
     // Rovermotor (seit 2026-11-25): Tonhöhe folgt der Drehzahl, Lautstärke Drehzahl und Gas (vorher nur Lautstärke nach Tempo, im Stand stumm)
