@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { innenArt, innenFlaeche } from './innenFlaeche';
 
 // Schiffsmodelle als komprimierte GLB-Dateien aus public/assets/ship (asset-src/glb/ship → build-assets.mjs).
 // Lackierungen (paint/<Modell>_<Farbe>) kamen aus dem alten Gratis-Paket, das 2026-11-18 entfernt wurde; die Mechanik bleibt für spätere Modelle.
@@ -30,6 +31,7 @@ export async function loadShipModels() {
         if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = 4; m.map.needsUpdate = true; m.metalness = 0.35; m.roughness = 0.55; }
         m.envMapIntensity = 0.8;
         if (m.name.startsWith('ext_pan')) panelShader(m);
+        const art = innenArt(m.name); if (art) innenFlaeche(m, art);      // Innenräume (Kormoran, Wisent): Oberfläche im Shader
       });
       inner.rotation.y = Math.PI;                 // Nase von +Z nach −Z
       inner.userData.glbRoot = true;              // Koordinaten der GLB-Datei (Gelenke beweglicher Teile, setDoors)

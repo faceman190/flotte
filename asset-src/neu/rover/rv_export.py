@@ -24,9 +24,9 @@ CFG = {
     'Torwache': {'near': 0.4, 'far': 0.05, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 2.5},
     'Fernohr': {'near': 0.4, 'far': 0.05, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 3.0},
     'Pumpwerk': {'near': 0.4, 'far': 0.05, 'drop_near': set(), 'schrift': 1.0, 'res': 3, 'far_min': 2.5},
-    'FrachtKiste': {'near': 0.9, 'far': 0.2, 'drop_near': set(), 'schrift': 1.0, 'res': 2, 'far_min': 0.1, 'fern': False},
-    'FrachtPalette': {'near': 0.9, 'far': 0.2, 'drop_near': set(), 'schrift': 1.0, 'res': 2, 'far_min': 0.1, 'fern': False},
-    'FrachtContainer': {'near': 0.8, 'far': 0.2, 'drop_near': set(), 'schrift': 1.0, 'res': 2, 'far_min': 0.1, 'fern': False},
+    'FrachtKiste': {'near': 0.5, 'far': 0.2, 'drop_near': set(), 'schrift': 1.0, 'res': 2, 'far_min': 0.1, 'fern': False},
+    'FrachtPalette': {'near': 0.55, 'far': 0.2, 'drop_near': set(), 'schrift': 1.0, 'res': 2, 'far_min': 0.1, 'fern': False},
+    'FrachtContainer': {'near': 0.7, 'far': 0.2, 'drop_near': set(), 'schrift': 1.0, 'res': 2, 'far_min': 0.1, 'fern': False},
 }[NAME]
 SKIP_COLL = {'Studio grau', 'Studio', 'Kameras', 'Lichter', 'Buehne', 'Bühne', 'Weltraum'}
 BRIGHT = 1.5                                   # die Blender-Farben sind fürs Studiolicht sehr dunkel

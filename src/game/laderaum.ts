@@ -26,9 +26,10 @@ interface Raum {
   aus?: string[];                                                // feste Frachtattrappen im Modell, die den echten Kisten weichen (ausgeblendet)
 }
 const RAEUME: Record<string, Raum> = {
-  Kormoran: { boden: -1.4, hw: 3.3, z0: 10.3, tuer: 21.4, rampe: { y0: -1.42, z1: 27.6, y1: -4.1, hw: 2.1 }, gasse: 2.0, decke: 3.3, stell: [{ x: 0, z: 15.6 }],
-    reihen: [{ x: 2.65, z0: 10.8, z1: 21.0 }, { x: -2.65, z0: 10.8, z1: 21.0 }], aus: ['Container001', 'Kiste010', 'Netzschnur096'] },
-  Wisent: { boden: -3.8, hw: 6.3, z0: -4.0, tuer: 41.2, rampe: { y0: -3.7, z1: 50.0, y1: -10.2, hw: 3.7 }, gasse: 3.7, decke: 5.6, stell: [{ x: 0, z: 35.0 }, { x: 0, z: 26.0 }],
+  // Kormoran seit dem 25.11.2026 ohne feste Frachtattrappen im Modell, Boden mit Platten 1 cm höher (asset-src/neu/kormoran/kor_raeume.py)
+  Kormoran: { boden: -1.39, hw: 3.3, z0: 10.3, tuer: 21.4, rampe: { y0: -1.42, z1: 27.6, y1: -4.1, hw: 2.1 }, gasse: 2.0, decke: 3.3, stell: [{ x: 0, z: 15.6 }],
+    reihen: [{ x: 2.65, z0: 10.8, z1: 21.0 }, { x: -2.65, z0: 10.8, z1: 21.0 }] },
+  Wisent: { boden: -3.78, hw: 6.3, z0: -4.0, tuer: 41.2, rampe: { y0: -3.7, z1: 50.0, y1: -10.2, hw: 3.7 }, gasse: 3.7, decke: 5.6, stell: [{ x: 0, z: 35.0 }, { x: 0, z: 26.0 }],
     reihen: [{ x: 4.95, z0: -3.4, z1: 40.5, doppel: true }, { x: -4.95, z0: -3.4, z1: 40.5, doppel: true }] },
 };
 const STUECK = { kiste: { e: 10, l: 1.2, b: 0.8, h: 0.8, name: 'FrachtKiste' }, palette: { e: 25, l: 1.2, b: 1.2, h: 1.2, name: 'FrachtPalette' }, container: { e: 100, l: 3.0, b: 2.4, h: 2.4, name: 'FrachtContainer' } };

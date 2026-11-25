@@ -40,7 +40,7 @@ def captain_extras(x0, x1, s):
     box('Fensterrahmen', 0.06, 1.16, 0.74, x0 + 0.08, yc - s * 0.2, DECK + 1.5, M['irahmen'], 0.01)
     box('Sternenfenster', 0.01, 1.0, 0.6, x0 + 0.115, yc - s * 0.2, DECK + 1.5, M['sterne'], 0)
     box('Fensterblende', 0.12, 1.16, 0.05, x0 + 0.12, yc - s * 0.2, DECK + 1.86, M['irahmen'], 0.006)
-    box('Teppich', 1.7, 1.2, 0.008, (x0 + x1) / 2 + 0.1, yc - s * 0.1, DECK + 0.004, M['teppich'], 0.002)
+    box('Teppich', 1.7, 1.2, 0.008, (x0 + x1) / 2 + 0.1, yc - s * 0.1, DECK + 0.021, M['teppich'], 0.002)
     # Regal über dem Schreibtisch mit Büchern, Kiste und Bilderrahmen
     dy = yo - s * 1.95
     box('Wandregal', 0.25, 1.1, 0.03, x1 - 0.16, dy, DECK + 1.82, M['irahmen'], 0.004)
@@ -125,11 +125,44 @@ def cargo_detail():
             if k in (1, 2, 5, 6):
                 for i in range(5): pipe('Netzschnur', [Vector((xa + 0.1 + i * 0.2, s * (w - 0.09), f0 + 0.3)), Vector((xa + 0.1 + i * 0.2, s * (w - 0.09), f0 + 1.9))], 0.008, M['netz'])
                 for j in range(7): pipe('Netzschnur', [Vector((xa + 0.05, s * (w - 0.09), f0 + 0.35 + j * 0.25)), Vector((xb - 0.05, s * (w - 0.09), f0 + 0.35 + j * 0.25))], 0.008, M['netz'])
+    SL, SB, SW = Sammel('Laderaumdetail Boden', C_ROOM, 0.003), Sammel('Laderaumdetail Wand', C_ROOM), Sammel('Laderaumdetail Decke', C_ROOM)
+    zp = f0 + 0.02      # Oberkante Bodenblech: darauf schwere Bodenplatten (1,2 m) mit Fugen und Schrauben, Ankerschienen längs
+    platten(SL, x1 - 0.3 if False else x0 + 0.05, x1, -3.2, 3.2, zp, M['floor'], M['ischacht'], M['mittel'], M['iboden2'], p=1.2, q=1.6, h=0.01)
+    for s in (1, -1):
+        zurrschiene(SL, x0 + 0.2, x1 - 0.2, (s * 1.6, zp + 0.01), (0, 0, 1), M['mittel'], M['ischacht'], breite=0.09)
+        zurrschiene(SL, x0 + 0.2, x1 - 0.2, (s * 3.05, zp + 0.01), (0, 0, 1), M['mittel'], M['ischacht'], breite=0.07)
     for k in range(9):
-        for s in (1, -1): ring('Zurroese', 0.05, 0.012, (x0 + 0.6 + k * 1.2, s * 1.6, f0 + 0.03), (0, 0, 1), M['steel'], 14)
+        for s in (1, -1): ring('Zurroese', 0.05, 0.012, (x0 + 0.6 + k * 1.2, s * 1.6, f0 + 0.05), (0, 0, 1), M['steel'], 14)
     # Bodenmarkierungen: Ladegasse, Gefahrenband vor der Rampe
-    for s in (1, -1): box('Ladegasse', x0 - x1 - 0.6, 0.06, 0.004, (x0 + x1) / 2, s * 1.3, f0 + 0.022, M['platey'], 0)
-    box('Rampenband', 0.4, 2 * DOOR_Y, 0.004, x0 + 0.5, 0, f0 + 0.022, M['warn2'], 0)
+    for s in (1, -1): box('Ladegasse', x0 - x1 - 0.6, 0.06, 0.004, (x0 + x1) / 2, s * 1.3, f0 + 0.033, M['platey'], 0)
+    box('Rampenband', 0.4, 2 * DOOR_Y, 0.004, x0 + 0.5, 0, f0 + 0.033, M['warn2'], 0)
+    # Wände: Ankerschienen in zwei Höhen, Leitungsbündel oben mit Schellen an jedem Spant, Anschlusskästen, Käfigleuchten, Feldschrift
+    for s in (1, -1):
+        yw = s * (w - 0.05)
+        for zz in (f0 + 0.55, f0 + 1.45): zurrschiene(SW, x0 + 0.3, x1 - 0.3, (yw, zz), (0, -s, 0), M['mittel'], M['ischacht'], breite=0.06, dicke=0.016)
+        for r, dy, zz, mm in ((0.045, 0.16, c0 - 0.42, 'irohr1'), (0.03, 0.16, c0 - 0.6, 'irohr2'), (0.025, 0.14, c0 - 0.74, 'steel')):
+            pipe('Laderaumleitung', [Vector((x0 + 0.15, s * (w - 0.05 - dy - r), zz)), Vector((x1 - 0.1, s * (w - 0.05 - dy - r), zz))], r, M[mm])
+            for k in range(9): schelle(SW, (x0 + 0.6 + k * 1.2 + 0.12, s * (w - 0.05 - dy - r), zz), (0, -s, 0), r, M['irahmen'])
+        for k in range(9):
+            x = x0 + 0.6 + k * 1.2
+            if k % 2 == 1:      # Käfigleuchte am Spant
+                SW.box(0.1, 0.12, 0.3, x, s * (w - 0.27), f0 + 2.35, M['irahmen'])
+                SW.box(0.06, 0.04, 0.24, x, s * (w - 0.34), f0 + 2.35, M['lichtband'])
+                for dz in (-0.1, 0.0, 0.1): SW.box(0.09, 0.012, 0.012, x, s * (w - 0.365), f0 + 2.35 + dz, M['irahmen'])
+            if k in (0, 3, 7):      # Anschlusskasten mit Kabel nach oben
+                SW.box(0.36, 0.1, 0.42, x + 0.6, s * (w - 0.1), f0 + 2.0, M['cab'])
+                SW.box(0.24, 0.004, 0.08, x + 0.6, s * (w - 0.152), f0 + 2.1, M['ischild'])
+                SW.box(0.06, 0.05, c0 - 0.8 - f0 - 2.21, x + 0.72, s * (w - 0.08), (f0 + 2.21 + c0 - 0.8) / 2, M['irahmen'])
+        for i, xx in enumerate((-19.6, -16.0, -12.6)):
+            text('A%d' % (i + 1) if s > 0 else 'B%d' % (i + 1), 0.26, (xx, s * (w - 0.052), f0 + 2.95), (1, 0, 0) if s > 0 else (-1, 0, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Feldschrift')
+    # Decke: zwei Kabelpritschen längs zwischen den Deckenspanten, Kabel darin
+    for s in (1, -1):
+        y = s * 1.25; zt = c0 - 0.24
+        SB.box(x0 - x1 - 0.4, 0.36, 0.008, (x0 + x1) / 2, y, zt - 0.06, M['irahmen'])
+        for sy in (-1, 1): SB.box(x0 - x1 - 0.4, 0.008, 0.07, (x0 + x1) / 2, y + sy * 0.176, zt - 0.03, M['irahmen'])
+        for j, mm in enumerate(('dunkel', 'irohr2', 'dunkel', 'irohr1')):
+            pipe('Pritschenkabel', [Vector((x0 + 0.1, y - 0.12 + j * 0.08, zt - 0.038)), Vector((x1 - 0.2, y - 0.12 + j * 0.08, zt - 0.038))], 0.016, M[mm])
+    for o in (SL, SB, SW): o.fertig()
     # Laufkran: Doppel-T-Träger unter den Deckenspanten, Katze, Seil, Hakenflasche
     kx0, kx1 = -20.0, -11.5; km = (kx0 + kx1) / 2; zt = c0 - 0.22
     box('Kranbahn Steg', kx1 - kx0, 0.025, 0.2, km, 0, zt - 0.1, M['oxid'] if 'oxid' in M else M['ochre'], 0.004)
@@ -139,24 +172,7 @@ def cargo_detail():
     cyl('Kranseil', 0.008, 0.95, tx, 0, zt - 0.9, M['steel'], 'Z', n=6)
     box('Hakenflasche', 0.18, 0.12, 0.22, tx, 0, zt - 1.45, M['ochre'], 0.02)
     pipe('Kranhaken', [Vector((tx, 0, zt - 1.56)), Vector((tx, 0, zt - 1.72)), Vector((tx + 0.1, 0, zt - 1.78)), Vector((tx + 0.14, 0, zt - 1.68))], 0.02, M['steel'], rad=0.04)
-    # Fracht Backbord: Kistenstapel mit Gurten, Palette mit kleinen Kisten
-    crate(-18.25, 2.45, 1.0, 1.0, 0.9, tag=1); crate(-17.15, 2.45, 1.0, 1.0, 0.9, tag=1); crate(-17.7, 2.45, 1.0, 1.0, 0.75, f0 + 0.9)
-    for xx in (-18.0, -17.4): box('Spanngurt', 0.05, 1.04, 0.012, xx, 2.45, f0 + 1.66, M['ochre'], 0.002)
-    box('Palette', 1.2, 1.0, 0.14, -14.6, 2.5, f0 + 0.07, M['platte'], 0.01)
-    for i in range(2):
-        for j in range(2): crate(-14.88 + i * 0.56, 2.25 + j * 0.5, 0.52, 0.46, 0.45, f0 + 0.14)
-    crate(-14.6, 2.5, 0.5, 0.44, 0.4, f0 + 0.59, tag=1)
-    # Fracht Steuerbord: Container mit Rippen und Türen, Fässer auf Palette
-    cx, cy = -17.4, -2.55
-    box('Container', 2.6, 1.5, 1.7, cx, cy, f0 + 0.85, M['container'], 0.02)
-    for k in range(9): box('Containerrippe', 0.05, 1.52, 1.66, cx - 1.2 + k * 0.3, cy, f0 + 0.85, M['container'], 0.006)
-    for sg in (1, -1): box('Containertuer', 0.04, 0.72, 1.6, cx + 1.31, cy + sg * 0.37, f0 + 0.84, M['container'], 0.006)
-    for sg in (1, -1): cyl('Verschlussstange', 0.015, 1.5, cx + 1.34, cy + sg * 0.15, f0 + 0.85, M['steel'], 'Z', n=8)
-    box('Palette', 1.3, 1.3, 0.14, -13.8, -2.55, f0 + 0.07, M['platte'], 0.01)
-    for i in range(2):
-        for j in range(2):
-            cyl('Fass', 0.28, 0.86, -14.1 + i * 0.6, -2.85 + j * 0.6, f0 + 0.57, M['red' if (i + j) % 2 else 'teal'], 'Z', n=24)
-            for z in (0.35, 0.8): ring('Fassreif', 0.285, 0.012, (-14.1 + i * 0.6, -2.85 + j * 0.6, f0 + z), (0, 0, 1), M['mittel'], 24)
+    # Ladegut: keine festen Kisten mehr (seit dem 25.11.2026 stellt das Spiel die Fracht als echte Normkisten, src/game/laderaum.ts)
     # Spinde an der Stirnwand, Bedienpult und Warnleuchte an der Rampe, Arbeitsleuchten
     for s in (1, -1):
         for k in range(2):

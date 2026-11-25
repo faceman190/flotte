@@ -24,7 +24,17 @@ M.update(
     kern=mk('Energiekern', (0.3, 0.6, 1.0), 0, 0.2, var=0, rvar=0, emit=(0.3, 0.62, 1.0), es=14, grime=False),
     lichtband=mk('Lichtband', (1, 1, 1), 0, 0.3, var=0, rvar=0, emit=(0.92, 0.96, 1.0), es=10, grime=False),
     leitlicht=mk('Leitlicht', (0.2, 0.5, 1), 0, 0.3, var=0, rvar=0, emit=(0.22, 0.55, 1.0), es=6, grime=False),
+    # Details (25.11.2026): Wandfelder, Bodenplatten, Gitterrost, Schacht, Typenschilder (innen_detail.py)
+    ifeld=mk('Innenwand Feld', (0.21, 0.215, 0.222), 0.15, 0.44, var=0.06, rvar=0.05, scale=2.0, bump=0.12, wear=0.3),
+    iboden2=mk('Innenboden hell', (0.06, 0.062, 0.067), 0.6, 0.48, scale=11, studs=True, wear=0.5),
+    igitter=mk('Gitterrost', (0.08, 0.082, 0.086), 0.85, 0.42, var=0.1, wear=0.7),
+    ischacht=mk('Schacht', (0.008, 0.008, 0.01), 0.3, 0.85, var=0.05, grime=False),
+    ischild=mk('Typenschild', (0.42, 0.42, 0.4), 0.7, 0.38, var=0.05),
+    irohr1=mk('Leitung Petrol', (0.03, 0.12, 0.13), 0.4, 0.42, var=0.08, wear=0.5),
+    irohr2=mk('Leitung Ocker', (0.42, 0.26, 0.04), 0.3, 0.5, var=0.08, wear=0.5),
 )
+exec(compile(open(os.path.join(HERE, '..', 'innen', 'innen_detail.py'), encoding='utf-8').read(), 'innen_detail.py', 'exec'))
+SD = {'wand': None, 'boden': None, 'decke': None, 'k': 0}      # Sammler, in innen() angelegt
 
 # ---------- Bauhelfer ----------
 def iwall(name, a, b, z0, z1, doors=(), th=0.1, m='iwand', band=True):
@@ -43,7 +53,13 @@ def iwall(name, a, b, z0, z1, doors=(), th=0.1, m='iwand', band=True):
         top = z1 - 0.32 if band else z1
         n = max(1, round((s1 - s0) / 1.2))
         for k in range(n):
-            piece(s0 + (s1 - s0) * k / n + 0.006, s0 + (s1 - s0) * (k + 1) / n - 0.006, z0 + 0.14, top, m, th)
+            pa, pb = s0 + (s1 - s0) * k / n + 0.006, s0 + (s1 - s0) * (k + 1) / n - 0.006
+            piece(pa, pb, z0 + 0.14, top, m, th)
+            if SD['wand'] is not None:      # Rahmenfeld, Schrauben, je nach Nummer Lüftungsgitter, Wartungsklappe, Anschlusskasten (beide Seiten)
+                nv = Vector((-u.y, u.x, 0)); a3 = Vector((a.x, a.y, 0)); u3 = Vector((u.x, u.y, 0))
+                for sg in (1, -1):
+                    SD['k'] += 1
+                    wandfeld(SD['wand'], a3, u3, nv * sg, pa, pb, z0 + 0.14, top, SD['k'], M['ifeld'] if m == 'iwand' else M['iwand'], M['irahmen'], M['ischacht'], M['mittel'], M['ischild'], d=th / 2)
         if band: piece(s0, s1, top, z1, 'iwand2', th)
     for t, w, h in doors:
         hf = min(h, z1 - z0)      # Tür höher als die Wand (Cockpitrückwand): oben offen, kein Sturz, Rahmen nur bis zur Oberkante
@@ -69,6 +85,7 @@ def slab(name, x0, x1, y0, y1, z, m, th=0.05):
     return box(name, x1 - x0, y1 - y0, th, (x0 + x1) / 2, (y0 + y1) / 2, z, M[m], 0.004)
 def ceiling(name, x0, x1, y0, y1, z=CEIL, lights=(), watt=80, col=(1.0, 0.97, 0.92)):
     slab(name, x0, x1, y0, y1, z + 0.025, 'idecke')
+    if SD['decke'] is not None and name != 'Gangdecke': deckenraster(SD['decke'], x0, x1, y0, y1, z, M['irahmen'], p=1.0, b=0.04, t=0.02)
     for (x, y, lx, ly) in lights:
         box(name + ' Leuchte', lx, ly, 0.03, x, y, z - 0.015, M['lichtband'], 0.004)
         area(name + ' Licht', (x, y, z - 0.06), (0, 0, 0), lx, ly, watt, col)
@@ -91,6 +108,16 @@ def corridor():
         box('Leitlicht', 16.6, 0.03, 0.01, -2.5, s * 0.82, DECK + 0.03, M['leitlicht'], 0)
         box('Kabelkanal', 16.6, 0.22, 0.08, -2.5, s * 0.75, CEIL - 0.04, M['iwand2'], 0.004)
     slab('Gangboden', -11.0, 9.9, -1.0, 1.0, DECK - 0.02, 'iboden')
+    zf = DECK + 0.005
+    for s in (1, -1): platten(SD['boden'], -11.0, 6.0, s * 0.3 if s > 0 else -1.0, 1.0 if s > 0 else -0.3, zf, M['iboden'], M['ischacht'], M['mittel'], M['iboden2'], p=1.0, q=0.7)
+    for k in range(17): gitter(SD['boden'], -11.0 + k + 0.01, -10.0 + k - 0.01, -0.3, 0.3, zf, M['igitter'], M['ischacht'])
+    for s, mm, yy in ((1, 'irohr1', 0.42), (-1, 'irohr2', 0.42)):      # Leitungen längs unter der Decke, Halter an den Spanten
+        pipe('Gangleitung', [Vector((-10.9, s * yy, CEIL - 0.13)), Vector((5.9, s * yy, CEIL - 0.13))], 0.032, M[mm])
+        pipe('Gangleitung', [Vector((-10.9, s * (yy - 0.09), CEIL - 0.12)), Vector((5.9, s * (yy - 0.09), CEIL - 0.12))], 0.02, M['mittel'])
+        for k in range(15):
+            x = -10.4 + k * 1.15
+            SD['decke'].box(0.04, 0.2, 0.1, x, s * (yy - 0.045), CEIL - 0.07, M['irahmen'])
+            SD['decke'].box(0.05, 0.22, 0.012, x, s * (yy - 0.045), CEIL - 0.172, M['irahmen'])
     ceiling('Gangdecke', -11.0, 6.0, -1.0, 1.0, CEIL, [(x, 0, 1.4, 0.36) for x in (-8.5, -3.5, 1.5)], 70)
     for x in (-6.0, -1.0, 4.0): box('Deckenspant', 0.16, 2.0, 0.14, x, 0, CEIL - 0.07, M['irahmen'], 0.006)
     # Feuerlöscher und Notfallkasten
@@ -99,6 +126,8 @@ def corridor():
 def deck_floor():
     slab('Deckboden Backbord', -11.0, 5.0, 1.0, 5.2, DECK - 0.02, 'iboden')
     slab('Deckboden Steuerbord', -11.0, 5.0, -5.2, -1.0, DECK - 0.02, 'iboden')
+    for x0, x1, y1 in ((-10.0, -6.0, 5.2), (-6.0, -2.0, 5.2), (-2.0, 5.0, 4.6)):      # Kabinen und Messe (Backbord)
+        platten(SD['boden'], x0 + 0.06, x1 - 0.06, 1.06, y1 - 0.06, DECK + 0.005, M['iboden'], M['ischacht'], M['mittel'], M['iboden2'], p=1.2)
 def side_walls(s):
     iwall('Querwand', (-10.0, s * 1.0), (-10.0, s * 5.2), DECK, CEIL)
     iwall('Querwand', (-6.0, s * 1.0), (-6.0, s * 5.2), DECK, CEIL)
@@ -242,12 +271,14 @@ def cargo_front():
     label('LADERAUM', 0.06, (-10.94, -0.33, DECK + 2.42), (0, 1, 0), (0, 0, 1))
 def innen():
     CUR[0] = C_ROOM
+    SD['wand'], SD['boden'], SD['decke'] = Sammel('Innendetail Wand', C_ROOM), Sammel('Innendetail Boden', C_ROOM, 0.003), Sammel('Innendetail Decke', C_ROOM)
     deck_floor(); corridor()
     for s in (1, -1):
         side_walls(s)
         if s > 0: cabin(-10.0, -6.0, s, 1); mess(s)      # Kabine 2 und Sanität: kor_raeume.py
         else: washroom(-6.0, -2.0, s); engineering(s)
     stairs(); cockpit_rear(); cargo_front(); cockpit(); raeume()
+    for k in ('wand', 'boden', 'decke'): SD[k].fertig(); SD[k] = None
 
 # ---------- Kameras und Ansichten innen ----------
 def innen_cams():
