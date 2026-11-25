@@ -1,6 +1,6 @@
-# Neues Planetengelände (Test, `?gelaende=neu`)
+# Planetengelände (Standard seit 2026-11-25)
 
-Seit 2026-11-25 hinter dem Testschalter `?gelaende=neu` (zurück mit `?gelaende=alt`, bleibt im Browser gespeichert).
+Seit 2026-11-25 Standard. Das alte Gelände ist zum Vergleich mit `?gelaende=alt` erreichbar (bleibt im Browser gespeichert, zurück mit `?gelaende=neu`).
 
 ## Was anders ist
 - **Form** (`src/game/terrain.ts`): Simplex-Rauschen ohne Details unter 2,5 Gitterfeldern, Domain Warping, Gebirge nur in Regionen,

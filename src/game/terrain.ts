@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 // =====================================================================================
-// Neues Planetengelände (Testschalter ?gelaende=neu, seit 2026-11-25)
+// Planetengelände, seit 2026-11-25 Standard (altes Gelände mit ?gelaende=alt)
 // Das alte Gelände bestand aus 31-m-Dreiecken, auf die Rauschen bis hinunter zu 16 m Wellenlänge gelegt wurde: Das Netz konnte
 // diese Details nicht darstellen, daraus wurden Zacken; die Grate waren als spitzes V gebaut (1 - |n|).
 // Hier:
@@ -12,12 +12,13 @@ import * as THREE from 'three';
 //  - Masken für Shader und Bewuchs: Abflussrinnen, Sediment, Schutt, Krümmung; Normalen pro Bildpunkt aus der Höhenkarte
 // Ein- und ausschalten: ?gelaende=neu bzw. ?gelaende=alt (bleibt gespeichert).
 // =====================================================================================
-export const GELAENDE = { neu: false };
+// Seit 25.11.2026 Standard. Das alte Gelände bleibt zum Vergleich mit ?gelaende=alt erreichbar (bleibt gespeichert, zurück mit ?gelaende=neu).
+export const GELAENDE = { neu: true };
 try {
   const q = new URLSearchParams(location.search).get('gelaende');
   if (q === 'neu' || q === 'alt') localStorage.setItem('lf_gelaende', q);
-  GELAENDE.neu = (q ?? localStorage.getItem('lf_gelaende')) === 'neu';
-} catch (e) { /* ohne Speicher: alt */ }
+  GELAENDE.neu = (q ?? localStorage.getItem('lf_gelaende')) !== 'alt';
+} catch (e) { /* ohne Speicher: neu */ }
 
 // ---------------- Simplex-Rauschen (2D, nach Stefan Gustavson), deterministisch je Seed ----------------
 const F2 = 0.5 * (Math.sqrt(3) - 1), G2 = (3 - Math.sqrt(3)) / 6;
