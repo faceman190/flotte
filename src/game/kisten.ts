@@ -10,6 +10,7 @@ import { ITEMS, type ItemId } from '../data/items';
 import { decoLaden, bojeTeile } from '../models/bojen';
 import { raum } from './laderaum';
 import { burst } from './fx';
+import { onCoop, coopSend, coopNet } from './coop';
 
 // =====================================================================================
 // Kisten in der Welt (seit 2026-11-25, Konzept docs/konzept-schiffe-fracht.md, Schritt 4)
@@ -20,6 +21,9 @@ import { burst } from './fx';
 //    Halbcontainer nur in den Wisent, Paletten nur in Schiffe mit Laderaum, Kisten in jedes Schiff.
 //  - Beim Außenbordeinsatz greift man eine Kiste ([E]) und schiebt sie zur Rampe oder Schleuse (eva.ts).
 //  - Die kleinen Beutebrocken aus Bergbau und Kämpfen bleiben, wie sie sind (world.pickups, player.ts updatePickups).
+//  - Mehrspieler (seit 2026-11-25, über den Koop-Kanal 'co', coop.ts): Neue Kisten ('kneu'), eingeladene ('kweg') und bewegte Kisten
+//    (Traktorstrahl, von Hand geschoben: 'kzug', 5× pro Sekunde) gehen an alle im Sektor. Eine Kiste, die ein anderer gerade bewegt, ist
+//    für den eigenen Strahl und zum Greifen gesperrt (fern). Wer neu in den Sektor kommt, bekommt die Kisten von den anderen (kistenAnNeue).
 // =====================================================================================
 
 export type KistenArt = 'kiste' | 'palette' | 'container';
@@ -36,6 +40,8 @@ export interface WeltKiste {
   hand: boolean;        // wird beim Außenbordeinsatz geschoben
   gemeldet: boolean;    // „passt nicht“ schon gemeldet
   treibgut: boolean;    // Treibgut mit weithin sichtbarem Licht
+  id: string;           // Kennung über alle Mitspieler (Pilotenkennung.Zähler.Zufall)
+  fern: number;         // Sekunden, die ein anderer Pilot sie noch bewegt (dann gesperrt)
 }
 export const KISTEN: WeltKiste[] = [];
 export const KISTE_INFO = MODELL;
@@ -79,17 +85,38 @@ export function groesste(): KistenArt { const R = raum(); return !R ? 'kiste' : 
 const passt = (a: KistenArt) => a === 'kiste' || (a === 'palette' ? groesste() !== 'kiste' : groesste() === 'container');
 
 /** Kiste in die Welt setzen (Weltkoordinaten, Anfangsgeschwindigkeit) */
-export function kisteSetzen(x: number, y: number, z: number, ware: ItemId, n: number, o: { art?: KistenArt; v?: [number, number, number]; life?: number; sperre?: number; treibgut?: boolean } = {}) {
+let kn = 0;
+export function kisteSetzen(x: number, y: number, z: number, ware: ItemId, n: number, o: { art?: KistenArt; v?: [number, number, number]; life?: number; sperre?: number; treibgut?: boolean; id?: string; netz?: boolean } = {}) {
   const art = o.art || (n > 25 ? 'container' : n > 10 ? 'palette' : 'kiste');
   const g = new THREE.Group();
   const lampe = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: o.treibgut ? 0xffb040 : ITEMS[ware].c, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
   lampe.position.y = DIM[art][2] / 2 + 0.25; lampe.scale.setScalar(o.treibgut ? 40 : 4); g.add(lampe);
-  const k: WeltKiste = { x, y, z, vx: o.v?.[0] || 0, vy: o.v?.[1] || 0, vz: o.v?.[2] || 0, art, ware, n, life: o.life ?? 900, sektor: P.sector, g, lampe, echt: false, sperre: o.sperre || 0, hand: false, gemeldet: false, treibgut: !!o.treibgut };
+  const k: WeltKiste = { x, y, z, vx: o.v?.[0] || 0, vy: o.v?.[1] || 0, vz: o.v?.[2] || 0, art, ware, n, life: o.life ?? 900, sektor: P.sector, g, lampe, echt: false, sperre: o.sperre || 0, hand: false, gemeldet: false, treibgut: !!o.treibgut, id: o.id || `${coopNet.id}.${++kn}.${Math.floor(Math.random() * 1e4)}`, fern: 0 };
   koerper(k);
   g.position.set(x, y, z); g.rotation.set(rand(0, 6), rand(0, 6), rand(0, 6)); g.userData.spin = [rand(-0.25, 0.25), rand(-0.25, 0.25)];
   scene.add(g); KISTEN.push(k);
+  if (o.netz !== false) kisteMelden(k);
   return k;
 }
+const r2 = (v: number) => Math.round(v * 100) / 100;
+function kisteMelden(k: WeltKiste) {
+  coopSend('kneu', { id: k.id, a: k.art, w: k.ware, n: k.n, p: [r2(k.x), r2(k.y), r2(k.z)], v: [r2(k.vx), r2(k.vy), r2(k.vz)], l: Math.round(k.life), tg: k.treibgut ? 1 : 0, s: k.sektor });
+}
+/** ein Mitspieler ist neu im Sektor (net.ts): ihm die Kisten zeigen, die hier treiben */
+export function kistenAnNeue() { for (const k of KISTEN) if (k.sektor === P.sector && !world.surface) kisteMelden(k); }
+onCoop('kneu', m => {
+  if (m.s !== P.sector || world.surface || G.mode === 'menu' || typeof m.id !== 'string' || KISTEN.some(k => k.id === m.id)) return;
+  if (!ITEMS[m.w as ItemId] || !MODELL[m.a as KistenArt] || !(m.n > 0) || !Array.isArray(m.p) || m.p.length !== 3) return;
+  const v = Array.isArray(m.v) && m.v.length === 3 ? m.v.map(Number) as [number, number, number] : undefined;
+  kisteSetzen(+m.p[0], +m.p[1], +m.p[2], m.w as ItemId, Math.min(100, Math.floor(m.n)), { art: m.a as KistenArt, v, life: Math.min(1200, +m.l || 900), treibgut: !!m.tg, id: m.id, netz: false });
+});
+onCoop('kweg', m => { const i = KISTEN.findIndex(k => k.id === m.id); if (i >= 0) { const k = KISTEN[i]; burst(k.x, k.y, k.z, '#9fe0ff', 8, 5, 0.4); weg(i); } });
+onCoop('kzug', m => {
+  const k = KISTEN.find(q => q.id === m.id); if (!k || k.hand || !Array.isArray(m.p) || m.p.length !== 3) return;
+  k.x = +m.p[0]; k.y = +m.p[1]; k.z = +m.p[2];
+  if (Array.isArray(m.v) && m.v.length === 3) { k.vx = +m.v[0]; k.vy = +m.v[1]; k.vz = +m.v[2]; }
+  k.fern = 0.7;
+});
 function weg(i: number) { const k = KISTEN[i]; k.g.removeFromParent(); KISTEN.splice(i, 1); }
 export function kistenLeeren() { while (KISTEN.length) weg(KISTEN.length - 1); }
 
@@ -109,7 +136,7 @@ export function ladenGrund(k: WeltKiste): string | null {
 }
 export function einladen(k: WeltKiste): boolean {
   const i = KISTEN.indexOf(k); if (i < 0 || ladenGrund(k)) return false;
-  P.cargo[k.ware] += k.n; weg(i);
+  P.cargo[k.ware] += k.n; weg(i); coopSend('kweg', { id: k.id });
   snd(520, 0.18, 'triangle', 0.05, 260); setTimeout(() => snd(780, 0.12, 'triangle', 0.04, 200), 120);
   radio('SYSTEM', `${MODELL[k.art].n} geladen: ${k.n} ${ITEMS[k.ware].n}.`);
   return true;
@@ -139,7 +166,7 @@ export function updateKisten(dt: number) {
   for (let i = KISTEN.length - 1; i >= 0; i--) {
     const k = KISTEN[i];
     if (k.sektor !== P.sector || world.surface) { weg(i); continue; }
-    k.life -= dt; k.sperre -= dt;
+    k.life -= dt; k.sperre -= dt; k.fern -= dt;
     if (k.life <= 0 && !k.hand) { weg(i); continue; }
     if (!k.echt && bojeTeile(MODELL[k.art].name)) koerper(k);
     const dr = Math.pow(k.hand ? 1 : 0.85, dt); k.vx *= dr; k.vy *= dr; k.vz *= dr;
@@ -156,7 +183,7 @@ export function updateKisten(dt: number) {
   if (ziel && (!KISTEN.includes(ziel) || ziel.hand)) ziel = null;
   if (fliegt) {
     const lp = ladePunkt();
-    const nah = KISTEN.filter(k => !k.hand && k.sperre <= 0 && d3(k.x, k.y, k.z, P.x, P.y, P.z) < st!.magnet + 40)
+    const nah = KISTEN.filter(k => !k.hand && k.sperre <= 0 && k.fern <= 0 && d3(k.x, k.y, k.z, P.x, P.y, P.z) < st!.magnet + 40)
       .sort((a, b) => d3(a.x, a.y, a.z, P.x, P.y, P.z) - d3(b.x, b.y, b.z, P.x, P.y, P.z));
     if (!ziel) ziel = nah.find(k => !ladenGrund(k)) || null;
     const erste = nah[0];
@@ -173,7 +200,11 @@ export function updateKisten(dt: number) {
     } else strahlZeigen(null);
   } else { ziel = null; strahlZeigen(null); }
   TRAKTOR.ziel = ziel;
+  // bewegte Kisten an die Mitspieler (Traktorstrahl, von Hand geschoben)
+  zugT -= dt;
+  if (zugT <= 0 && coopNet.id) { zugT = 0.2; for (const k of KISTEN) if (k.hand || k === ziel) coopSend('kzug', { id: k.id, p: [r2(k.x), r2(k.y), r2(k.z)], v: [r2(k.vx), r2(k.vy), r2(k.vz)] }); }
 }
+let zugT = 0;
 
 /** Beute als Kisten: auseinandertreibend um einen Punkt (Bienenstock) */
 export function beuteKisten(x: number, y: number, z: number, teile: [ItemId, number][]) {

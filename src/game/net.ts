@@ -22,6 +22,8 @@ import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { SHIPS, type ShipId } from '../data/ships';
 import { setGear, setDoors, type Paint } from '../models/gltfShips';
 import { radio } from '../ui/radio';
+import { kistenAnNeue } from './kisten';
+import { EVA } from './eva';
 import { quartierHooks, einladungAn, dekoAusNetz, ortKennung, nrText } from './quartier';
 
 // =====================================================================================
@@ -104,7 +106,7 @@ function onMsg(m: any) {
   } else if (m.t === 'st') {
     if (m.id === NET.id) return;
     let r = remotes.get(m.id);
-    if (!r) { r = { id: m.id, name: m.name, cls: '', paint: '', m: '', s: 0, w: null, d: '', g: null, ship: null, rover: null, tp: new THREE.Vector3(), tq: new THREE.Quaternion(), seen: 0 }; remotes.set(m.id, r); }
+    if (!r) { r = { id: m.id, name: m.name, cls: '', paint: '', m: '', s: 0, w: null, d: '', g: null, ship: null, rover: null, tp: new THREE.Vector3(), tq: new THREE.Quaternion(), seen: 0 }; remotes.set(m.id, r); kistenAnNeue(); }      // Neuer im Raum: ihm die treibenden Kisten zeigen
     r.name = m.name; r.s = m.s || 0; r.m = m.m; r.w = Array.isArray(m.w) ? m.w : null; r.d = m.d || ''; r.g = Array.isArray(m.g) ? m.g.map(String) : null;
     if (m.p?.length === 3) r.tp.set(m.p[0], m.p[1], m.p[2]);
     if (m.q?.length === 4) r.tq.set(m.q[0], m.q[1], m.q[2], m.q[3]).normalize();
@@ -165,6 +167,7 @@ export function myStation(): string { return (G.dockedAt && G.dockedAt.id) || (I
 export function pilotsHere() { const st = myStation(); return st ? [...remotes.values()].filter(r => r.d === st) : []; }
 const footObj = new THREE.Object3D();
 function myState() {
+  if (EVA.active && !world.surface) return { o: SHIP.g, m: 'eva' };      // Außenbord: Schiff steht, die Figur schwebt (Lage im Feld w)
   if (DUN.active) { footObj.position.set(DUN.x, 0, DUN.z); footObj.rotation.set(0, DUN.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'mine' }; }
   if (FOOT.active && !IN.active) { footObj.position.set(FOOT.x, FOOT.y, FOOT.z);   // zu Fuß (aus dem Rover oder direkt aus dem Schiff)
     footObj.rotation.set(0, FOOT.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'fuss' }; }
@@ -187,9 +190,9 @@ function sendState() {
   if (key !== room) { room = key; clearRemotes(); hostId = 0; synced = false; foesSynced = false; npcResync(); updateRole(); sendMsg({ t: 'room', room }); }
   flushYld();
   // im Flug die Flugposition (das Modell wird nur beim Zeichnen nachgeführt), sonst die Lage des Modells
-  const s = myState(), p = s.m === 'schiff' ? P : s.o.position, q = s.o.quaternion;
+  const s = myState(), p = s.m === 'schiff' || s.m === 'eva' ? P : s.o.position, q = s.o.quaternion;
   // zu Fuß in einer Station (nicht im eigenen Schiff): Position im Stationsraum mitschicken
-  const w = DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [ortKennung(IN.station.id), IN.x, IN.z, IN.yaw, IN.fy + IN.jy] : null;      // Station: fünfter Eintrag = Höhe (Rampen, Sprung)
+  const w = s.m === 'eva' ? ['eva', EVA.x, EVA.y, EVA.z, EVA.yaw] : DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [ortKennung(IN.station.id), IN.x, IN.z, IN.yaw, IN.fy + IN.jy] : null;      // Station: fünfter Eintrag = Höhe (Rampen, Sprung)
   // Bodenfahrzeug: Art, Tempo, Lenkung, Lage und Drehung des Modells (auch wenn der Pilot daneben zu Fuß ist)
   const rm = world.surface && ROVER.active && ROVER.model ? ROVER.model.g : null;
   const v = rm ? [ROVER.kind, ROVER.speed, ROVER.steer, rm.position.x, rm.position.y, rm.position.z, rm.quaternion.x, rm.quaternion.y, rm.quaternion.z, rm.quaternion.w] : undefined;
@@ -216,19 +219,21 @@ export function netUpdate(dt: number) {
   const k = Math.min(1, dt * 8), now = performance.now();
   for (const r of [...remotes.values()]) {
     if (now - r.seen > 6000) { removeRemote(r.id); continue; }   // lange nichts gehört
-    const ship = r.ship!, onShip = r.m === 'schiff', boden = r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord';
+    const ship = r.ship!, onShip = r.m === 'schiff' || r.m === 'eva', boden = r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord';
     ship.g.visible = onShip || boden;   // am Boden steht das Schiff gelandet da (Lage aus ls, ältere Fassungen: letzter Stand im Flug)
     if (onShip) { ship.g.position.lerp(r.tp, k); ship.g.quaternion.slerp(r.tq, k); }
     else if (boden && r.ls) { ship.g.position.set(r.ls[0], r.ls[1], r.ls[2]); ship.g.rotation.set(0, r.ls[3], 0); }
-    setGear(ship.g, boden); setDoors(ship.g, boden, dt);      // gelandet: Fahrwerk aus, Rampe offen (wie beim eigenen Schiff)
-    for (const gl of ship.glows) { gl.visible = onShip; gl.scale.setScalar((gl.userData.base || 1) * (0.5 + Math.min(1, r.s / 200) * 1.3)); }      // Triebwerke nur im Flug
+    setGear(ship.g, boden); setDoors(ship.g, boden || r.m === 'eva', dt);      // gelandet: Fahrwerk aus, Rampe offen (wie beim eigenen Schiff)
+    for (const gl of ship.glows) { gl.visible = r.m === 'schiff'; gl.scale.setScalar((gl.userData.base || 1) * (0.5 + Math.min(1, r.s / 200) * 1.3)); }      // Triebwerke nur im Flug
     if (r.vv) driveRemoteRover(r, dt, k);
     else if (r.rover) { r.rover.visible = r.m === 'rover' || r.m === 'fuss'; if (r.m === 'rover') { r.rover.position.lerp(r.tp, k); r.rover.quaternion.slerp(r.tq, k); } }
     // zu Fuß auf dem Planeten: Soldat mit Laufclips
-    if (r.m === 'fuss') {
+    const eva = r.m === 'eva' && !!r.w && r.w.length >= 5;
+    if (r.m === 'fuss' || eva) {
       const f = r.fig || (r.fig = newRemoteFig()), ng = gearFromNet(r.g);
-      f.gear = ng.gear; f.wid = ng.wid; f.tracht = ng.tracht; readNetFlags(f, r.g?.[4]); f.tx = r.tp.x; f.ty = r.tp.y; f.tz = r.tp.z;
-      f.yaw = new THREE.Euler().setFromQuaternion(r.tq, 'YXZ').y;
+      f.gear = ng.gear; f.wid = ng.wid; f.tracht = ng.tracht; readNetFlags(f, r.g?.[4]);
+      if (eva) { f.tx = +r.w![1]; f.ty = +r.w![2] - 1; f.tz = +r.w![3]; f.yaw = +r.w![4]; f.air = true; f.fire = 0; f.ohneWaffe = true; }      // Außenbord: schwebt (Haltung wie im Sprung), Füße einen Meter unter der Mitte
+      else { f.ohneWaffe = false; f.tx = r.tp.x; f.ty = r.tp.y; f.tz = r.tp.z; f.yaw = new THREE.Euler().setFromQuaternion(r.tq, 'YXZ').y; }
       driveRemote(scene, f, dt);
     } else if (r.fig) dropRemote(r.fig);
   }
@@ -263,7 +268,7 @@ function driveRemoteRover(r: Remote, dt: number, k: number) {
 export function remoteMarkers() {
   const out: { name: string; x: number; y: number; z: number; m: string }[] = [];
   for (const r of remotes.values()) {
-    if (r.m === 'fuss' && r.fig?.av) { out.push({ name: r.name, x: r.fig.x, y: r.fig.y + 1.6, z: r.fig.z, m: r.m }); continue; }
+    if ((r.m === 'fuss' || r.m === 'eva') && r.fig?.av) { out.push({ name: r.name, x: r.fig.x, y: r.fig.y + 1.6, z: r.fig.z, m: r.m }); continue; }
     const o = r.m === 'rover' && r.rover ? r.rover : r.ship?.g;
     if (!o || !o.visible) continue;
     out.push({ name: r.name, x: o.position.x, y: o.position.y, z: o.position.z, m: r.m });

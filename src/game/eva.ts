@@ -41,7 +41,7 @@ let pack: THREE.Group | null = null, leine: THREE.Line | null = null, strahl: TH
 let grabT = 0, poseT = 0, dressT = 0;
 let gegriffen: WeltKiste | null = null;      // Normkiste, die gerade geschoben wird
 const LAST = { kiste: 0.85, palette: 0.6, container: 0.35 };      // Schub mit Kiste (Anteil)
-const kisteNah = () => KISTEN.filter(k => !k.hand && d3(k.x, k.y, k.z, EVA.x, EVA.y, EVA.z) < KISTE_INFO[k.art].r + 2.2).sort((a, b) => d3(a.x, a.y, a.z, EVA.x, EVA.y, EVA.z) - d3(b.x, b.y, b.z, EVA.x, EVA.y, EVA.z))[0];
+const kisteNah = () => KISTEN.filter(k => !k.hand && k.fern <= 0 && d3(k.x, k.y, k.z, EVA.x, EVA.y, EVA.z) < KISTE_INFO[k.art].r + 2.2).sort((a, b) => d3(a.x, a.y, a.z, EVA.x, EVA.y, EVA.z) - d3(b.x, b.y, b.z, EVA.x, EVA.y, EVA.z))[0];
 function loslassen() { if (gegriffen) { gegriffen.hand = false; gegriffen.vx = EVA.vx; gegriffen.vy = EVA.vy; gegriffen.vz = EVA.vz; } gegriffen = null; }
 const lean = { x: 0, z: 0 };
 const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3(0, 1, 0), _c = new THREE.Vector3(), _l = new THREE.Vector3(), _a = new THREE.Vector3(), _s = new THREE.Vector3();

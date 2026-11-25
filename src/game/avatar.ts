@@ -344,7 +344,7 @@ function gripWeapon(a: Avatar, d: Drive) {
 }
 
 // Mitspieler als Figur: Zielwerte (aus dem Netz) weich nachführen, Tempo aus der Bewegung, gleiche Clips wie die eigene Figur
-export interface RemoteFig extends NetAct { av: Avatar | null; x: number; y: number; z: number; tx: number; ty: number; tz: number; yaw: number; vx: number; vz: number; gear: FigGear; wid: string; init: boolean; tracht: Tracht | null }
+export interface RemoteFig extends NetAct { ohneWaffe?: boolean; av: Avatar | null; x: number; y: number; z: number; tx: number; ty: number; tz: number; yaw: number; vx: number; vz: number; gear: FigGear; wid: string; init: boolean; tracht: Tracht | null }
 export const newRemoteFig = (): RemoteFig => ({ av: null, x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, vx: 0, vz: 0, gear: {}, wid: 'k12', init: false, crouch: false, hit: 0, fire: 0, fl: '', tracht: null });
 // Netzfeld g: [Helm, Anzug, Rucksack, Waffe, Haltung/Ereignisse, Aussehen „Kopf,Farbe“, Figur, Weste, Handschuhe, Stiefel]
 // (Aussehen seit 2026-11-20, Figur und die drei Teile seit 2026-11-24; fehlen sie – älteres Spiel –, gilt Figur 1 mit Helm und Anzug)
@@ -364,7 +364,7 @@ export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {
   const ivx = (f.x - ox) / Math.max(dt, 1e-3), ivz = (f.z - oz) / Math.max(dt, 1e-3), kv = Math.min(1, dt * 6);
   f.vx += (ivx - f.vx) * kv; f.vz += (ivz - f.vz) * kv;
   f.fire -= dt;
-  driveAvatar(f.av, dt, { x: f.x, y: f.y, z: f.z, yaw: f.yaw, pitch: 0, vx: Math.abs(f.vx) < 0.05 ? 0 : f.vx, vz: Math.abs(f.vz) < 0.05 ? 0 : f.vz, wid: f.wid, crouch: f.crouch, hit: f.hit, fire: f.fire > 0, shots: f.shots, armed: true, air: f.air, dead: f.dead });      // Planet und Mine: bewaffnet
+  driveAvatar(f.av, dt, { x: f.x, y: f.y, z: f.z, yaw: f.yaw, pitch: 0, vx: Math.abs(f.vx) < 0.05 ? 0 : f.vx, vz: Math.abs(f.vz) < 0.05 ? 0 : f.vz, wid: f.wid, crouch: f.crouch, hit: f.hit, fire: f.fire > 0, shots: f.shots, armed: !f.ohneWaffe, air: f.air, dead: f.dead });      // Planet und Mine: bewaffnet (außenbord ohne Waffe)
 }
 /** fremde Figur abbauen (Mitspieler weg, Stadt verlassen): auch die neue Figur freigeben */
 export function freeAvatar(a: Avatar) { a.fremd?.dispose(); a.fremd = null; a.s.g.removeFromParent(); }
