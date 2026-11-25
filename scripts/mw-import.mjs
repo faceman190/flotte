@@ -12,7 +12,7 @@ if (!SRC || !fs.existsSync(path.join(SRC, 'textures'))) { console.error('Ordner 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), '..');
 const OUT = path.join(ROOT, 'asset-src', 'tex-src', 'mw'), GJ = path.join(ROOT, 'asset-src', 'tex-src', 'polyhaven', 'ground.json');
 const MAP = { Grass: 'gras', Dirt: 'erde', Rock: 'fels', Stones: 'steine', SandA: 'sand', SandC: 'sand2', Snow: 'schnee', CoverRocks: 'deckfels' };
-const SIZE = 2048;
+const SIZE = 1024;      // das Spiel packt Böden mit höchstens 1024 px
 const find = (name) => { for (const ext of ['.png', '.tga', '.jpg']) { const f = path.join(SRC, 'textures', name + ext); if (fs.existsSync(f)) return f; } return null; };
 const ground = JSON.parse(fs.readFileSync(GJ, 'utf8'));
 for (const [src, id] of Object.entries(MAP)) {

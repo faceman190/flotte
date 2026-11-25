@@ -43,7 +43,9 @@ def main():
             obj = a.get_asset()
             if isinstance(obj, unreal.Texture2D):
                 # PNG in voller Auflösung aus den Quelldaten (verlustfrei); das Spiel verkleinert beim Packen
-                if export(obj, os.path.join(OUT, 'textures', str(a.asset_name) + '.png'), unreal.TextureExporterPNG()):
+                # Pflanzen-Texturen heißen wie die Böden (TEX_MWAM_Grass_col): eigener Vorsatz, sonst überschreiben sie sich
+                name = ('Plants_' if d.endswith('Plants') else '') + str(a.asset_name)
+                if export(obj, os.path.join(OUT, 'textures', name + '.png'), unreal.TextureExporterPNG()):
                     n_tex += 1
     gltf = getattr(unreal, 'GLTFExporter', None)
     for d in MESH_DIRS:
