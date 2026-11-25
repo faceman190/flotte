@@ -3,6 +3,7 @@ import { KEEP } from './keep';
 import { scene } from '../core/engine';
 import { texMat, std } from '../core/textures';
 import { world, rockGeo } from './world';
+import { updateGrass } from './grass';
 
 // =====================================================================================
 // Bewuchs und Dekoration der Planetenoberflächen.
@@ -202,7 +203,8 @@ export function buildFlora(type: string, R: { range: (a: number, b: number) => n
     if (shadow) { im.castShadow = true; im.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: mat.map, alphaTest: 0.4 }); }
     layers.push({ im, cell, rad, dens, h, w, lx: 1e9, lz: 1e9, salt });
   };
-  if (F.grass > 0) layer(crossGeo(), card(tGrass, F.grassCol, F.glow || 0), 6000, 1.3, 50, F.grass, [0.25, 0.7], 1.8, 1);
+  if (F.grass > 0 && !mask) layer(      // mit Masken (neues Gelände) wächst das Gras als echte Halme (grass.ts)
+    crossGeo(), card(tGrass, F.grassCol, F.glow || 0), 6000, 1.3, 50, F.grass, [0.25, 0.7], 1.8, 1);
   if (F.shrub > 0) layer(crossGeo(), card(tShrub, F.shrubCol), 900, 13, 240, F.shrub, [0.9, 2.4], 1.25, 2, true);
   if (F.tree > 0) layer(treeGeo(), card(treeTex(), 0xffffff), 900, 26, 800, F.tree, [9, 21], 1, 3, true);
   // Geröll: kleine Steine dicht um die Kamera, größere Brocken weiter hinaus (halb im Boden, jeder etwas anders gefärbt)
@@ -233,7 +235,7 @@ export function treeNear(x: number, z: number, r: number) {
 
 // Pflanzen neu setzen, sobald sich die Kamera merklich bewegt hat
 export function updateFlora(cam: THREE.Vector3) {
-  updateRocks(cam);
+  updateRocks(cam); updateGrass(cam);
   for (const L of layers) {
     if (Math.abs(cam.x - L.lx) < L.cell * 1.5 && Math.abs(cam.z - L.lz) < L.cell * 1.5) continue;
     if (L.rad < 100 && cam.y - hAt(cam.x, cam.z) > 140) { if (L.im.count) { L.im.count = 0; L.lx = 1e9; } continue; }   // aus der Höhe ist Gras nicht zu sehen

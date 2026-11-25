@@ -6,7 +6,7 @@ import { fahrwerkTiefe } from '../models/gltfShips';
 import { FZ_MASS } from './fahrzeuge';
 import { scene, camera, view, ux, glowMat } from '../core/engine';
 import { texMat, std, boxUV } from '../core/textures';
-import { setSky, setSurfaceSky } from '../core/sky';
+import { setSky, setSurfaceSky, sunDir } from '../core/sky';
 import { groundTexture, groundNormal, groundRough, groundLayer } from '../core/planetVis';
 import { setAmbience } from '../core/ambience';
 import { keys, mouse } from '../core/input';
@@ -34,7 +34,8 @@ import { SHIP, hurtPlayer } from './player';
 import { burst, puff } from './fx';
 import { radio } from '../ui/radio';
 import { groundShade, GROUND_SHADE_PARS } from './groundShade';
-import { GELAENDE, TERRAIN_LOOK, makeHeightFn, noiseSet, smoothField, erode, buildMaps, type TerrainMaps, type ErodeOut } from './terrain';
+import { GELAENDE, TERRAIN_LOOK, makeHeightFn, noiseSet, smoothField, erode, buildMaps, bakeLight, type TerrainMaps, type ErodeOut } from './terrain';
+import { buildGrass } from './grass';
 
 // =====================================================================================
 // Planetenoberflächen: Gelände, Atmosphäre, Lagerstätten, Bodenstation und Bergbau-Rover.
@@ -184,7 +185,7 @@ export function buildSurface(sector: string) {
       if (eroP) { eroP.flow[k] *= 1 - s; eroP.sed[k] *= 1 - s; eroP.talus[k] *= 1 - s; }
     }
   }
-  if (terrMaps) { terrMaps.nrm.dispose(); terrMaps.mask.dispose(); }
+  if (terrMaps) { terrMaps.nrm.dispose(); terrMaps.mask.dispose(); terrMaps.height.dispose(); terrMaps.light.value?.dispose(); }
   terrMaps = GELAENDE.neu ? buildMaps(HM, N, SURF.size, eroP) : null;
   // Geländemodell
   const geo = new THREE.PlaneGeometry(SURF.size, SURF.size, N - 1, N - 1);
@@ -258,7 +259,10 @@ export function buildSurface(sector: string) {
   const rot: [number, number, number] = [SR.range(-0.5, 0.5), SR.range(0, 6.28), SR.range(-0.4, 0.4)];
   const sd: [number, number, number] = [SR.range(-1, 1), SR.range(0.2, 1), SR.range(-1, 1)];
   sd[1] = Math.max(0.45, sd[1]);
+  // Neues Gelände: tiefere Sonne (etwa 17 bis 26 Grad), lange Schatten zeigen die Formen der Landschaft
+  if (GELAENDE.neu) { const l = Math.hypot(sd[0], sd[2]) || 1; sd[0] /= l; sd[2] /= l; sd[1] = 0.3 + 0.18 * SR.next(); }
   setSky({ neb: sec.neb, tint: sec.tint, rot, sunDir: sd });
+  if (terrMaps) terrMaps.light.value = bakeLight(HM, N, SURF.size, sunDir);      // Bergschatten und Umgebungsverdeckung (terrain.ts)
   const SL = SKYLOOK[pd.type];
   setSurfaceSky({ horizon: T.sky[0], zenith: T.sky[1], fog: T.fog, fogDensity: T.fogDensity, clouds: SL.clouds, cloudCol: SL.cloudCol, stars: SL.stars, body: skyBody(sector),
     ...(pd.type === 'mond' ? { air: 0.15, moon: { dir: [-0.86, 0.5, -0.1] as [number, number, number], rad: 0.036, col: 0xb8bcc4 } } : {}) });
@@ -292,6 +296,10 @@ export function buildSurface(sector: string) {
     }
   }
   buildFlora(pd.type, R, heightAt, liquidLevel, hashStr(sector) % 1000, terrMaps ? terrMaps.sample : undefined);
+  if (terrMaps) {      // dichtes Gras (grass.ts); Schneeflecken nach demselben Muster wie im Bodenshader, damit dort kein Gras steht
+    const SL = SKYLOOK[pd.type] || SKYLOOK.fels;
+    buildGrass(terrMaps, pd.type, liquidLevel, SL.snow[2], !!SL.veg, KEEP.r, gTex ? { map: gTex, scale: 1 / (GROUND[pd.type]?.m ?? 24), k: SL.snow[1], y: SL.snow[2] } : null);
+  }
   buildDungeonEntrances(sector, heightAt, liquidLevel);                         // Stolleneingänge (src/game/dungeon.ts)
   void 0;      // Felsbrocken, Felsnadeln, Pflanzen (src/game/flora.ts)
   world.surface = { planet: sector, limit: SURF.limit, type: pd.type };
@@ -403,7 +411,7 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
     sh.uniforms.snowCol = { value: new THREE.Color(SL.snow[0]) }; sh.uniforms.snowK = { value: SL.snow[1] }; sh.uniforms.snowY = { value: SL.snow[2] };
     sh.uniforms.vegCol = { value: new THREE.Color(SL.veg ? SL.veg[0] : 0) }; sh.uniforms.vegK = { value: SL.veg ? SL.veg[1] : 0 };
     sh.uniforms.mistK = { value: SL.mist }; sh.uniforms.mistY = { value: lowY + 25 };
-    if (terr) { sh.uniforms.tNrm = { value: terr.nrm }; sh.uniforms.tMask = { value: terr.mask }; sh.uniforms.tGeo = { value: new THREE.Vector2(terr.size / 2, terr.N) }; }
+    if (terr) { sh.uniforms.tNrm = { value: terr.nrm }; sh.uniforms.tMask = { value: terr.mask }; sh.uniforms.tLight = terr.light; sh.uniforms.tGeo = { value: new THREE.Vector2(terr.size / 2, terr.N) }; }
     sh.uniforms.bShMap = groundShade.map; sh.uniforms.bShMat = groundShade.mat; sh.uniforms.bShOn = groundShade.on; sh.uniforms.bShPx = groundShade.px;   // Gebäudeschatten (groundShade.ts)
     if (set) {
       sh.uniforms.gFineMap = { value: lf!.map }; sh.uniforms.gFineNrm = { value: lf!.nrm }; sh.uniforms.gScreeMap = { value: ls!.map }; sh.uniforms.gScreeNrm = { value: ls!.nrm };
@@ -417,7 +425,7 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlope = slope; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz; vWNrm = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-        ${terr ? '#define TERR\n        uniform sampler2D tNrm; uniform sampler2D tMask; uniform vec2 tGeo;' : ''}
+        ${terr ? '#define TERR\n        uniform sampler2D tNrm; uniform sampler2D tMask; uniform sampler2D tLight; uniform vec2 tGeo;' : ''}
         ${set ? '#define GSET\n        uniform sampler2D gFineMap; uniform sampler2D gFineNrm; uniform sampler2D gScreeMap; uniform sampler2D gScreeNrm; uniform vec3 gFineCol; uniform vec3 gScreeCol; uniform vec4 gSetP; uniform float gSetK; uniform float gSetVeg;' : ''}
         uniform sampler2D groundMap; uniform sampler2D groundNrm; uniform sampler2D groundRgh; uniform vec3 cliffCol; uniform vec3 gCol;
         uniform float gScale; uniform float gTint; uniform float gNrmK; uniform float gHasR; uniform vec3 snowCol; uniform float snowK; uniform float snowY; uniform float mistK; uniform float mistY; uniform vec3 vegCol; uniform float vegK; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;
@@ -557,7 +565,11 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
         #endif`);
     // Gebäudeschatten der Bodenstation: nimmt das direkte Licht weg (das Himmelslicht bleibt)
     sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
-        { float bS = bShade(vWPos); reflectedLight.directDiffuse *= bS; reflectedLight.directSpecular *= bS; }`);
+        { float bS = bShade(vWPos); reflectedLight.directDiffuse *= bS; reflectedLight.directSpecular *= bS; }
+        #ifdef TERR
+          // Bergschatten und Umgebungsverdeckung aus dem Gelände (terrain.ts bakeLight)
+          if (tIn > 0.5) { vec2 tL = texture2D(tLight, (vWPos.xz + tGeo.x) / (2.0 * tGeo.x)).rg; reflectedLight.directDiffuse *= tL.r; reflectedLight.directSpecular *= tL.r; reflectedLight.indirectDiffuse *= mix(0.45, 1.0, tL.g); }
+        #endif`);
     // Dunst sammelt sich in tiefen Lagen und wächst mit der Entfernung
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <fog_fragment>', `

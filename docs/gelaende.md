@@ -21,3 +21,8 @@ Danach nutzt das neue Gelände auf Fels-, Wüsten- und Eiswelten die MW-Böden (
 
 ## Kosten
 Aufbau beim ersten Landen rund 1–1,5 s länger (Höhen und Erosion), danach aus dem Speicher.
+
+## Gras und Licht (src/game/grass.ts, terrain.ts bakeLight)
+
+- **Gras als echte Halme:** Zwei Gitter aus Büscheln ziehen mit der Kamera mit (nah 0,6-m-Zellen mit 14 Halmen bis 36 m, fern 1,5-m-Zellen mit 6 Halmen bis 90 m; bei niedriger Grafikqualität nur ein Gitter). Alles rechnet der Vertex-Shader: Platz und Größe aus der Zellnummer, Boden aus der Höhentextur (genau die Dreiecke des Geländenetzes), Dichte aus den Erosionsmasken (Sediment und Rinnen dicht, Schutt kaum, Steilhang nichts), große Flecken, keine Halme unter Wasser, über der Schneegrenze, auf den Schneeflecken des Bodenshaders und auf dem Landeplatz. Wind schwingt in langen Wellen. Die alten Grasbüschel-Karten entfallen im neuen Gelände.
+- **Licht:** Die Sonne steht im neuen Gelände tiefer (Höhe 0,3–0,48), damit Hänge Form bekommen. `bakeLight` rechnet beim Landen einmal weiche Bergschatten (Strahl zur Sonne bis 4,5 km) und Umgebungsverdeckung (8 Richtungen) in eine 257er Textur. Boden und Gras dunkeln damit direktes Licht bzw. Umgebungslicht ab.

@@ -218,7 +218,7 @@ export function erode(H: Float32Array, N: number, cell: number, R: () => number,
 // ---------------- Karten für Shader und Bewuchs ----------------
 // nrm: Normale (x, z) als Halbfließkomma-Textur mit linearer Filterung → glattes Licht pro Bildpunkt, ohne Dreieckskanten
 // mask: R = Abfluss, G = Sediment, B = Schutt, A = Krümmung (0,5 = eben, > 0,5 Mulde, < 0,5 Kuppe)
-export interface TerrainMaps { N: number; size: number; nrm: THREE.DataTexture; mask: THREE.DataTexture; m: Uint8Array; sample: (x: number, z: number) => { flow: number; sed: number; talus: number; curv: number } }
+export interface TerrainMaps { N: number; size: number; nrm: THREE.DataTexture; mask: THREE.DataTexture; m: Uint8Array; height: THREE.DataTexture; light: { value: THREE.Texture | null }; sample: (x: number, z: number) => { flow: number; sed: number; talus: number; curv: number } }
 export function buildMaps(H: Float32Array, N: number, size: number, e: ErodeOut | null): TerrainMaps {
   const cell = size / (N - 1), half = size / 2;
   const nd = new Uint16Array(N * N * 4), m = new Uint8Array(N * N * 4);
@@ -247,5 +247,52 @@ export function buildMaps(H: Float32Array, N: number, size: number, e: ErodeOut 
     const f = (o: number) => { const a = m[(j * N + i) * 4 + o], b = m[(j * N + i + 1) * 4 + o], c = m[((j + 1) * N + i) * 4 + o], d = m[((j + 1) * N + i + 1) * 4 + o]; return ((a * (1 - u) + b * u) * (1 - w) + (c * (1 - u) + d * u) * w) / 255; };
     return { flow: f(0), sed: f(1), talus: f(2), curv: f(3) * 2 - 1 };
   };
-  return { N, size, nrm, mask, m, sample };
+  return { N, size, nrm, mask, m, sample, height: heightTexture(H, N), light: { value: null } };
+}
+
+// ---------------- Licht aus dem Gelände (einmal je Landung, die Sonne steht auf einem Planeten fest) ----------------
+// R = Schatten der Berge (weich: Halbschatten wächst mit der Entfernung zum verdeckenden Hang), G = Umgebungsverdeckung (wie viel Himmel
+// ein Punkt sieht: Täler und Rinnen dunkler). Der Echtzeit-Schatten reicht nur rund 320 m; so werfen Berge Schatten über ganze Täler.
+export function bakeLight(H: Float32Array, N: number, size: number, sun: THREE.Vector3, R = 257) {
+  const cell = size / (N - 1), half = size / 2, rc = size / (R - 1);
+  const hAt = (x: number, z: number) => {
+    const gx = (x + half) / cell, gz = (z + half) / cell;
+    if (gx < 0 || gz < 0 || gx > N - 1.001 || gz > N - 1.001) return -1e9;
+    const i = Math.floor(gx), j = Math.floor(gz), u = gx - i, v = gz - j, k = j * N + i;
+    return (H[k] * (1 - u) + H[k + 1] * u) * (1 - v) + (H[k + N] * (1 - u) + H[k + N + 1] * u) * v;
+  };
+  const d = new THREE.Vector2(sun.x, sun.z), hl = d.length() || 1; d.divideScalar(hl);
+  const tanE = sun.y / hl, out = new Uint8Array(R * R * 4);
+  const dirs = Array.from({ length: 8 }, (_, a) => [Math.cos(a * Math.PI / 4), Math.sin(a * Math.PI / 4)]), dist = [10, 22, 45, 90, 180, 330];
+  for (let j = 0; j < R; j++) for (let i = 0; i < R; i++) {
+    const x = -half + i * rc, z = -half + j * rc, h0 = hAt(x, z) + 1.5;
+    let vis = 1;
+    for (let t = cell; t < 4500; t += cell * (1 + t / 700)) {
+      const hq = hAt(x + d.x * t, z + d.y * t); if (hq < -1e8) break;
+      const diff = h0 + t * tanE - hq;
+      vis = Math.min(vis, diff / (t * 0.045) + 0.5);
+      if (vis <= 0) { vis = 0; break; }
+    }
+    let occ = 0;
+    for (const [dx, dz] of dirs) {
+      let m = 0;
+      for (const r of dist) { const hq = hAt(x + dx * r, z + dz * r); if (hq < -1e8) break; m = Math.max(m, (hq - h0 + 1.5) / Math.hypot(r, hq - h0)); }
+      occ += m;
+    }
+    const k = (j * R + i) * 4;
+    out[k] = Math.round(255 * Math.min(1, Math.max(0, vis)));
+    out[k + 1] = Math.round(255 * Math.min(1, Math.max(0, 1 - occ / 8 * 1.3)));
+    out[k + 3] = 255;
+  }
+  const t = new THREE.DataTexture(out, R, R, THREE.RGBAFormat, THREE.UnsignedByteType);
+  t.magFilter = t.minFilter = THREE.LinearFilter; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.needsUpdate = true;
+  return t;
+}
+
+// Höhen als Fließkomma-Textur (ein Kanal, ohne Filterung): Das Gras liest daraus im Vertex-Shader den Boden, genau nach den Dreiecken
+// des Geländenetzes (wie heightAt in surface.ts)
+export function heightTexture(H: Float32Array, N: number) {
+  const t = new THREE.DataTexture(H.slice(), N, N, THREE.RedFormat, THREE.FloatType);
+  t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true;
+  return t;
 }
