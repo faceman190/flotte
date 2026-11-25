@@ -598,7 +598,7 @@ export function updatePanels(dt: number) {
   cp.style.transform = `scale(${settings.hud})`;
   // Netz: nur im Mehrspieler (im Einzelspiel steht dort nichts)
   const np = $('netP'), solo = NET.status !== 'online' && NET.status !== 'verbinde' && NET.status !== 'fehler';
-  np.classList.toggle('hidden', solo);
+  np.classList.add('hidden'); void solo;      // seit 2026-11-26 zeigt #netBar (ui/mp.ts) den Stand, auch außerhalb des HUD
   if (!solo) np.innerHTML = NET.status === 'online' ? `<span class="good">●</span> online · ${NET.roster.length}` : NET.status === 'verbinde' ? '<span class="acc">●</span> verbinde …' : '<span class="bad">●</span> getrennt';
   np.style.transform = `scale(${settings.hud})`;
   updateObjectives();

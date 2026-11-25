@@ -26,4 +26,10 @@ export function radio(who: string, text: string, col?: string) {
   setTimeout(() => el.remove(), 8700);
   snd(950, 0.035, 'sine', 0.012, -250);   // leiser Funkklick (bis Alpha 1.51 ein heller Rechteckton bei 1400 Hz, klang wie ein Ping)
 }
+/** nur in den Verlauf (Flottenband → Funk), ohne Meldung oben rechts – z. B. Chat, der seine eigene Anzeige hat */
+export function radioVerlauf(who: string, text: string, col?: string) {
+  radioLog.push({ who, text, col: col || COLORS[who] || '#5fd0ff', t: G.time || 0 });
+  if (radioLog.length > 80) radioLog.shift();
+  radioHooks.added();
+}
 export function clearRadio() { $('radio').innerHTML = ''; }

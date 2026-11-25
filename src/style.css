@@ -88,6 +88,15 @@ kbd{display:inline-block;min-width:22px;text-align:center;background:rgba(95,208
 #ctrlP .cr.hi kbd{background:var(--acc);color:#04121c;animation:kpulse 1.4s ease-in-out infinite}
 @keyframes kpulse{50%{box-shadow:0 0 12px var(--acc)}}
 
+#netBar{position:fixed;top:12px;left:16px;z-index:15;pointer-events:none;font:600 12px var(--ui);letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;background:rgba(6,16,26,.62);border-left:2px solid var(--mut);color:var(--mut);text-shadow:0 0 6px #000}
+#netBar.on{border-color:#7fe0a0;color:#cfeedd}#netBar.on b{color:#7fe0a0}
+#netBar.warn{border-color:#ffb347;color:#ffd9a0}#netBar.bad{border-color:#ff6b5b;color:#ffb0a8}
+#netBar .h{color:var(--mut);font-weight:500;letter-spacing:.5px;text-transform:none;margin-left:8px}
+body.netbar #crPop{top:44px}
+#chatLog{position:fixed;left:16px;top:80px;z-index:15;width:min(440px,42vw);display:flex;flex-direction:column;gap:4px;pointer-events:none}
+.cl{background:rgba(6,16,26,.72);border-left:2px solid #7fe0a0;padding:5px 10px;font-size:14px;line-height:1.35;color:var(--txt);transition:opacity .6s;animation:slideInL .3s ease-out;text-shadow:0 0 4px #000;overflow-wrap:anywhere}
+.cl b{color:#7fe0a0;margin-right:6px}.cl.me{border-color:#ffb347}.cl.me b{color:#ffb347}.cl.sys{border-color:var(--mut)}.cl.sys b{color:var(--mut)}
+@keyframes slideInL{from{transform:translateX(-18px);opacity:0}to{transform:none;opacity:1}}
 #chatIn{position:fixed;left:12px;bottom:12px;width:min(520px,calc(100vw - 24px));z-index:20;background:rgba(6,16,26,.92);border:1px solid var(--acc);box-shadow:0 0 16px rgba(95,208,255,.25);font-size:15px}
 #prompt{position:fixed;top:63%;left:50%;transform:translateX(-50%);border-color:var(--acc);color:var(--acc);padding:8px 20px;font-weight:700;letter-spacing:1px;pointer-events:none;font-size:16px;animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 rgba(95,208,255,0),0 10px 30px rgba(0,0,0,.45)}50%{box-shadow:0 0 18px rgba(95,208,255,.35),0 10px 30px rgba(0,0,0,.45)}}

@@ -58,8 +58,34 @@ authHooks.changed = () => { accountNote(); render(); };
 
 // ---------- Chat ----------
 let chatFrom = '';
+// Chatzeilen links oben: je Zeile 15 s, höchstens 6
+export function chatZeile(name: string, text: string, art: '' | 'me' | 'sys' = '') {
+  const box = $('chatLog'), el = document.createElement('div');
+  el.className = 'cl' + (art ? ' ' + art : '');
+  const b = document.createElement('b'); b.textContent = name; el.appendChild(b); el.appendChild(document.createTextNode(text));
+  box.appendChild(el); while (box.children.length > 6) box.firstChild!.remove();
+  setTimeout(() => (el.style.opacity = '0'), 15000); setTimeout(() => el.remove(), 15700);
+}
+netHooks.chat = (name, text, mine) => { chatZeile(name, text, mine ? 'me' : ''); if (!mine) snd(1180, 0.05, 'sine', 0.02, -200); };
+// Stand links oben, immer sichtbar außer im Vorspann: Einzelspieler oder Mehrspieler mit Zahl der Piloten (online und hier)
+let barTxt = '';
+function netBar() {
+  const el = $('netBar'), st = NET.status, show = G.mode !== 'intro';
+  let cls = '', html = '';
+  if (st === 'online') {
+    const me = NET.roster.find(r => r.id === NET.id), hier = me && me.room ? NET.roster.filter(r => r.room === me.room).length : 0;
+    cls = 'on'; html = `<b>●</b> Mehrspieler · ${NET.roster.length} online${me && me.room ? ` · ${hier} hier` : ''}${NET.account ? `<span class="h">als ${esc(NET.account)}</span>` : '<span class="h">nicht angemeldet</span>'}`;
+  } else if (st === 'verbinde') { cls = 'warn'; html = '● Verbinde …'; }
+  else if (st === 'fehler') { cls = 'bad'; html = `● Mehrspieler getrennt<span class="h">${esc(NET.err || 'keine Verbindung')}</span>`; }
+  else html = 'Einzelspieler<span class="h">Mehrspieler: Menü → Mehrspieler → Verbinden</span>';
+  const key = cls + html + show;
+  if (key === barTxt) return; barTxt = key;
+  el.className = (show ? '' : 'hidden ') + cls; el.innerHTML = html;
+  document.body.classList.toggle('netbar', show);
+}
+setInterval(netBar, 400);
 export function openChat() {
-  if ((!isOnline() && !devMode()) || !(G.mode === 'play' || G.mode === 'walk' || G.mode === 'rover')) return false;
+  if ((!isOnline() && !devMode()) || !(G.mode === 'play' || G.mode === 'walk' || G.mode === 'rover' || G.mode === 'dungeon' || G.mode === 'eva')) return false;
   chatFrom = G.mode;
   releaseAll();
   if (document.pointerLockElement) document.exitPointerLock();

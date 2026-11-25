@@ -25,7 +25,7 @@ import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { SHIPS, hasInterior, type ShipId } from '../data/ships';
 import { setGear, setDoors, setKanzel, RAMP_ENTRY, type Paint } from '../models/gltfShips';
 import { LEITER, leiterSetzen } from './ausstieg';
-import { radio } from '../ui/radio';
+import { radio, radioVerlauf } from '../ui/radio';
 import { kistenAnNeue } from './kisten';
 import { EVA } from './eva';
 import { quartierHooks, einladungAn, dekoAusNetz, ortKennung, nrText } from './quartier';
@@ -39,7 +39,7 @@ export const NET = {
   roster: [] as { id: number; name: string; room: string }[],
   account: null as string | null, authErr: '', authOk: '', savedAt: 0, tempStore: false,      // authOk: Bestätigung nach dem Anlegen eines Kontos
 };
-export const netHooks = { changed: () => {}, trade: (_m: any) => {}, lost: () => {} };   // Status oder Online-Liste geändert (Menüs neu zeichnen)
+export const netHooks = { changed: () => {}, trade: (_m: any) => {}, lost: () => {}, chat: (_name: string, _text: string, _mine: boolean) => {} };      // chat: eigene Anzeige in ui/mp.ts   // Status oder Online-Liste geändert (Menüs neu zeichnen)
 export interface Remote {
   id: number; name: string; cls: string; paint: string; m: string; s: number; w: any[] | null; d: string; g: string[] | null;   // g: Aussehen zu Fuß [Helm, Anzug, Rucksack, Waffe]   // d: Station, an der er angedockt ist   // w: zu Fuß in einer Station [Station, x, z, Blick]
   ship: ShipModel | null; rover: THREE.Group | null;
@@ -159,7 +159,9 @@ function onMsg(m: any) {
   } else if (m.t === 'co') {
     coopReceive(m);
   } else if (m.t === 'chat') {
-    radio(m.name, m.text, m.id === NET.id ? '#ffb347' : '#7fe0a0');
+    // Chat (seit 2026-11-26): eigene Anzeige links oben, immer sichtbar (der Funkkasten liegt im Flug-HUD und war zu Fuß, an Bord und in Stationen aus)
+    netHooks.chat(String(m.name || ''), String(m.text || ''), m.id === NET.id);
+    radioVerlauf(m.name, m.text, m.id === NET.id ? '#ffb347' : '#7fe0a0');
   } else if (m.t === 'qi') {
     // Einladung ins Quartier eines anderen Piloten (game/quartier.ts)
     const name = String(m.name || ''), d = dekoAusNetz(m.deko, name);
