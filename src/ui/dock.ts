@@ -28,6 +28,7 @@ import { showShip, hideShip, showModel } from './shipPreview';
 import { FZ, FZ_IDS, buildFahrzeug, fzLaden, normFz, type FzId } from '../models/rover';
 import { bodenAushang, bodenAnnehmen, bodenAbgeben } from '../game/bodenaufgaben';
 import { aufgabenAushang } from '../game/aufgaben';
+import { eigene, ortText, kaufen as fzKaufen, verladen as fzVerladen, passtIn, schiffePasst, anBord, freiePlaetze, stellplaetze, ortVon, FZ_MASS } from '../game/fahrzeuge';
 import { QS, QPREIS, quartierHooks, eigeneDeko, mieten, nrText, gueltigeEinladungen, funde, schiffe, fundName, QEINLADUNG_MS, type QDeko } from '../game/quartier';
 
 // Stationsterminals (seit Alpha 1.25): Jeder Dienst hat seinen eigenen Ort auf der Station und sein eigenes Terminal.
@@ -287,11 +288,11 @@ function vWerft(): View {
     const p = shipPrice(id), own = id === P.cls ? 'dein Schiff' : here.some(r => r.cls === id) ? 'im Hangar' : '', on = id === sel && !selFz, lock = shipLock(id, owns(id));
     h += `<button class="row ${on ? 'sel' : ''}" data-a="ship" data-k="${id}" ${on ? 'aria-current="true"' : ''}><span><b>${SHIPS[id].n}</b><small>${SHIPS[id].role}${own ? ` · <i class="up">${own}</i>` : ''}${lock ? ` · <i class="dn">🔒 ${lock}</i>` : ''}</small></span><span class="mo ${P.credits < p || lock ? 'dn' : 'hi'}">${fmtN(p)} Cr</span></button>`;
   }
-  // Bodenfahrzeuge (seit 2026-11-24): fahren im Schiff mit, eins davon wird beim Landen ausgesetzt
+  // Bodenfahrzeuge (seit 2026-11-25 mit Maßen): fahren nur in Schiffen mit Laderaum mit (game/fahrzeuge.ts)
   h += `<p class="lb">Bodenfahrzeuge</p>`;
   for (const k of FZ_IDS) {
-    const f = FZ[k], have = k === 'dachs' || (P.fahrzeuge || []).includes(k), on = selFz === k;
-    h += `<button class="row ${on ? 'sel' : ''}" data-a="fz" data-k="${k}" ${on ? 'aria-current="true"' : ''}><span><b>${f.kurz}</b><small>${k === 'dachs' ? 'Bergbaurover' : 'Erkundungsbuggy'}${have ? ` · <i class="up">${fzAktiv() === k ? 'wird ausgesetzt' : 'im Schiff'}</i>` : ''}</small></span><span class="mo ${have ? 'dim' : P.credits < f.price ? 'dn' : 'hi'}">${have ? 'gehört dir' : fmtN(f.price) + ' Cr'}</span></button>`;
+    const f = FZ[k], have = eigene().includes(k), on = selFz === k, wo = have ? (ortVon(k) === 'sh:' + P.uid ? 'an Bord' : ortVon(k) === 'st:' + st().id ? 'in der Halle' : 'woanders') : '';
+    h += `<button class="row ${on ? 'sel' : ''}" data-a="fz" data-k="${k}" ${on ? 'aria-current="true"' : ''}><span><b>${f.kurz}</b><small>${k === 'dachs' ? 'Bergbaurover' : 'Erkundungsbuggy'}${have ? ` · <i class="up">${wo}</i>` : ''}</small></span><span class="mo ${have ? 'dim' : P.credits < f.price ? 'dn' : 'hi'}">${have ? 'gehört dir' : fmtN(f.price) + ' Cr'}</span></button>`;
   }
   h += `<p class="hint end">Rot: Dafür reichen deine Credits nicht.</p></nav>`;
   if (selFz) return vWerftFz(h, selFz);
@@ -312,11 +313,12 @@ function vWerft(): View {
 
 const owns = (cls: string) => P.cls === cls || P.fleet.some(r => r.cls === cls);
 // Werft, Bodenfahrzeug gewählt: Ansicht, Beschreibung, Werte im Vergleich, Kaufen bzw. „beim Landen aussetzen“
-const fzAktiv = (): FzId => { const k = normFz(P.fahrzeug); return k === 'wiesel' && !(P.fahrzeuge || []).includes('wiesel') ? 'dachs' : k; };
 function vWerftFz(nav: string, k: FzId): View {
-  const f = FZ[k], have = k === 'dachs' || (P.fahrzeuge || []).includes(k), aktiv = fzAktiv() === k, o = FZ[k === 'dachs' ? 'wiesel' : 'dachs'];
+  const f = FZ[k], have = eigene().includes(k), o = FZ[k === 'dachs' ? 'wiesel' : 'dachs'], m = FZ_MASS[k], pass = passtIn(k, P.cls), wo = ortVon(k);
   let h = nav;
-  h += `<section class="pn deep flush"><div class="prev"><canvas id="tmShip" width="900" height="420"></canvas></div><div class="pd"><div class="pt"><h2>${f.n}</h2><p class="lb">${k === 'dachs' ? 'Bergbaurover' : 'Erkundungsbuggy'}</p></div><p>${f.d}</p><p class="hint">Beide Fahrzeuge fahren im Schiff mit. Am gelandeten Schiff tauschst du mit [X]; hier legst du fest, welches beim Landen ausgesetzt wird.</p></div></section>`;
+  const passt = schiffePasst(k);
+  h += `<section class="pn deep flush"><div class="prev"><canvas id="tmShip" width="900" height="420"></canvas></div><div class="pd"><div class="pt"><h2>${f.n}</h2><p class="lb">${k === 'dachs' ? 'Bergbaurover' : 'Erkundungsbuggy'} · ${n1(m[0])} × ${n1(m[1])} × ${n1(m[2])} m</p></div><p>${f.d}</p>
+    <p class="hint">Passt in: ${passt.join(', ') || 'kein Schiff'}. Jäger und Elster tragen keine Fahrzeuge; an jeder Planetenbasis gibt es einen Leihrover „Dachs“.</p></div></section>`;
   const row = (label: string, v: number, ov: number, max: number, unit: string) => {
     const d = Math.round(v - ov);
     return `<div class="cp"><div><span>${label}</span><span class="mo"><b>${fmtN(Math.round(v))}${unit}</b>${d ? ` <i class="${d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : '−'}${fmtN(Math.abs(d))}</i>` : ''}</span></div><div class="br"><i class="${d < 0 ? 'dn' : ''}" style="width:${Math.round(Math.min(1, v / max) * 100)}%"></i></div></div>`;
@@ -324,10 +326,13 @@ function vWerftFz(nav: string, k: FzId): View {
   h += `<aside class="pn"><p class="lb">Werte · Vergleich mit dem ${o.kurz}</p>
     ${row('Tempo', f.v * 3.6, o.v * 3.6, 170, ' km/h')}${row('Mit Umschalt', f.vB * 3.6, o.vB * 3.6, 170, ' km/h')}${row('Anzug', f.eng * 10, o.eng * 10, 140, ' %')}${row('Erzladung', f.cap, o.cap, 40, ' E')}
     <div class="sep"></div><p class="lb">Ausrüstung</p><p>${k === 'dachs' ? 'Schneckenbohrer · Erzmulde 40 E · Druckkabine · sechs Räder' : 'Sensormast 1,6 km ([R]) · Lichtleiste · zwei Sitze · Ersatzrad · kein Bohrer'}</p>
-    <div class="act">${have ? line('Beim Landen', aktiv ? 'wird ausgesetzt' : 'bleibt im Schiff') : line('Credits danach', `${fmtN(P.credits - f.price)} Cr`, P.credits < f.price ? 'dn' : '')}
-    ${have ? `<button class="pri big" data-a="usefz" data-k="${k}" ${aktiv ? 'disabled' : ''}><span>${aktiv ? 'Wird beim Landen ausgesetzt' : 'Beim Landen aussetzen'}</span><span class="mo"></span></button>`
-      : `<button class="pri big" data-a="buyfz" data-k="${k}" ${P.credits >= f.price ? '' : 'disabled'}><span>Kaufen</span><span class="mo">${fmtN(f.price)} Cr</span></button>`}</div></aside>`;
-  return { k: kpi('Credits', `${fmtN(P.credits)} Cr`) + kpi('Fahrzeuge', String(1 + (P.fahrzeuge || []).length)), cols: '300px minmax(0,1fr) 370px', h };
+    <div class="act">${line(`Laderaum der ${esc(P.shipName)}`, stellplaetze(P.cls) ? `${freiePlaetze()} von ${stellplaetze(P.cls)} Stellplätzen frei` : 'keiner', stellplaetze(P.cls) ? '' : 'dn')}
+    ${have ? line('Steht', ortText(k, stationName)) : line('Credits danach', `${fmtN(P.credits - f.price)} Cr`, P.credits < f.price ? 'dn' : '')}
+    ${!have ? `<button class="pri big" data-a="buyfz" data-k="${k}" ${P.credits >= f.price ? '' : 'disabled'}><span>Kaufen</span><span class="mo">${fmtN(f.price)} Cr</span></button>`
+      : wo === 'sh:' + P.uid ? `<button class="pri big" data-a="ladefz" data-k="${k}"><span>In die Fahrzeughalle stellen</span><span class="mo"></span></button>`
+      : wo === 'st:' + st().id ? `<button class="pri big" data-a="ladefz" data-k="${k}" ${pass && freiePlaetze() > 0 ? '' : 'disabled'}><span>${!pass ? `Passt nicht in die ${esc(P.shipName)}` : freiePlaetze() > 0 ? `In die ${esc(P.shipName)} laden` : 'Kein Stellplatz frei'}</span><span class="mo"></span></button>`
+      : `<p class="hint">Steht nicht hier. Hol ihn mit einem passenden Schiff dort ab, wo er steht.</p>`}</div></aside>`;
+  return { k: kpi('Credits', `${fmtN(P.credits)} Cr`) + kpi('Fahrzeuge an Bord', String(anBord().length)), cols: '300px minmax(0,1fr) 370px', h };
 }
 
 // ---------- Werkstatt: Ausbaustufen ----------
@@ -694,11 +699,8 @@ $('dockCard').addEventListener('click', e => {
   if (a === 'bodacc') note = bodenAnnehmen(k) || note;
   if (a === 'boddel') note = bodenAbgeben(k) || note;
   if (a === 'fz') selFz = normFz(k);
-  if (a === 'buyfz' && k === 'wiesel' && !(P.fahrzeuge || []).includes(k) && P.credits >= FZ.wiesel.price) {
-    P.credits -= FZ.wiesel.price; (P.fahrzeuge ||= []).push(k); P.fahrzeug = k;
-    note = `${FZ.wiesel.n} gekauft. Er fährt ab jetzt im Schiff mit und wird beim nächsten Landen ausgesetzt; am Schiff tauschst du mit [X].`; snd(600, 0.5, 'triangle', 0.06, 600);
-  }
-  if (a === 'usefz') { P.fahrzeug = normFz(k); note = `Beim Landen wird der ${FZ[normFz(k)].kurz} ausgesetzt.`; snd(500, 0.2, 'triangle', 0.04, 200); }
+  if (a === 'buyfz') { note = fzKaufen(normFz(k), st().id); snd(600, 0.5, 'triangle', 0.06, 600); }
+  if (a === 'ladefz') { note = fzVerladen(normFz(k), st().id); snd(500, 0.3, 'triangle', 0.04, 200); }
   if (a === 'upsel') selUp = k as UpgId;
   if (a === 'shmode' && shop.nurSpind && k === 'kauf') return;
   if (a === 'shmode') { shop.mode = k; shop.sel = ''; shop.probe = false; snd(700, 0.04, 'sine', 0.025, 200); }

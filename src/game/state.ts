@@ -48,7 +48,8 @@ export interface Player {
   surface?: boolean;               // gespeichert auf der Planetenoberfläche
   rover?: Partial<Record<ItemId, number>>; // Ladung des Rovers
   fahrzeug?: string;                        // Bodenfahrzeug, das beim Landen ausgesetzt wird: 'dachs' (Vorgabe) | 'wiesel' (models/rover.ts FZ)
-  fahrzeuge?: string[];
+  fahrzeuge?: string[];                     // eigene Bodenfahrzeuge (der Dachs der Basen ist geliehen, game/fahrzeuge.ts)
+  fzOrt?: Partial<Record<string, string>>;  // wo ein eigenes Fahrzeug steht: 'sh:<uid>' an Bord, 'st:<Station>' in der Fahrzeughalle (game/fahrzeuge.ts)
   boden?: Record<string, import('./bodenaufgaben').BodenAkt>;   // laufende Bodenaufgaben auf Planeten (game/bodenaufgaben.ts)
   bodenGen?: Record<string, number>;        // je Bodenaufgabe: wie oft erledigt (neue Orte)
   bodenZuletzt?: Record<string, number>;

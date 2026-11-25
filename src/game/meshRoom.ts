@@ -98,5 +98,15 @@ export function buildMeshRoom(cls: string) {
     spawn: { x: W.spawn.x * k, y: W.spawn.y * k, z: W.spawn.z * k, yaw: W.spawn.yaw },
     spots: W.spots.map(s => ({ kind: s.kind, x: s.x * k, y: s.y * k, z: s.z * k, r: s.r, label: '' })),
     lamps: W.lamps.map(l => [l[0] * k, l[1] * k, l[2] * k, l[3]] as [number, number, number, number]),
+    /** Boden in einem Rechteck (Schiffskoordinaten) begehbar machen, wo die Laufkarte keinen in dieser Höhe hat (z. B. unter ausgeblendeten Frachtstücken) */
+    fuellen(x0: number, x1: number, z0: number, z1: number, y: number, head: number) {
+      for (let x = x0; x <= x1; x += W.cell * k * 0.5) for (let z = z0; z <= z1; z += W.cell * k * 0.5) {
+        const ix = Math.floor((x / k - W.x0) / W.cell), iz = Math.floor((z / k - W.z0) / W.cell);
+        if (ix < 0 || iz < 0 || ix >= W.nx || iz >= W.nz) continue;
+        const id = ix * W.nz + iz, fl = W.floors.get(id) || [];
+        let hat = false; for (let i = 0; i < fl.length; i += 2) if (Math.abs(fl[i] - y / k) < 0.3) hat = true;
+        if (!hat) { fl.push(y / k, head / k); W.floors.set(id, fl); }
+      }
+    },
   };
 }

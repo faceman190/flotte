@@ -199,3 +199,105 @@ export function setDoors(root: THREE.Object3D, open: boolean, dt = 0) {
 // Koordinatensystem eines Modells im Spiel (für Innenmodelle, die deckungsgleich zum Außenmodell sitzen sollen):
 // Modell um 180° gedreht, um innerPos verschoben, mit s × Länge skaliert
 export const modelFrame = (name: string) => TPL[name]?.frame || null;
+
+// ---------- Kanzel (seit 2026-11-25, Konzept docs/konzept-schiffe-fracht.md, Schritt 2) ----------
+// Jäger und Elster steigen über die Kanzel aus. Die Modelle haben dafür kein eigenes bewegliches Teil, aber das Kanzelglas ist ein eigenes
+// Material: Diese Netze hängen an einem Gelenk an der hinteren Oberkante des Glases und klappen vorn hoch. Venom: das ganze Glas ist ein Stück.
+const KANZEL: Record<string, { mats: string[]; angle: number; zMax?: number }> = {
+  Venom: { mats: ['glass_clear'], angle: 0.26, zMax: -1.2 },      // nur das Glas vor z = −1,2 m (über dem Cockpit), der Rest bleibt fest
+  Wuerger: { mats: ['Schauglas (Spiel)'], angle: 0.95 },
+  Elster: { mats: ['Kuppelglas (Spiel)'], angle: 1.05 },
+};
+interface KanzelRig { pivot: THREE.Object3D; angle: number; p: number; box: THREE.Box3 }
+function rigKanzel(root: THREE.Object3D): KanzelRig | null {
+  let name = ''; root.traverse(o => { if (!name && o.userData.model) name = o.userData.model; });
+  const cfg = KANZEL[name]; if (!cfg) return null;
+  let list: THREE.Mesh[] = []; root.traverse((o: any) => { if (o.isMesh && cfg.mats.includes(o.material?.name)) list.push(o); });
+  if (!list.length) return null;
+  root.updateMatrixWorld(true);
+  if (cfg.zMax !== undefined) list = list.map(m => kanzelTeil(m, root, cfg.zMax!)).filter(Boolean) as THREE.Mesh[];
+  if (!list.length) return null;
+  let gr = list[0].parent; while (gr && !gr.userData.glbRoot) gr = gr.parent;
+  if (!gr) return null;
+  const ginv = new THREE.Matrix4().copy(gr.matrixWorld).invert(), rinv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const gb = new THREE.Box3(), sb = new THREE.Box3();
+  for (const m of list) { m.geometry.computeBoundingBox(); gb.union(m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(ginv, m.matrixWorld))); sb.union(m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(rinv, m.matrixWorld))); }
+  list = list.concat(kanzelStreben(root, list, sb, cfg.mats));      // Streben und Rahmen am Glas gehen mit
+  // Nase im Rahmen der GLB-Datei: Schiffs-Nase ist −Z im Spiel
+  const nose = new THREE.Vector3(0, 0, -1).transformDirection(root.matrixWorld).transformDirection(ginv);
+  const front = nose.z >= 0 ? 1 : -1, pivot = new THREE.Object3D(); pivot.name = 'Gelenk Kanzel';
+  gr.add(pivot); pivot.position.set((gb.min.x + gb.max.x) / 2, gb.max.y, front > 0 ? gb.min.z : gb.max.z); pivot.updateMatrixWorld(true);
+  for (const m of list) pivot.attach(m);
+  return { pivot, angle: -front * cfg.angle, p: 0, box: sb };      // vorn hoch: um x mit dem Vorzeichen gegen die Nasenrichtung
+}
+// Netz in zwei teilen: Dreiecke, für die pred (Ecken in Schiffskoordinaten) gilt, kommen in ein neues Netz (eigene Kopie der Geometrie)
+function teilen(m: THREE.Mesh, root: THREE.Object3D, pred: (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => boolean): THREE.Mesh | null {
+  const g = m.geometry, p = g.attributes.position; if (!p) return null;
+  const idx = g.index ? Array.from(g.index.array as ArrayLike<number>) : Array.from({ length: p.count }, (_, i) => i);
+  const M = new THREE.Matrix4().multiplyMatrices(new THREE.Matrix4().copy(root.matrixWorld).invert(), m.matrixWorld);
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), ja: number[] = [], nein: number[] = [];
+  for (let t = 0; t + 2 < idx.length; t += 3) {
+    A.fromBufferAttribute(p, idx[t]).applyMatrix4(M); B.fromBufferAttribute(p, idx[t + 1]).applyMatrix4(M); C.fromBufferAttribute(p, idx[t + 2]).applyMatrix4(M);
+    (pred(A, B, C) ? ja : nein).push(idx[t], idx[t + 1], idx[t + 2]);
+  }
+  if (!ja.length) return null;
+  const gv = g.clone(); gv.setIndex(ja); const gr = g.clone(); gr.setIndex(nein); m.geometry = gr;
+  const k = new THREE.Mesh(gv, m.material); k.matrixAutoUpdate = m.matrixAutoUpdate; k.position.copy(m.position); k.quaternion.copy(m.quaternion); k.scale.copy(m.scale); k.matrix.copy(m.matrix);
+  m.parent!.add(k); k.updateMatrixWorld(true); return k;
+}
+// Glas teilen: Dreiecke mit dem Schwerpunkt vor zMax (Schiffskoordinaten) werden die Kanzel
+const kanzelTeil = (m: THREE.Mesh, root: THREE.Object3D, zMax: number) => teilen(m, root, (a, b, c) => (a.z + b.z + c.z) / 3 < zMax);
+// Streben und Rahmen der Kanzel: alle übrigen Flächen (außer dem restlichen Glas), deren Schwerpunkt höchstens 12 cm vom Kanzelglas entfernt
+// und über dem Kanzelrand liegt. Die Modelle haben dafür kein eigenes Teil; so geht der Rahmen mit dem Glas auf, Sitze und Rumpf bleiben.
+function kanzelStreben(root: THREE.Object3D, glas: THREE.Mesh[], sb: THREE.Box3, glasMats: string[], abst = 0.12): THREE.Mesh[] {
+  const rinv = new THREE.Matrix4().copy(root.matrixWorld).invert(), tris: THREE.Triangle[] = [], grid = new Map<string, number[]>(), Z = 0.3;
+  const cell = (x: number, y: number, z: number) => Math.floor(x / Z) + ',' + Math.floor(y / Z) + ',' + Math.floor(z / Z);
+  for (const m of glas) {
+    const g = m.geometry, p = g.attributes.position, M = new THREE.Matrix4().multiplyMatrices(rinv, m.matrixWorld);
+    const idx = g.index ? (g.index.array as ArrayLike<number>) : Array.from({ length: p.count }, (_, i) => i);
+    for (let t = 0; t + 2 < idx.length; t += 3) {
+      const tr = new THREE.Triangle(new THREE.Vector3().fromBufferAttribute(p, idx[t]).applyMatrix4(M), new THREE.Vector3().fromBufferAttribute(p, idx[t + 1]).applyMatrix4(M), new THREE.Vector3().fromBufferAttribute(p, idx[t + 2]).applyMatrix4(M));
+      const i = tris.push(tr) - 1, bb = new THREE.Box3().setFromPoints([tr.a, tr.b, tr.c]).expandByScalar(abst);
+      for (let x = Math.floor(bb.min.x / Z); x <= Math.floor(bb.max.x / Z); x++) for (let y = Math.floor(bb.min.y / Z); y <= Math.floor(bb.max.y / Z); y++) for (let z = Math.floor(bb.min.z / Z); z <= Math.floor(bb.max.z / Z); z++) {
+        const k = x + ',' + y + ',' + z; let l = grid.get(k); if (!l) grid.set(k, (l = [])); l.push(i);
+      }
+    }
+  }
+  const nah = sb.clone().expandByScalar(abst + 0.05), sill = sb.min.y + 0.03, glasSet = new Set(glas), q = new THREE.Vector3(), c = new THREE.Vector3(), out: THREE.Mesh[] = [], kand: THREE.Mesh[] = [];
+  root.traverse((o: any) => {
+    if (!o.isMesh || glasSet.has(o) || glasMats.includes(o.material?.name) || !o.geometry?.attributes?.position) return;
+    o.geometry.computeBoundingBox(); const bb = o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(rinv, o.matrixWorld));
+    if (bb.intersectsBox(nah)) kand.push(o);
+  });
+  for (const o of kand) {
+    const k = teilen(o, root, (a, b, d) => {
+      c.copy(a).add(b).add(d).multiplyScalar(1 / 3);
+      if (c.y < sill || !nah.containsPoint(c)) return false;
+      const l = grid.get(cell(c.x, c.y, c.z)); if (!l) return false;
+      for (const i of l) if (tris[i].closestPointToPoint(c, q).distanceToSquared(c) < abst * abst) return true;
+      return false;
+    });
+    if (k) out.push(k);
+  }
+  return out;
+}
+const kRig = (root: THREE.Object3D) => { let r = root.userData.kanzel as KanzelRig | null | undefined; if (r === undefined) r = root.userData.kanzel = rigKanzel(root); return r; };
+/** Kanzel öffnen oder schließen (jedes Bild, dt = Spielzeit); 1,2 s für den ganzen Weg */
+export function setKanzel(root: THREE.Object3D, open: boolean, dt = 0) {
+  const r = kRig(root); if (!r) return;
+  r.p = Math.max(0, Math.min(1, r.p + (open ? 1 : -1) * Math.min(0.1, dt) / 1.2));
+  r.pivot.rotation.x = r.angle * ease(r.p);
+}
+/** Lage des Kanzelglases im Schiff (Schiffskoordinaten: Nase −Z, oben +Y) und wie weit sie offen ist; null = keine Kanzel */
+export function kanzelInfo(root: THREE.Object3D): { box: THREE.Box3; p: number } | null { const r = kRig(root); return r ? { box: r.box, p: r.p } : null; }
+
+/** tiefster Punkt des Fahrwerks (ausgefahren) in Schiffskoordinaten, als positive Höhe über dem Boden; null = Modell ohne Fahrwerk */
+export function fahrwerkTiefe(root: THREE.Object3D): number | null {
+  if (root.userData.fwTiefe !== undefined) return root.userData.fwTiefe;
+  const list: THREE.Mesh[] = []; root.traverse((o: any) => { if (o.isMesh && o.material?.name === 'gear') list.push(o); });
+  if (!list.length) return (root.userData.fwTiefe = null);
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(); let y = 0;
+  for (const m of list) { m.geometry.computeBoundingBox(); y = Math.min(y, m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld)).min.y); }
+  return (root.userData.fwTiefe = y < -0.3 ? -y : null);
+}

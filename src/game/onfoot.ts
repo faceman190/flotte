@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GUN } from './footgun';
+import { ausArt, leiterFuss, blende } from './ausstieg';
 import { drawPrompt, drawSpeechBubble } from '../ui/footHud';
 import { CITY, cityTargets, cityDoorNear, cityDoorPos, cityBark, cityBubble } from './city';
 import { scene, camera, view, ux, gl, compileFor, renderer } from '../core/engine';
@@ -8,7 +9,7 @@ import { clamp } from '../core/util';
 import { sfx, snd } from '../core/audio';
 import { P, G, settings, stats } from './state';
 import { world } from './world';
-import { ROVER, SURF, terrainAt, liquidAt, resetRoverCamera, buildRover } from './surface';
+import { ROVER, SURF, terrainAt, liquidAt, resetRoverCamera, buildRover , landeHoehe } from './surface';
 import { updateFlora, treeNear } from './flora';
 import { gearFactor } from './inventory';
 import { radio } from '../ui/radio';
@@ -87,16 +88,19 @@ export function leaveRover() {
 // Über die Rampe aus dem Schiff: hinter dem gelandeten Schiff
 export function leaveShipOnFoot() {
   const S = ROVER.ship, bx = Math.sin(S.yaw), bz = Math.cos(S.yaw), r = stats().radius;
+  // Jäger und Elster: aus der Kanzel über die Bordleiter (ausstieg.ts), am Fuß der Leiter
+  const f = ausArt() === 'kanzel' ? leiterFuss(S) : null;
+  if (f) { place(f.x, f.z, f.yaw); blende(380); return; }
   place(S.x + bx * (r * 0.7 + 3), S.z + bz * (r * 0.7 + 3), S.yaw + Math.PI);
 }
 // Planetenbasis: auf dem Landefeld landen und gleich zu Fuß aussteigen
 export function landAtBase(st: Station, quiet = false) {      // quiet: beim Laden eines Spielstands (main.ts, resumeAt)
   const p = basePad(st); if (!p) return false;
   const px = P.x, pz = P.z; P.x = p.x; P.z = p.z;
-  if (!landShip(quiet)) { P.x = px; P.z = pz; return false; }
+  if (!landShip(quiet, true)) { P.x = px; P.z = pz; return false; }
   const r = stats().radius;
   let ax = p.x - st.x, az = p.z - st.z; const L = Math.hypot(ax, az) || 1; ax /= L; az /= L;   // vom Gebäude weg
-  ROVER.ship = { x: p.x, y: p.y + r * 0.55, z: p.z, yaw: Math.atan2(-ax, -az) };
+  ROVER.ship = { x: p.x, y: p.y + landeHoehe(), z: p.z, yaw: Math.atan2(-ax, -az) };
   const off = Math.max(p.hu, p.hv) + 6;
   ROVER.x = p.x + ax * off; ROVER.z = p.z + az * off; ROVER.y = terrainAt(ROVER.x, ROVER.z); ROVER.yaw = ROVER.ship.yaw;
   place(p.x - ax * (r * 0.8 + 2.5), p.z - az * (r * 0.8 + 2.5), Math.atan2(ax, az));   // zwischen Schiff und Tür, Blick zur Basis

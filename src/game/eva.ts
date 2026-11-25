@@ -11,6 +11,8 @@ import { figTracht } from './avatar';
 import { evaContainer } from './begegnungen';
 import { radio } from '../ui/radio';
 import { gearDef } from '../data/gear';
+import { SHIPS } from '../data/ships';
+import { ausArt, kanzelPunkte, schiffZuWelt } from './ausstieg';
 
 // =====================================================================================
 // Außenbordeinsatz in der Schwerelosigkeit (seit 2026-11-24, Konzept docs/konzept-welt-und-leben.md Punkt 7; überarbeitet 2026-11-25)
@@ -26,7 +28,8 @@ import { gearDef } from '../data/gear';
 //    Schubrichtung, greift beim Bergen nach vorn. Düsen: feiner Kaltgasnebel, die Triebwerke des Schiffs sind aus.
 // =====================================================================================
 
-export const EVA = { active: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, o2: 240, fuel: 90, warnT: 0, prompt: '', duesen: false, ax: 0, ay: 0, az: 0 };
+export const EVA = { active: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, o2: 240, fuel: 90, warnT: 0, prompt: '', duesen: false, ax: 0, ay: 0, az: 0, pump: 0, art: 'heck' as 'kanzel' | 'rampe' | 'heck' };
+const PUMP = 4;      // Sekunden: Laderaum leer pumpen, bevor die Rampe öffnet (Kormoran, Wisent)
 const O2 = 240, FUEL = 90;
 const MODE = { duesen: { acc: 3.2, vmax: 6, reich: 600 }, strahl: { acc: 1.4, vmax: 2.2, reich: 60 } };
 let sk: THREE.Object3D | null = null, fig: Figur | null = null, holder: THREE.Group | null = null, loading = false;
@@ -172,19 +175,28 @@ export function startEva() {
   figurLaden();
   P.vx = P.vy = P.vz = 0;
   EVA.duesen = !!gearDef(P.gear?.rucksack || '')?.duesen;
-  // an der Heckrampe: hinter dem Schiff, etwas tiefer; dort hängt die Leine
+  // Ausstieg je Schiff (ausstieg.ts): Jäger und Elster aus der Kanzel, Kormoran und Wisent über die Rampe (erst Laderaum leer pumpen), sonst hinten
   const r = stats().radius, q = SHIP.g.quaternion;
   _f.set(0, 0, -1).applyQuaternion(q);
-  EVA.ax = P.x - _f.x * (r * 0.8); EVA.ay = P.y - r * 0.12; EVA.az = P.z - _f.z * (r * 0.8);
-  EVA.x = P.x - _f.x * (r + 4); EVA.y = P.y - r * 0.15; EVA.z = P.z - _f.z * (r + 4);
+  EVA.art = ausArt(); EVA.pump = EVA.art === 'rampe' ? PUMP : 0;
+  const kp = EVA.art === 'kanzel' ? kanzelPunkte() : null;
+  if (kp) {
+    const a = schiffZuWelt(kp.rand.clone()), o = schiffZuWelt(kp.oben.clone());
+    EVA.ax = a.x; EVA.ay = a.y; EVA.az = a.z; EVA.x = o.x; EVA.y = o.y; EVA.z = o.z;
+  } else {      // Heck bzw. Rampe: an der Schiffslänge gemessen (die Rampe sitzt am Heckende), etwas unter der Mitte (Laderaumboden)
+    const half = ((SHIPS as any)[P.cls]?.len || r * 2) / 2, dy = -Math.min(4, half * 0.09);
+    EVA.ax = P.x - _f.x * (half - 1.5); EVA.ay = P.y + dy; EVA.az = P.z - _f.z * (half - 1.5);
+    EVA.x = P.x - _f.x * (half + 4); EVA.y = P.y + dy; EVA.z = P.z - _f.z * (half + 4);
+  }
   EVA.vx = EVA.vy = EVA.vz = 0; EVA.yaw = P.yaw; EVA.pitch = 0; EVA.o2 = O2; EVA.fuel = FUEL; EVA.warnT = 0; EVA.active = true; grabT = 0; poseT = 0;
   G.mode = 'eva';
   for (const gl of SHIP.glows) gl.visible = false;      // Triebwerke aus, solange jemand draußen ist
   document.getElementById('hud')?.classList.add('hidden');
-  sfx('door_open', 0.5, 0.8, () => snd(160, 0.6, 'sawtooth', 0.04, -60));
-  radio('SYSTEM', EVA.duesen
-    ? 'Schleuse offen. Manövrierrucksack bereit: WASD, Leertaste hoch, Strg runter, Umschalt bremst. [E] Container bergen, [F] an der Schleuse einsteigen.'
-    : 'Schleuse offen. Ohne Manövrierrucksack führt dich der Traktorstrahl des Schiffs, bis 60 m: WASD, Leertaste, Strg. [E] Container bergen, [F] an der Schleuse einsteigen.');
+  if (EVA.art === 'rampe') { radio('SYSTEM', 'Schott zum Gang geschlossen. Laderaum wird leer gepumpt …', '#ffb347'); snd(520, 0.3, 'square', 0.03); }
+  else sfx('door_open', 0.5, 0.8, () => snd(160, 0.6, 'sawtooth', 0.04, -60));
+  radio('SYSTEM', (EVA.art === 'kanzel' ? 'Kanzel offen. ' : '') + (EVA.duesen
+    ? 'Manövrierrucksack bereit: WASD, Leertaste hoch, Strg runter, Umschalt bremst. [E] Container bergen, [F] am Ausstieg einsteigen.'
+    : 'Ohne Manövrierrucksack führt dich der Traktorstrahl des Schiffs, bis 60 m: WASD, Leertaste, Strg. [E] Container bergen, [F] am Ausstieg einsteigen.'));
   return true;
 }
 export function endEva(not = false) {
@@ -192,7 +204,7 @@ export function endEva(not = false) {
   for (const gl of SHIP.glows) gl.visible = true;
   document.getElementById('hud')?.classList.remove('hidden');
   if (not) { P.hull = Math.max(1, P.hull - stats().maxHull * 0.15); radio('SYSTEM', 'Sauerstoff leer. Notrückholung über die Leine, die Schleuse hat dabei etwas abbekommen.', '#ff6b5b'); }
-  else sfx('door_close', 0.5, 1, () => snd(200, 0.2, 'triangle', 0.03, 60));
+  else { sfx('door_close', 0.5, 1, () => snd(200, 0.2, 'triangle', 0.03, 60)); if (EVA.art === 'rampe') radio('SYSTEM', 'Rampe zu. Laderaum wird gefüllt, Schott zum Gang öffnet.'); }
   saveGame();
 }
 const nahAmSchiff = () => d3(EVA.x, EVA.y, EVA.z, EVA.ax, EVA.ay, EVA.az) < 5 || d3(EVA.x, EVA.y, EVA.z, P.x, P.y, P.z) < stats().radius + 4;
@@ -230,6 +242,14 @@ export function updateEva(dt: number) {
   if (!EVA.active) return;
   const M = EVA.duesen ? MODE.duesen : MODE.strahl;
   for (const gl of SHIP.glows) gl.visible = false;
+  // Rampe: erst leer pumpen (Warnton jede Sekunde), so lange wartet die Figur im Laderaum
+  if (EVA.pump > 0) {
+    const vor = Math.ceil(EVA.pump); EVA.pump -= dt; EVA.prompt = `Laderaum wird leer gepumpt … ${Math.max(0, Math.ceil(EVA.pump))}`;
+    if (Math.ceil(EVA.pump) !== vor) snd(EVA.pump > 0 ? 520 : 760, 0.25, 'square', 0.03);
+    if (EVA.pump <= 0) radio('SYSTEM', 'Druck null. Rampe öffnet.', '#9fd8ff');
+    EVA.yaw -= steer.dx * 0.0024; EVA.pitch = clamp(EVA.pitch - steer.dy * 0.0022, -1.4, 1.4); steer.dx = steer.dy = 0;
+    return;
+  }
   // Blick: Maus (eingefangen) oder freie Kamera
   EVA.yaw -= steer.dx * 0.0024; EVA.pitch = clamp(EVA.pitch - steer.dy * 0.0022, -1.4, 1.4); steer.dx = steer.dy = 0;
   if (look.dx || look.dy) { EVA.yaw -= look.dx * 0.003; EVA.pitch = clamp(EVA.pitch - look.dy * 0.003, -1.4, 1.4); look.dx = look.dy = 0; }

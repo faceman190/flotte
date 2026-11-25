@@ -36,9 +36,10 @@ import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
 import { quartierFahrt, inKojeAufwachen, startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
 import { quartierHooks } from './game/quartier';
+import { fzOrdnen } from './game/fahrzeuge';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
-import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, roverView, liquidAt, ROVER, SURF } from './game/surface';
+import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, roverView, liquidAt, ROVER, SURF , fzImLaderaum, fzWeg, fzInHalle, landeHoehe } from './game/surface';
 import { wieselScan } from './game/wiesel';
 import { initTestlabor, updateTestlabor, testHooks } from './game/testlabor';
 import { mannyHooks } from './game/mannyAvatar';
@@ -58,7 +59,10 @@ import { openChat } from './ui/mp';
 const openMap = () => openBand('karte'), closeMap = closeBand;
 import { menuHooks, showMainMenu, hideMainMenu, showPause, hidePause, applySettings, pauseSubOpen, closePauseSub } from './ui/menus';
 import { SECTOR, FACTION } from './data/galaxy';
-import { loadShipModels, setGear, setDoors, RAMP, type Paint } from './models/gltfShips';
+import { loadShipModels, setGear, setDoors, setKanzel, kanzelInfo, RAMP, type Paint } from './models/gltfShips';
+import { leiterZeigen } from './game/ausstieg';
+import { laderaumUpdate, hatLaderaum } from './game/laderaum';
+import { anBordStellen } from './game/fahrzeuge';
 import { hasInterior, SHIPS } from './data/ships';
 import { loadRockModel } from './game/world';
 import { updateFarView } from './game/farview';
@@ -210,7 +214,7 @@ function resumeStation(st: Station, at: Extract<PlayerAt, { k: 'st' }>) {
 function resumeLanded(land: Extract<PlayerAt, { k: 'land' }>) {
   relandShip(land.ship, land.rover);
   const f = land.foot;
-  if (f === 'ship') leaveShipOnFoot();
+  if (f === 'ship' || (ROVER.ohne && !f)) leaveShipOnFoot();
   else if (f && isFinite(f.x) && isFinite(f.z) && Math.abs(f.x) < SURF.limit && Math.abs(f.z) < SURF.limit) footAt(f.x, f.z, f.yaw || 0);
   else footOff();
   G.mode = 'rover'; resetRoverCamera(); releaseAll();
@@ -254,7 +258,7 @@ testHooks.reise = (ziel: string) => {
       }
       const r = stats().radius, gy = world.ground ? world.ground(x, z) : 0;
       P.x = x; P.z = z; P.y = gy + 40;
-      resumeLanded({ k: 'land', ship: { x, y: gy + r * 0.55, z, yaw: 0 }, rover: { x: x + r + 7, z, yaw: 0 } });
+      resumeLanded({ k: 'land', ship: { x, y: gy + landeHoehe(), z, yaw: 0 }, rover: { x: x + r + 7, z, yaw: 0 } });
     }
   }
   if (!inside) $('hud').classList.remove('hidden');
@@ -292,6 +296,7 @@ function resumeAt(at: PlayerAt | null) {
 function startGame(p: Player, fresh: boolean) {
   setMusicMode(fresh ? 'menu' : 'game');
   setPlayer(p);
+  fzOrdnen();      // Fahrzeuge an ihren Ort (game/fahrzeuge.ts): an Bord, wenn sie passen, sonst in die Halle
   setShipModel(P.cls, (P.paint || 'Orange') as Paint, true);
   hideMainMenu();
   clearRadio();
@@ -467,6 +472,7 @@ interiorHooks.openMap = openMap;
 interiorHooks.pause = pause;
 interiorHooks.tabs = () => (G.dockedAt ? dockTabs(G.dockedAt) : []);
 interiorHooks.takeoff = () => { leaveInterior(); boardShip(); G.mode = 'play'; $('hud').classList.remove('hidden'); saveGame(); };
+interiorHooks.toFahrzeug = (kind: string) => { leaveInterior(); ROVER.active = true; if (fzImLaderaum(kind as any)) { footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); radio('SYSTEM', 'Über die Rampe hinausfahren. Zum Einladen hinauffahren und im Laderaum [E].'); } };
 interiorHooks.toRover = () => { leaveInterior(); ROVER.active = true; leaveShipOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); };
 bandHooks.closed = m => {
   if (m === 'pause') showPause();
@@ -542,7 +548,10 @@ onKey(code => {
     else if (G.mode === 'rover') {
       // im Rover oder zu Fuß (FOOT): Schiff, Mine, Rover
       if (bodenE(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, !FOOT.active && ROVER.active)) return;      // Bodenaufgaben: Außenstelle, vermisster Rover
-      const atShip = FOOT.active ? footNearShip() : nearShip();
+      if (!FOOT.active && ROVER.model) { const t = fzInHalle(); if (t) { radio('SYSTEM', t); if (!ROVER.model) footAt(ROVER.x + 3, ROVER.z, ROVER.yaw); return; } }      // an der Basis: in die Fahrzeughalle
+      // Kormoran und Wisent: im Laderaum abgestellt, das Fahrzeug steht an Bord (Standbild im Laderaum)
+      if (!FOOT.active && ROVER.model && !ROVER.leih && hatLaderaum() && nearShip()) { if (Math.abs(ROVER.speed) > 3) { radio('SYSTEM', 'Erst anhalten.'); return; } if (!anBordStellen(ROVER.kind)) { radio('SYSTEM', 'Kein freier Stellplatz, oder das Fahrzeug passt nicht durchs Tor.'); return; } unloadRover(); fzWeg(); laderaumUpdate(null); }
+      const atShip = FOOT.active ? footNearShip() : (nearShip() || (!ROVER.model && ROVER.active));
       const mine = atShip ? null : nearEntrance(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z);
       const door = FOOT.active ? nearDoor(FOOT.x, FOOT.z) : null;
       if (door) { enterBase(door.st); return; }
@@ -564,7 +573,7 @@ onKey(code => {
       const st = nearDock();
       if (st && world.surface && settings.walk && basePad(st)) { if (landAtBase(st)) { G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); } }   // Planetenbasis: aufs Landefeld, zu Fuß hinein
       else if (st) { const rd = rechtDock(st.name, stationFaction(st.id, P.sector)); if (!rd.ok) radio(st.name.toUpperCase(), rd.text + '.', '#ff6b5b'); else { if (rd.text) rechtZahlen(rd.zahlen, st.name); openDock(st); } }      // Recht und Ordnung: Bußgeld
-      else if (world.surface && landShip()) { footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); }
+      else if (world.surface && landShip()) { if (ROVER.ohne) leaveShipOnFoot(); else footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); }      // ohne Fahrzeug an Bord: zu Fuß (game/fahrzeuge.ts)
       else if (!world.surface && !G.dead) { for (const k of orteKey) if (k()) break; }   // Orte im Sektor (z. B. Bergung in der Alten Werft)
     }
   }
@@ -913,12 +922,16 @@ function loop(now: number, manual = false) {
   if (world.def && G.mode !== 'map') {
     animateStructures(dt);
     // Rampe und Leiter (setDoors): im Hangar und am Boden offen, im Flug und beim Landeanflug zu
-    if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); setDoors(SHIP.g, hangarGearDown() && RAMP.want, dt); }
-    else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); setDoors(SHIP.g, true, dt); }
+    // Kanzel der Jäger und der Elster (ausstieg.ts): offen, solange der Pilot draußen ist (am Boden mit Bordleiter, im All beim Außenbord)
+    laderaumUpdate(ROVER.model?.g.parent && !ROVER.leih ? ROVER.kind : null);      // draußen = Modell steht in der Szene (auch während man an Bord ist)      // Kisten und Fahrzeug im Laderaum (laderaum.ts)
+    if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); setDoors(SHIP.g, hangarGearDown() && RAMP.want, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }
+    else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); setDoors(SHIP.g, true, dt); setKanzel(SHIP.g, true, dt); leiterZeigen((kanzelInfo(SHIP.g)?.p || 0) > 0.6, ROVER.ship); }
     else {
       SHIP.g.visible = (G.mode === 'play' || G.mode === 'jump' || G.mode === 'pause' || G.mode === 'entry' || G.mode === 'eva') && !G.dead;
       setGear(SHIP.g, G.mode === 'entry');   // im Flug eingezogen, beim Landeanflug ausgefahren
-      setDoors(SHIP.g, G.mode === 'eva' || (G.mode === 'pause' && EVA.active), dt);      // Außenbord: Heckrampe offen
+      const draussen = G.mode === 'eva' || (G.mode === 'pause' && EVA.active);
+      setDoors(SHIP.g, draussen && EVA.pump <= 0, dt);      // Außenbord: Heckrampe offen, sobald der Laderaum leer gepumpt ist
+      setKanzel(SHIP.g, draussen, dt); leiterZeigen(false);
       if (SHIP.g.visible) syncShip();
     }
     setDustVisible(!IN.active);

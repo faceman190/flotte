@@ -33,6 +33,8 @@ import { crewBesuch, crewSpruch, crewFetzen, crewDurchsage, crewEile, crewHooks 
 import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, type Deck, type HangarBuild, type DeckQuartier } from './deck';
 import { QS, eigeneDeko, nrText, FUND_FARBE, ortKennung, type QDeko } from './quartier';
 import { REP } from './reputation';
+import { stellLokal, fzImRaum, flaeche as laderaumFlaeche, bloecke as laderaumBloecke } from './laderaum';
+import { FZ } from '../models/rover';
 
 // =====================================================================================
 // Begehbare Stationen: Hangar → Korridor → Promenade, in der Ego-Ansicht.
@@ -65,6 +67,7 @@ export const interiorHooks = {
   tabs: () => [] as string[],
   takeoff: () => {},     // Planet: vom Pilotensitz aus abheben
   toRover: () => {},     // Planet: über die Rampe zurück zum Rover
+  toFahrzeug: (_kind: string) => {},      // Planet: im Laderaum ins eigene Fahrzeug steigen und über die Rampe hinausfahren (laderaum.ts)
   leaveBase: () => {},   // Planetenbasis: durch die Tür wieder hinaus (zu Fuß)
 };
 export const IN = {
@@ -1150,6 +1153,12 @@ export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: num
   group = room.g;
   rects = room.rects; obstacles = room.obstacles; shipObs = []; shipLabels = []; labels = []; shipInters = [];
   inters = room.spots.map(sp => Object.assign(shipInter(sp, info), { y: (sp as any).y }));
+  const lf = mesh && active ? laderaumFlaeche() : null; if (lf) mesh!.fuellen(lf.x0, lf.x1, lf.z0, lf.z1, lf.y, lf.head);
+  if (mesh && active) obstacles = [...obstacles, ...laderaumBloecke()];      // Kisten und abgestelltes Fahrzeug im Laderaum (laderaum.ts)
+  // Kormoran und Wisent am Planeten: im Laderaum ins Fahrzeug steigen (Schiffskoordinaten = Raumkoordinaten)
+  const fzs = mesh && planet && active ? fzImRaum() : [];
+  for (const k of fzs) { const p = stellLokal(k)!; inters.push(Object.assign({ x: p.x, z: p.z, r: 3.2, label: () => `In den ${FZ[k].kurz} steigen und hinausfahren`, act: () => interiorHooks.toFahrzeug(k) }, { y: p.y }) as any); }
+  const fzk = fzs[0], stl = fzk ? stellLokal(fzk) : null;
   IN.ship = info; IN.panel = null; IN.target = null;
   const yaw0 = IN.yaw + (saved?.group ? saved.group.rotation.y : 0) - room.g.rotation.y, pitch0 = IN.pitch;
   IN.x = room.spawn.x; IN.z = room.spawn.z; IN.yaw = room.spawn.yaw; IN.pitch = 0; IN.bob = 0; IN.fy = mesh ? mesh.spawn.y : 0; IN.jy = IN.jv = 0; walkV.x = walkV.z = 0;
@@ -1158,6 +1167,8 @@ export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: num
     const fy = mesh.floorAt(at.x, at.z, ground + 0.5);      // Rampenboden bis 1 m über dem Hangarboden
     if (fy !== null) { IN.x = at.x; IN.z = at.z; IN.fy = Math.max(ground, fy - 0.3); IN.yaw = yaw0; IN.pitch = pitch0; }      // knapp unter dem Rampenboden beginnen, die Bodenhöhe folgt weich (kleinerer Sprung der Augenhöhe)
   }
+  if (stl && fzk && !at && Math.hypot(IN.x - stl.x, IN.z - stl.z) < 4.5 && free(stl.x + 1.62, stl.z + 0.8)) { IN.x = stl.x + 1.62; IN.z = stl.z + 0.8; }      // gerade abgestellt: neben dem Fahrzeug aussteigen
+  if (mesh && !free(IN.x, IN.z)) for (const d of [1.7, -1.7, 2.3, -2.3, 3, -3]) if (free(IN.x + d, IN.z)) { IN.x += d; break; }      // nicht im abgestellten Fahrzeug beginnen
   lamps.forEach((l, i) => { const q = room!.lamps[i]; room!.g.localToWorld(l.position.set(q[0], q[1], q[2])); l.distance = 22; l.intensity = mesh ? 0 : q[3] * Math.PI; });   // Modell-Räume bringen eigene Lampen mit
   setExposure(planet ? 0.5 : 0.2);
   // Modell-Räume: Grund- und Sonnenlicht von draußen gelten auch an Bord und machten weiße Flächen (Leuchtenabdeckungen, Wände) von allein
@@ -1316,7 +1327,9 @@ export function interact() {
 
 // ---------- Laufen ----------
 function free(x: number, z: number) {
-  if (mesh) { const e = rampOfRoom(); if (e && z > e.door - 0.3 && doorProgress(roomModel!, 'rampe') < 0.999) return false; return mesh.floorAt(x, z, IN.fy + IN.jy, IN.jy > 0.05) !== null; }   // Modell-Raum: Laufkarte (im Sprung: Boden unter den Füßen); Rampe nur offen begehbar
+  if (mesh) { const e = rampOfRoom(); if (e && z > e.door - 0.3 && doorProgress(roomModel!, 'rampe') < 0.999) return false; if (mesh.floorAt(x, z, IN.fy + IN.jy, IN.jy > 0.05) === null) return false;   // Modell-Raum: Laufkarte (im Sprung: Boden unter den Füßen); Rampe nur offen begehbar
+    for (const o of obstacles) if (x > o[0] - 0.3 && x < o[1] + 0.3 && z > o[2] - 0.3 && z < o[3] + 0.3) return false;      // Kisten und Fahrzeug im Laderaum
+    return true; }
   const R = 0.45;
   let ok = false;
   for (const r of rects) if (x > r[0] + R && x < r[1] - R && z > r[2] + R && z < r[3] - R) { ok = true; break; }
