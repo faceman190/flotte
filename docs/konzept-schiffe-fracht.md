@@ -103,4 +103,6 @@ Jedes Schiff hat seine Ausstiege als Punkte im Modell. Danach richten sich Ausst
   Bordleiter vom linken Kanzelrand zum Boden, man steigt an ihrem Fuß aus (kurze Blende) und dort ein. Im All schwebt man über der offenen
   Kanzel, die Leine hängt am Kanzelrand. Kormoran und Wisent: Außenbord erst nach 4 s Leerpumpen des Laderaums (Ansage, Warnton), dann öffnet
   die Rampe; Start und Leine am Heckende (nach der Schiffslänge). Pfeil: wie bisher hinten. Ohne Kletteranimation (Blende statt Klettern).
+  Seit dem Nachtrag gehen Rahmen und Streben mit: alle übrigen Flächen, deren Schwerpunkt höchstens 12 cm vom Kanzelglas und über dem
+  Kanzelrand liegt (gltfShips.ts kanzelStreben), einmal beim ersten Öffnen berechnet (0,05–0,12 s).
 - Garagen an den Basen sind vorerst nur Leihrover; eigene Fahrzeuge in einer Basishalle abstellen kommt mit Schritt 3 (Rampe).
