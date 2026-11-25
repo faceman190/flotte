@@ -60,7 +60,29 @@ Alle Fahrwerte stehen in `src/models/rover.ts` (`FZ`), `updateRover` in `src/gam
   je höher über dem Boden, desto mehr (kein Segeln über Hänge). Landung mit Federschlag, Ton und Staub.
 - Zusammenstöße mit Felsen, Gebäuden und Wracks federn ab, Flüssigkeiten und Kartenrand halten auf. Staub hinter den Hinterrädern.
 
-## Messungen (Entwicklungsserver, Eisgarten, 48 s Vollgas mit Schlangenlinien über Hügel)
+## Fahrgefühl nach dem Unreal-Buggy (seit 25.11.2026)
+
+Vorbild: das Vehicle-Template aus Unreal 5.8 (Chaos Vehicles). Alle Werte je Fahrzeug in `FZ` (`hb`, `rpmTop`, `inp`, `camLag`, `fov`, `hood`),
+das Getriebe in `GETRIEBE` (models/rover.ts).
+
+- **Handbremse** `[Q]` (im Wiesel auch Leertaste, er hat keinen Bohrer): blockiert nur die Hinterräder. Die Seitenführung sinkt stark
+  (Dachs ×0,3, Wiesel ×0,2), die größte Drehrate steigt (Dachs ×1,5, Wiesel ×2,4), längs bremst sie mäßig (6 bzw. 5 m/s²). Mit Lenken
+  bricht das Heck aus, Gegenlenken fängt es wieder. Im Stand hält sie wie die Feststellbremse. Steht im Steuerungsfeld, im Panel „HANDBR.“.
+  (Unreal: Handbremse 6000 nur hinten, Fußbremse 3000.)
+- **Motor mit Drehzahl und fünf Gängen**: 4,25 / 2,52 / 1,66 / 1,22 / 1,0, Achse 2,81, Leerlauf 900, Begrenzer 7000, hoch bei 6000,
+  runter bei 2000, 0,2 s Schaltpause mit kurzem Zugkraftloch (15 %). Die Drehzahl folgt aus Tempo, Radradius und Gang; weil das Spiel
+  schneller fährt als die echten Übersetzungen hergäben, ist sie so skaliert, dass das Höchsttempo mit Umschalt im 5. Gang bei `rpmTop` liegt.
+  Die Drehmomentkurve (Spitze 1500–2500) formt die Zugkraft leicht (±5 %). Rückwärts im 1. Gang (Anzeige R). In der Luft dreht er frei.
+  Der Motorton (`rover_engine`) folgt der Drehzahl in der Tonhöhe (`loopVol` hat dafür ein drittes Argument) und läuft im Stand leise weiter.
+  Panel unten: Gang und Drehzahlbalken mit rotem Bereich ab 6000.
+- **Eingabe geglättet**: Gas steigt 5–6,5/s und fällt 9–10/s, Lenkung steigt 2,1–2,8/s und fällt 4,5–5,5/s (Dachs träger), die Lenkung
+  wirkt quadratisch. Die Lenkmechanik folgt danach schneller als vorher (10/s statt 6/s).
+- **Kamera**: schwenkt der Drehung verzögert nach (`camLag`, Dachs 3,2/s, Wiesel 4,2/s), in Drifts sieht man das Fahrzeug schräg. Das Sichtfeld
+  weitet sich mit dem Tempo (70° → 78° bzw. 82°). `[V]` schaltet auf Motorhaubensicht bzw. Fahrersitz und zurück. Dachs: auf dem Kabinendach hinter
+  der Lichtleiste (die Kabinenscheiben sind von innen undurchsichtig, vor der Scheibe sieht man vom Fahrzeug nichts); Wiesel: Augenhöhe auf
+  dem Fahrersitz mit Lenkrad und Bordschirm, die Fahrerfigur wird ausgeblendet. In dieser Sicht sind die weißen Leuchtpunkte vorn aus.
+
+, Eisgarten, 48 s Vollgas mit Schlangenlinien über Hügel)
 
 - Dachs ohne Umschalt: keine Sprünge, 89 km/h. Mit Umschalt: 9 Sprünge, 11 % der Zeit in der Luft (ein Abhang mit 8 m).
 - Wiesel ohne Umschalt: 16 Sprünge, 20 % der Zeit in der Luft, meist 1–4 m, 117 km/h. Mit Umschalt bis 137 km/h.
@@ -71,6 +93,7 @@ Alle Fahrwerte stehen in `src/models/rover.ts` (`FZ`), `updateRover` in `src/gam
 
 - Fahrgefühl nur gemessen und auf Standbildern geprüft; der Nutzer ist noch nicht selbst gefahren.
 - Andere Spieler sehen fremde Bodenfahrzeuge nicht (wie bisher beim Rover).
-- Stellschrauben: `FZ` in models/rover.ts (Tempo, Griff, `jump`), Luftschwerkraft in surface.ts.
+- Stellschrauben: `FZ` in models/rover.ts (Tempo, Griff, `jump`, Handbremse, Eingabe, Kamera), `GETRIEBE`, Luftschwerkraft in surface.ts.
+- Andere Spieler hören den Motor nicht; kein eigener Reifenquietsch-Ton beim Driften.
 
 Seit 25.11.2026 passen Fahrzeuge zu den Schiffen: siehe docs/konzept-schiffe-fracht.md (Stand der Umsetzung) und `src/game/fahrzeuge.ts`.
