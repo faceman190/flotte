@@ -128,3 +128,17 @@ Jedes Schiff hat seine Ausstiege als Punkte im Modell. Danach richten sich Ausst
   bleibt es stehen (`P.fzOrt = 'pl:<Sektor>'`, Lage in `P.fzPark`). Marke „WIESEL · ABGESTELLT“ im Flug über dem Planeten und zu Fuß, ▣ neben
   dem Sektor auf der Galaxiekarte. Landet man im Umkreis von 800 m, steht es wieder dort ([X] wählt es auch, wenn ein anderes an Bord ist).
   Werft: „Vom Bergungstrupp holen lassen“ (900 Cr) bringt es in die Halle der Station. Früher flog es einfach mit.
+- **Schritt 4 gebaut (25.11.2026, auf test):** `src/game/kisten.ts`. Kisten in der Welt sind dieselben Normkisten wie im Laderaum (Farbe der
+  Ware, kleines Blinklicht, das aus der Ferne wächst, Marke im HUD; Treibgut mit weithin sichtbarem Licht).
+  - **Traktorstrahl:** im Flug unter 25 m/s zieht er die nächste passende Kiste in Reichweite (Traktor-Wert des Schiffs + 40 m) heran,
+    eine nach der anderen, sichtbar als Linie. Ziel ist die Spitze der Heckrampe (Kormoran, Wisent: die Rampe öffnet, sobald die Kiste unter
+    120 m ist) bzw. die Frachtklappe unter dem Heck (kleine Schiffe). Was passt: Kisten in jedes Schiff, Paletten nur mit Laderaum,
+    Halbcontainer nur in den Wisent; sonst Hinweis „passt nur in …“ und die Kiste treibt weiter. Voller Frachtraum: „Frachtraum voll“.
+  - **Abwerfen:** Band → Fracht, im Flug je Ware „10 ab“ / „alles ab“. Verpackt in die größten Kisten, die das Schiff selbst laden kann,
+    hinter dem Heck; 8 s lang nicht vom eigenen Strahl erfasst, danach holt er sie wieder. Abgeworfene Kisten verfallen nach 15 Minuten.
+  - **Beute:** Ein zerstörter Bienenstock lässt eine Palette Schrott (25) und eine Kiste Ferrit (10) zurück (statt 26 kleiner Brocken).
+    Jäger und Bomber lassen weiter kleine Brocken fallen, ebenso der Bergbau.
+  - **Treibgut** (weltLeben.ts): die verlorene Frachtkiste ist jetzt eine Palette (25) oder ein Halbcontainer (100) einer Ware.
+  - **Außenbord:** [E] an einer Kiste greift sie (die Hand bleibt vorn), mit ihr ist der Schub schwächer (Kiste 85 %, Palette 60 %,
+    Container 35 %). An der Rampe bzw. Frachtklappe wird sie geladen, wenn sie passt; [E] lässt los, sie treibt mit dem eigenen Tempo weiter.
+  - Kisten sind nur für den eigenen Piloten da (nicht über das Netz geteilt) und verschwinden beim Sektorwechsel und auf Planeten.

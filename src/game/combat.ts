@@ -7,6 +7,7 @@ import { sndOut as snd, sfxOut as sfx, boomOut as boom, outVol } from '../core/a
 import { ferroxDrone, BOMBER_T, buildMother } from '../models/ferrox';
 import { MK } from '../models/ships';
 import { world, dropPick, breakAst, SECTOR_RADIUS } from './world';
+import { beuteKisten } from './kisten';
 import { burst, puff, sparks, flash, floatText } from './fx';
 import { NO_MESH, boltStyle } from './bolts';
 import { P, G, stats } from './state';
@@ -251,7 +252,7 @@ export function rewardKill(type: string, x: number, y: number, z: number) {
   P.kills++; P.credits += bounty; P.earned += bounty;
   lootNote(type);
   if (bounty) floatText(x, y, z, bounty, 'Cr', '#ffd27a', 'kill');
-  if (type === 'mother') { for (let k = 0; k < 10; k++) dropPick(x, y, z, 'schrott', 2, 80); for (let k = 0; k < 6; k++) dropPick(x, y, z, 'ferrit', 1, 80); radio('SYSTEM', 'Bienenstock zerstört! Kopfgeld: +' + bounty + ' Credits.'); }
+  if (type === 'mother') { beuteKisten(x, y, z, [['schrott', 25], ['ferrit', 10]]); radio('SYSTEM', 'Bienenstock zerstört! Kopfgeld: +' + bounty + ' Credits.'); }
   else if (type === 'bomber') { dropPick(x, y, z, 'schrott', 1); dropPick(x, y, z, 'schrott', 1); }
   else if (Math.random() < 0.7) dropPick(x, y, z, 'schrott', 1);
 }
@@ -271,8 +272,7 @@ export function killEnemy(e: any, i: number, byPlayer = false, drops = true) {
       boom(0.9 * ov, 0.7 + k * 0.04, () => snd(50 + k * 10, 0.9, 'sawtooth', 0.08 * ov, -25));
       G.shake = Math.min(3, G.shake + 1);
     }, k * 200);
-    if (drops) for (let k = 0; k < 10; k++) dropPick(e.x, e.y, e.z, 'schrott', 2, 80);
-    if (drops) for (let k = 0; k < 6; k++) dropPick(e.x, e.y, e.z, 'ferrit', 1, 80);
+    if (drops) beuteKisten(e.x, e.y, e.z, [['schrott', 25], ['ferrit', 10]]);      // Beute als Normkisten (kisten.ts): Palette Schrott, Kiste Ferrit
     if (e.hive >= 0) world.hiveT[e.hive] = 420;
     radio('SYSTEM', byPlayer ? `Bienenstock zerstört! Kopfgeld: +${bounty} Credits.` : 'Bienenstock zerstört!');
     return;

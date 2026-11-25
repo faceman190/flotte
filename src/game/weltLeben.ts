@@ -13,6 +13,7 @@ import { buyPrice, sellsHere } from './economy';
 import { crewHooks } from './crewStimmen';
 import { SHARED } from './shared';
 import { burst } from './fx';
+import { kisteSetzen, KISTEN, type WeltKiste } from './kisten';
 
 // =====================================================================================
 // Weltleben im All (seit 2026-11-20): Funkverkehr im Hintergrund, Bergbauschiffe an den Asteroidenfeldern,
@@ -115,7 +116,7 @@ export function initWeltLeben() {
 export function clearWeltLeben() {
   for (const m of miners) { scene.remove(m.g); scene.remove(m.beam); scene.remove(m.glut); }
   miners.length = 0; queue = [];
-  if (crate) { scene.remove(crate.g); crate = null; }
+  crate = null;
   notruf = null;
 }
 function updateMiners(dt: number) {
@@ -149,36 +150,22 @@ function updateMiners(dt: number) {
 
 // ---------- Treibende Frachtkiste ----------
 // Ein Frachter hat eine Kiste verloren: Funkmeldung mit grober Lage (beim Tor nach …), blinkendes Licht weithin sichtbar.
-// Wer auf 60 m heranfliegt, birgt sie: Ware schwebt heraus und wird wie Beute eingesammelt.
-let crate: { g: THREE.Group; x: number; y: number; z: number; life: number; lamp: THREE.Sprite } | null = null, cargoT = 180;
-const CRATE_MAT = new THREE.MeshStandardMaterial({ color: 0x6a7058, roughness: 0.7, metalness: 0.4 });
+// Seit Schritt 4 (kisten.ts) eine echte Normkiste (Palette oder Halbcontainer einer Ware): der Traktorstrahl zieht sie zur Rampe bzw.
+// Frachtklappe, wenn sie passt; ein Halbcontainer geht nur in den Wisent, sonst bleibt er treiben oder man holt ihn mit einem passenden Schiff.
+let crate: WeltKiste | null = null, cargoT = 180;
 function spawnCrate() {
   const def = world.def; if (!def || !world.gates.length || !world.stations.length) return;
   const g0 = pick(world.gates), st = pick(world.stations), k = rand(0.25, 0.7);
   const off = new THREE.Vector3(rand(-1, 1), rand(-0.2, 0.2), rand(-1, 1)).normalize().multiplyScalar(rand(300, 700));
   const x = g0.x + (st.x - g0.x) * k + off.x, y = g0.y + (st.y - g0.y) * k + off.y, z = g0.z + (st.z - g0.z) * k + off.z;
-  const g = new THREE.Group();
-  g.add(new THREE.Mesh(new THREE.BoxGeometry(6, 4, 9), CRATE_MAT));
-  const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: 0xffb040, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
-  lamp.position.y = 2.6; lamp.scale.setScalar(40); g.add(lamp);
-  g.position.set(x, y, z); g.rotation.set(rand(0, 6), rand(0, 6), 0); scene.add(g);
-  crate = { g, x, y, z, life: 600, lamp };
+  const goods: ItemId[] = ['stahl', 'kupferb', 'zellen', 'titanb', 'erz', 'kupfer', 'eis'];
+  const gross = Math.random() < 0.35;
+  crate = kisteSetzen(x, y, z, pick(goods), gross ? 100 : 25, { art: gross ? 'container' : 'palette', life: 900, treibgut: true });
   const who = world.traffic.length ? `„${pick(world.traffic).name}“` : 'Ein Frachter';
   radio(lotse().who, `${who} hat eine Frachtkiste verloren, irgendwo zwischen dem Tor nach ${g0.name} und ${st.name}. Wer sie findet, darf sie behalten.`, lotse().col);
 }
-function updateCrate(dt: number) {
-  if (!crate) return;
-  crate.life -= dt;
-  crate.g.rotation.y += dt * 0.15; crate.g.rotation.x += dt * 0.07;
-  crate.lamp.material.opacity = Math.sin(G.time * 5) > 0.3 ? 1 : 0.15;
-  if (G.mode === 'play' && !G.dead && d3(crate.x, crate.y, crate.z, P.x, P.y, P.z) < 60) {
-    const goods: ItemId[] = ['stahl', 'kupferb', 'zellen', 'titanb', 'erz', 'kupfer', 'eis'];
-    for (let i = 0; i < 3; i++) dropPick(crate.x, crate.y, crate.z, pick(goods), Math.round(rand(2, 6)), 30);
-    burst(crate.x, crate.y, crate.z, '#ffd080', 40, 50, 0.9); snd(660, 0.12, 'sine', 0.04, 300);
-    radio('SYSTEM', 'Frachtkiste geborgen. Die Ladung schwebt heraus.');
-    scene.remove(crate.g); crate = null; return;
-  }
-  if (crate.life <= 0) { scene.remove(crate.g); crate = null; }
+function updateCrate(_dt: number) {
+  if (crate && !KISTEN.includes(crate)) crate = null;      // geladen, verfallen oder Sektor verlassen (kisten.ts)
 }
 export const weltKiste = () => crate;      // für Tests und eine mögliche Anzeige
 

@@ -25,6 +25,8 @@ import { aufgabenListe, aufgabeAbbrechen } from '../game/aufgaben';
 import { storyObjective } from '../game/story';
 import { invApp, invAct } from './invApp';
 import { shipMods } from '../game/inventory';
+import { abwerfen } from '../game/kisten';
+import { radio } from './radio';
 
 // =====================================================================================
 // Flottenband: der Armbandrechner, den die Flotte jedem Piloten mitgibt.
@@ -157,6 +159,7 @@ function act(a: string, k: string) {
   if (a === 'mdrop') { const m = (P.missions || []).find(x => x.id === k); if (m && confirmDrop(m.id)) { abandonMission(m); if (P.track === m.id) P.track = undefined; } }
   if (a === 'drop') { const c = P.contracts.find(x => x.id === k); if (c && confirmDrop(c.id)) { abandon(c); if (P.track === c.id) P.track = undefined; } }
   if (a === 'ship') fleetSel = +k;
+  if (a === 'abwurf') { const [w, n] = k.split(':'); radio('SYSTEM', abwerfen(w as ItemId, +n)); saveGame(); }
   if (a === 'app') { setApp(k as App); return; }
   if (invAct(a, k)) { saveGame(); $('bandCr').textContent = `${fmtN(P.credits)} Cr`; render(); return; }
   if (a.startsWith('tr')) { tradeAct(a, k); return; }
@@ -315,16 +318,18 @@ function drawBlueprint() {
 }
 
 // ---------- Fracht ----------
-function cargoTable(c: Partial<Record<ItemId, number>>) {
+function cargoTable(c: Partial<Record<ItemId, number>>, abwurf = false) {
   const ks = ITEM_IDS.filter(k => c[k]);
   if (!ks.length) return '<p class="hint">leer</p>';
-  return `<table><tbody>${ks.map(k => `<tr><td>${itemIcon(k, 20)}${ITEMS[k].n}</td><td class="num">${c[k]}</td></tr>`).join('')}</tbody></table>`;
+  // im Flug: Fracht in Normkisten abwerfen (kisten.ts), der Traktorstrahl holt sie nach 8 s wieder
+  const ab = (k: ItemId) => abwurf ? `<td><button class="mini" data-a="abwurf" data-k="${k}:10">10 ab</button> <button class="mini" data-a="abwurf" data-k="${k}:${c[k]}">alles ab</button></td>` : '';
+  return `<table><tbody>${ks.map(k => `<tr><td>${itemIcon(k, 20)}${ITEMS[k].n}</td><td class="num">${c[k]}</td>${ab(k)}</tr>`).join('')}</tbody></table>${abwurf ? '<p class="hint">Abgeworfene Fracht treibt in Normkisten hinter dem Heck. Der Traktorstrahl holt sie nach 8 s wieder, wenn du langsam bist.</p>' : ''}`;
 }
 function cargoApp() {
   const S = stats(), rover = P.rover && ITEM_IDS.some(k => P.rover![k]) ? P.rover : null;
   const stores = Object.entries(P.storage || {}).filter(([, v]) => ITEM_IDS.some(k => (v as any)[k]));
   return `<div class="bgrid">
-    <div class="bcard"><h4>Frachtraum · ${esc(P.shipName)}</h4><div class="row"><span>Belegt</span><b>${cargoUsed()}/${S.cargo}</b></div>${meter(cargoUsed(), S.cargo, 'linear-gradient(90deg,#c87a20,#ffb347)')}${cargoTable(P.cargo)}</div>
+    <div class="bcard"><h4>Frachtraum · ${esc(P.shipName)}</h4><div class="row"><span>Belegt</span><b>${cargoUsed()}/${S.cargo}</b></div>${meter(cargoUsed(), S.cargo, 'linear-gradient(90deg,#c87a20,#ffb347)')}${cargoTable(P.cargo, prevMode === 'play' && !world.surface && !G.dockedAt)}</div>
     ${rover ? `<div class="bcard"><h4>Rover</h4>${cargoTable(rover)}</div>` : ''}
     ${P.fleet.filter(r => ITEM_IDS.some(k => r.cargo[k])).map(r => `<div class="bcard"><h4>${esc(r.name)} (geparkt)</h4><div class="hint" style="margin-bottom:6px">${esc(stationName(r.loc.station).name)}</div>${cargoTable(r.cargo)}</div>`).join('')}
     ${stores.map(([id, v]) => { const s = stationName(id); return `<div class="bcard"><h4>Lager · ${esc(s.name)}</h4><div class="hint" style="margin-bottom:6px">${esc(SECTOR[s.sector]?.name || '')}</div>${cargoTable(v as any)}</div>`; }).join('')}

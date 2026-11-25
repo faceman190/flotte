@@ -9,6 +9,7 @@ import { SECTOR, FACTION, findRoute } from '../data/galaxy';
 import { ITEMS, ITEM_IDS } from '../data/items';
 import { MINE, COOL_WIN, droneInfo } from '../game/mining';
 import { landInfo, parkMarkers } from '../game/surface';
+import { kistenMarker, TRAKTOR } from '../game/kisten';
 import { NET, remoteMarkers } from '../game/net';
 import { trackedMission, missionLines, missionMarkers } from '../game/missions';
 import { aufgabeObjective, aufgabenMarkers } from '../game/aufgaben';
@@ -184,7 +185,7 @@ export function drawHUD() {
     if (onScreen(p) && d3(w.x, w.y, w.z, P.x, P.y, P.z) < 1500) { ux.fillStyle = w.col; ux.font = '10px "Share Tech Mono",Consolas,monospace'; ux.fillText(w.name, p.x, p.y); }
   }
   // Missionsziele (Messpunkte, Wrackfeld, Kapseln)
-  for (const mk of [...storyMarkers(), ...missionMarkers(), ...aufgabenMarkers(), ...begegnungMarkers(), ...parkMarkers()]) {
+  for (const mk of [...storyMarkers(), ...missionMarkers(), ...aufgabenMarkers(), ...begegnungMarkers(), ...parkMarkers(), ...kistenMarker()]) {
     const p = proj(mk.x, mk.y, mk.z), d = d3(mk.x, mk.y, mk.z, P.x, P.y, P.z), label = `◆ ${mk.label} · ${fmtD(d)}`;
     if (onScreen(p, 20)) {
       const r = clamp((mk.big ? 9000 : 1600) / Math.max(d, 1), 8, mk.big ? 70 : 26);
@@ -597,7 +598,8 @@ export function updatePanels(dt: number) {
   if (st) { const rd = rechtDock(st.name, stationFaction(st.id, P.sector)); pr.textContent = rd.text ? (rd.ok ? `[E] An „${st.name}“ andocken · ${rd.text}` : rd.text) : `[E] An „${st.name}“ andocken`; pr.classList.remove('hidden'); }
   else if (li) { pr.textContent = li.text; pr.classList.remove('hidden'); }
   else {
-    const t = G.mode === 'play' && !G.dead ? ortePrompt.reduce<string | null>((a, f) => a || f(), null) : null;
+    const t0 = G.mode === 'play' && !G.dead ? ortePrompt.reduce<string | null>((a, f) => a || f(), null) : null;
+    const t = t0 || (G.mode === 'play' && !G.dead ? (TRAKTOR.ziel ? `Traktorstrahl: ${TRAKTOR.ziel.n} ${ITEMS[TRAKTOR.ziel.ware].n} zur ${TRAKTOR.rampe ? 'Heckrampe' : 'Frachtklappe'}` : TRAKTOR.hinweis ? `Traktorstrahl · ${TRAKTOR.hinweis}` : null) : null);      // Kisten in der Welt (kisten.ts)
     if (t) { pr.textContent = t; pr.classList.remove('hidden'); } else pr.classList.add('hidden');
   }
 }
