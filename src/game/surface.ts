@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { KEEP } from './keep';
-import { ausgabe, wahl, anBordStellen, inHalleStellen, anBord, passtIn } from './fahrzeuge';
+import { ausgabe, wahl, anBordStellen, inHalleStellen, anBord, passtIn, parken, parkNahe, geparkt, ortVon } from './fahrzeuge';
 import { platzVon, aufsetzen, hatLaderaum, schiffBoden, imSchiff, gasse, stellplatz, kameraImRaum } from './laderaum';
 import { fahrwerkTiefe } from '../models/gltfShips';
 import { FZ_MASS } from './fahrzeuge';
@@ -596,7 +596,8 @@ export function landShip(quiet = false, basis = false) {
   P.vx = P.vy = P.vz = 0; P.pitch = 0;
   if (!P.rover) P.rover = {};
   // Fahrzeug nur, wenn eins an Bord ist, an einer Basis sonst der Leihrover; sonst zu Fuß (game/fahrzeuge.ts)
-  const aus = ausgabe(basis || anBasis(P.x, P.z), basisId());
+  const nahe = { sektor: P.sector, x: P.x, z: P.z };
+  const aus = ausgabe(basis || anBasis(P.x, P.z), basisId(), nahe);
   ROVER.ohne = !aus; ROVER.leih = !!aus?.leih;
   if (!aus) {
     if (ROVER.model) { scene.remove(ROVER.model.g); ROVER.model = null; }
@@ -612,6 +613,8 @@ export function landShip(quiet = false, basis = false) {
   scene.add(m.g);
   const rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
   ROVER.x = P.x + rx * (r + 7); ROVER.z = P.z + rz * (r + 7); ROVER.yaw = P.yaw; ROVER.speed = 0;
+  const pk = !aus.leih && ortVon(kind).startsWith('pl:') ? parkNahe(P.sector, P.x, P.z).find(p => p.kind === kind) : undefined;
+  if (pk) { ROVER.x = pk.x; ROVER.z = pk.z; ROVER.yaw = pk.yaw; }      // draußen abgestellt: steht noch, wo man es gelassen hat
   ROVER.y = heightAt(ROVER.x, ROVER.z);
   ROVER.active = true;
   m.head.intensity = 0;
@@ -623,7 +626,8 @@ export function landShip(quiet = false, basis = false) {
     if (!quiet) radio('SYSTEM', `Gelandet. Rampe öffnet: Der ${FZ[kind].kurz} steht im Laderaum, fahr ihn über die Rampe hinaus. Zum Einladen hinauffahren und im Laderaum [E].`);
     return true;
   }
-  const mehr = wahl(basis || anBasis(P.x, P.z), basisId()).length > 1 ? ' [X] am Schiff: anderes Fahrzeug.' : '';
+  if (pk) { radio('SYSTEM', `Gelandet. Dein ${FZ[kind].kurz} steht noch, wo du ihn abgestellt hast: ${Math.round(Math.hypot(pk.x - P.x, pk.z - P.z))} m entfernt.`); return true; }
+  const mehr = wahl(basis || anBasis(P.x, P.z), basisId(), nahe).length > 1 ? ' [X] am Schiff: anderes Fahrzeug.' : '';
   radio('SYSTEM', aus.leih ? `Die Fahrzeughalle der Basis stellt dir einen Leihrover „Dachs“ bereit: WASD fahren, Klick halten zum Bohren. Er bleibt auf dem Planeten.${mehr}`
     : kind === 'wiesel' ? `Gelandet. Buggy aus dem Laderaum: WASD fahren, [R] Umgebung abtasten, [E] am Schiff einsteigen.${mehr}`
     : `Gelandet. Rover aus dem Laderaum: WASD fahren, Klick halten zum Bohren, [E] am Schiff einsteigen.${mehr}`);
@@ -655,7 +659,7 @@ export function unloadRover() {
 }
 // Am Schiff das andere Fahrzeug nehmen (Taste X, main.ts): Der Dachs lädt vorher seine Ladung ins Schiff. null: kein zweites Fahrzeug.
 export function fahrzeugTauschen(): string | null {
-  const w = wahl(anBasis(ROVER.ship.x, ROVER.ship.z), basisId());
+  const w = wahl(anBasis(ROVER.ship.x, ROVER.ship.z), basisId(), { sektor: P.sector, x: ROVER.ship.x, z: ROVER.ship.z });
   if (!ROVER.model || w.length < 2) return null;
   const i = w.findIndex(q => q.kind === ROVER.kind && q.leih === ROVER.leih), nx = w[(i + 1) % w.length], neu: FzId = nx.kind;
   ROVER.leih = nx.leih;
@@ -665,13 +669,34 @@ export function fahrzeugTauschen(): string | null {
   P.fahrzeug = neu; ROVER.kind = neu; ROVER.cap = FZ[neu].cap;
   const m = buildRover(neu); ROVER.model = m; scene.add(m.g);
   const r = stats().radius, rx = Math.cos(ROVER.ship.yaw), rz = -Math.sin(ROVER.ship.yaw);
-  ROVER.x = ROVER.ship.x + rx * (r + 7); ROVER.z = ROVER.ship.z + rz * (r + 7); ROVER.yaw = ROVER.ship.yaw; ROVER.y = heightAt(ROVER.x, ROVER.z);
+  ROVER.x = ROVER.ship.x + rx * (r + 7); ROVER.z = ROVER.ship.z + rz * (r + 7); ROVER.yaw = ROVER.ship.yaw;
+  const pk = !nx.leih ? parkNahe(P.sector, ROVER.ship.x, ROVER.ship.z).find(p => p.kind === neu) : undefined;
+  if (pk) { ROVER.x = pk.x; ROVER.z = pk.z; ROVER.yaw = pk.yaw; }
+  ROVER.y = heightAt(ROVER.x, ROVER.z);
   ROVER.vx = ROVER.vz = ROVER.vy = 0; ROVER.speed = 0; ROVER.air = false; ROVER.yr = ROVER.steer = 0; roverStill(); ROVER.drilling = false; ROVER.target = null;
   camInit = false;
   snd(220, 0.5, 'sawtooth', 0.04, 120);
   return (nx.leih ? 'Leihrover „Dachs“ der Basis genommen.' : neu === 'wiesel' ? 'Buggy „Wiesel“ aus dem Laderaum. [R] tastet die Umgebung ab.' : 'Rover „Dachs“ aus dem Laderaum.') + msg;
 }
+/** Abheben, während das eigene Fahrzeug draußen steht: im Laderaum → an Bord, an einer Basis → in deren Fahrzeughalle, sonst bleibt es
+ *  stehen, wo es ist (P.fzPark, Marke auf dem Planeten und auf der Karte). Gibt den Funkspruch dazu zurück. */
+function fzZuruecklassen(): string {
+  if (!ROVER.model || ROVER.leih || ROVER.ohne) return '';
+  const k = ROVER.kind, n = FZ[k].kurz;
+  if (hatLaderaum() && imSchiff(ROVER.x, ROVER.z, ROVER.ship)?.wo === 'raum' && anBordStellen(k)) return ` ${n} im Laderaum.`;
+  if (ortVon(k) === 'sh:' + P.uid && hatLaderaum() && Math.hypot(ROVER.x - ROVER.ship.x, ROVER.z - ROVER.ship.z) < stats().radius + 25) return ` ${n} im Laderaum.`;      // dicht an der Rampe: die Crew fährt ihn hinein
+  if (anBasis(ROVER.x, ROVER.z) && world.stations.length) { inHalleStellen(k, basisId()); return ` Der ${n} fährt in die Fahrzeughalle der Basis.`; }
+  parken(k, P.sector, ROVER.x, ROVER.y, ROVER.z, ROVER.yaw);
+  return ` Der ${n} bleibt hier stehen. Die Karte zeigt, wo.`;
+}
+/** Marken der draußen abgestellten eigenen Fahrzeuge auf diesem Planeten (nicht das, mit dem man gerade fährt) */
+export function parkMarkers() {
+  if (!world.surface) return [];
+  const aktiv = ROVER.model?.g.parent && !ROVER.leih ? ROVER.kind : null;      // steht in der Szene = fährt oder steht gerade draußen
+  return geparkt(P.sector).filter(p => p.kind !== aktiv).map(p => ({ x: p.x, y: p.y + 4, z: p.z, label: `${FZ[p.kind].kurz.toUpperCase()} · ABGESTELLT`, col: '#e09030', big: true }));
+}
 export function boardShip() {
+  const zur = fzZuruecklassen();
   const { moved, left } = unloadRover();
   ROVER.active = false;
   laserSound(false); fahrerWeg(); wieselScanWeg();
@@ -680,7 +705,7 @@ export function boardShip() {
   P.vx = P.vy = P.vz = 0;
   G.camInit = false;
   snd(300, 0.6, 'sawtooth', 0.05, 500);
-  const fz = ROVER.ohne ? '' : ROVER.leih ? ' Der Leihrover fährt zurück in die Halle der Basis.' : ' Fahrzeug im Laderaum.';
+  const fz = ROVER.ohne ? '' : ROVER.leih ? ' Der Leihrover fährt zurück in die Halle der Basis.' : zur;
   radio('SYSTEM', (moved ? `${moved} Einheiten in den Frachtraum verladen.${left ? ` ${left} passen nicht mehr und bleiben im Rover.` : ''}` : 'An Bord. Abheben mit [W].') + fz);
 }
 

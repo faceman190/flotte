@@ -123,3 +123,8 @@ Jedes Schiff hat seine Ausstiege als Punkte im Modell. Danach richten sich Ausst
     mehr als 1,2 m über dem Boden oder hängt das Fahrwerk mehr als 3 m in der Luft, verweigert die Landung („Gelände zu uneben … drehen“).
     Landehöhe allgemein: tiefster Punkt des Fahrwerks (`fahrwerkTiefe`) statt Radius × 0,55, große Schiffe schwebten vorher 4–8 m hoch.
   - An Bord sind Kisten und abgestellte Fahrzeuge Hindernisse der Laufkarte (vorher galten in Modell-Räumen gar keine Hindernisse).
+- **Nachtrag: Fahrzeug draußen lassen (25.11.2026, auf test).** Hebt man ab, während das eigene Fahrzeug draußen steht (surface.ts
+  `fzZuruecklassen`): steht es im Laderaum oder dicht an der Rampe seines Schiffs → an Bord; an einer Basis → in deren Fahrzeughalle; sonst
+  bleibt es stehen (`P.fzOrt = 'pl:<Sektor>'`, Lage in `P.fzPark`). Marke „WIESEL · ABGESTELLT“ im Flug über dem Planeten und zu Fuß, ▣ neben
+  dem Sektor auf der Galaxiekarte. Landet man im Umkreis von 800 m, steht es wieder dort ([X] wählt es auch, wenn ein anderes an Bord ist).
+  Werft: „Vom Bergungstrupp holen lassen“ (900 Cr) bringt es in die Halle der Station. Früher flog es einfach mit.

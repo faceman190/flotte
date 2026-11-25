@@ -9,7 +9,7 @@ import { clamp } from '../core/util';
 import { sfx, snd } from '../core/audio';
 import { P, G, settings, stats } from './state';
 import { world } from './world';
-import { ROVER, SURF, terrainAt, liquidAt, resetRoverCamera, buildRover , landeHoehe } from './surface';
+import { ROVER, SURF, terrainAt, liquidAt, resetRoverCamera, buildRover , landeHoehe, parkMarkers } from './surface';
 import { updateFlora, treeNear } from './flora';
 import { gearFactor } from './inventory';
 import { radio } from '../ui/radio';
@@ -235,7 +235,7 @@ function marker(x: number, y: number, z: number, text: string, col: string, row:
 export function drawGroundMarkers() {
   const W = view.W, H = view.H, px = FOOT.active ? FOOT.x : ROVER.x, pz = FOOT.active ? FOOT.z : ROVER.z;
   ux.save(); ux.textAlign = 'center';
-  for (const mk of storyMarkers(true)) {
+  for (const mk of [...storyMarkers(true), ...parkMarkers()]) {
     _p.set(mk.x, mk.y, mk.z).project(camera);
     const d = Math.hypot(mk.x - px, mk.z - pz), label = `◆ ${mk.label} · ${d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m'}`;
     if (_p.z < 1 && Math.abs(_p.x) < 1 && Math.abs(_p.y) < 1) { ux.fillStyle = mk.col; ux.font = '700 13px "Share Tech Mono",Consolas,monospace'; ux.fillText(label, (_p.x + 1) / 2 * W, (1 - _p.y) / 2 * H); }

@@ -2,13 +2,14 @@
 //
 // Jedes Bodenfahrzeug hat Maße, jedes Schiff mit Laderaum ein Tor und Stellplätze. Ein Fahrzeug passt, wenn es durchs Tor geht (Breite mit
 // 0,3 m Luft je Seite, Höhe mit 0,1 m Luft) und auf einen Stellplatz. Jäger (Venom, Würger) und die Elster tragen keins.
-// Wo ein eigenes Fahrzeug ist, steht in P.fzOrt: 'sh:<uid>' an Bord des Schiffs mit dieser Nummer, 'st:<Station>' in deren Fahrzeughalle.
+// Wo ein eigenes Fahrzeug ist, steht in P.fzOrt: 'sh:<uid>' an Bord des Schiffs mit dieser Nummer, 'st:<Station>' in deren Fahrzeughalle, 'pl:<Sektor>' draußen abgestellt (Lage in P.fzPark).
 // Ausgesetzt wird beim Landen nur, was an Bord des aktiven Schiffs steht. An jeder Planetenbasis stellt die Fahrzeughalle einen Leihrover
 // „Dachs“ aufs Landefeld; er bleibt auf dem Planeten (beim Abheben fährt ihn die Basis zurück in die Halle). Abseits der Basen und ohne
 // Fahrzeug an Bord steigt man zu Fuß aus.
 import { P } from './state';
 import { SHIPS } from '../data/ships';
 import { FZ, normFz, type FzId } from '../models/rover';
+import { SECTOR } from '../data/galaxy';
 
 // Außenmaße der Fahrzeuge: Länge, Breite, Höhe (m), mit Rädern, Bohrer bzw. Sensormast
 export const FZ_MASS: Record<FzId, [number, number, number]> = { dachs: [6.6, 3.8, 3.3], wiesel: [4.3, 2.4, 2.2] };
@@ -34,7 +35,21 @@ export const ortVon = (k: FzId) => P.fzOrt?.[k] || '';
 export const anBord = (uid = P.uid): FzId[] => eigene().filter(k => ortVon(k) === 'sh:' + uid);
 export const inHalle = (st: string): FzId[] => eigene().filter(k => ortVon(k) === 'st:' + st);
 export const freiePlaetze = (cls = P.cls, uid = P.uid) => stellplaetze(cls) - anBord(uid).length;
-const setzeOrt = (k: FzId, o: string) => { (P.fzOrt ||= {})[k] = o; };
+const setzeOrt = (k: FzId, o: string) => { (P.fzOrt ||= {})[k] = o; if (!o.startsWith('pl:') && P.fzPark) delete P.fzPark[k]; };
+/** Draußen abgestellt (beim Abheben stehen gelassen, abseits einer Basis): bleibt dort, bis man es abholt (game/surface.ts boardShip) */
+export function parken(kind: FzId, sektor: string, x: number, y: number, z: number, yaw: number) { setzeOrt(kind, 'pl:' + sektor); (P.fzPark ||= {})[kind] = { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, z: Math.round(z * 10) / 10, yaw: Math.round(yaw * 100) / 100 }; }
+/** draußen abgestellte Fahrzeuge in diesem Sektor (mit Lage) */
+export const geparkt = (sektor: string) => eigene().filter(k => ortVon(k) === 'pl:' + sektor && P.fzPark?.[k]).map(k => ({ kind: k, ...P.fzPark![k]! }));
+/** ein abgestelltes Fahrzeug in der Nähe (Landeplatz): bis 800 m */
+export const parkNahe = (sektor: string, x: number, z: number) => geparkt(sektor).filter(p => Math.hypot(p.x - x, p.z - z) < 800).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z));
+export const ABHOLEN_PREIS = 900;
+/** Werft: abgestelltes Fahrzeug von einem Bergungstrupp in die Halle dieser Station bringen lassen */
+export function abholen(kind: FzId, station: string): string {
+  if (!ortVon(kind).startsWith('pl:')) return `Der ${FZ[kind].kurz} steht nicht draußen.`;
+  if (P.credits < ABHOLEN_PREIS) return 'Zu wenig Credits.';
+  P.credits -= ABHOLEN_PREIS; setzeOrt(kind, 'st:' + station);
+  return `Der Bergungstrupp holt den ${FZ[kind].kurz}. Er steht jetzt in der Fahrzeughalle.`;
+}
 
 /** Spielstand von vor Schritt 1: Der Dachs gehörte jedem (wird zum Leihrover der Basen), ein gekaufter Wiesel steht an Bord, wenn er passt,
  *  sonst in der Halle der Bastion. Fahrzeuge auf verkauften Schiffen kommen in die Halle der Bastion. */
@@ -45,22 +60,25 @@ export function fzOrdnen() {
   for (const k of eigene()) {
     const o = ortVon(k);
     if (o.startsWith('sh:') && uids.has(+o.slice(3))) continue;
-    if (o.startsWith('st:')) continue;
+    if (o.startsWith('st:') || (o.startsWith('pl:') && P.fzPark?.[k])) continue;
     if (!o && passtIn(k, P.cls) && freiePlaetze() > 0) setzeOrt(k, 'sh:' + P.uid);
     else setzeOrt(k, 'st:bastion');
   }
 }
 /** Was beim Landen ausgesetzt wird: ein eigenes Fahrzeug an Bord (bevorzugt P.fahrzeug), an einer Basis sonst der Leihrover; null = zu Fuß */
-export function ausgabe(anBasis: boolean, basis = ''): { kind: FzId; leih: boolean } | null {
+export function ausgabe(anBasis: boolean, basis = '', nahe?: { sektor: string; x: number; z: number }): { kind: FzId; leih: boolean } | null {
   const ab = anBord();
   if (ab.length) { const w = normFz(P.fahrzeug); return { kind: ab.includes(w) ? w : ab[0], leih: false }; }
+  const pk = nahe ? parkNahe(nahe.sektor, nahe.x, nahe.z) : [];      // draußen abgestellt, in der Nähe des Landeplatzes
+  if (pk.length) return { kind: pk[0].kind, leih: false };
   const h = basis ? inHalle(basis) : [];      // eigene Fahrzeuge in der Halle dieser Basis
   if (anBasis && h.length) return { kind: h[0], leih: false };
   return anBasis ? { kind: LEIH_KIND, leih: true } : null;
 }
 /** Fahrzeuge zur Wahl am Schiff (Taste X): die an Bord, an der Basis dazu der Leihrover */
-export function wahl(anBasis: boolean, basis = ''): { kind: FzId; leih: boolean }[] {
+export function wahl(anBasis: boolean, basis = '', nahe?: { sektor: string; x: number; z: number }): { kind: FzId; leih: boolean }[] {
   const o: { kind: FzId; leih: boolean }[] = anBord().map(kind => ({ kind, leih: false }));
+  if (nahe) for (const p of parkNahe(nahe.sektor, nahe.x, nahe.z)) if (!o.some(q => q.kind === p.kind)) o.push({ kind: p.kind, leih: false });
   if (anBasis && basis) for (const kind of inHalle(basis)) if (!o.some(q => q.kind === kind)) o.push({ kind, leih: false });
   if (anBasis && !o.some(q => q.kind === LEIH_KIND)) o.push({ kind: LEIH_KIND, leih: true });
   return o;
@@ -94,5 +112,6 @@ export function ortText(kind: FzId, stName: (id: string) => string): string {
   const o = ortVon(kind);
   if (o.startsWith('sh:')) { const uid = +o.slice(3); return uid === P.uid ? `an Bord der ${P.shipName}` : `an Bord der ${P.fleet.find(f => f.uid === uid)?.name || 'geparkten Schiffs'}`; }
   if (o.startsWith('st:')) return `Fahrzeughalle ${stName(o.slice(3))}`;
+  if (o.startsWith('pl:')) return `draußen abgestellt auf ${(SECTOR as any)[o.slice(3)]?.name || o.slice(3)}`;
   return '';
 }
