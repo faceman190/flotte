@@ -133,20 +133,16 @@ export function modelInstance(name: string, length: number, paint: Paint = 'Oran
   return { obj: holder, w: t.w * length, h: t.h * length, l: length };
 }
 
-// Fahrwerk und Rampe (Meshes mit dem Material „gear“) zeigen oder verbergen: im Flug eingezogen, am Boden ausgefahren
-export function setGear(root: THREE.Object3D, down: boolean) {
-  root.userData.zGear = down;      // gewünschter Zustand (Mehrspieler: net.ts schickt ihn mit)
-  let list = root.userData.gear as THREE.Object3D[] | undefined;
-  if (!list) { list = []; root.traverse((o: any) => { if (o.isMesh && o.material?.name === 'gear') list!.push(o); }); root.userData.gear = list; }
-  for (const o of list) o.visible = down;
-}
-
-// ---------- Bewegliche Teile: Heckrampe, Lukendeckel, Leiter ----------
-// Im Modell erkennbar am Materialnamen („… |rampe“ usw., Export asset-src/neu/kormoran/kor_export.py). Gelenke und Wege in den
-// Koordinaten der GLB-Datei (dort haben die Meshes keine eigene Lage). Ablauf wie im Blender-Modell (kor_anim.py), gemessen am
-// Fortschritt der Gruppe von 0 (zu) bis 1 (offen): t0–t1 ist der Abschnitt, in dem sich das Teil bewegt.
-interface DoorPart { tag: string; grp: string; t0: number; t1: number; hinge?: number[]; angle?: number; slide?: number[]; under?: string; retract?: boolean }
-const DOORS: Record<string, { dur: Record<string, number>; parts: DoorPart[] }> = {
+// ---------- Bewegliche Teile: Fahrwerk, Heckrampe, Klappen, Leiter ----------
+// Im Modell erkennbar am Materialnamen („… |rampe“ usw., Export asset-src/neu/kormoran/kor_export.py, milan/mil_export.py). Gelenke und Wege
+// in den Koordinaten der GLB-Datei (dort haben die Meshes keine eigene Lage). Gemessen am Fortschritt der Gruppe von 0 bis 1: t0–t1 ist der
+// Abschnitt, in dem sich das Teil bewegt. Klappen und Rampen: 0 zu … 1 offen (setDoors). Fahrwerk (Gruppe fw): 0 ausgefahren … 1 eingefahren
+// (setGear). axis: Drehachse in der Datei (Standard x = quer). inv: gebaut offen, der Winkel schließt (wirkt bei 0). retract: gebaut
+// ausgefahren, slide ist der Weg beim Einfahren. boden: Gruppen, die sich nur bei ausgefahrenem Fahrwerk öffnen (Bordleiter).
+// Modelle mit Fernmodell (LOD) bekommen je Fassung eigene Gelenke, sonst hingen die Teile des Fernmodells im Nahmodell.
+interface DoorPart { tag: string; grp: string; t0: number; t1: number; hinge?: number[]; angle?: number; axis?: 'x' | 'y' | 'z'; inv?: boolean; slide?: number[]; under?: string; retract?: boolean }
+interface DoorCfg { dur: Record<string, number>; parts: DoorPart[]; boden?: string[] }
+const DOORS: Record<string, DoorCfg> = {
   // Wisent (asset-src/neu/wisent/wis_rampe.py): Tor oben klappt 97° hoch, Rampe schwenkt von senkrecht bis zum Boden, drei Auszüge fahren nacheinander aus
   Wisent: {
     dur: { rampe: 6.0 },
@@ -167,50 +163,102 @@ const DOORS: Record<string, { dur: Record<string, number>; parts: DoorPart[] }> 
       { tag: 'leiter', grp: 'leiter', t0: 0.27, t1: 0.93, slide: [0, 1.906, -0.411], retract: true },   // Leiter gleitet aus dem Schacht
     ],
   },
+  // Milan (asset-src/neu/milan, mil-gelenke.json): Heckklappe des Frachtfachs, Bordleiter mit Klappe, einziehbares Fahrwerk
+  Milan: {
+    dur: { fracht: 1.6, leiter: 2.2, fw: 3.2 }, boden: ['leiter'],
+    parts: [
+      { tag: 'fracht', grp: 'fracht', t0: 0, t1: 1, hinge: [0, 3.695, -7.014], axis: 'x', angle: 1.74533 },
+      { tag: 'luke', grp: 'leiter', t0: 0, t1: 0.3, hinge: [0.9308, 1.98, 2.95], axis: 'z', angle: -1.74533, inv: true },
+      { tag: 'leiter', grp: 'leiter', t0: 0.25, t1: 0.95, slide: [-0.4392, 1.6327, 0], retract: true },
+      { tag: 'fwn', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [0, 1.92, 5], axis: 'x', angle: 1.62316 },             // Bugrad fährt nach hinten ein
+      { tag: 'fwnk_l', grp: 'fw', t0: 0.72, t1: 1, hinge: [0.235, 1.6889, 4.07], axis: 'z', angle: -1.53589 },   // Bugradklappen schließen zuletzt
+      { tag: 'fwnk_r', grp: 'fw', t0: 0.72, t1: 1, hinge: [-0.235, 1.6889, 4.07], axis: 'z', angle: 1.53589 },
+      { tag: 'fwh_l', grp: 'fw', t0: 0, t1: 0.7, hinge: [1.355, 1.98, -2.25], axis: 'x', angle: -1.53589 },       // Haupträder fahren nach vorn ein
+      { tag: 'fwh_r', grp: 'fw', t0: 0, t1: 0.7, hinge: [-1.355, 1.98, -2.25], axis: 'x', angle: -1.53589 },
+      { tag: 'fwhk_l', grp: 'fw', t0: 0.72, t1: 1, hinge: [1.57, 1.8336, -0.53], axis: 'z', angle: -1.53589 },
+      { tag: 'fwhk_r', grp: 'fw', t0: 0.72, t1: 1, hinge: [-1.57, 1.8336, -0.53], axis: 'z', angle: 1.53589 },
+    ],
+  },
 };
-interface DoorRig { cfg: typeof DOORS[string]; p: Record<string, number>; init: boolean; parts: { d: DoorPart; pivot: THREE.Object3D }[] }
+interface DoorRig { cfg: DoorCfg; p: Record<string, number>; init: boolean; parts: { d: DoorPart; pivot: THREE.Object3D }[] }
 const ease = (t: number) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
-function rigDoors(root: THREE.Object3D): DoorRig | null {
-  let name = ''; root.traverse(o => { if (!name && o.userData.model) name = o.userData.model; });
-  const cfg = DOORS[name]; if (!cfg) return null;
-  const meshes: Record<string, THREE.Mesh[]> = {};
-  root.traverse((o: any) => { if (!o.isMesh) return; const m = /\|(\w+)$/.exec(o.material?.name || ''); if (m) (meshes[m[1]] = meshes[m[1]] || []).push(o); });
-  const rig: DoorRig = { cfg, p: {}, init: false, parts: [] }, pivots: Record<string, THREE.Object3D> = {};
-  // Die komprimierten Meshes hängen an eigenen Knoten (Verschiebung, Maßstab der Quantisierung): darum weltlagetreu umhängen (attach)
-  const glbRoot = (o: THREE.Object3D) => { let p = o.parent; while (p && !p.userData.glbRoot) p = p.parent; return p; };
+const modelOf = (root: THREE.Object3D) => { let name = ''; root.traverse(o => { if (!name && o.userData.model) name = o.userData.model; }); return name; };
+const glbRootOf = (o: THREE.Object3D) => { let p = o.parent; while (p && !p.userData.glbRoot) p = p.parent; return p; };
+// Gelenke anlegen: die getaggten Netze jeder Fassung (Nah- und Fernmodell) an eigene Gelenke hängen (weltlagetreu, attach: die komprimierten
+// Netze hängen an eigenen Knoten mit Verschiebung und Maßstab der Quantisierung)
+function rigParts(root: THREE.Object3D, parts: DoorPart[]) {
+  const by = new Map<THREE.Object3D, Record<string, THREE.Mesh[]>>();
+  root.traverse((o: any) => {
+    if (!o.isMesh) return; const m = /\|(\w+)$/.exec(o.material?.name || ''); if (!m) return;
+    const gr = glbRootOf(o); if (!gr) return; let rec = by.get(gr); if (!rec) by.set(gr, (rec = {}));
+    (rec[m[1]] = rec[m[1]] || []).push(o);
+  });
   root.updateMatrixWorld(true);
-  for (const d of cfg.parts) {
-    const list = meshes[d.tag], gr = list?.length ? glbRoot(list[0]) : null; if (!gr) continue;
-    const base = d.under ? pivots[d.under] : null, pivot = new THREE.Object3D(); pivot.name = 'Gelenk ' + d.tag;
-    if (base) base.add(pivot); else { gr.add(pivot); pivot.position.set(...((d.hinge || [0, 0, 0]) as [number, number, number])); }
-    pivot.updateMatrixWorld(true);
-    for (const m of list) pivot.attach(m);
-    pivots[d.tag] = pivot; rig.parts.push({ d, pivot });
+  const out: { d: DoorPart; pivot: THREE.Object3D }[] = [];
+  for (const [gr, meshes] of by) {
+    const pivots: Record<string, THREE.Object3D> = {};
+    for (const d of parts) {
+      const list = meshes[d.tag]; if (!list?.length) continue;
+      const base = d.under ? pivots[d.under] : null, pivot = new THREE.Object3D(); pivot.name = 'Gelenk ' + d.tag;
+      if (base) base.add(pivot); else { gr.add(pivot); pivot.position.set(...((d.hinge || [0, 0, 0]) as [number, number, number])); }
+      pivot.updateMatrixWorld(true);
+      for (const m of list) pivot.attach(m);
+      pivots[d.tag] = pivot; out.push({ d, pivot });
+    }
   }
-  return rig;
+  return out;
 }
+function rigDoors(root: THREE.Object3D, fw = false): DoorRig | null {
+  const cfg = DOORS[modelOf(root)]; if (!cfg) return null;
+  const parts = cfg.parts.filter(d => (d.grp === 'fw') === fw); if (!parts.length) return null;
+  if (fw) fahrwerkTiefe(root);      // Landehöhe messen, solange das Fahrwerk noch in der gebauten Lage hängt
+  return { cfg, p: {}, init: false, parts: rigParts(root, parts) };
+}
+function stellen(rig: DoorRig, target: (grp: string) => number, dt: number) {
+  const step = rig.init ? Math.min(0.1, dt) : 1e9; rig.init = true;
+  for (const g of Object.keys(rig.cfg.dur)) {
+    const cur = rig.p[g] ?? target(g), want = target(g), d = step / rig.cfg.dur[g];
+    rig.p[g] = want > cur ? Math.min(want, cur + d) : Math.max(want, cur - d);
+  }
+  for (const { d, pivot } of rig.parts) {
+    const k = ease((rig.p[d.grp] - d.t0) / (d.t1 - d.t0));
+    if (d.angle !== undefined) { const a = d.angle * (d.inv ? 1 - k : k); pivot.rotation.set(0, 0, 0); pivot.rotation[d.axis || 'x'] = a; }
+    if (d.slide) {
+      const f = d.retract ? 1 - k : k; pivot.position.set(d.slide[0] * f, d.slide[1] * f, d.slide[2] * f);      // unter einem Gelenk: im Rahmen des Gelenks
+      if (d.retract) pivot.visible = rig.p[d.grp] > d.t0;      // eingezogene Leiter steckt im Schacht hinter dem Deckel
+    }
+  }
+}
+// Fahrwerk: im Flug eingezogen, am Boden ausgefahren. Modelle mit Fahrwerksgelenken (Milan) fahren es aus und ein (dt = Spielzeit des Bildes,
+// beim ersten Aufruf sofort im Zielzustand); ältere Modelle blenden die Netze mit dem Material „gear“ nur ein und aus.
+export function setGear(root: THREE.Object3D, down: boolean, dt = 0) {
+  root.userData.zGear = down;      // gewünschter Zustand (Mehrspieler: net.ts schickt ihn mit)
+  let rig = root.userData.gearRig as DoorRig | null | undefined;
+  if (rig === undefined) rig = root.userData.gearRig = rigDoors(root, true);
+  if (rig) { stellen(rig, g => (g === 'fw' ? (down ? 0 : 1) : (rig!.p[g] ?? 0)), dt); return; }
+  let list = root.userData.gear as THREE.Object3D[] | undefined;
+  if (!list) { list = []; root.traverse((o: any) => { if (o.isMesh && o.material?.name === 'gear') list!.push(o); }); root.userData.gear = list; }
+  for (const o of list) o.visible = down;
+}
+/** Fahrwerk ganz ausgefahren? (Modelle ohne Gelenke: sobald es gewünscht ist) */
+export function gearDown(root: THREE.Object3D) { const rig = root.userData.gearRig as DoorRig | null | undefined; return rig ? (rig.p.fw ?? 1) < 0.02 : !!root.userData.zGear; }
+/** Modell mit eigener Bordleiter (dann hängt das Spiel keine an die Kanzel, ausstieg.ts) */
+export const eigeneLeiter = (root: THREE.Object3D) => !!DOORS[modelOf(root)]?.boden?.includes('leiter');
 // Stand einer Gruppe (0 zu … 1 offen), z. B. ob die Rampe ganz offen ist
 export function doorProgress(root: THREE.Object3D, grp: string) { const rig = root.userData.doors as DoorRig | null | undefined; return rig ? rig.p[grp] ?? 0 : 0; }
 // Heckrampe zum Betreten ohne Taste (Schiffskoordinaten wie die Laufkarte: Nase −Z): Türebene, Fuß der offenen Rampe, halbe Breite.
 // RAMP.want schaltet der Rampenschalter (innen am Laderaum, außen am Rampenfuß); im Hangar öffnet die Rampe, solange want gilt.
 export const RAMP_ENTRY: Record<string, { door: number; foot: number; hw: number }> = { Wisent: { door: 41.39, foot: 49.9, hw: 3.7 } };
 export const RAMP = { want: true };
-// Öffnen oder schließen (jedes Bild aufrufen, dt = Spielzeit des Bildes): beim ersten Aufruf sofort im Zielzustand, danach mit der Dauer aus DOORS
+// Öffnen oder schließen (jedes Bild aufrufen, dt = Spielzeit des Bildes): beim ersten Aufruf sofort im Zielzustand, danach mit der Dauer aus DOORS.
+// Gruppen in boden (Bordleiter) öffnen nur bei ausgefahrenem Fahrwerk.
 export function setDoors(root: THREE.Object3D, open: boolean, dt = 0) {
   root.userData.zDoors = open;
   let rig = root.userData.doors as DoorRig | null | undefined;
   if (rig === undefined) rig = root.userData.doors = rigDoors(root);
   if (!rig) return;
-  const step = rig.init ? Math.min(0.1, dt) : 1e9; rig.init = true;
-  for (const g of Object.keys(rig.cfg.dur)) rig.p[g] = Math.max(0, Math.min(1, (rig.p[g] ?? 0) + (open ? 1 : -1) * step / rig.cfg.dur[g]));
-  for (const { d, pivot } of rig.parts) {
-    const k = ease((rig.p[d.grp] - d.t0) / (d.t1 - d.t0));
-    if (d.angle !== undefined) pivot.rotation.x = d.angle * k;
-    if (d.slide) {
-      const f = d.retract ? 1 - k : k; pivot.position.set(d.slide[0] * f, d.slide[1] * f, d.slide[2] * f);      // unter einem Gelenk: im Rahmen des Gelenks
-      if (d.retract) pivot.visible = rig.p[d.grp] > d.t0;      // eingezogene Leiter steckt im Schacht hinter dem Deckel
-    }
-  }
+  const boden = rig.cfg.boden || [], unten = gearDown(root);
+  stellen(rig, g => (g === 'fw' ? 0 : open && (!boden.includes(g) || unten) ? 1 : 0), dt);
 }
 
 // Koordinatensystem eines Modells im Spiel (für Innenmodelle, die deckungsgleich zum Außenmodell sitzen sollen):
@@ -220,32 +268,38 @@ export const modelFrame = (name: string) => TPL[name]?.frame || null;
 // ---------- Kanzel (seit 2026-11-25, Konzept docs/konzept-schiffe-fracht.md, Schritt 2) ----------
 // Jäger und Elster steigen über die Kanzel aus. Die Modelle haben dafür kein eigenes bewegliches Teil, aber das Kanzelglas ist ein eigenes
 // Material: Diese Netze hängen an einem Gelenk an der hinteren Oberkante des Glases und klappen vorn hoch. Venom: das ganze Glas ist ein Stück.
-const KANZEL: Record<string, { mats: string[]; angle: number; zMax?: number }> = {
+const KANZEL: Record<string, { mats: string[]; angle: number; zMax?: number; hinge?: number[] }> = {
   Venom: { mats: ['glass_clear'], angle: 0.26, zMax: -1.2 },      // nur das Glas vor z = −1,2 m (über dem Cockpit), der Rest bleibt fest
   Wuerger: { mats: ['Schauglas (Spiel)'], angle: 0.95 },
   Elster: { mats: ['Kuppelglas (Spiel)'], angle: 1.05 },
+  Milan: { mats: ['Kuppelglas (Spiel)'], angle: 0.62, hinge: [0, 3.4318, 1.49] },      // einteilige Blase, Gelenk am hinteren Rahmen (mil-gelenke.json)
 };
-interface KanzelRig { pivot: THREE.Object3D; angle: number; p: number; box: THREE.Box3 }
+interface KanzelRig { pivots: THREE.Object3D[]; angle: number; p: number; box: THREE.Box3 }
 function rigKanzel(root: THREE.Object3D): KanzelRig | null {
-  let name = ''; root.traverse(o => { if (!name && o.userData.model) name = o.userData.model; });
-  const cfg = KANZEL[name]; if (!cfg) return null;
-  let list: THREE.Mesh[] = []; root.traverse((o: any) => { if (o.isMesh && cfg.mats.includes(o.material?.name)) list.push(o); });
-  if (!list.length) return null;
+  const cfg = KANZEL[modelOf(root)]; if (!cfg) return null;
+  let all: THREE.Mesh[] = []; root.traverse((o: any) => { if (o.isMesh && cfg.mats.includes(o.material?.name)) all.push(o); });
+  if (!all.length) return null;
   root.updateMatrixWorld(true);
-  if (cfg.zMax !== undefined) list = list.map(m => kanzelTeil(m, root, cfg.zMax!)).filter(Boolean) as THREE.Mesh[];
-  if (!list.length) return null;
-  let gr = list[0].parent; while (gr && !gr.userData.glbRoot) gr = gr.parent;
-  if (!gr) return null;
-  const ginv = new THREE.Matrix4().copy(gr.matrixWorld).invert(), rinv = new THREE.Matrix4().copy(root.matrixWorld).invert();
-  const gb = new THREE.Box3(), sb = new THREE.Box3();
-  for (const m of list) { m.geometry.computeBoundingBox(); gb.union(m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(ginv, m.matrixWorld))); sb.union(m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(rinv, m.matrixWorld))); }
-  list = list.concat(kanzelStreben(root, list, sb, cfg.mats));      // Streben und Rahmen am Glas gehen mit
-  // Nase im Rahmen der GLB-Datei: Schiffs-Nase ist −Z im Spiel
-  const nose = new THREE.Vector3(0, 0, -1).transformDirection(root.matrixWorld).transformDirection(ginv);
-  const front = nose.z >= 0 ? 1 : -1, pivot = new THREE.Object3D(); pivot.name = 'Gelenk Kanzel';
-  gr.add(pivot); pivot.position.set((gb.min.x + gb.max.x) / 2, gb.max.y, front > 0 ? gb.min.z : gb.max.z); pivot.updateMatrixWorld(true);
-  for (const m of list) pivot.attach(m);
-  return { pivot, angle: -front * cfg.angle, p: 0, box: sb };      // vorn hoch: um x mit dem Vorzeichen gegen die Nasenrichtung
+  if (cfg.zMax !== undefined) all = all.map(m => kanzelTeil(m, root, cfg.zMax!)).filter(Boolean) as THREE.Mesh[];
+  const by = new Map<THREE.Object3D, THREE.Mesh[]>();
+  for (const m of all) { const gr = glbRootOf(m); if (!gr) continue; let l = by.get(gr); if (!l) by.set(gr, (l = [])); l.push(m); }
+  if (!by.size) return null;
+  const rinv = new THREE.Matrix4().copy(root.matrixWorld).invert(), pivots: THREE.Object3D[] = []; let box: THREE.Box3 | null = null, angle = 0;
+  for (const [gr, glas] of by) {
+    const ginv = new THREE.Matrix4().copy(gr.matrixWorld).invert(), gb = new THREE.Box3(), sb = new THREE.Box3();
+    for (const m of glas) { m.geometry.computeBoundingBox(); gb.union(m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(ginv, m.matrixWorld))); sb.union(m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(rinv, m.matrixWorld))); }
+    const list = glas.concat(kanzelStreben(root, glas, sb, cfg.mats, 0.12, gr));      // Streben und Rahmen am Glas gehen mit
+    // Nase im Rahmen der GLB-Datei: Schiffs-Nase ist −Z im Spiel
+    const nose = new THREE.Vector3(0, 0, -1).transformDirection(root.matrixWorld).transformDirection(ginv);
+    const front = nose.z >= 0 ? 1 : -1, pivot = new THREE.Object3D(); pivot.name = 'Gelenk Kanzel';
+    gr.add(pivot);
+    if (cfg.hinge) pivot.position.set(cfg.hinge[0], cfg.hinge[1], cfg.hinge[2]);
+    else pivot.position.set((gb.min.x + gb.max.x) / 2, gb.max.y, front > 0 ? gb.min.z : gb.max.z);
+    pivot.updateMatrixWorld(true);
+    for (const m of list) pivot.attach(m);
+    pivots.push(pivot); box = box || sb; angle = -front * cfg.angle;      // vorn hoch: um x mit dem Vorzeichen gegen die Nasenrichtung
+  }
+  return { pivots, angle, p: 0, box: box! };
 }
 // Netz in zwei teilen: Dreiecke, für die pred (Ecken in Schiffskoordinaten) gilt, kommen in ein neues Netz (eigene Kopie der Geometrie)
 function teilen(m: THREE.Mesh, root: THREE.Object3D, pred: (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => boolean): THREE.Mesh | null {
@@ -266,7 +320,7 @@ function teilen(m: THREE.Mesh, root: THREE.Object3D, pred: (a: THREE.Vector3, b:
 const kanzelTeil = (m: THREE.Mesh, root: THREE.Object3D, zMax: number) => teilen(m, root, (a, b, c) => (a.z + b.z + c.z) / 3 < zMax);
 // Streben und Rahmen der Kanzel: alle übrigen Flächen (außer dem restlichen Glas), deren Schwerpunkt höchstens 12 cm vom Kanzelglas entfernt
 // und über dem Kanzelrand liegt. Die Modelle haben dafür kein eigenes Teil; so geht der Rahmen mit dem Glas auf, Sitze und Rumpf bleiben.
-function kanzelStreben(root: THREE.Object3D, glas: THREE.Mesh[], sb: THREE.Box3, glasMats: string[], abst = 0.12): THREE.Mesh[] {
+function kanzelStreben(root: THREE.Object3D, glas: THREE.Mesh[], sb: THREE.Box3, glasMats: string[], abst = 0.12, scope: THREE.Object3D = root): THREE.Mesh[] {
   const rinv = new THREE.Matrix4().copy(root.matrixWorld).invert(), tris: THREE.Triangle[] = [], grid = new Map<string, number[]>(), Z = 0.3;
   const cell = (x: number, y: number, z: number) => Math.floor(x / Z) + ',' + Math.floor(y / Z) + ',' + Math.floor(z / Z);
   for (const m of glas) {
@@ -281,8 +335,8 @@ function kanzelStreben(root: THREE.Object3D, glas: THREE.Mesh[], sb: THREE.Box3,
     }
   }
   const nah = sb.clone().expandByScalar(abst + 0.05), sill = sb.min.y + 0.03, glasSet = new Set(glas), q = new THREE.Vector3(), c = new THREE.Vector3(), out: THREE.Mesh[] = [], kand: THREE.Mesh[] = [];
-  root.traverse((o: any) => {
-    if (!o.isMesh || glasSet.has(o) || glasMats.includes(o.material?.name) || !o.geometry?.attributes?.position) return;
+  scope.traverse((o: any) => {
+    if (!o.isMesh || glasSet.has(o) || glasMats.includes(o.material?.name) || !o.geometry?.attributes?.position || /\|\w+$/.test(o.material?.name || '')) return;
     o.geometry.computeBoundingBox(); const bb = o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(rinv, o.matrixWorld));
     if (bb.intersectsBox(nah)) kand.push(o);
   });
@@ -304,7 +358,7 @@ export function setKanzel(root: THREE.Object3D, open: boolean, dt = 0) {
   root.userData.zKanzel = open;
   const r = kRig(root); if (!r) return;
   r.p = Math.max(0, Math.min(1, r.p + (open ? 1 : -1) * Math.min(0.1, dt) / 1.2));
-  r.pivot.rotation.x = r.angle * ease(r.p);
+  for (const pv of r.pivots) pv.rotation.x = r.angle * ease(r.p);
 }
 /** Lage des Kanzelglases im Schiff (Schiffskoordinaten: Nase −Z, oben +Y) und wie weit sie offen ist; null = keine Kanzel */
 export function kanzelInfo(root: THREE.Object3D): { box: THREE.Box3; p: number } | null { const r = kRig(root); return r ? { box: r.box, p: r.p } : null; }
@@ -312,7 +366,7 @@ export function kanzelInfo(root: THREE.Object3D): { box: THREE.Box3; p: number }
 /** tiefster Punkt des Fahrwerks (ausgefahren) in Schiffskoordinaten, als positive Höhe über dem Boden; null = Modell ohne Fahrwerk */
 export function fahrwerkTiefe(root: THREE.Object3D): number | null {
   if (root.userData.fwTiefe !== undefined) return root.userData.fwTiefe;
-  const list: THREE.Mesh[] = []; root.traverse((o: any) => { if (o.isMesh && o.material?.name === 'gear') list.push(o); });
+  const list: THREE.Mesh[] = []; root.traverse((o: any) => { if (o.isMesh && (o.material?.name === 'gear' || /\|fw/.test(o.material?.name || '')) && !o.parent?.name?.startsWith('Gelenk')) list.push(o); });
   if (!list.length) return (root.userData.fwTiefe = null);
   root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(); let y = 0;

@@ -88,7 +88,7 @@ export const ORT_STATION: Record<string, string[]> = {
 export const STORY: Record<string, string[]> = {
   prolog: [
     'Bald ist deine Vereidigung, oder? Achterberg wird dich nicht schonen.',
-    'Erster Flug? Atme ruhig. Die Venom verzeiht mehr, als man denkt.',
+    'Erster Flug? Atme ruhig. Der Milan verzeiht mehr, als man denkt.',
     'Wenn du den Eid sprichst, sprich ihn laut. Hollweg hört genau hin.',
     'Neue Piloten erkennt man daran, dass sie zu oft aus dem Fenster schauen.',
   ],
@@ -208,7 +208,7 @@ export const GRUPPE = [
   '… und dann sagt sie: Das ist kein Erz, das ist Schlacke.',
   '… drei Tage ohne Schlaf, und die Pumpe läuft immer noch nicht.',
   '… ich sag dir, der Rat wartet, bis es zu spät ist.',
-  '… nein, die Venom ist kein Anfängerschiff. Die ist nur ehrlich.',
+  '… nein, der Milan ist kein Anfängerschiff. Der ist nur ehrlich.',
   '… wenn die Gilde das Ferrit kriegt, steigen die Preise. Wart’s ab.',
   '… und mein Kleiner fragt, ob die Ferrox auch Kinder haben.',
   '… achtunddreißig Jahre, und wir reden immer noch über die Altwelten.',

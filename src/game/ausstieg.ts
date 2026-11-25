@@ -6,7 +6,7 @@ import { kanzelInfo } from '../models/gltfShips';
 
 // =====================================================================================
 // Ausstiege der Schiffe (seit 2026-11-25, Konzept docs/konzept-schiffe-fracht.md, Schritt 2)
-//  - kanzel: Jäger (Venom, Würger) und Elster. Die Kanzel klappt auf (gltfShips.ts setKanzel), am Planeten hängt eine Bordleiter vom
+//  - kanzel: Jäger (Milan, Würger) und Elster. Die Kanzel klappt auf (gltfShips.ts setKanzel), am Planeten hängt eine Bordleiter vom
 //    Kanzelrand zum Boden; man steigt an ihrem Fuß aus und dort wieder ein. Im All stößt man sich aus der offenen Kanzel ab.
 //  - rampe: Kormoran und Wisent (bewegliche Heckrampe). Im All wird zuerst der Laderaum leer gepumpt (eva.ts), dann öffnet die Rampe.
 //  - heck: alle übrigen (Pfeil): hinter dem Schiff wie bisher.

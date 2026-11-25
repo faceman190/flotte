@@ -16,7 +16,7 @@ import { SF } from './schnellflug';
 // Akademie-Übungsgelände in Heimstatt (Phase 2, docs/heimstatt.md): 12 km nordöstlich der Bastion.
 //  · Leitstand (Außenposten-Modell, nicht andockbar)
 //  · Ringparcours: zwölf Ringe als Rundkurs. Durch den Startring fliegen startet die Uhr, der letzte Durchflug ist wieder der Startring.
-//  · Schießstand: ausgemusterte Venoms als ferngesteuerte Zieldrohnen. Der erste Treffer startet die Übung, zwölf Abschüsse beenden sie.
+//  · Schießstand: ausgemusterte Milane als ferngesteuerte Zieldrohnen. Der erste Treffer startet die Übung, zwölf Abschüsse beenden sie.
 // Beides läuft nur beim eigenen Piloten (Mehrspieler: jeder fliegt für sich). Bestzeiten und Abzeichen im Spielstand (P.akademie),
 // Lohn einmal je Abzeichen (Bronze, Silber, Gold). Keine Gefahr: Die Drohnen schießen nicht zurück.
 // =====================================================================================
@@ -148,7 +148,7 @@ function frameSolids(p: THREE.Vector3, q: THREE.Quaternion) {
 }
 
 function makeDrone(i: number): Drone {
-  const sm = buildShipModel('venom', 'Red');
+  const sm = buildShipModel('milan', 'Red');
   for (const o of sm.glows) o.visible = true;
   sm.shield.visible = false;
   const mats: THREE.MeshStandardMaterial[] = [];

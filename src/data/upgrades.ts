@@ -17,6 +17,6 @@ export const UPG = {
 export type UpgId = keyof typeof UPG;
 export const UPG_IDS = Object.keys(UPG) as UpgId[];
 export const MAXLV = 8;
-export const upCost = (l: number, cls: ShipId = 'venom') => Math.round(120 * Math.pow(1.55, l) * SHIPS[cls].upMul / 10) * 10;
+export const upCost = (l: number, cls: ShipId = 'milan') => Math.round(120 * Math.pow(1.55, l) * SHIPS[cls].upMul / 10) * 10;
 // Ausbauten, die für eine Klasse Sinn ergeben
 export const upgFor = (cls: ShipId) => UPG_IDS.filter(k => k !== 'laser' || SHIPS[cls].laser > 0);

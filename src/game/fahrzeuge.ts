@@ -1,7 +1,7 @@
 // Fahrzeuge, die zu den Schiffen passen (seit 2026-11-25, Konzept docs/konzept-schiffe-fracht.md, Schritt 1).
 //
 // Jedes Bodenfahrzeug hat Maße, jedes Schiff mit Laderaum ein Tor und Stellplätze. Ein Fahrzeug passt, wenn es durchs Tor geht (Breite mit
-// 0,3 m Luft je Seite, Höhe mit 0,1 m Luft) und auf einen Stellplatz. Jäger (Venom, Würger) und die Elster tragen keins.
+// 0,3 m Luft je Seite, Höhe mit 0,1 m Luft) und auf einen Stellplatz. Jäger (Milan, Würger) und die Elster tragen keins.
 // Wo ein eigenes Fahrzeug ist, steht in P.fzOrt: 'sh:<uid>' an Bord des Schiffs mit dieser Nummer, 'st:<Station>' in deren Fahrzeughalle, 'pl:<Sektor>' draußen abgestellt (Lage in P.fzPark).
 // Ausgesetzt wird beim Landen nur, was an Bord des aktiven Schiffs steht. An jeder Planetenbasis stellt die Fahrzeughalle einen Leihrover
 // „Dachs“ aufs Landefeld; er bleibt auf dem Planeten (beim Abheben fährt ihn die Basis zurück in die Halle). Abseits der Basen und ohne

@@ -438,12 +438,13 @@ function drawRadar() {
 // ---------- Schiffsanzeige (unten rechts) ----------
 // Draufsicht-Silhouetten je Schiffsklasse (Bug oben). body = Hauptformen, eng = Triebwerke, s = Maßstab
 export const SIL: Record<string, { s: number; body: number[][][]; lite?: number[][][]; eng: number[][]; guns: number[][] }> = {
-  // Venom (Startschiff) und Ersatz für Klassen ohne eigene Silhouette
-  venom: {
-    s: 2.8,
-    body: [[[0, -19], [2.2, -13], [4.2, -4], [5, 10], [4, 15], [-4, 15], [-5, 10], [-4.2, -4], [-2.2, -13]],
-      [[-4, -3], [-19, 8], [-20, 12], [-16, 13], [-5, 11]], [[4, -3], [19, 8], [20, 12], [16, 13], [5, 11]]],
-    eng: [[-2.4, 15], [2.4, 15]], guns: [[-1.4, -17], [1.4, -17]],
+  // Milan (Startschiff, eigenes Modell; Maße in Metern aus mil-anker.json) und Ersatz für Klassen ohne eigene Silhouette: Rumpf, Flügel mit Wurzelleiste
+  milan: {
+    s: 4.6,
+    body: [[[0, -7.47], [0.34, -7.02], [0.56, -6.32], [0.7, -5.12], [0.85, -3.92], [0.99, -2.52], [1.22, -1.12], [1.56, 0.28], [1.79, 1.88], [1.8, 3.68], [1.68, 5.28], [1.52, 6.38], [1.31, 7.23], [-1.31, 7.23], [-1.52, 6.38], [-1.68, 5.28], [-1.8, 3.68], [-1.79, 1.88], [-1.56, 0.28], [-1.22, -1.12], [-0.99, -2.52], [-0.85, -3.92], [-0.7, -5.12], [-0.56, -6.32], [-0.34, -7.02]],
+      [[0.88, -3.32], [1.18, -2.12], [1.45, -0.92], [1.62, 0.17], [5.55, 3.18], [5.55, 4.98], [1.5, 5.33], [0.9, 5.33]], [[-0.88, -3.32], [-0.9, 5.33], [-1.5, 5.33], [-5.55, 4.98], [-5.55, 3.18], [-1.62, 0.17], [-1.45, -0.92], [-1.18, -2.12]]],
+    lite: [[[0, -4.57], [0.4, -4.1], [0.6, -3.3], [0.64, -2.5], [0.55, -1.6], [0.3, -1.1], [-0.3, -1.1], [-0.55, -1.6], [-0.64, -2.5], [-0.6, -3.3], [-0.4, -4.1]]],
+    eng: [[-0.8, 7.83], [0.8, 7.83]], guns: [[-1.04, -2.6], [1.04, -2.6]],
   },
   // Elster (eigenes Modell, Fassung 2, rund): Maße in Metern, Rumpf, Gondeln, Erzkanister
   elster: {
@@ -504,7 +505,7 @@ function drawShipPanel() {
   arc(r, hf, G.dead ? '#5a5246' : hullCol(hf), 3);
   ux.lineCap = 'butt';
   // Umriss (füllt den inneren Kreis)
-  const sil = SIL[P.cls] || SIL.venom, s = sil.s * 0.6;
+  const sil = SIL[P.cls] || SIL.milan, s = sil.s * 0.6;
   const hit = G.sinceHit < 0.25 && !G.dead, col = G.dead ? '#5a5246' : hit ? '#ffffff' : hullCol(hf);
   const Pth = (pts: number[][]) => { ux.beginPath(); pts.forEach(([x, y], i) => (i ? ux.lineTo(x * s, y * s) : ux.moveTo(x * s, y * s))); ux.closePath(); };
   for (const poly of sil.lite || []) { Pth(poly); ux.fillStyle = col + '1c'; ux.fill(); ux.strokeStyle = col + '80'; ux.lineWidth = 1; ux.stroke(); }

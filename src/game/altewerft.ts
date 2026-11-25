@@ -154,7 +154,7 @@ function build(id: string) {
   world.solids.push({ x: W.x + ap.x, y: W.y + ap.y, z: W.z + ap.z, R: adm.R, sph: adm.sph.map(([x, y, z, rr]: number[]) => { const v = new THREE.Vector3(x, y, z).applyAxisAngle(Y, 2.2); return [v.x, v.y, v.z, rr]; }) });
   spots.push(ap.clone().add(new THREE.Vector3(0, -150, 170)));
   // treibende Wracks, drehen sich kaum merklich
-  const drifters: ShipId[] = ['venom', 'venom', 'wuerger', 'kormoran', 'elster'];
+  const drifters: ShipId[] = ['milan', 'milan', 'wuerger', 'kormoran', 'elster'];
   drifters.forEach((cls, i) => {
     const a = i / drifters.length * Math.PI * 2 + r() * 0.6, d = 300 + r() * 550;
     const o = hulk(cls); o.position.set(Math.cos(a) * d, (r() - 0.5) * 220, Math.sin(a) * d); o.rotation.set(r() * 6.28, r() * 6.28, r() * 6.28); root.add(o);

@@ -122,10 +122,13 @@ export function kistenLeeren() { while (KISTEN.length) weg(KISTEN.length - 1); }
 
 // ---------- Laden ----------
 const _v = new THREE.Vector3();
-/** Ladepunkt in der Welt: Spitze der Heckrampe (Kormoran, Wisent), sonst die Frachtklappe unter dem Heck */
+// Schiffe mit eigener Frachtklappe (Schiffskoordinaten, Nase −Z): Milan – Heckklappe des Frachtfachs im Rückengrat (mil-gelenke.json)
+const KLAPPE: Record<string, [number, number, number]> = { milan: [0, 1.11, 8.28] };
+export const hatKlappe = () => !!KLAPPE[P.cls];
+/** Ladepunkt in der Welt: Spitze der Heckrampe (Kormoran, Wisent), eigene Frachtklappe (Milan), sonst die Frachtklappe unter dem Heck */
 export function ladePunkt(out = _v) {
-  const R = raum(), r = stats().radius;
-  if (R) out.set(0, R.rampe.y1 + 0.5, R.rampe.z1 + 1); else out.set(0, -r * 0.25, r * 0.45);
+  const R = raum(), r = stats().radius, k = KLAPPE[P.cls];
+  if (R) out.set(0, R.rampe.y1 + 0.5, R.rampe.z1 + 1); else if (k) out.set(k[0], k[1], k[2]); else out.set(0, -r * 0.25, r * 0.45);
   SHIP.g.updateMatrixWorld(); return SHIP.g.localToWorld(out);
 }
 /** Kiste in den Frachtraum: passt sie (Art und Platz)? Gibt den Grund zurück, wenn nicht */
@@ -194,7 +197,7 @@ export function updateKisten(dt: number) {
       const zug = k.art === 'container' ? Math.min(7, 1.5 + d * 0.3) : Math.min(14, 2 + d * 0.5);      // schwere Stücke langsamer
       const kk = Math.min(1, dt * 2.5);
       k.vx += (dx / d * zug + P.vx - k.vx) * kk; k.vy += (dy / d * zug + P.vy - k.vy) * kk; k.vz += (dz / d * zug + P.vz - k.vz) * kk;
-      TRAKTOR.offen = !!raum() && d < 120;      // Rampe öffnet, wenn die Kiste naht
+      TRAKTOR.offen = (!!raum() || hatKlappe()) && d < 120;      // Rampe bzw. Heckklappe öffnet, wenn die Kiste naht
       strahlZeigen(lp, k);
       if (d < MODELL[k.art].r + 2.2) { burst(k.x, k.y, k.z, '#9fe0ff', 10, 6, 0.4); einladen(k); ziel = null; }
     } else strahlZeigen(null);

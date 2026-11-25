@@ -112,7 +112,7 @@ function onMsg(m: any) {
     r.name = m.name; r.s = m.s || 0; r.m = m.m; r.w = Array.isArray(m.w) ? m.w : null; r.d = m.d || ''; r.g = Array.isArray(m.g) ? m.g.map(String) : null;
     if (m.p?.length === 3) r.tp.set(m.p[0], m.p[1], m.p[2]);
     if (m.q?.length === 4) r.tq.set(m.q[0], m.q[1], m.q[2], m.q[3]).normalize();
-    const cls = SHIPS[m.cls as ShipId] ? m.cls : 'venom';
+    const cls = SHIPS[m.cls as ShipId] ? m.cls : 'milan';      // ältere Fassungen (Venom) und Unbekanntes: das Startschiff
     if (!r.ship || r.cls !== cls || r.paint !== m.paint) {
       if (r.ship) disposeObj(r.ship.g);
       r.cls = cls; r.paint = m.paint;
@@ -230,7 +230,7 @@ export function netUpdate(dt: number) {
     else if (boden && r.ls) { ship.g.position.set(r.ls[0], r.ls[1], r.ls[2]); ship.g.rotation.set(0, r.ls[3], 0); }
     // bewegliche Teile: wie beim Piloten selbst (z), ältere Fassungen ohne z: am Boden Fahrwerk aus und Rampe offen
     const z = r.z ?? ((boden ? 3 : 0) | (r.m === 'eva' ? 2 : 0));
-    setGear(ship.g, !!(z & 1)); setDoors(ship.g, !!(z & 2), dt); setKanzel(ship.g, !!(z & 4), dt);
+    setGear(ship.g, !!(z & 1), dt); setDoors(ship.g, !!(z & 2), dt); setKanzel(ship.g, !!(z & 4), dt);
     leiterSetzen(r.leiter || (r.leiter = { g: null }), !!(z & 8) && boden && !!r.ls, r.ls ? { x: r.ls[0], y: r.ls[1], z: r.ls[2], yaw: r.ls[3] } : undefined, ship.g);
     for (const gl of ship.glows) { gl.visible = r.m === 'schiff'; gl.scale.setScalar((gl.userData.base || 1) * (0.5 + Math.min(1, r.s / 200) * 1.3)); }      // Triebwerke nur im Flug
     if (r.vv) driveRemoteRover(r, dt, k);

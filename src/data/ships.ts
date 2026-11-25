@@ -15,10 +15,12 @@ export interface ShipClass {
 }
 
 export const SHIPS = {
-  venom: {
-    n: 'Venom', role: 'Abfangjäger', price: 0, desc: 'Schlanker Abfangjäger der Bastion: schnell, wendig, zwei Triebwerke. Das Schiff, auf dem jeder Pilot anfängt.',
-    hull: 110, shield: 45, speed: 285, acc: 520, turn: 1, cargo: 32, ammo: 300, rockets: 4, dmg: 1,
-    laser: 1, beams: 1, laserRange: 220, heat: 1, scan: 1300, charges: 0, drones: 0, radius: 7, camUp: 8, camBack: 28, upMul: 1, col: 0x6fbf3a, model: 'Venom', len: 18,
+  // Eigenes Modell (asset-src/neu/milan, Blender-Skripte, docs/milan.md): 15,8 × 11,6 × 4,3 m, einsitziger leichter Jäger mit Blasenkanzel,
+  // Seiteneinläufen, einziehbarem Fahrwerk, Bordleiter und Frachtfach für eine Normkiste im Rückengrat. Startschiff seit 2026-11-25 (ersetzt die Venom).
+  milan: {
+    n: 'Milan', role: 'Leichter Jäger', price: 0, desc: 'Leichter Jäger der Bastion: wendig, zwei Kanonen, zwei Flugkörper, ein Werkzeuglaser unter dem Kinn und ein Frachtfach für eine Normkiste. Das Schiff, auf dem jeder Pilot anfängt.',
+    hull: 115, shield: 45, speed: 290, acc: 530, turn: 1.05, cargo: 10, ammo: 300, rockets: 2, dmg: 1,
+    laser: 1, beams: 1, laserRange: 220, heat: 1, scan: 1300, charges: 0, drones: 0, radius: 6.5, camUp: 6, camBack: 23, upMul: 1, col: 0xd8892a, model: 'Milan', len: 15.82,
   },
   // Eigenes Modell (asset-src/neu/elster, Blender-Skripte, docs/elster.md), Fassung 2: 23,1 × 8,5 × 6,6 m, runder Rumpf mit Glaskuppel, Kugel-
   // Bergbaulaser unter dem Kinn, vier Erzkanister in Rundklammern, Manteltriebwerke; Fernmodell ElsterFern
@@ -54,9 +56,11 @@ export const SHIPS = {
   },
 } satisfies Record<string, ShipClass>;
 export type ShipId = keyof typeof SHIPS;
-// Seit 2026-11-18 entfernt (Fremdmodelle aus dem alten Gratis-Paket): Spielstände mit diesen Klassen bekommen eine Venom und den Kaufpreis zurück (state.ts loadGame)
+// Seit 2026-11-18 entfernt (Fremdmodelle aus dem alten Gratis-Paket), seit 2026-11-25 auch die Venom (gekauftes Modell, ersetzt durch den Milan):
+// Spielstände mit diesen Klassen bekommen das Startschiff und den Kaufpreis zurück (state.ts loadGame)
+export const STARTER = 'milan' as const;
 export const RETIRED: Record<string, { n: string; price: number }> = {
-  falke: { n: 'Falke', price: 0 }, habicht: { n: 'Habicht', price: 9500 }, maulwurf: { n: 'Maulwurf', price: 14000 }, kaerrner: { n: 'Kärrner', price: 8000 },
+  falke: { n: 'Falke', price: 0 }, habicht: { n: 'Habicht', price: 9500 }, maulwurf: { n: 'Maulwurf', price: 14000 }, kaerrner: { n: 'Kärrner', price: 8000 }, venom: { n: 'Venom', price: 0 },
 };
 // Kleine Flieger (unter 30 m) haben keinen begehbaren Innenraum: man steigt ein und fliegt los
 export const hasInterior = (cls: string) => ((SHIPS as any)[cls]?.len || 0) >= 30;
@@ -68,7 +72,7 @@ export type Up = Record<'guns' | 'rate' | 'hull' | 'shield' | 'mag' | 'engine' |
 // Zuschläge der eingebauten Module als Anteil (0,1 = +10 %), siehe game/inventory.ts shipMods
 export interface ShipMods { dmg?: number; rate?: number; hull?: number; shield?: number; speed?: number; turn?: number; cargo?: number; laser?: number; scan?: number }
 export function computeStats(cls: ShipId, u: Up, m: ShipMods = {}) {
-  const c: ShipClass = SHIPS[cls] || SHIPS.venom;
+  const c: ShipClass = SHIPS[cls] || SHIPS.milan;
   const f = (k: keyof ShipMods) => 1 + (m[k] || 0);
   return {
     cls: c,

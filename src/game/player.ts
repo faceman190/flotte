@@ -20,8 +20,8 @@ import { updateSchnellflug, SF, schnellflugHit } from './schnellflug';
 import { TESTF } from './testflags';
 
 // Das Modell des aktiven Schiffs (wird beim Umsteigen ausgetauscht)
-export let SHIP: ShipModel = buildShipModel('venom');
-let shipKey = 'venom:Orange:proc';
+export let SHIP: ShipModel = buildShipModel('milan');
+let shipKey = 'milan:Orange:proc';
 SHIP.g.visible = false;
 scene.add(SHIP.g);
 export function setShipModel(cls: ShipId, paint: Paint = 'Orange', force = false) {

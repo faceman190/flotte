@@ -59,7 +59,7 @@ import { openChat } from './ui/mp';
 const openMap = () => openBand('karte'), closeMap = closeBand;
 import { menuHooks, showMainMenu, hideMainMenu, showPause, hidePause, applySettings, pauseSubOpen, closePauseSub } from './ui/menus';
 import { SECTOR, FACTION } from './data/galaxy';
-import { loadShipModels, setGear, setDoors, setKanzel, kanzelInfo, RAMP, type Paint } from './models/gltfShips';
+import { loadShipModels, setGear, setDoors, setKanzel, kanzelInfo, eigeneLeiter, RAMP, type Paint } from './models/gltfShips';
 import { leiterZeigen } from './game/ausstieg';
 import { laderaumUpdate, hatLaderaum } from './game/laderaum';
 import { updateKisten, TRAKTOR, kistenLeeren } from './game/kisten';
@@ -689,7 +689,7 @@ hooks.respawn = () => {
 // =============== Hauptmenü-Kulisse ===============
 function setupMenuScene() {
   hideMiningFx();
-  setShipModel('venom');
+  setShipModel('milan');
   buildSector('heimstatt');
   initTraffic();
   initAllies();
@@ -934,12 +934,12 @@ function loop(now: number, manual = false) {
     // Kanzel der Jäger und der Elster (ausstieg.ts): offen, solange der Pilot draußen ist (am Boden mit Bordleiter, im All beim Außenbord)
     updateKisten(dt);      // Kisten in der Welt, Traktorstrahl zur Rampe (kisten.ts)
     laderaumUpdate(ROVER.model?.g.parent && !ROVER.leih ? ROVER.kind : null);      // draußen = Modell steht in der Szene (auch während man an Bord ist)      // Kisten und Fahrzeug im Laderaum (laderaum.ts)
-    if (IN.active && BORD.aktiv) { syncShip(); folgeSchiff(); setGear(SHIP.g, false); setDoors(SHIP.g, false, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }      // im Flug an Bord: Schiff fliegt, Innenraum folgt
-    else if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); setDoors(SHIP.g, hangarGearDown() && RAMP.want, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }
-    else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); setDoors(SHIP.g, true, dt); setKanzel(SHIP.g, true, dt); leiterZeigen((kanzelInfo(SHIP.g)?.p || 0) > 0.6, ROVER.ship); }
+    if (IN.active && BORD.aktiv) { syncShip(); folgeSchiff(); setGear(SHIP.g, false, dt); setDoors(SHIP.g, false, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }      // im Flug an Bord: Schiff fliegt, Innenraum folgt
+    else if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown(), dt); setDoors(SHIP.g, hangarGearDown() && RAMP.want, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }
+    else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true, dt); setDoors(SHIP.g, true, dt); setKanzel(SHIP.g, true, dt); leiterZeigen((kanzelInfo(SHIP.g)?.p || 0) > 0.6 && !eigeneLeiter(SHIP.g), ROVER.ship); }
     else {
       SHIP.g.visible = (G.mode === 'play' || G.mode === 'jump' || G.mode === 'pause' || G.mode === 'entry' || G.mode === 'eva') && !G.dead;
-      setGear(SHIP.g, G.mode === 'entry');   // im Flug eingezogen, beim Landeanflug ausgefahren
+      setGear(SHIP.g, G.mode === 'entry', dt);   // im Flug eingezogen, beim Landeanflug ausgefahren (Milan: fährt aus und ein)
       const draussen = G.mode === 'eva' || (G.mode === 'pause' && EVA.active);
       setDoors(SHIP.g, (draussen && EVA.pump <= 0) || TRAKTOR.offen, dt);      // Außenbord: Heckrampe offen, sobald der Laderaum leer gepumpt ist; Traktorstrahl: offen, wenn eine Kiste naht
       setKanzel(SHIP.g, draussen, dt); leiterZeigen(false);
@@ -1010,7 +1010,7 @@ Promise.all([loadShipModels().catch(() => false), loadStationModels().catch(() =
   // Hintergrund-Pakete gleich auspacken, solange der Ladebildschirm steht. Was beim ersten Besuch noch aus dem Netz kommt, wartet nicht länger als 6 s.
   const bg = Promise.all([hangarBgLoad().catch(() => false), loadDeck('eisenkrone').catch(() => false), loadDeck('pumpwerk').catch(() => false), preloadMeshRooms(), preloadBases(), preloadCities()]).catch(() => false);
   setTimeout(preloadSfx, 1500);   // Schritte, Klicks, Türen (Klänge entpackt der Browser nebenher)
-  setShipModel('venom', 'Orange', true);
+  setShipModel('milan', 'Orange', true);
   showMainMenu();
   setupMenuScene();
   // Shader der Menüszene übersetzen (der Browser macht das nebenher), dann ein paar Bilder hinter dem Ladebildschirm zeichnen

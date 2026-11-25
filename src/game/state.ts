@@ -1,6 +1,6 @@
 import { ITEM_IDS, type ItemId } from '../data/items';
 import { UPG_IDS, type UpgId } from '../data/upgrades';
-import { SHIPS, RETIRED, computeStats, type ShipId, type Up } from '../data/ships';
+import { SHIPS, RETIRED, computeStats, type ShipId, type Up , STARTER } from '../data/ships';
 import type { GearSlot, ShipSlot } from '../data/gear';
 import { sanitizeInv, shipMods, type InvItem } from './inventory';
 
@@ -105,8 +105,8 @@ export function newPlayer(name: string): Player {
     sector: 'heimstatt', x: 0, y: 0, z: 0, yaw: 0, pitch: 0, vx: 0, vy: 0, vz: 0,
     home: { sector: 'heimstatt', station: 'bastion' }, visited: ['heimstatt'], route: null, kills: 0, earned: 0, playtime: 0,
     tool: 'guns', mined: 0, market: {}, contracts: [], cctr: {},
-    // Startschiff: Venom
-    cls: 'venom', shipName: 'Venom', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2, rep: {}, missions: [], story: { prolog: 'done' },
+    // Startschiff: Milan (seit 2026-11-25; vorher die Venom)
+    cls: 'milan', shipName: 'Milan', uid: 1, charges: 0, dronesOn: true, paint: 'Orange', fleet: [], storage: {}, nextUid: 2, rep: {}, missions: [], story: { prolog: 'done' },
     inv: [], gear: { waffe: 'waffe_smg' }, locker: [], shipGear: {}, look: { kopf: 6, farbe: 0 }, figur: 1,   // Startwaffe: SMG (seit 2026-11-19); Kleidung: keine, nur der Körper im Unteranzug (seit 2026-11-24)
   };
 }
@@ -159,7 +159,7 @@ export function loadGame(): Player | null {
   } catch (e) { return null; }
 }
 
-// Entfernte Schiffsklassen (data/ships.ts RETIRED): Das Schiff wird zur Venom, der Kaufpreis kommt aufs Konto. Ausbaustufen und Module bleiben,
+// Entfernte Schiffsklassen (data/ships.ts RETIRED): Das Schiff wird zum Startschiff (Milan), der Kaufpreis kommt aufs Konto. Ausbaustufen und Module bleiben,
 // Ladung über dem neuen Frachtraum geht ins Lager der Station (aktives Schiff: Heimatstation). Hinweis für den Funk in retireNote.
 export let retireNote = '';
 function retireShips(p: Player) {
@@ -169,7 +169,7 @@ function retireShips(p: Player) {
     const old = RETIRED[cls] || { n: cls, price: 0 };
     refund += old.price;
     out.push(name && name !== old.n ? `${old.n} „${name}“` : old.n);
-    const cap = computeStats('venom', up as Up, shipMods(gear)).cargo;
+    const cap = computeStats(STARTER, up as Up, shipMods(gear)).cargo;
     let used = ITEM_IDS.reduce((a, k) => a + cargo[k], 0);
     for (const k of ITEM_IDS) {
       if (used <= cap) break;
@@ -177,24 +177,24 @@ function retireShips(p: Player) {
       cargo[k] -= m; used -= m; moved = true;
       (p.storage[station] = p.storage[station] || {})[k] = (p.storage[station][k] || 0) + m;
     }
-    return name && name !== old.n ? name : SHIPS.venom.n;
+    return name && name !== old.n ? name : SHIPS[STARTER].n;
   };
   if (!SHIPS[p.cls]) {
     p.shipName = swap(p.cls, p.shipName, p.cargo, p.up, p.shipGear, p.home.station);
-    p.cls = 'venom'; p.paint = 'Orange';
-    const st = computeStats('venom', p.up as Up, shipMods(p.shipGear));
+    p.cls = STARTER; p.paint = 'Orange';
+    const st = computeStats(STARTER, p.up as Up, shipMods(p.shipGear));
     p.hull = Math.min(p.hull, st.maxHull); p.shield = Math.min(p.shield, st.maxShield); p.ammo = Math.min(p.ammo, st.maxAmmo); p.rockets = Math.min(p.rockets, st.maxRockets); p.charges = 0;
     if (p.tool !== 'guns') p.tool = 'laser';
   }
   for (const r of p.fleet) {
     if (SHIPS[r.cls]) continue;
     r.name = swap(r.cls, r.name, r.cargo, r.up, r.gear, r.loc.station);
-    r.cls = 'venom'; r.paint = 'Orange';
-    const st = computeStats('venom', r.up as Up, shipMods(r.gear));
+    r.cls = STARTER; r.paint = 'Orange';
+    const st = computeStats(STARTER, r.up as Up, shipMods(r.gear));
     r.hull = Math.min(r.hull, st.maxHull); r.ammo = Math.min(r.ammo, st.maxAmmo); r.rockets = Math.min(r.rockets, st.maxRockets); r.charges = 0;
   }
   p.credits += refund;
-  retireNote = out.length ? [`Werft der Bastion: ${out.join(', ')} ${out.length > 1 ? 'wurden' : 'wurde'} außer Dienst gestellt und durch eine Venom ersetzt.`,
+  retireNote = out.length ? [`Werft der Bastion: ${out.join(', ')} ${out.length > 1 ? 'wurden' : 'wurde'} außer Dienst gestellt und durch einen Milan ersetzt.`,
     refund ? `Erstattet: ${refund.toLocaleString('de-DE')} Cr.` : '', moved ? 'Ladung, die nicht mehr passte, liegt im Stationslager.' : ''].filter(Boolean).join(' ') : '';
 }
 
