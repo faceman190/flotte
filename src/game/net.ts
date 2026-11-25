@@ -20,7 +20,7 @@ import { coopNet, coopReceive } from './coop';
 import { setFieldMates } from './fieldfight';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { SHIPS, type ShipId } from '../data/ships';
-import type { Paint } from '../models/gltfShips';
+import { setGear, setDoors, type Paint } from '../models/gltfShips';
 import { radio } from '../ui/radio';
 import { quartierHooks, einladungAn, dekoAusNetz, ortKennung, nrText } from './quartier';
 
@@ -38,6 +38,7 @@ export interface Remote {
   id: number; name: string; cls: string; paint: string; m: string; s: number; w: any[] | null; d: string; g: string[] | null;   // g: Aussehen zu Fuß [Helm, Anzug, Rucksack, Waffe]   // d: Station, an der er angedockt ist   // w: zu Fuß in einer Station [Station, x, z, Blick]
   ship: ShipModel | null; rover: THREE.Group | null;
   rv?: RoverNeu | null; rk?: string; vv?: (string | number)[] | null;      // Bodenfahrzeug aus Blender (Art, Lage, Tempo, Lenkung; seit 2026-11-24)
+  ls?: number[] | null;      // gelandetes Schiff [x, y, z, Kurs] (seit 2026-11-25)
   tp: THREE.Vector3; tq: THREE.Quaternion; seen: number; fig?: RemoteFig;   // fig: Figur zu Fuß auf dem Planeten
 }
 export const remotes = new Map<number, Remote>();
@@ -117,6 +118,7 @@ function onMsg(m: any) {
       scene.add(r.ship.g);
     }
     r.vv = Array.isArray(m.v) && m.v.length === 10 ? m.v : null;
+    r.ls = Array.isArray(m.ls) && m.ls.length === 4 ? m.ls.map(Number) : null;
     if (r.m === 'rover' && !r.rover && !r.vv) { r.rover = buildRover('dachs').g; r.rover.position.copy(r.tp); scene.add(r.rover); }      // ältere Fassung ohne Fahrzeugdaten
     r.seen = performance.now();
   } else if (m.t === 'leave') {
@@ -166,8 +168,12 @@ function myState() {
   if (DUN.active) { footObj.position.set(DUN.x, 0, DUN.z); footObj.rotation.set(0, DUN.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'mine' }; }
   if (FOOT.active && !IN.active) { footObj.position.set(FOOT.x, FOOT.y, FOOT.z);   // zu Fuß (aus dem Rover oder direkt aus dem Schiff)
     footObj.rotation.set(0, FOOT.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'fuss' }; }
+  // an Bord des eigenen Schiffs (seit 2026-11-25): im Flug fliegt es weiter (Autopilot), gelandet steht es da – für die anderen bleibt es sichtbar
+  if (IN.active && IN.ship?.ctx === 'flug') return { o: SHIP.g, m: 'schiff' };
+  if (IN.active && IN.ship?.ctx === 'planet') return { o: SHIP.g, m: 'bord' };
   if (IN.active || G.dockedAt) return { o: SHIP.g, m: 'innen' };
   if (ROVER.active && ROVER.model) return { o: ROVER.model.g, m: 'rover' };
+  if (ROVER.active && world.surface) return { o: SHIP.g, m: 'bord' };      // gelandet ohne Fahrzeug und nicht zu Fuß: Schiff steht, Pilot unsichtbar
   return { o: SHIP.g, m: 'schiff' };
 }
 // Eigenen Stand senden: eigener Takt (10× pro Sekunde), unabhängig vom Bildaufbau.
@@ -187,8 +193,10 @@ function sendState() {
   // Bodenfahrzeug: Art, Tempo, Lenkung, Lage und Drehung des Modells (auch wenn der Pilot daneben zu Fuß ist)
   const rm = world.surface && ROVER.active && ROVER.model ? ROVER.model.g : null;
   const v = rm ? [ROVER.kind, ROVER.speed, ROVER.steer, rm.position.x, rm.position.y, rm.position.z, rm.quaternion.x, rm.quaternion.y, rm.quaternion.z, rm.quaternion.w] : undefined;
+  // Lage des gelandeten Schiffs: zu Fuß, im Fahrzeug, an Bord oder in der Mine auf dem Planeten
+  const ls = world.surface && (ROVER.active || DUN.active || s.m === 'bord' || s.m === 'fuss') ? [ROVER.ship.x, ROVER.ship.y, ROVER.ship.z, ROVER.ship.yaw] : undefined;
   const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe), netFlags(), lookToNet(), String(P.figur ?? 1), gr.weste || '', gr.handschuh || '', gr.stiefel || ''];
-  sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g, v });
+  sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g, v, ls });
 }
 setInterval(sendState, 100);
 export function netUpdate(dt: number) {
@@ -208,13 +216,14 @@ export function netUpdate(dt: number) {
   const k = Math.min(1, dt * 8), now = performance.now();
   for (const r of [...remotes.values()]) {
     if (now - r.seen > 6000) { removeRemote(r.id); continue; }   // lange nichts gehört
-    const ship = r.ship!, onShip = r.m === 'schiff';
-    ship.g.visible = onShip || r.m === 'rover';   // im Rover-Modus steht das Schiff gelandet daneben (letzter Stand)
+    const ship = r.ship!, onShip = r.m === 'schiff', boden = r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord';
+    ship.g.visible = onShip || boden;   // am Boden steht das Schiff gelandet da (Lage aus ls, ältere Fassungen: letzter Stand im Flug)
     if (onShip) { ship.g.position.lerp(r.tp, k); ship.g.quaternion.slerp(r.tq, k); }
-    for (const gl of ship.glows) gl.scale.setScalar((gl.userData.base || 1) * (0.5 + Math.min(1, r.s / 200) * 1.3) * (onShip ? 1 : 0.4));
+    else if (boden && r.ls) { ship.g.position.set(r.ls[0], r.ls[1], r.ls[2]); ship.g.rotation.set(0, r.ls[3], 0); }
+    setGear(ship.g, boden); setDoors(ship.g, boden, dt);      // gelandet: Fahrwerk aus, Rampe offen (wie beim eigenen Schiff)
+    for (const gl of ship.glows) { gl.visible = onShip; gl.scale.setScalar((gl.userData.base || 1) * (0.5 + Math.min(1, r.s / 200) * 1.3)); }      // Triebwerke nur im Flug
     if (r.vv) driveRemoteRover(r, dt, k);
     else if (r.rover) { r.rover.visible = r.m === 'rover' || r.m === 'fuss'; if (r.m === 'rover') { r.rover.position.lerp(r.tp, k); r.rover.quaternion.slerp(r.tq, k); } }
-    if (r.m === 'fuss' || r.m === 'rover' || r.m === 'mine') ship.g.visible = true;   // Schiff bleibt gelandet stehen
     // zu Fuß auf dem Planeten: Soldat mit Laufclips
     if (r.m === 'fuss') {
       const f = r.fig || (r.fig = newRemoteFig()), ng = gearFromNet(r.g);
