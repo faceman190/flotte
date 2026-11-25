@@ -63,6 +63,8 @@ import { loadShipModels, setGear, setDoors, setKanzel, kanzelInfo, RAMP, type Pa
 import { leiterZeigen } from './game/ausstieg';
 import { laderaumUpdate, hatLaderaum } from './game/laderaum';
 import { updateKisten, TRAKTOR, kistenLeeren } from './game/kisten';
+import { INNEN } from './models/innenFlaeche';
+import { schiffslicht } from './models/gltfShips';
 import { BORD, aufstehen, updateBordflug, zumSteuer, ausBord } from './game/bordflug';
 import { anBordStellen } from './game/fahrzeuge';
 import { hasInterior, SHIPS } from './data/ships';
@@ -941,9 +943,12 @@ function loop(now: number, manual = false) {
       const draussen = G.mode === 'eva' || (G.mode === 'pause' && EVA.active);
       setDoors(SHIP.g, (draussen && EVA.pump <= 0) || TRAKTOR.offen, dt);      // Außenbord: Heckrampe offen, sobald der Laderaum leer gepumpt ist; Traktorstrahl: offen, wenn eine Kiste naht
       setKanzel(SHIP.g, draussen, dt); leiterZeigen(false);
+      for (const g2 of SHIP.glows) g2.visible = !draussen;      // im Flug an (am Boden aus: syncLandedShip; Außenbord aus)
       if (SHIP.g.visible) syncShip();
     }
     setDustVisible(!IN.active);
+    INNEN.amb.value = IN.active ? 1 : 0.45;      // Schiffsinnenräume von draußen: weniger Umgebungslicht (innenFlaeche.ts)
+    schiffslicht(IN.active || !world.surface ? 1 : 0.6);      // Leuchten der Schiffe auf Planeten draußen gedämpft (gltfShips.ts)
     updateCamera(dt);
     shadowSweep -= dt;
     if (shadowSweep <= 0) { shadowSweep = 0.4; markShadows(scene, sky); }

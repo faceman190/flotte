@@ -8,11 +8,13 @@ import { l2Noise } from '../core/rauschen';
 // Welche Materialien: Der Export hängt Innenraum-Materialien eine Kennung an („… ~iw“ Wand, „~ib“ Boden, „~ig“ Gitter, „~im“ Metall;
 // asset-src/neu/kormoran/kor_export.py, asset-src/neu/wisent/wis_export.py). Ein Shader je Art (gemeinsam für alle Materialien).
 export type InnenArt = 'w' | 'b' | 'g' | 'm';
-export const INNEN = { k: { value: 1 } };      // Stärke (0 = aus); zum Vergleichen in der Konsole: window.__innenK.value = 0
+export const INNEN = { k: { value: 1 }, amb: { value: 1 } };      // k: Stärke (0 = aus); zum Vergleichen in der Konsole: window.__innenK.value = 0
+// amb (seit 2026-11-25): Anteil des Umgebungslichts (Grundlicht, Himmel, Spiegelung). Von draußen gesehen bekam der offene Laderaum das volle
+// Tageslicht und leuchtete weiß aus der Rampe; drinnen steht 1 (main.ts setzt es jedes Bild: an Bord 1, sonst AMB_DRAUSSEN).
 (window as any).__innenK = INNEN.k;
 const VERT_PARS = 'varying vec3 vIfP; varying vec3 vIfN;';
 const VERT = '#include <begin_vertex>\nvIfP = position * length(modelMatrix[0].xyz); vIfN = normal;';
-const FRAG_PARS = `uniform sampler2D ifNA; uniform float ifK; varying vec3 vIfP; varying vec3 vIfN;
+const FRAG_PARS = `uniform sampler2D ifNA; uniform float ifK; uniform float ifAmb; varying vec3 vIfP; varying vec3 vIfN;
 vec2 ifUvOf(vec3 p, vec3 n) { vec3 a = abs(n); return a.y > 0.6 ? p.xz : (a.x > a.z ? p.zy : p.xy); }
 float ifN(vec2 q, int c) { vec4 t = texture2D(ifNA, q); return c == 0 ? t.r : (c == 1 ? t.g : t.b); }`;
 function colour(art: InnenArt) {
@@ -58,10 +60,11 @@ export function innenArt(name: string): InnenArt | null { const m = / ~i([wbgm])
 export function innenFlaeche(m: THREE.MeshStandardMaterial, art: InnenArt) {
   const [nA] = l2Noise();
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.ifNA = { value: nA }; sh.uniforms.ifK = INNEN.k;
+    sh.uniforms.ifNA = { value: nA }; sh.uniforms.ifK = INNEN.k; sh.uniforms.ifAmb = INNEN.amb;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_PARS).replace('#include <begin_vertex>', VERT);
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + FRAG_PARS)
-      .replace('#include <color_fragment>', colour(art)).replace('#include <roughnessmap_fragment>', ROUGH).replace('#include <normal_fragment_maps>', NORMAL);
+      .replace('#include <color_fragment>', colour(art)).replace('#include <roughnessmap_fragment>', ROUGH).replace('#include <normal_fragment_maps>', NORMAL)
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= ifAmb; reflectedLight.indirectSpecular *= ifAmb;');
   };
   m.customProgramCacheKey = () => 'innen-' + art;
 }

@@ -5,6 +5,31 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
+// ---------- Fester Lichtsatz (seit 2026-11-25) ----------
+// three baut die Zahl der Lampen fest in jeden Shader ein: Ein Material bei 4 Punktlichtern ist ein anderes Programm als bei 12. Jede
+// Lage brachte eigene Lampen mit (All 3, Planet 4, Schiffsinnenraum 12 und ein Himmelslicht, Deck 9 Strahler), also musste beim Wechsel
+// jedes beleuchtete Material neu übersetzt werden – das waren die Hänger beim Einsteigen und Landen. Jetzt wird jede Szene vor dem Zeichnen
+// mit Platzhaltern (Stärke 0) auf dieselbe Zahl aufgefüllt; die Shader bleiben gleich, egal wo man ist. Braucht eine Lage einmal mehr
+// Lampen, wächst die Grenze für den Rest der Sitzung mit (einmal neu übersetzen, danach wieder fest).
+// Alle Lampen merken: Object3D.add wird einmal umgelegt (auch ganze Gruppen, die Lampen enthalten, und geladene Modelle).
+const LIT = new Set<THREE.Light>();
+const _add = THREE.Object3D.prototype.add;
+THREE.Object3D.prototype.add = function (this: THREE.Object3D, ...objs: THREE.Object3D[]) {
+  for (const o of objs) {
+    if (!o || o.userData?.lichtsatz) continue;
+    if ((o as any).isLight) LIT.add(o as THREE.Light);
+    else if (o.children?.length) o.traverse(c => { if ((c as any).isLight && !c.userData.lichtsatz) LIT.add(c as THREE.Light); });
+  }
+  return _add.apply(this, objs as any);
+} as any;
+// Damit die Platzhalter (und Lampen außer Reichweite) nichts kosten: three rechnet die Lichtformel für jede Lampe, auch wenn ihr Licht hier
+// null ist. directLight.visible ist genau dann falsch (Farbe null, außerhalb von Reichweite oder Kegel) – dann wird sie übersprungen.
+// Das Ergebnis bleibt Bildpunkt für Bildpunkt gleich, weil eine Lampe mit Farbe null nichts beiträgt.
+THREE.ShaderChunk.lights_fragment_begin = THREE.ShaderChunk.lights_fragment_begin.replace(
+  /(\n\s*)RE_Direct\( directLight, /g, '$1if ( directLight.visible ) RE_Direct( directLight, ');
+/** Grenzen des Lichtsatzes (wachsen bei Bedarf); spot/spotSh gelten in Szenen mit Strahlern (Decks), sonst 1 Strahler ohne Schatten */
+export const LICHTSATZ = { point: 16, spot: 9, spotSh: 6, hemi: 1, zuViel: 0 };      // 16 Punktlichter: die Mine braucht bis zu 15
+
 // Farbverwaltung: Farben und Texturen in sRGB, Licht wird linear gerechnet, am Ende Filmkurve (ACES)
 THREE.ColorManagement.enabled = true;
 
@@ -82,7 +107,9 @@ try {
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
   composer.addPass(new ShaderPass(Guard));
-  bloomPass = new UnrealBloomPass(new THREE.Vector2(view.W, view.H), 0.5, 0.45, 0.82);
+  // Seit 2026-11-25 schwächer und erst ab Helligkeit 1,0 (vorher 0,5 / 0,45 / 0,82): Leuchtflächen der Schiffe und Decks liegen bei 2 bis 4,5
+  // und bekamen große Höfe, das blendete (Nutzer). Bildschirme bleiben weiter unter der Schwelle (deck.ts GLOW_MAX).
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(view.W, view.H), 0.36, 0.4, 1.0);
   composer.addPass(bloomPass);
   vignettePass = new ShaderPass(Vignette);
   composer.addPass(vignettePass);
@@ -92,11 +119,18 @@ try {
   composer = null;
 }
 // Schatten der Sonne um einen Punkt legen (Spieler, Rover); size = halbe Kantenlänge des Schattenbereichs
+// Der Sonnenschatten bleibt immer eingeschaltet (Lichtsatz: Ein- und Ausschalten bräuchte neue Shader). „Aus“ heißt seit 2026-11-25: Der
+// Schattenbereich liegt 500 km tiefer, wird einmal leer gezeichnet und ruht dann; alles im Bild liegt außerhalb und wird nicht abgetastet.
+let sunPark = false;
 export function aimShadows(x: number, y: number, z: number, dir: THREE.Vector3, size: number, on: boolean) {
-  sun.castShadow = on && view.hiQ;
-  sun.target.position.set(x, y, z);
-  sun.position.set(x + dir.x * 1200, y + dir.y * 1200, z + dir.z * 1200);
-  if (!sun.castShadow) return;
+  sun.castShadow = view.hiQ;
+  const live = on && view.hiQ, py = live ? y : y - 5e5;
+  sun.target.position.set(x, py, z);
+  sun.position.set(x + dir.x * 1200, py + dir.y * 1200, z + dir.z * 1200);
+  if (!view.hiQ) return;
+  sun.shadow.intensity = live ? 1 : 0;
+  if (live) { sun.shadow.autoUpdate = true; sunPark = false; }
+  else if (!sunPark) { sunPark = true; sun.shadow.autoUpdate = false; sun.shadow.needsUpdate = true; }
   const c = sun.shadow.camera as THREE.OrthographicCamera;
   if (c.right !== size) { c.left = -size; c.right = size; c.top = size; c.bottom = -size; c.updateProjectionMatrix(); }
 }
@@ -142,7 +176,7 @@ function renderBody() {
   // Waffe ungleichmäßig und flackernd; der Körper bekommt dort ein eigenes Licht (dungeon.ts).
   if (now - bodyLightT > 400) { bodyLightT = now; scene.traverse(o => { if ((o as any).isLight) { if (o.userData.noBody) o.layers.disable(BODY_LAYER); else o.layers.enable(BODY_LAYER); } }); }
   const n = camera.near, f = camera.far, mask = camera.layers.mask, bg = scene.background, au = renderer.shadowMap.autoUpdate, mw = scene.matrixWorldAutoUpdate;
-  camera.near = bodyPass.near; camera.far = bodyPass.far; camera.layers.set(BODY_LAYER); camera.updateProjectionMatrix();
+  camera.near = bodyPass.near; camera.far = bodyPass.far; camera.layers.set(BODY_LAYER); camera.updateProjectionMatrix(); padLights(camera);
   scene.background = null; renderer.shadowMap.autoUpdate = false; scene.matrixWorldAutoUpdate = false;      // Himmel nicht noch einmal, Schatten und Lagen vom Hauptbild
   renderer.autoClear = false; renderer.setRenderTarget(null); renderer.clearDepth();
   try { renderer.render(scene, camera); }
@@ -187,6 +221,7 @@ export function uploadAll(root: THREE.Object3D) {
   try { renderer.setRenderTarget(UP_RT); renderer.render(sc, camera); } catch (e) { console.warn('Formen vorab hochladen:', e); } finally { renderer.setRenderTarget(rt0); }
 }
 export function compileFor(root: THREE.Object3D, target: THREE.Scene | null = null, toTarget = view.hiQ && !!composer): Promise<void> {
+  padLights();
   const rt0 = renderer.getRenderTarget();
   let mats = new Set<THREE.Material>();
   try { if (toTarget) renderer.setRenderTarget(WARM_RT); mats = renderer.compile(root, camera, target as any) as any || mats; } catch (e) { console.warn('Shader vorab übersetzen:', e); }
@@ -261,7 +296,47 @@ export function warmScene(label: string, prime: null | (() => void) = null, maxM
  * Spielbild, das deshalb danach wieder hergestellt werden muss. Der Körper der Ich-Sicht bleibt, wie er im letzten Bild war.
  */
 export function renderStill() { bodyPass.on = bodyPass.was; render(); }
+// Lichtsatz auffüllen: vor jedem Zeichnen der Hauptszene, vor dem Körperbild der Ich-Sicht (andere Ebene) und vor dem Vorwärmen.
+// Gezählt wird, was three auch zählt: Lampen in der Szene, sichtbar entlang aller Eltern, auf einer Ebene der Kamera.
+const PADG = new THREE.Group(); PADG.name = 'Lichtsatz'; PADG.userData.lichtsatz = true;
+const pads = { d: [] as THREE.Light[], p: [] as THREE.Light[], s: [] as THREE.Light[], ss: [] as THREE.Light[], h: [] as THREE.Light[] };
+function fuellen(arr: THREE.Light[], n: number, mk: () => THREE.Light) {
+  while (arr.length < n) {
+    const l = mk(); l.userData.lichtsatz = true; l.intensity = 0; l.layers.enableAll(); l.position.set(0, -9e5, 0);
+    _add.call(PADG, l); arr.push(l);
+  }
+  for (let i = 0; i < arr.length; i++) arr[i].visible = i < n;
+}
+export function padLights(cam: THREE.Camera = camera) {
+  if (PADG.parent !== scene) _add.call(scene, PADG);
+  let d = 0, p = 0, s = 0, ss = 0, h = 0;
+  for (const l of LIT) {
+    let o: THREE.Object3D = l, vis = true;
+    for (;;) { if (!o.visible) vis = false; if (!o.parent) break; o = o.parent; }
+    if (o !== scene) { LIT.delete(l); continue; }      // nicht (mehr) in der Szene; beim nächsten add ist sie wieder dabei
+    if (!vis || !l.layers.test(cam.layers)) continue;
+    const a = l as any;
+    if (a.isPointLight) p++; else if (a.isSpotLight) { s++; if (l.castShadow) ss++; } else if (a.isHemisphereLight) h++; else if (a.isDirectionalLight) d++;
+  }
+  const L = LICHTSATZ, mehr = (was: string, n: number) => { L.zuViel++; console.info(`Lichtsatz: ${n} ${was}, Grenze wächst (einmal neue Shader)`); };
+  if (p > L.point) { mehr('Punktlichter', p); L.point = p; }
+  if (h > L.hemi) { mehr('Himmelslichter', h); L.hemi = h; }
+  let ts = 1, tss = 0;      // Szenen ohne Strahler (oder nur die Stirnlampe der Mine): ein Strahler ohne Schatten
+  if (s > 1 || ss > 0) {
+    if (ss > L.spotSh) { mehr('Strahler mit Schatten', ss); L.spotSh = ss; }
+    tss = L.spotSh;
+    if (s + tss - ss > L.spot) { mehr('Strahler', s + tss - ss); L.spot = s + tss - ss; }
+    ts = L.spot;
+  }
+  if (s > ts) ts = s;
+  fuellen(pads.d, Math.max(0, 2 - d), () => new THREE.DirectionalLight(0, 0));
+  fuellen(pads.p, L.point - p, () => new THREE.PointLight(0, 0, 1, 2));
+  fuellen(pads.ss, tss - ss, () => { const l = new THREE.SpotLight(0, 0, 1, 0.5); l.castShadow = true; l.shadow.mapSize.set(16, 16); l.shadow.autoUpdate = false; l.shadow.needsUpdate = true; return l; });
+  fuellen(pads.s, ts - s - (tss - ss), () => new THREE.SpotLight(0, 0, 1, 0.5));
+  fuellen(pads.h, L.hemi - h, () => new THREE.HemisphereLight(0, 0, 0));
+}
 export function render() {
+  padLights();
   if (prePass.fn) prePass.fn();
   if (vignettePass) vignettePass.uniforms.time.value = (performance.now() % 10000) / 1000;
   if (view.hiQ && composer) composer.render();

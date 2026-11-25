@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { innenArt, innenFlaeche } from './innenFlaeche';
+import { innenArt, innenFlaeche, INNEN } from './innenFlaeche';
 
 // Schiffsmodelle als komprimierte GLB-Dateien aus public/assets/ship (asset-src/glb/ship → build-assets.mjs).
 // Lackierungen (paint/<Modell>_<Farbe>) kamen aus dem alten Gratis-Paket, das 2026-11-18 entfernt wurde; die Mechanik bleibt für spätere Modelle.
@@ -30,6 +30,7 @@ export async function loadShipModels() {
         // Texturierte Modelle (Lackierungen) bekommen einheitliche Werte; Modelle mit eigenen Materialien behalten ihre
         if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = 4; m.map.needsUpdate = true; m.metalness = 0.35; m.roughness = 0.55; }
         m.envMapIntensity = 0.8;
+        if (m.emissive && m.emissive.getHex() !== 0) { m.userData.em0 = m.emissiveIntensity; SCHIFFSLICHT.mats.add(m); }
         if (m.name.startsWith('ext_pan')) panelShader(m);
         const art = innenArt(m.name); if (art) innenFlaeche(m, art);      // Innenräume (Kormoran, Wisent): Oberfläche im Shader
       });
@@ -93,13 +94,25 @@ const PANEL_NORMAL = /* glsl */ `
   vec3 r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1) * faceDirection;
   vec3 grad = sign(det) * (pdH.x * r1 + pdH.y * r2); normal = normalize(abs(det) * normal - grad); }
 `;
+// ext_pan_innen (Wände der Laderäume) bekommt wie die Innenraum-Materialien weniger Umgebungslicht, solange man draußen steht (INNEN.amb)
 function panelShader(m: THREE.MeshStandardMaterial) {
+  const innen = m.name === 'ext_pan_innen';
   m.onBeforeCompile = (sh) => {
+    if (innen) sh.uniforms.ifAmb = INNEN.amb;
     sh.vertexShader = 'varying vec2 vPan;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\nvPan = uv;');
     sh.fragmentShader = PANEL_PARS + sh.fragmentShader.replace('#include <color_fragment>', PANEL_COLOR)
       .replace('#include <roughnessmap_fragment>', PANEL_ROUGH).replace('#include <normal_fragment_maps>', PANEL_NORMAL);
+    if (innen) sh.fragmentShader = 'uniform float ifAmb;\n' + sh.fragmentShader.replace('#include <lights_fragment_end>',
+      '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= ifAmb; reflectedLight.indirectSpecular *= ifAmb;');
   };
-  m.customProgramCacheKey = () => 'platten';
+  m.customProgramCacheKey = () => innen ? 'platten-innen' : 'platten';
+}
+// Leuchtflächen der Schiffsmodelle (seit 2026-11-25): Auf Planeten draußen bei Tag schwächer (wie ein Auge, das sich ans Tageslicht gewöhnt
+// hat). Die Leuchten liegen bei 1,5 bis 3 und strahlten am Boden weiß aus Rampe und Laderaum (Nutzer: „Lichter blenden sehr stark“).
+export const SCHIFFSLICHT = { k: 1, mats: new Set<THREE.MeshStandardMaterial>() };
+export function schiffslicht(k: number) {
+  if (Math.abs(k - SCHIFFSLICHT.k) < 0.002) return;
+  SCHIFFSLICHT.k = k; for (const m of SCHIFFSLICHT.mats) m.emissiveIntensity = (m.userData.em0 ?? 1) * k;
 }
 export const hasPaint = (name: string, p: Paint) => p === 'Orange' || !!PAINT_TEX[`${name}_${p}`];
 

@@ -1044,7 +1044,7 @@ export function syncLandedShip() {
   SHIP.g.position.set(ROVER.ship.x, ROVER.ship.y, ROVER.ship.z);
   SHIP.g.rotation.set(0, ROVER.ship.yaw, 0);
   SHIP.g.visible = true;
-  for (const g2 of SHIP.glows) g2.scale.setScalar(0.6 * (g2.userData.base || 1));
+  for (const g2 of SHIP.glows) g2.visible = false;      // Triebwerke aus, solange das Schiff steht (wie im Hangar; ihr Schein blendete am Boden)
 }
 
 // Verfolgerkamera hinter dem Rover. Seit 2026-11-25: Die Kamera schwenkt der Drehung verzögert nach (FZ.camLag; in Drifts sieht man
