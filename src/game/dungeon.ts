@@ -16,7 +16,7 @@ import { PLANETS, PTYPE } from '../data/planets';
 import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, poseViewModel, type DroneVis, type ViewModel } from './mineArt';
 import { droneBark } from './barks';
 import { kitMaterials } from '../models/kit';
-import { onCoop, coopSend, coopNow, pack, CoopGroup } from './coop';
+import { onCoop, coopSend, coopNow, pack, CoopGroup, coopNet } from './coop';
 import { gunReady, gunFired, gunUpdate, GUN, AIM, aimUpdate, aimFov, aimShake, aimK, gunSpread, gunFalloff, camShake, hurtSound, noteKill, whiz } from './footgun';
 import { drawFootRing, drawPrompt, drawFootCross } from '../ui/footHud';
 import { throwGrenade, updateGrenades } from './granate';
@@ -46,7 +46,7 @@ type Vec2 = [number, number];
 interface Entrance { id: string; x: number; y: number; z: number; yaw: number; size: number; name: string; kind?: 'wrack' | 'archiv' | 'schiff'; danger?: number; note?: () => string; goal?: { label: string; got: () => boolean; take: () => void } }
 export type DungeonEntrance = Entrance;
 interface Crate { tx: number; tz: number; g: THREE.Group; lid: THREE.Object3D; open: boolean; big: boolean; idx: number; a: number; med?: boolean }
-interface Foe { id: number; nx?: number; nz?: number; x: number; z: number; y: number; hp: number; max: number; g: THREE.Group; eye: THREE.MeshBasicMaterial; boss: boolean; cool: number; aim: number; alert: boolean; tx: number; tz: number; ph: number; hit: number; vis?: DroneVis | null; atk?: number }
+interface Foe { id: number; nx?: number; nz?: number; x: number; z: number; y: number; hp: number; max: number; g: THREE.Group; eye: THREE.MeshBasicMaterial; boss: boolean; cool: number; aim: number; alert: boolean; tx: number; tz: number; ph: number; hit: number; vis?: DroneVis | null; atk?: number; lh?: number; km?: boolean }   // lh: Kennung des letzten Schützen (0 = ich), km: der Gastgeber meldet den Abschuss als meinen
 interface Bolt { m: THREE.Object3D; x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; dmg: number; col: string; big: boolean }
 
 export const DUN = {
@@ -816,7 +816,7 @@ onCoop('mcr', m => { if (!sameMine(m)) return; const c = DUN.crates.find(q => q.
 onCoop('mh', m => {
   if (!sameMine(m) || !amHost(mates.keys())) return;
   const fo = DUN.foes.find(f => f.id === +m.i); if (!fo) return;
-  fo.hp -= clamp(+m.d || 0, 0, 200); fo.hit = 0.12;
+  fo.hp -= clamp(+m.d || 0, 0, 200); fo.hit = 0.12; fo.lh = +m.from || 0;
   if (!fo.alert) droneBark('alarm', Math.hypot(fo.x - DUN.x, fo.z - DUN.z)); fo.alert = true;
 });
 // Stand der Wächter vom Gastgeber
@@ -833,7 +833,10 @@ onCoop('mst', m => {
   }
   // beim Gastgeber nicht mehr vorhanden: zerstört (beim ersten Abgleich ohne Explosion – war schon vorher weg)
   for (const fo of DUN.foes) if (!seen.has(fo.id)) fo.hp = first ? -999 : Math.min(fo.hp, 0);
-  for (const ev of Array.isArray(m.ev) ? m.ev : []) if (ev[0] === 'b') spawnBolt(+ev[1], +ev[2], +ev[3], +ev[4], +ev[5], +ev[6], +ev[7], +ev[8]);
+  for (const ev of Array.isArray(m.ev) ? m.ev : []) {
+    if (ev[0] === 'b') spawnBolt(+ev[1], +ev[2], +ev[3], +ev[4], +ev[5], +ev[6], +ev[7], +ev[8]);
+    else if (ev[0] === 'k' && +ev[2] === coopNet.id) { const fo = DUN.foes.find(f => f.id === +ev[1]); if (fo) fo.km = true; }      // Abschuss gehört mir
+  }
 });
 
 // ---------- Betreten und Verlassen ----------
@@ -1043,7 +1046,7 @@ function shoot() {
     }
     const hp = cp.clone().addScaledVector(d, bt); end = hp;
     if (best && mates.size && !amHost(mates.keys())) { best.hit = 0.12; coopSend('mh', { e: DUN.e!.id, i: best.id, d: w.dmg }); impact(hp, d, 'metall'); G.hitMark = 0.12; }
-    else if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg * gunFalloff(bt); best.hit = 0.12; best.alert = true; impact(hp, d, 'metall'); G.hitMark = 0.12; }
+    else if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg * gunFalloff(bt); best.hit = 0.12; best.lh = 0; best.alert = true; impact(hp, d, 'metall'); G.hitMark = 0.12; }
     else impact(hp, d, 'boden', w.col);
     fxTracer(a, hp, w.col, w.n > 1 ? 0.04 : 0.065);                  // Leuchtspur je Kugel
   }
@@ -1058,7 +1061,7 @@ export function dungeonKey(code: string) {
         const d = Math.hypot(f.x - x, f.y - y, f.z - z); if (d > r) continue;
         const dm = dmg * (1 - 0.7 * d / r);
         if (mates.size && !amHost(mates.keys())) { f.hit = 0.12; coopSend('mh', { e: DUN.e!.id, i: f.id, d: dm }); }
-        else { f.hp -= dm; f.hit = 0.12; f.alert = true; G.hitMark = 0.12; }
+        else { f.hp -= dm; f.hit = 0.12; f.alert = true; f.lh = 0; G.hitMark = 0.12; }
       }
     } })) noteToss();
     return;
@@ -1161,7 +1164,10 @@ export function updateDungeon(dt: number) {
     const fo = DUN.foes[i];
     if (fo.hp <= -900) { group.remove(fo.g); DUN.foes.splice(i, 1); continue; }   // schon vorher zerstört (Abgleich)
     if (fo.hp <= 0) {
-      droneDeath(BASE.x + fo.x, BASE.y + fo.y, BASE.z + fo.z, () => BASE.y, !!fo.boss); noteKill();   // Blitz, Funken, Rauch, Trümmer (footfx.ts)
+      droneDeath(BASE.x + fo.x, BASE.y + fo.y, BASE.z + fo.z, () => BASE.y, !!fo.boss);
+      // Abschussmarke und Serie nur für den, der getroffen hat (2026-11-25: Mitspieler sahen fremde Abschüsse im Fadenkreuz)
+      if (client ? fo.km : !fo.lh) noteKill();
+      if (!client && mates.size) coEv.push(['k', fo.id, fo.lh || coopNet.id]);
       group.remove(fo.g); DUN.foes.splice(i, 1); DUN.kills++; droneBark('tot', Math.hypot(DUN.x - fo.x, DUN.z - fo.z));
       if (fo.boss) say(AR() ? 'Wächterkern zerstört. Der Speicherkern ist frei.' : WR() ? 'Wächterkern zerstört. Die Brücke ist frei.' : 'Wächterkern zerstört. Der Tresor ist frei.', '#ffb347');
       continue;

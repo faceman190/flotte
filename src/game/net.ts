@@ -3,7 +3,8 @@ import { scene } from '../core/engine';
 import { P, G, settings, saveGame, saveHooks, setSaveSlot, rawSave, writeRawSave, localSave } from './state';
 import { world, makeAst, removeAst, breakAst, astHooks, type Asteroid } from './world';
 import { crumble, blastAst, MINE } from './mining';
-import { burst } from './fx';
+import { burst, flash } from './fx';
+import { boltStyle } from './bolts';
 import { spawnEnemy, killEnemy, rewardKill, fireBullet, remoteTorp } from './combat';
 import { npcSnapshot, applyNpc, npcResync, npcBecameHost } from './npc';
 import { SHARED } from './shared';
@@ -11,16 +12,18 @@ import type { ItemId, RockKind } from '../data/items';
 import { SHIP } from './player';
 import { ROVER, buildRover } from './surface';
 import { buildFahrzeug, fzLaden, fzBereit, normFz, FZ, type FzId, type RoverNeu } from '../models/rover';
-import { IN, syncOtherPilots } from './interior';
+import { IN, syncOtherPilots, bordWelt, enterShip, interiorHooks, walkFree } from './interior';
+import { hasMeshRoom, meshRoomReady, loadMeshRoom } from './meshRoom';
 import { viewModelId } from './mineArt';
-import { FOOT } from './onfoot';
+import { FOOT, footTargets, footOff } from './onfoot';
 import { DUN, syncMinePilots } from './dungeon';
 import { newRemoteFig, driveRemote, dropRemote, gearFromNet, readNetFlags, netFlags, lookToNet, type RemoteFig } from './avatar';
-import { coopNet, coopReceive } from './coop';
+import { coopNet, coopReceive, onCoop, coopSend, pack } from './coop';
+import { Fahrer } from './fahrer';
 import { setFieldMates } from './fieldfight';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
-import { SHIPS, type ShipId } from '../data/ships';
-import { setGear, setDoors, setKanzel, type Paint } from '../models/gltfShips';
+import { SHIPS, hasInterior, type ShipId } from '../data/ships';
+import { setGear, setDoors, setKanzel, RAMP_ENTRY, type Paint } from '../models/gltfShips';
 import { LEITER, leiterSetzen } from './ausstieg';
 import { radio } from '../ui/radio';
 import { kistenAnNeue } from './kisten';
@@ -40,8 +43,8 @@ export const netHooks = { changed: () => {}, trade: (_m: any) => {}, lost: () =>
 export interface Remote {
   id: number; name: string; cls: string; paint: string; m: string; s: number; w: any[] | null; d: string; g: string[] | null;   // g: Aussehen zu Fuß [Helm, Anzug, Rucksack, Waffe]   // d: Station, an der er angedockt ist   // w: zu Fuß in einer Station [Station, x, z, Blick]
   ship: ShipModel | null; rover: THREE.Group | null;
-  rv?: RoverNeu | null; rk?: string; vv?: (string | number)[] | null;      // Bodenfahrzeug aus Blender (Art, Lage, Tempo, Lenkung; seit 2026-11-24)
-  ls?: number[] | null;      // gelandetes Schiff [x, y, z, Kurs] (seit 2026-11-25)
+  rv?: RoverNeu | null; rk?: string; vv?: (string | number)[] | null; fahrer?: Fahrer;      // fahrer: Sitzfigur im Wiesel (seit 2026-11-25)      // Bodenfahrzeug aus Blender (Art, Lage, Tempo, Lenkung; seit 2026-11-24)
+  ls?: number[] | null; dy?: number;      // gelandetes Schiff [x, y, z, Kurs] (seit 2026-11-25); dy: Unterschied der Bodenhöhe hier gegenüber dem Absender
   z?: number | null; leiter?: { g: THREE.Group | null };      // bewegliche Teile (Bits 1 Fahrwerk, 2 Rampe, 4 Kanzel, 8 Leiter) und die Leiter dazu
   tp: THREE.Vector3; tq: THREE.Quaternion; seen: number; fig?: RemoteFig;   // fig: Figur zu Fuß auf dem Planeten
 }
@@ -122,7 +125,11 @@ function onMsg(m: any) {
       scene.add(r.ship.g);
     }
     r.vv = Array.isArray(m.v) && m.v.length === 10 ? m.v : null;
-    r.ls = Array.isArray(m.ls) && m.ls.length === 4 ? m.ls.map(Number) : null;
+    // Gelandetes Schiff; fünfter Wert (seit 2026-11-25): Bodenhöhe unter der Mitte beim Absender. Hat dieser ein anderes Gelände (altes Gelände
+    // mit ?gelaende=alt gespeichert), steht das Schiff hier um den Unterschied verschoben auf dem eigenen Boden statt in der Luft oder darin.
+    const ls = Array.isArray(m.ls) && m.ls.length >= 4 ? m.ls.map(Number) : null;
+    r.dy = ls && ls.length === 5 && world.surface && world.ground && Number.isFinite(ls[4]) ? world.ground(ls[0], ls[2]) - ls[4] : 0;
+    r.ls = ls ? [ls[0], ls[1] + r.dy, ls[2], ls[3]] : null;
     r.z = typeof m.z === 'number' ? m.z : null;
     if (r.m === 'rover' && !r.rover && !r.vv) { r.rover = buildRover('dachs').g; r.rover.position.copy(r.tp); scene.add(r.rover); }      // ältere Fassung ohne Fahrzeugdaten
     r.seen = performance.now();
@@ -160,7 +167,7 @@ function onMsg(m: any) {
 quartierHooks.piloten = () => pilotsHere().map(r => ({ id: r.id, name: r.name }));
 quartierHooks.einladen = (id, deko) => { if (NET.status !== 'online') return false; sendMsg({ t: 'qi', to: id, deko }); return true; };
 function disposeObj(o: THREE.Object3D) { scene.remove(o); o.traverse((c: any) => { if (c.isMesh && !c.userData.shared) c.geometry?.dispose(); }); }
-function removeRemote(id: number) { const r = remotes.get(id); if (!r) return; r.leiter?.g?.removeFromParent(); if (r.fig) dropRemote(r.fig); if (r.ship) disposeObj(r.ship.g); if (r.rover) disposeObj(r.rover); remotes.delete(id); }
+function removeRemote(id: number) { const r = remotes.get(id); if (!r) return; r.leiter?.g?.removeFromParent(); r.fahrer?.frei(); if (r.fig) dropRemote(r.fig); if (r.ship) disposeObj(r.ship.g); if (r.rover) disposeObj(r.rover); remotes.delete(id); }
 function clearRemotes() { for (const id of [...remotes.keys()]) removeRemote(id); syncOtherPilots([]); }
 
 // Was gerade sichtbar ist: Schiff, Rover oder nichts (zu Fuß in der Station, angedockt)
@@ -195,12 +202,13 @@ function sendState() {
   // im Flug die Flugposition (das Modell wird nur beim Zeichnen nachgeführt), sonst die Lage des Modells
   const s = myState(), p = s.m === 'schiff' || s.m === 'eva' ? P : s.o.position, q = s.o.quaternion;
   // zu Fuß in einer Station (nicht im eigenen Schiff): Position im Stationsraum mitschicken
-  const w = s.m === 'eva' ? ['eva', EVA.x, EVA.y, EVA.z, EVA.yaw] : DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [ortKennung(IN.station.id), IN.x, IN.z, IN.yaw, IN.fy + IN.jy] : null;      // Station: fünfter Eintrag = Höhe (Rampen, Sprung)
+  const bw = s.m === 'bord' ? bordWelt() : null;      // an Bord eines gelandeten Schiffs (eigenes oder als Gast): Lage in der Welt
+  const w = bw ? ['bw', ...pack(bw.x, bw.y, bw.z, bw.yaw)] : s.m === 'eva' ? ['eva', EVA.x, EVA.y, EVA.z, EVA.yaw] : DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [ortKennung(IN.station.id), IN.x, IN.z, IN.yaw, IN.fy + IN.jy] : null;      // Station: fünfter Eintrag = Höhe (Rampen, Sprung)
   // Bodenfahrzeug: Art, Tempo, Lenkung, Lage und Drehung des Modells (auch wenn der Pilot daneben zu Fuß ist)
   const rm = world.surface && ROVER.active && ROVER.model ? ROVER.model.g : null;
   const v = rm ? [ROVER.kind, ROVER.speed, ROVER.steer, rm.position.x, rm.position.y, rm.position.z, rm.quaternion.x, rm.quaternion.y, rm.quaternion.z, rm.quaternion.w] : undefined;
   // Lage des gelandeten Schiffs: zu Fuß, im Fahrzeug, an Bord oder in der Mine auf dem Planeten
-  const ls = world.surface && (ROVER.active || DUN.active || s.m === 'bord' || s.m === 'fuss') ? [ROVER.ship.x, ROVER.ship.y, ROVER.ship.z, ROVER.ship.yaw] : undefined;
+  const ls = world.surface && (ROVER.active || DUN.active || s.m === 'bord' || s.m === 'fuss') ? [ROVER.ship.x, ROVER.ship.y, ROVER.ship.z, ROVER.ship.yaw, world.ground ? world.ground(ROVER.ship.x, ROVER.ship.z) : ROVER.ship.y] : undefined;
   const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe), netFlags(), lookToNet(), String(P.figur ?? 1), gr.weste || '', gr.handschuh || '', gr.stiefel || ''];
   sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g, v, ls, z: schiffsTeile() });
 }
@@ -235,16 +243,59 @@ export function netUpdate(dt: number) {
     for (const gl of ship.glows) { gl.visible = r.m === 'schiff'; gl.scale.setScalar((gl.userData.base || 1) * (0.5 + Math.min(1, r.s / 200) * 1.3)); }      // Triebwerke nur im Flug
     if (r.vv) driveRemoteRover(r, dt, k);
     else if (r.rover) { r.rover.visible = r.m === 'rover' || r.m === 'fuss'; if (r.m === 'rover') { r.rover.position.lerp(r.tp, k); r.rover.quaternion.slerp(r.tq, k); } }
-    // zu Fuß auf dem Planeten: Soldat mit Laufclips
-    const eva = r.m === 'eva' && !!r.w && r.w.length >= 5;
-    if (r.m === 'fuss' || eva) {
+    // zu Fuß auf dem Planeten: Soldat mit Laufclips; an Bord eines gelandeten Schiffs (bw): dieselbe Figur im Schiff
+    const eva = r.m === 'eva' && !!r.w && r.w.length >= 5, bw = r.m === 'bord' && r.w?.[0] === 'bw' && r.w.length >= 5;
+    if (r.m === 'fuss' || eva || bw) {
       const f = r.fig || (r.fig = newRemoteFig()), ng = gearFromNet(r.g);
       f.gear = ng.gear; f.wid = ng.wid; f.tracht = ng.tracht; readNetFlags(f, r.g?.[4]);
-      if (eva) { f.tx = +r.w![1]; f.ty = +r.w![2] - 1; f.tz = +r.w![3]; f.yaw = +r.w![4]; f.air = true; f.fire = 0; f.ohneWaffe = true; }      // Außenbord: schwebt (Haltung wie im Sprung), Füße einen Meter unter der Mitte
+      if (bw) { f.ohneWaffe = false; f.air = false; f.tx = +r.w![1]; f.ty = +r.w![2] + (r.dy || 0); f.tz = +r.w![3]; f.yaw = +r.w![4]; }
+      else if (eva) { f.tx = +r.w![1]; f.ty = +r.w![2] - 1; f.tz = +r.w![3]; f.yaw = +r.w![4]; f.air = true; f.fire = 0; f.ohneWaffe = true; }      // Außenbord: schwebt (Haltung wie im Sprung), Füße einen Meter unter der Mitte
       else { f.ohneWaffe = false; f.tx = r.tp.x; f.ty = r.tp.y; f.tz = r.tp.z; f.yaw = new THREE.Euler().setFromQuaternion(r.tq, 'YXZ').y; }
       driveRemote(scene, f, dt);
     } else if (r.fig) dropRemote(r.fig);
   }
+  gastZiele();
+}
+// =====================================================================================
+// Zu Gast an Bord (seit 2026-11-25): An der offenen Rampe eines gelandeten Kormoran oder Wisent eines Mitspielers steht ein Ziel [E].
+// Man betritt den Innenraum aus dem Modell (deckungsgleich im fremden Schiff), läuft herum, sieht den Besitzer, und geht über die Luke
+// wieder hinaus. Hebt der Besitzer ab oder geht er offline, steht man draußen.
+// =====================================================================================
+let gastLs: number[] | null = null, gastCls = '';
+const zuWelt = (ls: number[], lx: number, lz: number) => { const c = Math.cos(ls[3]), s = Math.sin(ls[3]); return { x: ls[0] + lx * c + lz * s, z: ls[2] - lx * s + lz * c }; };
+function gastEingang(cls: string, ls: number[]) {      // Fuß der Heckrampe (Wisent), sonst hinter dem Schiff
+  const e = RAMP_ENTRY[SHIPS[cls as ShipId]?.model || ''], len = SHIPS[cls as ShipId]?.len || 30;
+  return e ? { ...zuWelt(ls, 0, e.foot + 1.2), r: e.hw + 2.5, aus: e.foot + 3.5 } : { ...zuWelt(ls, 0, len * 0.5 + 2), r: 6, aus: len * 0.5 + 4 };
+}
+function gastZiele() {
+  for (let i = footTargets.length - 1; i >= 0; i--) if ((footTargets[i] as any).gast) footTargets.splice(i, 1);
+  if (IN.active && IN.ship?.gast) {      // Besitzer weg oder abgehoben: hinaus
+    const r = remotes.get(IN.ship.gast), boden = r && (r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord');
+    if (!r || !boden || !r.ls) { interiorHooks.gastRaus(); radio('SYSTEM', r ? 'Das Schiff hebt ab. Du stehst wieder draußen.' : 'Der Besitzer ist fort. Du stehst wieder draußen.'); }
+    return;
+  }
+  if (!world.surface || !FOOT.active) return;
+  for (const r of remotes.values()) {
+    if (!r.ls || !r.ship || !(r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord')) continue;
+    if (!hasInterior(r.cls) || !hasMeshRoom(r.cls) || !((r.z ?? 2) & 2)) continue;      // Innenraum aus dem Modell, Rampe offen
+    const e = gastEingang(r.cls, r.ls), ls = r.ls, rr = r;
+    footTargets.push(Object.assign({ x: e.x, z: e.z, r: e.r, label: `An Bord der ${SHIPS[r.cls as ShipId].n} von ${r.name} gehen`, act: () => gastRein(rr, ls) }, { gast: true }));
+  }
+}
+function gastRein(r: Remote, ls: number[]) {
+  if (!r.ship) return;
+  if (!meshRoomReady(r.cls)) { radio('SYSTEM', 'Der Innenraum wird geladen …'); void loadMeshRoom(r.cls); return; }
+  gastLs = [...ls]; gastCls = r.cls;
+  footOff(); ROVER.active = false; document.getElementById('hud')?.classList.add('hidden');
+  enterShip({ cls: r.cls, uid: -r.id, name: `${SHIPS[r.cls as ShipId].n} von ${r.name}`, ctx: 'planet', gast: r.id }, r.ship);
+  if (IN.ship?.gast) for (const d of [1.6, -1.6, 2.4, -2.4]) if (walkFree(IN.x + d, IN.z)) { IN.x += d; break; }      // nicht im Besitzer (gleicher Startpunkt) beginnen
+  radio(r.name, 'Willkommen an Bord.', '#7fe0a0');
+}
+/** wohin man als Gast hinausgeht (main.ts, interiorHooks.gastRaus): ans Ende der Rampe, Blick vom Schiff weg */
+export function gastAusstieg() {
+  const ls = gastLs; gastLs = null; if (!ls) return null;
+  const e = gastEingang(gastCls, ls), p = zuWelt(ls, 0, e.aus);
+  return { x: p.x, z: p.z, yaw: ls[3] + Math.PI };
 }
 // Bodenfahrzeug eines Mitspielers: das richtige Modell (Dachs oder Wiesel), weich nachgeführt, Räder drehen und lenken, Sensor dreht.
 // Solange das Modell lädt, steht nichts da (es kommt mit dem Hintergrund-Paket).
@@ -270,13 +321,16 @@ function driveRemoteRover(r: Remote, dt: number, k: number) {
     w.spin.rotation.x -= spd * dt / F.radR;
   }
   if (m.sensor) m.sensor.rotation.y += 2.2 * dt;
+  // Fahrer im offenen Wiesel: Sitzfigur mit seiner Tracht, solange er fährt (im Dachs sitzt er in der geschlossenen Kabine)
+  if (r.m === 'rover' && m.seat) (r.fahrer || (r.fahrer = new Fahrer(() => gearFromNet(r.g).tracht))).update(m, dt);
+  else r.fahrer?.zeigen(false);
   (m.beacon.material as THREE.SpriteMaterial).opacity = Math.sin(performance.now() / 160) > 0 ? 1 : 0.2;
 }
 // Für Anzeigen: wo sind die anderen gerade sichtbar?
 export function remoteMarkers() {
   const out: { name: string; x: number; y: number; z: number; m: string }[] = [];
   for (const r of remotes.values()) {
-    if ((r.m === 'fuss' || r.m === 'eva') && r.fig?.av) { out.push({ name: r.name, x: r.fig.x, y: r.fig.y + 1.6, z: r.fig.z, m: r.m }); continue; }
+    if ((r.m === 'fuss' || r.m === 'eva' || r.m === 'bord') && r.fig?.av) { out.push({ name: r.name, x: r.fig.x, y: r.fig.y + 1.6, z: r.fig.z, m: r.m }); continue; }
     const o = r.m === 'rover' && r.rover ? r.rover : r.ship?.g;
     if (!o || !o.visible) continue;
     out.push({ name: r.name, x: o.position.x, y: o.position.y, z: o.position.z, m: r.m });
@@ -292,7 +346,7 @@ export function remoteMarkers() {
 let hostId = 0, synced = false, nextAstId = 1;
 const KINDS: RockKind[] = ['metal', 'ice', 'crystal'];
 const goneAt = new Map<number, number>(), pendYld = new Map<number, number>();
-function leaveShared() { SHARED.online = false; SHARED.client = false; SHARED.pilots = []; SHARED.shots.length = 0; SHARED.ev.length = 0; SHARED.ashots.length = 0; hostId = 0; synced = false; foesSynced = false; npcResync(); }
+function leaveShared() { SHARED.pshots.length = 0; SHARED.online = false; SHARED.client = false; SHARED.pilots = []; SHARED.shots.length = 0; SHARED.ev.length = 0; SHARED.ashots.length = 0; hostId = 0; synced = false; foesSynced = false; npcResync(); }
 function updateRole() {
   const was = SHARED.client;
   SHARED.client = NET.status === 'online' && !!room && hostId !== 0 && hostId !== NET.id;
@@ -367,6 +421,27 @@ function applyAction(m: any) {
   else if (m.op === 'blast') blastAst(a, false);
 }
 SHARED.sendMarket = (st, k, n) => sendMsg({ t: 'mkt', st, k, n });
+
+// =====================================================================================
+// Schüsse der anderen Schiffe (seit 2026-11-25): jeder schickt seine eigenen Schüsse 10× pro Sekunde gebündelt an alle im Raum.
+// Bei den anderen fliegen sie als Geschoss ohne Schaden (Art 'q'): Treffer zeigen Funken, Schaden rechnet nur der Schütze.
+// =====================================================================================
+setInterval(() => {
+  if (!SHARED.pshots.length) return;
+  const l = SHARED.pshots.splice(0);
+  if (NET.status === 'online' && room && othersHere()) coopSend('ps', { r: room, l });
+}, 100);
+onCoop('ps', m => {
+  if (m.r !== room || !world.def || !Array.isArray(m.l)) return;
+  const r = remotes.get(+m.from); if (r && r.m !== 'schiff') return;
+  for (const e of m.l.slice(0, 60)) {
+    const [x, y, z, vx, vy, vz, life, bolt] = e; if (![x, y, z, vx, vy, vz].every(Number.isFinite)) continue;
+    const sp = Math.hypot(vx, vy, vz) || 1;
+    fireBullet(world.bullets, x, y, z, vx / sp, vy / sp, vz / sp, sp, Math.min(2, +life || 0.75), 0, 'q', { remote: true, bolt: String(bolt || 'p1') });
+    const bs = boltStyle(String(bolt));
+    if (bs.muzzle) flash(x + vx / sp * 1.5, y + vy / sp * 1.5, z + vz / sp * 1.5, '#' + bs.halo.toString(16).padStart(6, '0'), bs.muzzle, 0.05);
+  }
+});
 
 // =====================================================================================
 // Gemeinsame Welt: Ferrox

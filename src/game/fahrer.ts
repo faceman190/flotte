@@ -11,10 +11,42 @@ import { figTracht } from './avatar';
 // Sichtbar nur, solange der Pilot fährt (onfoot.ts: leaveRover/enterRover → fahrerZeigen).
 // =====================================================================================
 
-let sk: THREE.Object3D | null = null, fig: Figur | null = null, loading = false, holder: THREE.Group | null = null, host: object | null = null;
-let posed = false, shown = true, dressT = 0;
-const rest = new Map<THREE.Object3D, THREE.Quaternion>();      // Ruhelage der Knochen (vor dem ersten Einsetzen), damit jedes Einsetzen gleich ausfällt
-export const FAHRER = { get bereit() { return posed; } };
+// Seit 2026-11-25 eine Klasse: dieselbe Sitzfigur auch für Mitspieler im Wiesel (net.ts), mit deren Tracht.
+type Tracht = ReturnType<typeof figTracht>;
+type Sitz = { body: THREE.Object3D; seat: THREE.Vector3 | null; wheel: THREE.Vector3 | null; neu: boolean };
+export class Fahrer {
+  sk: THREE.Object3D | null = null; fig: Figur | null = null; loading = false; holder: THREE.Group | null = null; host: object | null = null;
+  posed = false; shown = true; dressT = 0; dead = false;
+  rest = new Map<THREE.Object3D, THREE.Quaternion>();      // Ruhelage der Knochen (vor dem ersten Einsetzen), damit jedes Einsetzen gleich ausfällt
+  constructor(public tracht: () => Tracht) {}
+  /** jedes Bild: Figur laden, an den Sitz hängen, einmal in Sitzhaltung bringen */
+  update(m: Sitz, dt: number) {
+    if (!m.neu || !m.seat || !m.wheel) { if (this.holder) this.weg(); return; }
+    if (!this.sk) {
+      if (!this.loading) {
+        this.loading = true;
+        neuesSkelett().then(s => {
+          this.loading = false; if (!s || this.dead) return;
+          this.sk = s; this.fig = new Figur(s); this.fig.setzen(this.tracht());
+          for (const b of Object.values(this.fig.bones)) this.rest.set(b, b.quaternion.clone());
+        }).catch(() => { this.loading = false; });
+      }
+      return;
+    }
+    if (this.host !== m) {
+      this.holder?.removeFromParent(); this.holder = new THREE.Group(); this.holder.add(this.sk); m.body.add(this.holder); this.host = m; this.posed = false;
+    }
+    if ((this.dressT -= dt) <= 0) { this.dressT = 1; this.fig!.setzen(this.tracht()); }      // Ausrüstung gewechselt? (billig, wenn gleich)
+    if (!this.posed && this.fig!.bereit) this.posed = pose(this, m.body, m.seat, m.wheel);
+    this.shown = true; this.holder!.visible = this.posed;
+  }
+  zeigen(on: boolean) { this.shown = on; if (this.holder) this.holder.visible = this.posed && on; }
+  weg() { this.holder?.removeFromParent(); this.holder = null; this.host = null; this.posed = false; }
+  /** ganz weg (Mitspieler hat den Raum verlassen) */
+  frei() { this.weg(); this.dead = true; }
+}
+const ICH = new Fahrer(() => figTracht());
+export const FAHRER = { get bereit() { return ICH.posed; } };
 
 const V = () => new THREE.Vector3(), Q = () => new THREE.Quaternion();
 const wp = (o: THREE.Object3D) => o.getWorldPosition(V());
@@ -37,11 +69,12 @@ function ik2(a: THREE.Object3D, b: THREE.Object3D, c: THREE.Object3D, target: TH
   aim(b, wp(c), target);
 }
 
-function pose(body: THREE.Object3D, seat: THREE.Vector3, wheel: THREE.Vector3) {
+function pose(f: Fahrer, body: THREE.Object3D, seat: THREE.Vector3, wheel: THREE.Vector3) {
+  const sk = f.sk, fig = f.fig;
   if (!sk || !fig) return false;
   const bn = fig.bones, need = ['pelvis', 'spine_01', 'neck_01', 'thigh_l', 'calf_l', 'foot_l', 'thigh_r', 'calf_r', 'foot_r', 'upperarm_l', 'lowerarm_l', 'hand_l', 'upperarm_r', 'lowerarm_r', 'hand_r', 'ball_l'];
   if (need.some(n => !bn[n])) { console.warn('Fahrer: Knochen fehlen', need.filter(n => !bn[n])); return false; }
-  for (const [b, q] of rest) b.quaternion.copy(q);
+  for (const [b, q] of f.rest) b.quaternion.copy(q);
   body.updateMatrixWorld(true);
   const L = (x: number, y: number, z: number) => body.localToWorld(new THREE.Vector3(x, y, z));      // Punkt im Buggy → Welt
   const D = (x: number, y: number, z: number) => L(x, y, z).sub(L(0, 0, 0)).normalize();            // Richtung im Buggy → Welt
@@ -69,28 +102,9 @@ function pose(body: THREE.Object3D, seat: THREE.Vector3, wheel: THREE.Vector3) {
   return true;
 }
 
-/** im Buggy jedes Bild (surface.ts updateRover): Figur laden, an den Sitz hängen, einmal in Sitzhaltung bringen */
-export function updateFahrer(m: { body: THREE.Object3D; seat: THREE.Vector3 | null; wheel: THREE.Vector3 | null; neu: boolean }, dt: number) {
-  if (!m.neu || !m.seat || !m.wheel) { if (holder) fahrerWeg(); return; }
-  if (!sk) {
-    if (!loading) {
-      loading = true;
-      neuesSkelett().then(s => {
-        loading = false; if (!s) return;
-        sk = s; fig = new Figur(s); fig.setzen(figTracht());
-        for (const b of Object.values(fig.bones)) rest.set(b, b.quaternion.clone());
-      }).catch(() => { loading = false; });
-    }
-    return;
-  }
-  if (host !== m) {
-    holder?.removeFromParent(); holder = new THREE.Group(); holder.add(sk); m.body.add(holder); host = m; posed = false;
-  }
-  if ((dressT -= dt) <= 0) { dressT = 1; fig!.setzen(figTracht()); }      // Ausrüstung gewechselt? (billig, wenn gleich)
-  if (!posed && fig!.bereit) posed = pose(m.body, m.seat, m.wheel);
-  shown = true; holder!.visible = posed;      // updateRover läuft nur, solange der Pilot fährt
-}
+/** im Buggy jedes Bild (surface.ts updateRover) */
+export function updateFahrer(m: Sitz, dt: number) { ICH.update(m, dt); }      // updateRover läuft nur, solange der Pilot fährt
 /** Pilot steigt aus (false) oder ein (true) */
-export function fahrerZeigen(on: boolean) { shown = on; if (holder) holder.visible = posed && on; }
+export function fahrerZeigen(on: boolean) { ICH.zeigen(on); }
 /** Buggy weg (eingeladen, getauscht, Planet verlassen): Figur abhängen, sie bleibt für das nächste Mal geladen */
-export function fahrerWeg() { holder?.removeFromParent(); holder = null; host = null; posed = false; }
+export function fahrerWeg() { ICH.weg(); }

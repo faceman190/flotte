@@ -12,6 +12,7 @@ import { flightMax, P, G, stats, cargoUsed, settings } from './state';
 import { world, SECTOR_RADIUS, SECTOR_HEIGHT, decoNear, shatterDeco } from './world';
 import { burst, puff, sparks, flash, shieldRipple, followRipples } from './fx';
 import { fireBullet, launchRocket } from './combat';
+import { SHARED } from './shared';
 import { playerBolt, BOLTS } from './bolts';
 import { gearDef } from '../data/gear';
 import { radio } from '../ui/radio';
@@ -282,6 +283,7 @@ export function updatePlayer(dt: number) {
         const gx = P.x + _v.x, gy = P.y + _v.y, gz = P.z + _v.z;
         const b = fireBullet(world.bullets, gx, gy, gz, dir.x + rand(-0.006, 0.006), dir.y + rand(-0.006, 0.006), dir.z + rand(-0.006, 0.006), 1400 * (bs.speed || 1), 0.75 / (bs.speed || 1), st.dmg, 'p', { bolt });   // schnellere Geschosse fliegen gleich weit
         b.vx += P.vx * 0.5; b.vy += P.vy * 0.5; b.vz += P.vz * 0.5;
+        if (SHARED.online && SHARED.pshots.length < 60) SHARED.pshots.push([Math.round(gx * 10) / 10, Math.round(gy * 10) / 10, Math.round(gz * 10) / 10, Math.round(b.vx), Math.round(b.vy), Math.round(b.vz), b.life, bolt]);   // für die Mitspieler
         if (bs.muzzle) flash(gx + f.x * 1.5, gy + f.y * 1.5, gz + f.z * 1.5, '#' + bs.halo.toString(16).padStart(6, '0'), bs.muzzle, 0.05);
       }
       P.ammo--;

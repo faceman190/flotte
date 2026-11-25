@@ -52,7 +52,7 @@ import { PLANETS, PTYPE, planetBaseId } from './data/planets';
 import { d3 } from './core/util';
 import { openBand, closeBand, drawBand, bandHooks } from './ui/band';
 import { updateControls } from './ui/controls';
-import { netUpdate, NET, isOnline } from './game/net';
+import { netUpdate, NET, isOnline, gastAusstieg } from './game/net';
 import { TRADE, requestTrade } from './game/trade';
 import { openChat } from './ui/mp';
 // Die Galaxiekarte ist eine App im Flottenband
@@ -481,6 +481,7 @@ interiorHooks.takeoff = () => { leaveInterior(); boardShip(); G.mode = 'play'; $
 interiorHooks.toFahrzeug = (kind: string) => { leaveInterior(); ROVER.active = true; if (fzImLaderaum(kind as any)) { footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); radio('SYSTEM', 'Über die Rampe hinausfahren. Zum Einladen hinauffahren und im Laderaum [E].'); } };
 interiorHooks.zumSteuer = () => zumSteuer();
 interiorHooks.ausBord = ausBord;
+interiorHooks.gastRaus = () => { const o = gastAusstieg(); leaveInterior(); ROVER.active = true; if (o) footAt(o.x, o.z, o.yaw); else leaveShipOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); };      // als Gast aus dem Schiff eines Mitspielers (net.ts)
 interiorHooks.toRover = () => { leaveInterior(); ROVER.active = true; leaveShipOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); };
 bandHooks.closed = m => {
   if (m === 'pause') showPause();

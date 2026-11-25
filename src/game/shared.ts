@@ -17,6 +17,8 @@ export const SHARED = {
   ev: [] as any[][],
   onKill: (_type: string) => {},   // eigener Ferrox-Abschuss (für Missionen)
   ashots: [] as number[][],
+  // eigene Schüsse im Flug für die anderen im Sektor (seit 2026-11-25): [x, y, z, vx, vy, vz, Lebensdauer, Geschossart]
+  pshots: [] as (number | string)[][],
 };
 // Gastgeber: Ereignis für die Mitspieler im Sektor mitschreiben
 export function hostEvent(e: any[]) { if (SHARED.online && !SHARED.client) SHARED.ev.push(e); }
