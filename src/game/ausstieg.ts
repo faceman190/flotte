@@ -17,7 +17,7 @@ export type AusArt = 'kanzel' | 'rampe' | 'heck';
 export function ausArt(): AusArt {
   if (kanzelInfo(SHIP.g)) return 'kanzel';
   let name = ''; SHIP.g.traverse(o => { if (!name && o.userData.model) name = o.userData.model; });
-  return name === 'Kormoran' || name === 'Wisent' ? 'rampe' : 'heck';
+  return name === 'Kormoran' || name === 'Wisent' || name === 'Dohle' ? 'rampe' : 'heck';
 }
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(1, 1, 1);
 /** Schiffskoordinaten → Welt: am Boden aus der Landelage (x, y, z, Gierwinkel), sonst aus dem Schiffsmodell */
@@ -32,6 +32,14 @@ export function kanzelPunkte(root: THREE.Object3D = SHIP.g) {
   return { rand: new THREE.Vector3(b.min.x - 0.25, b.min.y + 0.05, cz + 0.3), oben: new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y + 1.0, cz), seite: -1 };
 }
 /** Fuß der Bordleiter in der Welt (Boden), mit Blick vom Schiff weg */
+/** Schiffe mit Seitentür und Treppe (Dohle, doh-gelenke.json): Stehplatz vor dem Treppenfuß in Schiffskoordinaten (x, z) */
+const TREPPE: Record<string, [number, number]> = { Dohle: [-3.6, -0.1] };
+export function treppenFuss(lage: { x: number; y: number; z: number; yaw: number }) {
+  let name = ''; SHIP.g.traverse(o => { if (!name && o.userData.model) name = o.userData.model; });
+  const t = TREPPE[name]; if (!t) return null;
+  const p = schiffZuWelt(new THREE.Vector3(t[0], 0, t[1]), lage), o = schiffZuWelt(new THREE.Vector3(t[0] - 1, 0, t[1]), lage).sub(p);
+  return { x: p.x, z: p.z, yaw: Math.atan2(-o.x, -o.z) };      // Blick von der Tür weg
+}
 export function leiterFuss(lage: { x: number; y: number; z: number; yaw: number }, root: THREE.Object3D = SHIP.g) {
   const k = kanzelPunkte(root); if (!k) return null;
   const top = schiffZuWelt(k.rand.clone(), lage), out = schiffZuWelt(k.rand.clone().add(new THREE.Vector3(-1, 0, 0)), lage).sub(top).setY(0).normalize();

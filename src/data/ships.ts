@@ -22,6 +22,14 @@ export const SHIPS = {
     hull: 115, shield: 45, speed: 290, acc: 530, turn: 1.05, cargo: 10, ammo: 300, rockets: 2, dmg: 1,
     laser: 1, beams: 1, laserRange: 220, heat: 1, scan: 1300, charges: 0, drones: 0, radius: 6.5, camUp: 6, camBack: 23, upMul: 1, col: 0xd8892a, model: 'Milan', len: 15.82,
   },
+  // Eigenes Modell (asset-src/neu/dohle, Blender-Skripte, docs/dohle.md): 16,7 × 8,2 × 5,5 m, kleiner einsitziger Frachter mit Rundumverglasung,
+  // Tür mit Treppe, Laderaum mit Heckrampe (Paletten und Kisten stehen sichtbar darin), Gondeln an Pylonen, Fahrwerk in seitlichen Wülsten.
+  // Der Frachter für Einsteiger, das Gegenstück zum Milan (seit 2026-11-25).
+  dohle: {
+    n: 'Dohle', role: 'Kleiner Frachter', price: 1500, desc: 'Kleiner einsitziger Frachter: Laderaum mit Heckrampe für Paletten und Kisten, Tür mit Treppe, zwei Gondeln, Werkzeuglaser unter dem Kinn. Gutmütig, aber kaum bewaffnet. Für den Einstieg in den Handel.',
+    hull: 150, shield: 40, speed: 235, acc: 400, turn: 0.75, cargo: 60, ammo: 200, rockets: 0, dmg: 0.6,
+    laser: 0.7, beams: 1, laserRange: 200, heat: 1, scan: 1400, charges: 0, drones: 0, radius: 8.5, camUp: 8, camBack: 30, upMul: 1.05, col: 0xd8a02a, model: 'Dohle', len: 16.7,
+  },
   // Eigenes Modell (asset-src/neu/elster, Blender-Skripte, docs/elster.md), Fassung 2: 23,1 × 8,5 × 6,6 m, runder Rumpf mit Glaskuppel, Kugel-
   // Bergbaulaser unter dem Kinn, vier Erzkanister in Rundklammern, Manteltriebwerke; Fernmodell ElsterFern
   elster: {

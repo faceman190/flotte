@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GUN } from './footgun';
-import { ausArt, leiterFuss, blende } from './ausstieg';
+import { ausArt, leiterFuss, treppenFuss, blende } from './ausstieg';
 import { drawPrompt, drawSpeechBubble } from '../ui/footHud';
 import { CITY, cityTargets, cityDoorNear, cityDoorPos, cityBark, cityBubble } from './city';
 import { scene, camera, view, ux, gl, compileFor, renderer } from '../core/engine';
@@ -91,6 +91,8 @@ export function leaveShipOnFoot() {
   // Jäger und Elster: aus der Kanzel über die Bordleiter (ausstieg.ts), am Fuß der Leiter
   const f = ausArt() === 'kanzel' ? leiterFuss(S) : null;
   if (f) { place(f.x, f.z, f.yaw); blende(380); return; }
+  const t = treppenFuss(S);      // Dohle: durch die Seitentür die Treppe hinunter
+  if (t) { place(t.x, t.z, t.yaw); blende(380); return; }
   place(S.x + bx * (r * 0.7 + 3), S.z + bz * (r * 0.7 + 3), S.yaw + Math.PI);
 }
 // Planetenbasis: auf dem Landefeld landen und gleich zu Fuß aussteigen

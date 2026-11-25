@@ -163,6 +163,23 @@ const DOORS: Record<string, DoorCfg> = {
       { tag: 'leiter', grp: 'leiter', t0: 0.27, t1: 0.93, slide: [0, 1.906, -0.411], retract: true },   // Leiter gleitet aus dem Schacht
     ],
   },
+  // Dohle (asset-src/neu/dohle, doh-gelenke.json): Heckrampe bis zum Boden, Tür mit Treppe (nur bei ausgefahrenem Fahrwerk), Fahrwerk
+  Dohle: {
+    dur: { rampe: 3.5, tuer: 2.4, fw: 3.6 }, boden: ['tuer'],
+    parts: [
+      { tag: 'rampe', grp: 'rampe', t0: 0, t1: 1, hinge: [0, 1.5, -6.46], axis: 'x', angle: -2.22344 },
+      { tag: 'tuer', grp: 'tuer', t0: 0, t1: 1, hinge: [1.6538, 1.62, 1.1], axis: 'z', angle: -2.44346 },
+      { tag: 'fwn', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [0, 2.08, 6.55], axis: 'x', angle: 1.6057 },             // Bugbein fährt nach hinten ein
+      { tag: 'fwnk_l', grp: 'fw', t0: 0.72, t1: 1, hinge: [0.3, 1.5795, 5.625], axis: 'z', angle: -1.53589 },
+      { tag: 'fwnk_r', grp: 'fw', t0: 0.72, t1: 1, hinge: [-0.3, 1.5795, 5.625], axis: 'z', angle: 1.53589 },
+      { tag: 'fwh_l', grp: 'fw', t0: 0, t1: 0.7, hinge: [2.05, 2.2, -2.05], axis: 'x', angle: 1.53589 },          // Hauptbeine fahren nach hinten in die Wülste
+      { tag: 'fwh_r', grp: 'fw', t0: 0, t1: 0.7, hinge: [-2.05, 2.2, -2.05], axis: 'x', angle: 1.53589 },
+      { tag: 'fwhk_la', grp: 'fw', t0: 0.72, t1: 1, hinge: [2.35, 1.2376, -3.1], axis: 'z', angle: -1.53589 },
+      { tag: 'fwhk_li', grp: 'fw', t0: 0.72, t1: 1, hinge: [1.75, 1.2376, -3.1], axis: 'z', angle: 1.53589 },
+      { tag: 'fwhk_ra', grp: 'fw', t0: 0.72, t1: 1, hinge: [-1.75, 1.2376, -3.1], axis: 'z', angle: -1.53589 },
+      { tag: 'fwhk_ri', grp: 'fw', t0: 0.72, t1: 1, hinge: [-2.35, 1.2376, -3.1], axis: 'z', angle: 1.53589 },
+    ],
+  },
   // Milan (asset-src/neu/milan, mil-gelenke.json): Heckklappe des Frachtfachs, Bordleiter mit Klappe, einziehbares Fahrwerk
   Milan: {
     dur: { fracht: 1.6, leiter: 2.2, fw: 3.2 }, boden: ['leiter'],

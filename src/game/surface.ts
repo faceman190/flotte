@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { KEEP } from './keep';
-import { ausgabe, wahl, anBordStellen, inHalleStellen, anBord, passtIn, parken, parkNahe, geparkt, ortVon } from './fahrzeuge';
+import { ausgabe, wahl, anBordStellen, inHalleStellen, anBord, passtIn, parken, parkNahe, geparkt, ortVon, stellplaetze } from './fahrzeuge';
 import { platzVon, aufsetzen, hatLaderaum, schiffBoden, imSchiff, gasse, stellplatz, kameraImRaum } from './laderaum';
 import { fahrwerkTiefe } from '../models/gltfShips';
 import { FZ_MASS } from './fahrzeuge';
@@ -1031,13 +1031,13 @@ export function updateRover(dt: number) {
   const tausch = (P.fahrzeuge || []).includes('wiesel') ? ` · [X] ${R.kind === 'dachs' ? 'Buggy nehmen' : 'Dachs nehmen'}` : '';
   // Kormoran und Wisent mit eigenem Fahrzeug: Einladen nur über die Rampe in den Laderaum
   const lr = !R.leih && hatLaderaum() ? imSchiff(R.x, R.z, R.ship) : null;
-  if (!R.leih && hatLaderaum() && dShip < stats().radius + 12 && !lr) { R.prompt = 'Über die Rampe in den Laderaum fahren'; return; }
+  if (!R.leih && hatLaderaum() && stellplaetze(P.cls) > 0 && dShip < stats().radius + 12 && !lr) { R.prompt = 'Über die Rampe in den Laderaum fahren'; return; }
   if (lr?.wo === 'rampe') { R.prompt = 'Hinauf in den Laderaum fahren, dort [E] abstellen'; return; }
   if (lr?.wo === 'raum') { R.prompt = `[E] ${FZ[R.kind].kurz} abstellen und an Bord gehen`; return; }
   if (!R.leih && world.stations.some(s => Math.hypot(s.x - R.x, s.z - R.z) < 70) && dShip > stats().radius + 12) { R.prompt = `[E] ${FZ[R.kind].kurz} in die Fahrzeughalle stellen`; return; }
   R.prompt = dShip < stats().radius + 12 ? `[E] ${settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`}${R.kind === 'dachs' && roverLoad() ? ` und ${roverLoad()} E verladen` : ''}${tausch}` : R.target ? (roverLoad() >= R.cap ? 'Rover voll' : 'Klick halten: bohren') : '';
 }
-export const nearShip = () => ROVER.active && (ROVER.leih || !ROVER.model || !hatLaderaum() ? Math.hypot(ROVER.x - ROVER.ship.x, ROVER.z - ROVER.ship.z) < stats().radius + 12 : imSchiff(ROVER.x, ROVER.z, ROVER.ship)?.wo === 'raum');
+export const nearShip = () => ROVER.active && (ROVER.leih || !ROVER.model || !hatLaderaum() || stellplaetze(P.cls) === 0 ? Math.hypot(ROVER.x - ROVER.ship.x, ROVER.z - ROVER.ship.z) < stats().radius + 12 : imSchiff(ROVER.x, ROVER.z, ROVER.ship)?.wo === 'raum');
 
 // Gelandetes Schiff an seinem Platz halten
 export function syncLandedShip() {

@@ -133,7 +133,7 @@ export function ladePunkt(out = _v) {
 }
 /** Kiste in den Frachtraum: passt sie (Art und Platz)? Gibt den Grund zurück, wenn nicht */
 export function ladenGrund(k: WeltKiste): string | null {
-  if (!passt(k.art)) return k.art === 'container' ? `${MODELL.container.n}: passt nur in den Wisent` : `${MODELL[k.art].n}: passt nur in Schiffe mit Laderaum (Kormoran, Wisent)`;
+  if (!passt(k.art)) return k.art === 'container' ? `${MODELL.container.n}: passt nur in den Wisent` : `${MODELL[k.art].n}: passt nur in Schiffe mit Laderaum (Dohle, Kormoran, Wisent)`;
   if (cargoUsed() + k.n > stats().cargo) return 'Frachtraum voll';
   return null;
 }
