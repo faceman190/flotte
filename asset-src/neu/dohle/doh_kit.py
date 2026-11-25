@@ -9,8 +9,11 @@
 #  - Laderaum (5,7 × 3,1 × 2,4 m) für Paletten und Normkisten, Heckrampe bis zum Boden, Zurrschienen, Leuchten, Netz, Warnmarken
 #  - zwei Triebwerksgondeln oben an Pylonen (Einlauf mit Lüfterrad, Schubdüse mit Klappen), Leitflossen, Seitenleitwerk
 #  - zwei Hubdüsen unter dem Rumpf, Ladescheinwerfer über der Heckluke, Dachluke mit Handläufen
-#  - Fahrwerk: Bugbein mit Zwillingsrädern (fährt nach hinten ein), Hauptbeine mit Zwillingsrädern in seitlichen Fahrwerkswülsten
-# Bewegliche Teile hängen an Gelenken (Gruppen fw, rampe, tuer); mil_kit.py liefert Werkzeuge, Rad, Federbein, Gelenkverwaltung.
+#  - Fahrwerk (26.11.2026 auf Wunsch des Nutzers ohne Räder: „die starten senkrecht und nicht auf einer Landebahn“): Landebeine mit
+#    Füßen (Federbein, Gabel, kippbarer Fußteller mit Gummisohle und zwei Dämpfern); Bugbein fährt nach hinten ein, Hauptbeine in die Wülste
+#  - Innenräume (26.11.2026 aufgewertet): Cockpit mit Schalensitz, Seitenstick, Pult mit Blendschutz; Vorraum und Gang verbunden, Luke
+#    zum Laderaum; Laderaum mit Rollenbahnen, Wandfeldern, Kabelpritschen und Kettenzug (Kleinteile aus innen/innen_detail.py)
+# Bewegliche Teile hängen an Gelenken (Gruppen fw, rampe, tuer); mil_kit.py liefert Werkzeuge, Federbein, Gelenkverwaltung.
 # Aufruf ohne Fenster: blender.exe -b --python doh_lauf.py -- <ansichten> | alle | bauplan
 import bpy, bmesh, math, random, os, json
 from mathutils import Vector, Matrix
@@ -32,6 +35,14 @@ M['ocker'] = hull_mat('Lack Ocker', (0.34, 0.19, 0.028), 0.25, 0.45, 1.0)
 M['gangwand'] = mk('Gangwand', (0.11, 0.115, 0.12), 0.25, 0.5, var=0.1, scale=3.0, bump=0.2, wear=0.4)
 M['boden2'] = mk('Ladeboden', (0.05, 0.052, 0.056), 0.6, 0.45, var=0.15, scale=4.0, bump=0.4, bscale=200, wear=0.9)
 HULL_MATS = ['d_weiss', 'd_schiefer', 'd_nase', 'd_ocker']
+# Innenräume (26.11.2026): helle Wände, dunklere Felder, Polster, Rahmen; Kleinteile über innen_detail.py (wie Kormoran und Wisent)
+M['d_innen'] = mk('Innenwand hell', (0.25, 0.255, 0.25), 0.15, 0.55, var=0.08, scale=3.0, bump=0.15, wear=0.3)
+M['d_feld'] = mk('Innenfeld', (0.13, 0.138, 0.145), 0.2, 0.5, var=0.1, scale=3.0, bump=0.15, wear=0.3)
+M['d_polster'] = mk('Polster', (0.06, 0.062, 0.066), 0.0, 0.8, var=0.12, scale=6.0, bump=0.5, bscale=120)
+M['d_rahmen'] = mk('Innenrahmen', (0.07, 0.075, 0.08), 0.6, 0.4, var=0.1, scale=4.0, wear=0.5)
+_idk = os.path.join(HIER, '..', 'innen', 'innen_detail.py')
+exec(compile(open(_idk, encoding='utf-8').read(), 'innen_detail.py', 'exec'))
+C_HOLD = bpy.data.collections.new('Laderaum innen'); bpy.context.scene.collection.children.link(C_HOLD)
 WEISS, SCHIEFER, NASE, OCKER = 0, 1, 2, 3
 
 # =====================================================================================
@@ -133,6 +144,16 @@ def glazing():
             box('Wischerarm', 0.5, 0.02, 0.012, -0.22, 0, 0.01, M['dunkel'], 0.003); box('Wischerblatt', 0.42, 0.012, 0.02, -0.24, s * 0.02, 0.0, M['rubber'], 0.003)
     ANCH['kanzel'] = hull_point(7.5, 0.7) + Vector((0, 0, 0.05))
 FLC = 2.25
+def open_box2(name, x0, x1, y0, y1, z0, z1, m, open_sides, col):      # wie open_box, aber mit mehreren offenen Seiten (Durchgänge)
+    bmb = bmesh.new(); bmesh.ops.create_cube(bmb, size=1.0)
+    for v in bmb.verts: v.co.x = x0 + (x1 - x0) * (v.co.x + 0.5); v.co.y = y0 + (y1 - y0) * (v.co.y + 0.5); v.co.z = z0 + (z1 - z0) * (v.co.z + 0.5)
+    bmb.normal_update(); dead = set()
+    for f in bmb.faces:
+        for s_ in open_sides:
+            ax = {'x': 0, 'y': 1, 'z': 2}[s_[1]]; sg = 1 if s_[0] == '+' else -1
+            if f.normal[ax] * sg > 0.9: dead.add(f)
+    bmesh.ops.delete(bmb, geom=list(dead), context='FACES'); bmesh.ops.reverse_faces(bmb, faces=bmb.faces[:])
+    return mesh_obj(name, bmb, [m], False, col)
 def cockpit():
     CUR[0] = C_ROOM; bm = bmesh.new(); R = []
     XSC = [5.95 + (8.75 - 5.95) * i / 24 for i in range(25)]
@@ -145,37 +166,129 @@ def cockpit():
         for k in range(len(V[0]) - 1): bm.faces.new((V[i][k], V[i][k + 1], V[i + 1][k + 1], V[i + 1][k]))
     bm.faces.new(V[-1][::-1]); bm.normal_update()
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:]); bmesh.ops.reverse_faces(bm, faces=bm.faces[:])
-    mesh_obj('Cockpitwanne', bm, ['innen3'], True, C_ROOM)
-    # Rückwand mit Durchgang zum Gang
+    mesh_obj('Cockpitwanne', bm, ['d_innen'], True, C_ROOM)
+    # Rückwand mit Durchgang zum Gang, gepolstert
     wr = params(5.95)[0] * 0.78 - 0.42      # Rückwand mit Durchgang (bleibt innerhalb der Wanne)
-    for s in (1, -1): box('Rueckwand', 0.06, wr, 1.05, 5.97, s * (0.42 + wr / 2), FLC + 0.52, M['gangwand'], 0.01)
-    box('Durchgangssturz', 0.06, 0.84, 0.18, 5.97, 0, FLC + 1.0, M['gangwand'], 0.01)
-    xs = 6.75
-    with Part('Pilotensitz', T(xs, 0, FLC) @ RY(math.radians(-10)), C_ROOM):
-        cyl('Sitzsaeule', 0.08, 0.3, 0.05, 0, 0.15, M['mittel'], 'Z', n=16); box('Sitzwanne', 0.52, 0.5, 0.12, 0.08, 0, 0.36, M['dunkel'], 0.02)
-        box('Sitzpolster', 0.5, 0.48, 0.1, 0.09, 0, 0.45, M['sitz'], 0.03); box('Lehne', 0.12, 0.5, 0.75, -0.16, 0, 0.86, M['sitz'], 0.04)
-        box('Kopfstuetze', 0.12, 0.3, 0.2, -0.17, 0, 1.33, M['sitz'], 0.03)
+    for s in (1, -1): box('Rueckwand', 0.06, wr, 1.05, 5.97, s * (0.42 + wr / 2), FLC + 0.52, M['d_feld'], 0.01)
+    box('Durchgangssturz', 0.06, 0.84, 0.18, 5.97, 0, FLC + 1.0, M['d_feld'], 0.01)
+    for s in (1, -1): box('Durchgangskante', 0.08, 0.04, 1.0, 5.99, s * 0.42, FLC + 0.5, M['ocker'], 0.008)
+    S = Sammel('Cockpit Kleinteile', C_ROOM)
+    for s in (1, -1):
+        for i in range(2):
+            for j in range(3): S.box(0.03, wr / 2 - 0.035, 0.25, 6.015, s * (0.42 + (i + 0.5) * wr / 2), FLC + 0.27 + j * 0.27, M['d_polster'])
+    # Boden: Trittplatten, Gummimatte im Fußraum, Kabelstränge an den Wandfüßen
+    platten(S, 6.02, 7.72, -0.6, 0.6, FLC, M['boden2'], M['dunkel'], M['mittel'], p=0.57, q=0.6)
+    S.box(0.5, 0.62, 0.008, 7.48, 0, FLC + 0.017, M['rubber'])
+    for s in (1, -1):
+        pts = [Vector((x, s * (params(x)[0] - 0.07) * 0.79, FLC + 0.07)) for x in (6.05, 6.6, 7.2, 7.75, 8.15)]
+        pipe('Kabelstrang', pts, 0.022, M['dunkel'], rad=0.2); pipe('Kabelstrang', [p + Vector((0, 0, 0.05)) for p in pts], 0.014, M['ocker'], rad=0.2)
+    # Sitz: Schalensitz auf Schienen, Seitenwangen, Steppnähte, Fünfpunktgurt, Kopfstütze mit Wangen
+    xs = 6.75; kz = min(1.18, top_z(xs - 0.25, 0) - FLC - 0.27)      # Kopfstütze bleibt unter der Kanzel
+    for s in (1, -1):
+        S.box(0.8, 0.045, 0.035, xs - 0.02, s * 0.19, FLC + 0.03, M['mittel'])
+        for k in range(6): S.cyl(0.011, 0.004, (xs - 0.35 + k * 0.13, s * 0.19, FLC + 0.049), (0, 0, 1), M['dunkel'], 6)
+    with Part('Pilotensitz', T(xs, 0, FLC + 0.04) @ RY(math.radians(-10)), C_ROOM):
+        box('Sitzsockel', 0.4, 0.4, 0.18, 0.0, 0, 0.09, M['dunkel'], 0.02)
+        box('Sitzschale', 0.56, 0.56, 0.08, 0.06, 0, 0.22, M['d_rahmen'], 0.02)
+        box('Sitzpolster', 0.48, 0.38, 0.08, 0.08, 0, 0.3, M['sitz'], 0.03)
+        box('Schalenlehne', 0.08, 0.56, kz - 0.2, -0.25, 0, 0.26 + (kz - 0.2) / 2, M['d_rahmen'], 0.03)
+        box('Lehnenpolster', 0.07, 0.38, kz - 0.36, -0.18, 0, 0.36 + (kz - 0.36) / 2, M['sitz'], 0.03)
+        for k in range(4): box('Steppnaht', 0.004, 0.36, 0.008, -0.143, 0, 0.45 + k * (kz - 0.5) / 4, M['dunkel'], 0)
         for s in (1, -1):
-            box('Armlehne', 0.4, 0.07, 0.06, 0.05, s * 0.29, 0.62, M['dunkel'], 0.015); box('Gurt', 0.012, 0.05, 0.6, -0.09, s * 0.12, 0.8, M['gurt'], 0.002)
-    xp = 7.85
-    prism('Pult', [(xp + 0.25, FLC), (xp + 0.55, FLC), (xp + 0.55, FLC + 0.62), (xp + 0.15, FLC + 0.86), (xp, FLC + 0.8)], -0.8, 0.8, M['verkleidung'], 'Y', 0.02)
-    for y, mm in ((0.45, 'mfd2'), (0.15, 'mfd'), (-0.15, 'mfd'), (-0.45, 'mfd2')):
-        with Part('Anzeige', T(xp + 0.05, y, FLC + 0.77) @ RY(math.radians(-58)), C_ROOM):
-            box('Rahmen', 0.22, 0.27, 0.025, 0, 0, 0, M['dunkel'], 0.006); box('Bild', 0.18, 0.23, 0.004, 0, 0, 0.014, M[mm], 0)
-    for k in range(10): box('Pulttaste', 0.05, 0.05, 0.015, xp + 0.3 + (k % 2) * 0.08, -0.36 + (k // 2) * 0.18, FLC + 0.64, M['taste'] if k % 3 else M['e_white'], 0.004)
-    with Part('Steuerhorn', T(7.45, 0, FLC + 0.62), C_ROOM):      # Doppelgriff wie ein kurzes Steuerhorn
-        cyl('Saeule', 0.035, 0.62, 0.12, 0, -0.31, M['dunkel'], 'Z', n=12); cyl('Saeulenfuss', 0.08, 0.04, 0.12, 0, -0.6, M['rubber'], 'Z', n=16); box('Horn', 0.06, 0.4, 0.05, 0, 0, 0.06, M['dunkel'], 0.015)
-        for s in (1, -1): box('Griff', 0.05, 0.05, 0.14, 0, s * 0.2, 0.12, M['rubber'], 0.015)
+            box('Seitenwange', 0.46, 0.08, 0.12, 0.08, s * 0.235, 0.33, M['sitz'], 0.035)
+            box('Lehnenwange', 0.11, 0.08, kz - 0.5, -0.175, s * 0.235, 0.38 + (kz - 0.5) / 2, M['sitz'], 0.035)
+            box('Armlehne', 0.36, 0.07, 0.05, 0.02, s * 0.32, 0.54, M['dunkel'], 0.015); box('Armstuetze', 0.05, 0.05, 0.2, -0.13, s * 0.32, 0.42, M['d_rahmen'], 0.01)
+            box('Schultergurt', 0.012, 0.05, kz - 0.5, -0.135, s * 0.11, 0.36 + (kz - 0.5) / 2, M['gurt'], 0.002)
+            box('Beckengurt', 0.24, 0.05, 0.012, 0.03, s * 0.12, 0.35, M['gurt'], 0.002)
+        box('Kopfstuetze', 0.12, 0.28, 0.2, -0.2, 0, kz, M['sitz'], 0.035)
+        for s in (1, -1): box('Kopfwange', 0.1, 0.06, 0.17, -0.17, s * 0.16, kz, M['sitz'], 0.03)
+        cyl('Gurtschloss', 0.045, 0.02, 0.16, 0, 0.36, M['chrom'], 'Z', n=20); box('Schrittgurt', 0.012, 0.05, 0.08, 0.21, 0, 0.32, M['gurt'], 0.002)
+        box('Verstellhebel', 0.16, 0.02, 0.02, 0.16, 0.26, 0.14, M['ocker'], 0.005)
+    # Seitenkonsolen: rechts Seitenstick, links Schubhebel, Tasten, Drehknöpfe, kleine Anzeigen, Fußraumleisten
     for s in (1, -1):
         box('Seitenkonsole', 0.9, 0.22, 0.42, 6.95, s * 0.62, FLC + 0.21, M['verkleidung'], 0.02)
-        for k in range(5): box('Schalter', 0.08, 0.05, 0.018, 6.6 + k * 0.17, s * 0.62, FLC + 0.43, M['taste'], 0.004)
-    with Part('Schubhebel', T(6.95, -0.62, FLC + 0.43), C_ROOM):
-        for k in range(2): cyl('Hebel', 0.014, 0.16, k * 0.06 - 0.03, 0, 0.08, M['mittel'], 'Z', n=10); box('Hebelgriff', 0.05, 0.04, 0.05, k * 0.06 - 0.03, 0, 0.17, M['dunkel'], 0.01)
+        box('Konsolendeckel', 0.86, 0.2, 0.02, 6.95, s * 0.62, FLC + 0.43, M['d_rahmen'], 0.005)
+        S.box(0.84, 0.012, 0.012, 6.95, s * 0.505, FLC + 0.06, M['e_teal'])
+        with Part('Konsolenanzeige', T(7.28, s * 0.62, FLC + 0.46) @ RY(math.radians(-22)), C_ROOM):
+            box('Rahmen', 0.18, 0.17, 0.02, 0, 0, 0, M['dunkel'], 0.005); box('Bild', 0.14, 0.13, 0.004, 0, 0, 0.011, M['mfd2'] if s > 0 else M['mfd'], 0)
+        for k in range(4): S.box(0.05, 0.04, 0.016, 6.56 + (k % 2) * 0.08, s * (0.57 + (k // 2) * 0.09), FLC + 0.448, M['taste'])
+        for k in range(2): S.cyl(0.017, 0.022, (6.76, s * (0.57 + k * 0.09), FLC + 0.451), (0, 0, 1), M['dunkel'], 12)
+        for k in range(5): S.box(0.004, 0.012, 0.18, 6.52 + k * 0.2, s * 0.508, FLC + 0.25, M['dunkel'])      # Lüftungsschlitze
+    with Part('Seitenstick', T(7.0, -0.62, FLC + 0.44), C_ROOM):
+        cyl('Stickmanschette', 0.05, 0.04, 0, 0, 0.02, M['rubber'], 'Z', n=16); cyl('Sticksaeule', 0.016, 0.1, 0, 0, 0.09, M['dunkel'], 'Z', n=12)
+        box('Stickgriff', 0.06, 0.055, 0.13, 0.01, 0, 0.2, M['rubber'], 0.02, rot=(0, math.radians(12), 0))
+        box('Stickkappe', 0.08, 0.065, 0.025, 0.02, 0, 0.275, M['dunkel'], 0.01); cyl('Stickknopf', 0.011, 0.012, 0.03, 0.0, 0.292, M['rotlack'], 'Z', n=10)
+        box('Stickabzug', 0.015, 0.025, 0.035, 0.05, 0, 0.21, M['dunkel'], 0.004)
+    with Part('Schubhebel', T(6.98, 0.62, FLC + 0.44), C_ROOM):
+        box('Hebelkulisse', 0.26, 0.11, 0.012, 0, 0, 0.0, M['dunkel'], 0.003)
+        for k in range(2):
+            yy = (k - 0.5) * 0.05
+            box('Hebel', 0.02, 0.014, 0.16, 0.03, yy, 0.08, M['mittel'], 0.003, rot=(0, math.radians(-18), 0)); box('Hebelgriff', 0.055, 0.04, 0.05, 0.055, yy, 0.165, M['dunkel'], 0.012)
+        box('Hebelschild', 0.05, 0.08, 0.002, -0.1, 0, 0.007, M['ocker'], 0)
+    for s in (1, -1):
+        with Part('Pedal', T(7.55, s * 0.17, FLC + 0.03), C_ROOM):
+            box('Pedalarm', 0.04, 0.03, 0.2, 0.06, 0, 0.1, M['mittel'], 0.005, rot=(0, math.radians(20), 0))
+            box('Pedalplatte', 0.035, 0.12, 0.22, 0.0, 0, 0.15, M['dunkel'], 0.01, rot=(0, math.radians(-25), 0))
+            box('Pedalgummi', 0.01, 0.1, 0.18, -0.02, 0, 0.16, M['rubber'], 0.003, rot=(0, math.radians(-25), 0))
+    # Instrumentenpult: großes Mittelbild, je zwei Seitenbilder mit Randtasten, Blendschutz mit Warnleuchten und Notinstrument, Drehknöpfe, Tastenfeld
+    xp = 7.85
+    prism('Pult', [(xp + 0.25, FLC), (xp + 0.55, FLC), (xp + 0.55, FLC + 0.62), (xp + 0.15, FLC + 0.86), (xp, FLC + 0.8)], -0.8, 0.8, M['verkleidung'], 'Y', 0.02)
+    for y, w, mm in ((0.0, 0.32, 'mfd'), (0.35, 0.25, 'mfd2'), (-0.35, 0.25, 'mfd'), (0.62, 0.17, 'screen'), (-0.62, 0.17, 'mfd2')):
+        with Part('Anzeige', T(xp + 0.05, y, FLC + 0.77) @ RY(math.radians(-58)), C_ROOM):
+            box('Rahmen', 0.24, w, 0.025, 0, 0, 0, M['dunkel'], 0.006); box('Bild', 0.19, w - 0.05, 0.004, 0, 0, 0.014, M[mm], 0)
+            for sg in (1, -1):
+                for k in range(4): box('Randtaste', 0.025, 0.012, 0.01, -0.075 + k * 0.05, sg * (w / 2 - 0.012), 0.015, M['taste'], 0.002)
+    prism('Blendschutz', [(xp - 0.07, FLC + 0.93), (xp + 0.3, FLC + 0.955), (xp + 0.3, FLC + 0.905), (xp - 0.05, FLC + 0.885)], -0.5, 0.5, M['d_polster'], 'Y', 0.01)
+    LAMPEN = [M['e_amber'], M['e_green'], M['e_red'], M['e_white']]
+    for k in range(9): S.box(0.006, 0.05, 0.022, xp - 0.062, -0.28 + k * 0.07, FLC + 0.908, LAMPEN[k % 4] if k != 4 else M['dunkel'])
+    cyl('Notinstrument', 0.035, 0.03, xp - 0.07, 0, FLC + 0.908, M['dunkel'], 'X', n=20); cyl('Notinstrument Bild', 0.028, 0.004, xp - 0.086, 0, FLC + 0.908, M['mfd2'], 'X', n=20)
+    n_ = Vector((-0.8, 0, -0.25)).normalized(); up_ = Vector((-0.25, 0, 0.8)).normalized()
+    def pf(y, z): return Vector((xp + 0.25 * (0.8 - (z - FLC)) / 0.8, y, z))      # Punkt auf der schrägen Pultfront
+    for c_, w_, h_ in (((0.0, FLC + 0.55), 1.1, 0.1), ((0.23, FLC + 0.388), 0.2, 0.22), ((-0.255, FLC + 0.37), 0.2, 0.25)):      # eingelassene Felder
+        S.obox(tuple(pf(*c_) + n_ * 0.003), (0, 1, 0), up_, (w_, h_, 0.006), M['d_feld'])
+        for sy in (-1, 1):
+            for sz in (-1, 1): S.cyl(0.006, 0.004, tuple(pf(c_[0] + sy * (w_ / 2 - 0.015), c_[1] + sz * (h_ / 2 - 0.015) * 0.954) + n_ * 0.007), n_, M['mittel'], 6)
+    for k in range(7):
+        p = pf(-0.45 + k * 0.15, FLC + 0.55); S.cyl(0.02, 0.03, tuple(p + n_ * 0.015), n_, M['dunkel'], 12)
+        S.obox(tuple(p + n_ * 0.031 + up_ * 0.01), (0, 1, 0), up_, (0.006, 0.014, 0.003), M['e_white'])
+    for k in range(12): p = pf(0.18 + (k % 3) * 0.05, FLC + 0.32 + (k // 3) * 0.045); S.obox(tuple(p + n_ * 0.008), (0, 1, 0), up_, (0.038, 0.035, 0.014), M['taste'])
+    for k in range(6): p = pf(-0.3 + (k % 2) * 0.09, FLC + 0.3 + (k // 2) * 0.07); S.obox(tuple(p + n_ * 0.008), (0, 1, 0), up_, (0.05, 0.03, 0.016), M['e_amber'] if k == 0 else M['taste'])
+    # Deckenpult: Sicherungen, Kippschalter mit roten Schutzkappen, kleine Anzeige, Haltegriff, Kartenleuchte
     zt = top_z(6.5, 0) - 0.12
-    box('Deckenpult', 0.7, 0.5, 0.06, 6.55, 0, zt, M['verkleidung'], 0.012)
-    for k in range(8): box('Deckenschalter', 0.05, 0.04, 0.012, 6.3 + (k % 4) * 0.16, -0.12 + (k // 4) * 0.24, zt - 0.035, M['taste'], 0.003)
+    box('Deckenpult', 0.78, 0.54, 0.06, 6.52, 0, zt, M['verkleidung'], 0.012)
+    for k in range(16): S.cyl(0.012, 0.03, (6.22 + (k % 8) * 0.085, -0.17 + (k // 8) * 0.07, zt - 0.045), (0, 0, 1), M['dunkel'], 8)
+    for k in range(6): S.box(0.04, 0.03, 0.012, 6.27 + k * 0.1, 0.16, zt - 0.036, M['taste'])
+    for s in (1, -1): S.box(0.05, 0.05, 0.03, 6.82, s * 0.19, zt - 0.045, M['rotlack'])
+    S.box(0.12, 0.08, 0.006, 6.82, 0, zt - 0.033, M['mfd2'])
+    pipe('Haltegriff', [Vector((6.05, -0.32, zt + 0.04)), Vector((6.07, -0.32, zt - 0.08)), Vector((6.07, 0.32, zt - 0.08)), Vector((6.05, 0.32, zt + 0.04))], 0.014, M['chrom'], rad=0.05)
+    sphere('Kartenleuchte', 0.022, 6.2, 0.22, zt - 0.04, M['e_white'], 10)
+    # Kleinigkeiten an der Rückwand: Helm am Haken, Datentafel in der Halterung, Feuerlöscher
+    with Part('Helm', T(6.18, 0.74, FLC + 0.62), C_ROOM):
+        sphere('Helmschale', 0.13, 0, 0, 0, M['weiss2'], 20); box('Helmvisier', 0.05, 0.18, 0.1, 0.1, 0, 0.0, M['rauchglas'], 0.03)
+        box('Helmstreifen', 0.2, 0.03, 0.02, 0.0, 0, 0.125, M['ocker'], 0.008); cyl('Helmhaken', 0.008, 0.08, -0.12, 0, 0.12, M['chrom'], 'X', n=8)
+    with Part('Datentafel', T(6.06, -0.72, FLC + 0.7), C_ROOM):
+        box('Tafelhalter', 0.04, 0.24, 0.06, 0.0, 0, -0.16, M['dunkel'], 0.006); box('Tafel', 0.02, 0.2, 0.28, 0.01, 0, 0.0, M['dunkel'], 0.01); box('Tafelbild', 0.003, 0.17, 0.24, 0.022, 0, 0.0, M['mfd2'], 0)
+    with Part('Feuerloescher', T(6.1, -0.6, FLC + 0.3), C_ROOM):
+        cyl('Loescher', 0.05, 0.34, 0, 0, 0, M['rotlack'], 'Z', n=16); cyl('Loescherkopf', 0.02, 0.07, 0, 0, 0.2, M['dunkel'], 'Z', n=10); box('Loescherband', 0.02, 0.12, 0.03, -0.04, 0, 0.08, M['dunkel'], 0.004)
+    CUR[0] = C_ROOM
     area('Cockpitlicht', (6.8, 0, 3.35), (0, 0, 0), 0.7, 0.5, 50, (0.85, 0.9, 1.0))
+    area('Fussraumlicht', (7.3, 0, FLC + 0.35), (0, 0, 0), 0.5, 0.6, 8, (0.6, 0.9, 1.0))
+    S.fertig()
     ANCH['sitz'] = Vector((xs, 0, FLC + 0.9))
+
+def luke(xw, nx, yc, zf, schrift, col):      # geschlossene Durchgangsluke (Wand bei x = xw, Fläche zeigt nach nx): Rahmen, Blatt, Fenster, Hebel, Scharniere, Warnband
+    CUR[0] = col
+    box('Lukenrahmen', 0.04, 0.88, 1.94, xw + nx * 0.02, yc, zf + 0.97, M['d_rahmen'], 0.01)
+    box('Lukenblatt', 0.03, 0.74, 1.8, xw + nx * 0.05, yc, zf + 0.94, M['d_feld'], 0.012)
+    box('Lukenfenster', 0.012, 0.22, 0.3, xw + nx * 0.066, yc, zf + 1.42, M['rauchglas'], 0.004)
+    box('Fensterrahmen innen', 0.01, 0.26, 0.34, xw + nx * 0.063, yc, zf + 1.42, M['dunkel'], 0.004)
+    for z in (zf + 0.45, zf + 1.45): cyl('Lukenscharnier', 0.025, 0.14, xw + nx * 0.05, yc + 0.39, z, M['chrom'], 'Z', n=12)
+    box('Lukenhebel', 0.03, 0.05, 0.22, xw + nx * 0.075, yc - 0.27, zf + 0.95, M['chrom'], 0.006)
+    box('Hebellager', 0.02, 0.08, 0.08, xw + nx * 0.068, yc - 0.27, zf + 1.02, M['dunkel'], 0.006)
+    box('Lukenwarnband', 0.012, 0.88, 0.06, xw + nx * 0.044, yc, zf + 1.97, M['warnrw'], 0.002)
+    for z in (zf + 0.2, zf + 1.7):
+        for sg in (1, -1): cyl('Lukenschraube', 0.012, 0.01, xw + nx * 0.067, yc + sg * 0.3, z, M['mittel'], 'X', n=8)
+    text(schrift, 0.06, (xw + nx * 0.067, yc, zf + 1.68), (0, nx, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Lukenschrift')
 
 # =====================================================================================
 # 3. Einstieg: Tür mit Treppe, Vorraum und Gang nach vorn
@@ -183,24 +296,61 @@ def cockpit():
 FLG = 1.62
 def entry():
     x0, x1, z0, z1 = DOOR; xm = (x0 + x1) / 2
-    CUR[0] = C_ROOM
-    open_box('Vorraum', 0.45, 1.75, -0.65, params(1.1)[0] + 0.02, FLG, 3.75, M['gangwand'], '+y', C_ROOM)
-    open_box('Gang', 1.72, 4.3, -0.62, 0.62, FLG, 3.6, M['gangwand'], '+x', C_ROOM)
-    box('Gangboden', 2.6, 1.22, 0.02, 3.0, 0, FLG + 0.01, M['boden2'], 0.004); box('Vorraumboden', 1.28, 2.3, 0.02, 1.1, 0.5, FLG + 0.01, M['boden2'], 0.004)
+    CUR[0] = C_ROOM; yv = params(1.1)[0] + 0.02
+    # Vorraum und Gang hängen zusammen (Durchgang bei x 1,72–1,75), helle Wände, Gitterrost in der Gangmitte
+    open_box2('Vorraum', 0.45, 1.75, -0.65, yv, FLG, 3.75, M['d_innen'], ('+y', '+x'), C_ROOM)
+    box('Vorraumwand', 0.04, yv - 0.62, 3.75 - FLG, 1.75, (0.62 + yv) / 2, (FLG + 3.75) / 2, M['d_innen'], 0.005)
+    open_box2('Gang', 1.72, 4.3, -0.62, 0.62, FLG, 3.6, M['d_innen'], ('+x', '-x'), C_ROOM)
+    box('Gangsturz', 0.06, 1.24, 0.15, 1.74, 0, 3.675, M['d_innen'], 0.005)
+    S = Sammel('Gang Kleinteile', C_ROOM)
+    platten(S, 0.47, 1.73, -0.63, yv - 0.08, FLG, M['boden2'], M['dunkel'], M['mittel'], p=0.62, q=0.62)
+    gitter(S, 1.74, 4.3, -0.3, 0.3, FLG + 0.004, M['grate'], M['dunkel'])
+    platten(S, 1.74, 4.3, 0.3, 0.61, FLG, M['boden2'], M['dunkel'], M['mittel'], p=0.64, q=0.31); platten(S, 1.74, 4.3, -0.61, -0.3, FLG, M['boden2'], M['dunkel'], M['mittel'], p=0.64, q=0.31)
+    for s in (1, -1): S.box(2.5, 0.01, 0.006, 3.0, s * 0.33, FLG + 0.04, M['e_teal'])      # Leitstreifen am Rost
+    # Wandfelder (Lüftung, Wartungsklappen, Anschlusskästen), Stoßleisten, Deckenraster, Leitungen mit Schellen, Leuchten
+    for i in range(4):
+        wandfeld(S, (1.75, -0.62, FLG), (1, 0, 0), (0, 1, 0), i * 0.635, (i + 1) * 0.635, 0.2, 1.86, i, M['d_feld'], M['d_rahmen'], M['dunkel'], M['mittel'], M['ocker'])
+        wandfeld(S, (1.75, 0.62, FLG), (1, 0, 0), (0, -1, 0), i * 0.635, (i + 1) * 0.635, 0.2, 1.86, (3, 4, 5, 1)[i], M['d_feld'], M['d_rahmen'], M['dunkel'], M['mittel'], M['ocker'])
+    for s in (1, -1): S.box(2.55, 0.012, 0.14, 3.02, s * 0.613, FLG + 0.08, M['ocker'])
+    S.box(1.26, 0.012, 0.14, 1.1, -0.643, FLG + 0.08, M['ocker'])
+    deckenraster(S, 1.75, 4.28, -0.6, 0.6, 3.6, M['d_rahmen'], p=0.63)
+    deckenraster(S, 0.47, 1.73, -0.63, yv - 0.1, 3.75, M['d_rahmen'], p=0.63)
+    for s in (1, -1):
+        pipe('Gangleitung', [Vector((1.76, s * 0.5, 3.51)), Vector((4.26, s * 0.5, 3.51))], 0.025, M['mittel' if s > 0 else 'ocker'])
+        pipe('Gangleitung', [Vector((1.76, s * 0.42, 3.53)), Vector((4.26, s * 0.42, 3.53))], 0.015, M['dunkel'])
+        for x in (2.05, 2.95, 3.85): schelle(S, (x, s * 0.5, 3.51), (0, 0, -1), 0.025, M['d_rahmen'])
+    for x in (2.4, 3.65):
+        S.box(0.66, 0.18, 0.03, x, 0, 3.565, M['d_rahmen']); S.box(0.6, 0.12, 0.006, x, 0, 3.548, M['e_white'])
+    S.box(0.6, 0.6, 0.03, 1.1, 0.6, 3.73, M['d_rahmen']); S.box(0.52, 0.52, 0.006, 1.1, 0.6, 3.713, M['e_white'])
+    text('COCKPIT', 0.07, (3.95, 0.613, FLG + 1.95), (1, 0, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Gangschrift')
+    text('GANG 1 · DH 04', 0.045, (2.5, -0.613, FLG + 1.95), (-1, 0, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Gangschrift')
     for k in range(3):      # Stufen hinauf ins Cockpit
         box('Stufe', 0.32, 1.0, 0.02, 4.45 + k * 0.33, 0, FLG + 0.21 * (k + 1), M['boden2'], 0.004); box('Stufenkante', 0.03, 1.0, 0.21, 4.3 + k * 0.33, 0, FLG + 0.21 * k + 0.105, M['warnrw'], 0.002)
-        box('Stufenwange', 0.33, 0.04, 0.21 * (k + 1), 4.45 + k * 0.33, 0.52, FLG + 0.105 * (k + 1), M['gangwand'], 0.004); box('Stufenwange', 0.33, 0.04, 0.21 * (k + 1), 4.45 + k * 0.33, -0.52, FLG + 0.105 * (k + 1), M['gangwand'], 0.004)
-    box('Gangleuchte', 2.2, 0.08, 0.012, 3.0, 0, 3.594, M['e_white'], 0)
-    for k in range(4): box('Wandfeld', 0.5, 0.012, 1.1, 2.0 + k * 0.6, -0.614, 2.5, M['innen3'], 0.006)
+        box('Stufenwange', 0.33, 0.04, 0.21 * (k + 1), 4.45 + k * 0.33, 0.52, FLG + 0.105 * (k + 1), M['d_rahmen'], 0.004); box('Stufenwange', 0.33, 0.04, 0.21 * (k + 1), 4.45 + k * 0.33, -0.52, FLG + 0.105 * (k + 1), M['d_rahmen'], 0.004)
+        for s in (1, -1): S.box(0.26, 0.008, 0.006, 4.45 + k * 0.33, s * 0.45, FLG + 0.21 * (k + 1) + 0.012, M['e_teal'])
+    # Vorraum: Spind, Verbandskasten, Feuerlöscher, Türbedienung, Luke zum Laderaum
     with Part('Spind', T(0.75, -0.45, FLG), C_ROOM):
-        box('Spindkorpus', 0.5, 0.36, 1.9, 0, 0, 0.95, M['verkleidung'], 0.012); box('Spindtuer', 0.012, 0.32, 1.8, 0.256, 0, 0.95, M['innen3'], 0.003)
+        box('Spindkorpus', 0.5, 0.36, 1.9, 0, 0, 0.95, M['verkleidung'], 0.012); box('Spindtuer', 0.012, 0.32, 1.8, 0.256, 0, 0.95, M['d_feld'], 0.003)
         for k in range(3): box('Lueftung', 0.004, 0.2, 0.012, 0.263, 0, 1.6 + k * 0.03, M['dunkel'], 0)
+        box('Spindgriff', 0.02, 0.025, 0.14, 0.27, -0.12, 1.0, M['chrom'], 0.004); box('Namensschild', 0.003, 0.14, 0.04, 0.263, 0, 1.45, M['ocker'], 0)
         text('ANZUG', 0.05, (0.264, 0.0, 1.3), (0, 1, 0), (0, 0, 1), M['txtw'], align='CENTER', name='Spindschrift')
-    with Part('Feuerloescher', T(1.6, -0.55, FLG + 0.9), C_ROOM):
+    with Part('Feuerloescher', T(1.6, -0.55, FLG + 0.5), C_ROOM):
         cyl('Loescher', 0.06, 0.42, 0, 0, 0, M['rotlack'], 'Z', n=16); cyl('Loescherkopf', 0.025, 0.08, 0, 0, 0.25, M['dunkel'], 'Z', n=10)
+        box('Loescherhalter', 0.08, 0.04, 0.04, 0, -0.07, 0.05, M['dunkel'], 0.004)
+    with Part('Verbandskasten', T(1.28, -0.6, FLG + 1.45), C_ROOM):
+        box('Kastenkorpus', 0.32, 0.1, 0.24, 0, 0, 0, M['white'], 0.01)
+        box('Kreuz', 0.08, 0.004, 0.024, 0, 0.051, 0, M['rotlack'], 0); box('Kreuz', 0.024, 0.004, 0.08, 0, 0.051, 0, M['rotlack'], 0)
+        box('Kastengriff', 0.12, 0.02, 0.015, 0, 0.055, 0.1, M['dunkel'], 0.003)
+    with Part('Tuerbedienung', T(0.47, 1.3, FLG + 1.25), C_ROOM):
+        box('Bedienkasten', 0.04, 0.16, 0.24, 0, 0, 0, M['dunkel'], 0.006)
+        sphere('Taster', 0.016, 0.024, 0, 0.04, M['e_green'], 10); sphere('Taster', 0.016, 0.024, 0, -0.04, M['e_red'], 10)
+        text('TÜR', 0.03, (0.022, 0.0, 0.085), (0, 1, 0), (0, 0, 1), M['txtw'], align='CENTER', name='Bedienschrift')
+    luke(0.45, 1, 0.45, FLG, 'LADERAUM', C_ROOM)
     pipe('Handlauf', [Vector((1.8, 0.55, 2.6)), Vector((4.2, 0.55, 2.6)), Vector((5.2, 0.5, 3.25))], 0.018, M['chrom'], rad=0.2)
+    S.fertig()
+    CUR[0] = C_ROOM
     area('Ganglicht', (2.6, 0, 3.4), (0, 0, 0), 2.0, 0.6, 40, (0.85, 0.9, 1.0))
-    area('Vorraumlicht', (1.1, 0.6, 3.6), (0, 0, 0), 1.0, 1.0, 45, (1.0, 0.92, 0.82)); box('Vorraumleuchte', 0.6, 0.6, 0.012, 1.1, 0.6, 3.744, M['e_white'], 0)
+    area('Vorraumlicht', (1.1, 0.6, 3.6), (0, 0, 0), 1.0, 1.0, 45, (1.0, 0.92, 0.82))
     # Tür (beweglich, unten angeschlagen): Außenhaut, Rahmen innen, Treppe mit sechs Stufen (waagrecht, wenn die Tür offen ist), Handläufe
     t = t_for_z(xm, z0, 1); hp = hull_point(xm, t); h = z1 - z0
     OPEN = math.radians(-140)
@@ -230,23 +380,66 @@ def entry():
 # =====================================================================================
 def hold():
     x0, x1, hw, z0, z1 = HOLD
-    CUR[0] = C_PART
-    open_box('Laderaum', x0, x1, -hw, hw, z0, z1, M['gangwand'], '-x', C_PART)
-    box('Ladeboden', x1 - x0, 2 * hw - 0.02, 0.02, (x0 + x1) / 2, 0, z0 + 0.01, M['boden2'], 0.004)
-    for y in (-0.36, 0.36):
-        box('Zurrschiene', x1 - x0 - 0.05, 0.05, 0.02, (x0 + x1) / 2, y, z0 + 0.025, M['mittel'], 0.004)
-        for k in range(7): ring('Zurrauge', 0.025, 0.006, (x0 + 0.3 + k * (x1 - x0 - 0.6) / 6, y, z0 + 0.05), (1, 0, 0), M['chrom'], 12)
+    CUR[0] = C_HOLD; xc = (x0 + x1) / 2; L = x1 - x0
+    open_box('Laderaum', x0, x1, -hw, hw, z0, z1, M['d_innen'], '-x', C_HOLD)
+    S = Sammel('Laderaum Kleinteile', C_HOLD)
+    # Boden: Ladeplatten, zwei Rollenbahnen unter den Ladereihen (y ±0,92, wie RAEUME.Dohle), Ankerschienen, Warnkante an der Rampe
+    platten(S, x0 + 0.02, x1 - 0.02, -hw + 0.02, hw - 0.02, z0, M['boden2'], M['dunkel'], M['mittel'], p=0.96, q=0.76)
+    for yl in (-0.92, 0.92):
+        for sg in (-1, 1): S.box(L - 0.5, 0.03, 0.03, xc + 0.1, yl + sg * 0.17, z0 + 0.027, M['mittel'])
+        for k in range(int((L - 0.7) / 0.22) + 1): S.cyl(0.016, 0.31, (x0 + 0.42 + k * 0.22, yl, z0 + 0.022), (0, 1, 0), M['chrom'], 8)
+    for y in (0.0, -1.4, 1.4): zurrschiene(S, x0 + 0.25, x1 - 0.25, (y, z0 + 0.0135), (0, 0, 1), M['mittel'], M['dunkel'])
+    S.box(0.12, 2 * hw - 0.1, 0.004, x0 + 0.1, 0, z0 + 0.0155, M['warnrw'])
+    # Spanten an Wand und Decke, Knotenbleche, Stoßleisten, Wandfelder zwischen den Spanten, Ankerschiene oben
+    XF = [x0 + 0.4 + k * (L - 0.8) / 4 for k in range(5)]
     for s in (1, -1):
-        for k in range(5):
-            xx = x0 + 0.4 + k * (x1 - x0 - 0.8) / 4
+        for k, xx in enumerate(XF):
             box('Spant', 0.08, 0.05, z1 - z0 - 0.04, xx, s * (hw - 0.03), (z0 + z1) / 2, M['mittel'], 0.006)
-        box('Wandschiene', x1 - x0 - 0.1, 0.03, 0.04, (x0 + x1) / 2, s * (hw - 0.03), z0 + 1.25, M['mittel'], 0.004)
-        box('Stossleiste', x1 - x0 - 0.1, 0.04, 0.25, (x0 + x1) / 2, s * (hw - 0.03), z0 + 0.16, M['ocker'], 0.006)
-    for k in range(3): box('Deckenleuchte', 0.9, 0.12, 0.02, x0 + 0.9 + k * 1.85, 0, z1 - 0.012, M['e_white'], 0)
-    for k in range(6): box('Netzstrang', 0.012, 2 * hw - 0.3, 0.01, x1 - 0.03, 0, z0 + 0.35 + k * 0.35, M['gurt'], 0)
-    for k in range(7): box('Netzstrang', 0.012, 0.01, z1 - z0 - 0.4, x1 - 0.03, -hw + 0.3 + k * (2 * hw - 0.6) / 6, (z0 + z1) / 2, M['gurt'], 0)
+            S.obox((xx, s * (hw - 0.11), z1 - 0.11), (1, 0, 0), (0, -s, 1), (0.06, 0.2, 0.012), M['mittel'])
+        for k in range(4):
+            wandfeld(S, (XF[k], s * hw, z0), (1, 0, 0), (0, -s, 0), 0.07, XF[k + 1] - XF[k] - 0.07, 0.34, 1.86, (1, 3, 5, 0)[k] if s > 0 else (5, 0, 1, 3)[k], M['d_feld'], M['d_rahmen'], M['dunkel'], M['mittel'], M['ocker'])
+        zurrschiene(S, x0 + 0.3, x1 - 0.1, (s * (hw - 0.002), z0 + 2.02), (0, -s, 0), M['mittel'], M['dunkel'])
+        box('Stossleiste', L - 0.1, 0.04, 0.25, xc, s * (hw - 0.03), z0 + 0.16, M['ocker'], 0.006)
+    for xx in XF: box('Deckenspant', 0.08, 2 * hw - 0.06, 0.06, xx, 0, z1 - 0.03, M['mittel'], 0.006)
+    # Decke: Kabelpritschen und Leitungen an beiden Seiten, Laufschiene mit Kettenzug in der Mitte, Leuchten in Fassungen
+    for s in (1, -1):
+        S.box(L - 0.3, 0.22, 0.01, xc, s * (hw - 0.42), z1 - 0.16, M['mittel'])
+        for sg in (-1, 1): S.box(L - 0.3, 0.01, 0.05, xc, s * (hw - 0.42) + sg * 0.11, z1 - 0.14, M['mittel'])
+        for k in range(3): S.box(L - 0.32, 0.025, 0.02, xc, s * (hw - 0.42) + (k - 1) * 0.06, z1 - 0.145, [M['dunkel'], M['ocker'], M['dunkel']][k])
+        for xx in XF: S.box(0.02, 0.02, 0.1, xx + 0.12, s * (hw - 0.42), z1 - 0.1, M['mittel'])
+        pipe('Laderaumleitung', [Vector((x0 + 0.1, s * (hw - 0.25), z1 - 0.09)), Vector((x1 - 0.05, s * (hw - 0.25), z1 - 0.09))], 0.03, M['mittel' if s > 0 else 'ocker'])
+        for xx in XF: schelle(S, (xx + 0.3, s * (hw - 0.25), z1 - 0.09), (0, 0, -1), 0.03, M['d_rahmen'])
+        for k in range(3):
+            xl = x0 + 1.1 + k * 1.85
+            S.box(1.0, 0.2, 0.04, xl, s * 0.72, z1 - 0.04, M['d_rahmen']); S.box(0.9, 0.12, 0.006, xl, s * 0.72, z1 - 0.062, M['e_white'])
+    S.box(L - 0.4, 0.12, 0.012, xc, 0, z1 - 0.18, M['gun']); S.box(L - 0.4, 0.012, 0.12, xc, 0, z1 - 0.12, M['gun']); S.box(L - 0.4, 0.1, 0.012, xc, 0, z1 - 0.065, M['gun'])
+    for xx in XF: S.box(0.06, 0.06, 0.06, xx, 0, z1 - 0.03, M['gun'])
+    with Part('Kettenzug', T(x1 - 0.55, 0, z1 - 0.19), C_HOLD):
+        box('Laufkatze', 0.24, 0.2, 0.08, 0, 0, -0.04, M['ocker'], 0.01)
+        for sg in (1, -1): cyl('Laufrolle', 0.03, 0.02, sg * 0.08, 0.075, 0.03, M['dunkel'], 'Y', n=12); cyl('Laufrolle', 0.03, 0.02, sg * 0.08, -0.075, 0.03, M['dunkel'], 'Y', n=12)
+        cyl('Zuggehaeuse', 0.09, 0.22, 0, 0, -0.17, M['ocker'], 'Y', n=20)
+        for k in range(5): ring('Kettenglied', 0.018, 0.005, (0.04, 0, -0.27 - k * 0.03), (1, 0, 0) if k % 2 else (0, 1, 0), M['chrom'], 10)
+        box('Hakenblock', 0.06, 0.05, 0.08, 0.04, 0, -0.45, M['ocker'], 0.008); ring('Lasthaken', 0.04, 0.01, (0.04, 0, -0.52), (0, 1, 0), M['chrom'], 14)
+        text('MAX 500 KG', 0.025, (0.0, -0.092, -0.17), (1, 0, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Zugschrift')
+    # Stirnwand: Luke zum Vorraum, Netz links daneben, Feuerlöscher, Schrift; Rampenbedienung an der rechten Wand hinten
+    luke(x1, -1, 0.45, z0, 'VORRAUM', C_HOLD)
+    for k in range(5): S.box(0.012, 1.25, 0.01, x1 - 0.03, -0.62, z0 + 0.35 + k * 0.38, M['gurt'])
+    for k in range(5): S.box(0.012, 0.01, 1.6, x1 - 0.03, -1.22 + k * 0.3, z0 + 1.1, M['gurt'])
+    for y in (-1.25, 0.0):
+        for z in (z0 + 0.3, z0 + 1.9): S.cyl(0.02, 0.03, (x1 - 0.02, y, z), (1, 0, 0), M['chrom'], 8)
+    with Part('Feuerloescher', T(x1 - 0.08, 1.25, z0 + 0.55), C_HOLD):
+        cyl('Loescher', 0.07, 0.48, 0, 0, 0, M['rotlack'], 'Z', n=16); cyl('Loescherkopf', 0.03, 0.08, 0, 0, 0.28, M['dunkel'], 'Z', n=10)
     text('LADERAUM · MAX 2,5 T', 0.08, (x1 - 0.045, 0.75, z1 - 0.3), (0, -1, 0), (0, 0, 1), M['txto'], name='Laderaumschrift')
-    area('Laderaumlicht', ((x0 + x1) / 2, 0, z1 - 0.3), (0, 0, 0), 4.0, 2.0, 120, (0.85, 0.9, 1.0))
+    with Part('Rampenbedienung', T(x0 + 0.2, -(hw - 0.03), z0 + 1.3), C_HOLD):
+        box('Bedienkasten', 0.22, 0.05, 0.32, 0, 0, 0, M['dunkel'], 0.008)
+        for k, mm in enumerate(('e_green', 'e_red', 'e_amber')): cyl('Rampentaster', 0.022, 0.02, -0.06 + k * 0.06, 0.03, -0.04, M[mm], 'Y', n=12)
+        box('Notaus', 0.07, 0.03, 0.07, 0.0, 0.035, 0.08, M['ocker'], 0.006); cyl('Notauspilz', 0.03, 0.025, 0.0, 0.055, 0.08, M['rotlack'], 'Y', n=14)
+        text('RAMPE', 0.035, (0.0, 0.027, -0.12), (-1, 0, 0), (0, 0, 1), M['txtw'], align='CENTER', name='Rampenschrift innen')
+    for s in (1, -1): sphere('Notleuchte', 0.035, x1 - 0.06, s * (hw - 0.08), z1 - 0.22, M['e_amber'], 10)
+    S.fertig()
+    CUR[0] = C_HOLD
+    area('Laderaumlicht', (xc, 0, z1 - 0.3), (0, 0, 0), 4.0, 2.0, 120, (0.85, 0.9, 1.0))
+    CUR[0] = C_PART
     # Ladung (nur in Blender, Ansicht „fracht“): zwei Paletten und zwei Kisten
     CUR[0] = C_STU
     with Part('Ladung', T(0, 0, 0), C_STU):
@@ -364,7 +557,7 @@ def lift_fans():
             cyl('Hubnabe', 0.08, 0.03, 0, 0, -0.005, M['ocker'], 'Z', n=16)
 
 # =====================================================================================
-# 6. Fahrwerk: Bugbein mit Zwillingsrädern, Hauptbeine in seitlichen Fahrwerkswülsten
+# 6. Fahrwerk: Landebeine mit Füßen (senkrechter Start, keine Räder); Bugbein, Hauptbeine in seitlichen Fahrwerkswülsten
 # =====================================================================================
 SP = (2.05, -1.45, -5.55, 0.42, 1.16, 2.78)      # Wulst: |y| Mitte, x vorn, x hinten, halbe Breite, unten, oben
 _SW2 = pchip([-5.55, -5.25, -4.6, -2.4, -1.75, -1.45], [0.04, 0.3, 0.42, 0.42, 0.3, 0.04], 0.0, 0.0)
@@ -388,26 +581,56 @@ def sponson(s):
 def sp_bot(d):      # Unterkante des Wulsts bei seitlichem Abstand d von seiner Mitte (volle Breite)
     w = 0.42; zc = (SP[4] + SP[5]) / 2; hz = (SP[5] - SP[4]) / 2 + 0.02
     sn = min(1.0, abs(d) / w) ** (1 / 0.6); cs = math.sqrt(max(0.0, 1 - sn * sn)); return zc - hz * cs ** 0.6
-def twin_wheels(name, A, rw, ww, gap):
-    for sg in (1, -1): wheel(name, A + Vector((0, sg * (gap / 2 + ww / 2), 0)), (0, 1, 0), rw, ww)
-    rod(name + ' Achse', A - Vector((0, gap / 2 + ww + 0.03, 0)), A + Vector((0, gap / 2 + ww + 0.03, 0)), 0.035, M['chrom'], 14)
-def leg(name, P0, A, r, rw, ww, gap, tag_label):
-    strut(name, P0, A, r)
+def foot(name, Ap, E, hx, hy):
+    # Landefuß unter dem Querbolzen Ap (der Fuß kippt um y und legt sich an schrägen Boden an): Gummisohle, Rand, Warnkante,
+    # zweistufiger Teller, vier Rippen, Nabe mit Lageraugen, Querbolzen, zwei Federdämpfer vorn und hinten (halten ihn waagrecht),
+    # Bodenkontaktfühler mit grüner Lampe, Zurraugen. E: Gabelbrücke am Kolbenende (oberes Auge der Dämpfer)
+    F = Vector((Ap.x, Ap.y, 0.0)); rad = min(hx, hy) * 0.62
+    def RR(ex, z0, z1, m, bev, nm):
+        prism(name + nm, [(F.x + x, F.y + y) for x, y in rrect(-hx - ex, hx + ex, -hy - ex, hy + ex, max(0.03, rad + ex), 6)], z0, z1, m, 'Z', bev)
+    RR(0.0, 0.0, 0.035, M['rubber'], 0.008, ' Sohle'); RR(0.012, 0.035, 0.048, M['gun'], 0.004, ' Sohlenrand')
+    RR(0.0, 0.048, 0.075, M['warnrw'], 0.003, ' Warnkante'); RR(-0.03, 0.075, 0.1, M['graphit'], 0.008, ' Teller')
+    RR(-0.09, 0.1, 0.125, M['graphit'], 0.012, ' Oberteller'); hz = 0.125
+    for sx in (1, -1): prism(name + ' Rippe', [(F.x + sx * 0.09, hz), (F.x + sx * (hx - 0.07), hz), (F.x + sx * 0.09, hz + 0.1)], F.y - 0.012, F.y + 0.012, M['gun'], 'Y', 0.003)
+    for sy in (1, -1): prism(name + ' Rippe', [(F.y + sy * 0.09, hz), (F.y + sy * (hy - 0.07), hz), (F.y + sy * 0.09, hz + 0.08)], F.x - 0.012, F.x + 0.012, M['gun'], 'X', 0.003)
+    rod(name + ' Nabe', F + Vector((0, 0, hz)), F + Vector((0, 0, hz + 0.08)), 0.1, M['gun'], 28, r2=0.075)
+    zp = Ap.z; lh = zp + 0.045 - hz - 0.08
+    for sy in (1, -1): slab(name + ' Lagerauge', (F.x, F.y + sy * 0.05, hz + 0.08 + lh / 2), (1, 0, 0), (0, 0, 1), (0.11, lh, 0.022), M['gun'], 0.006)
+    rod(name + ' Querbolzen', Ap - Vector((0, 0.135, 0)), Ap + Vector((0, 0.135, 0)), 0.022, M['chrom'], 14)
+    for sy in (1, -1): rod(name + ' Bolzenkappe', Ap + Vector((0, sy * 0.125, 0)), Ap + Vector((0, sy * 0.145, 0)), 0.032, M['gun'], 14)
+    for sx in (1, -1):      # Federdämpfer: oben an der Gabelbrücke, unten auf dem Teller
+        a = E + Vector((sx * 0.13, 0, -0.03)); b = F + Vector((sx * (hx - 0.11), 0, 0.105))
+        sphere(name + ' Daempferauge', 0.024, *a, M['gun'], 10); sphere(name + ' Daempferauge', 0.022, *b, M['gun'], 10)
+        rod(name + ' Daempfer', a, a.lerp(b, 0.6), 0.019, M['gun'], 12); rod(name + ' Daempferkolben', a.lerp(b, 0.55), b, 0.011, M['chrom'], 10)
+        for f in (0.12, 0.24, 0.36, 0.48): ring(name + ' Feder', 0.029, 0.005, tuple(a.lerp(b, f)), tuple((b - a).normalized()), M['ocker'], 12)
+    rod(name + ' Fuehler', F + Vector((hx - 0.05, 0, 0.14)), F + Vector((hx - 0.05, 0, 0.012)), 0.013, M['mittel'], 10)
+    sphere(name + ' Fuehlerlampe', 0.018, *(F + Vector((hx - 0.05, 0, 0.15))), M['e_green'], 8)
+    for sy in (1, -1): ring(name + ' Zurrauge', 0.03, 0.009, tuple(F + Vector((-(hx - 0.07), sy * (hy - 0.08), 0.13))), (1, 0, 0), M['mittel'], 12)
+def leg(name, P0, Ap, r, hx, hy, tag_label):
+    # Federbein vom Lagerbock bis zum Kolbenende E, darunter Gabelbrücke und Gabel zum Querbolzen Ap des Landefußes
+    u = (Ap - P0).normalized(); E = Ap - u * 0.2; A2 = P0 + (E - P0) / 0.82      # strut() rechnet in Anteilen bis 0,82 (Kolbenende)
+    strut(name, P0, A2, r)
     rod('Lagerachse', P0 - Vector((0, 0.22, 0)), P0 + Vector((0, 0.22, 0)), 0.055, M['chrom'], 20)
     for sg in (1, -1): rod('Lagerbock', P0 + Vector((0, sg * 0.18, 0)), P0 + Vector((0, sg * 0.24, 0)), 0.085, M['gun'], 20)
-    bot = P0.lerp(A, 0.82); slab('Achsschwinge', (bot + A) / 2, (0, 0, 1), (1, 0, 0), ((bot - A).length + 0.1, 0.12, 0.12), M['gun'], 0.012)
-    twin_wheels(name + 'rad', A, rw, ww, gap)
-    fw = Vector((1, 0, 0)); t0 = P0.lerp(A, 0.55) + fw * 0.1; t1 = P0.lerp(A, 0.82) + fw * 0.1; kn = (t0 + t1) / 2 + fw * 0.17
+    rod(name + ' Gabelkopf', E - u * 0.04, E + u * 0.03, r * 0.9, M['gun'], 24)
+    slab(name + ' Gabelbruecke', E + u * 0.03, (1, 0, 0), (0, 1, 0), (0.3, 0.26, 0.05), M['gun'], 0.01)
+    for sg in (1, -1): link_bar(name + ' Gabel', E + u * 0.03 + Vector((0, sg * 0.1, 0)), Ap + Vector((0, sg * 0.1, 0)), 0.07, 0.024, (0, 1, 0), M['gun'])
+    foot(name + 'fuss', Ap, E + u * 0.03, hx, hy)
+    bw = Vector((-1, 0, 0)); t0 = P0.lerp(A2, 0.55) + bw * 0.1; t1 = E + bw * 0.1; kn = (t0 + t1) / 2 + bw * 0.17      # Drehmomentlenker hinten
     link_bar('Drehmomentlenker', t0, kn, 0.055, 0.028, (0, 1, 0), M['mittel']); link_bar('Drehmomentlenker', kn, t1, 0.055, 0.028, (0, 1, 0), M['mittel'])
-    rod('Einziehzylinder', P0 + Vector((-0.35, 0.09, 0.1)), P0.lerp(A, 0.15) + Vector((-0.05, 0.09, 0)), 0.03, M['gun'], 14)
-    pipe('Hydraulikleitung', [P0 + Vector((0.08, -0.08, 0.02)), P0.lerp(A, 0.3) + Vector((0.09, -0.09, 0)), P0.lerp(A, 0.55) + Vector((0.08, -0.09, 0))], 0.011, M['rubber'], rad=0.05)
-    text(tag_label, 0.05, tuple(P0.lerp(A, 0.28) + Vector((r + 0.004, 0, 0))), (0, -1, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Beinschrift')
+    for p in (t0, kn, t1): rod('Lenkerbolzen', p - Vector((0, 0.04, 0)), p + Vector((0, 0.04, 0)), 0.016, M['chrom'], 12)
+    rod('Einziehzylinder', P0 + Vector((-0.35, 0.09, 0.1)), P0.lerp(A2, 0.15) + Vector((-0.05, 0.09, 0)), 0.03, M['gun'], 14)
+    hl = Vector((0.02, -(r + 0.026), 0))      # Hydraulikleitung dicht am Bein, mit Schellen
+    pipe('Hydraulikleitung', [P0 + Vector((0.06, -0.1, 0.04)), P0.lerp(A2, 0.12) + hl, P0.lerp(A2, 0.5) + hl, E + u * 0.0 + Vector((0.02, -0.11, 0.0))], 0.011, M['rubber'], rad=0.05)
+    for f in (0.22, 0.42): ring('Leitungsschelle', r + 0.012, 0.008, tuple(P0.lerp(A2, f)), tuple(u), M['mittel'], 24); slab('Schellenfuss', P0.lerp(A2, f) + Vector((0.01, -(r + 0.016), 0)), u, (0, 1, 0), (0.03, 0.025, 0.02), M['mittel'], 0.003)
+    text(tag_label, 0.05, tuple(P0.lerp(A2, 0.28) + Vector((r + 0.004, 0, 0))), (0, -1, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Beinschrift')
+    return E
 def nose_gear():
-    P0 = Vector((6.55, 0, 2.08)); A = Vector((6.66, 0, 0.29))
+    P0 = Vector((6.55, 0, 2.08)); Aw = Vector((6.66, 0, 0.29)); Ap = P0 + (Aw - P0) * ((P0.z - 0.25) / (P0.z - Aw.z))      # Fußgelenk auf 0,25 m
     with Gruppe('fwn'):
         with Part('Bugfahrwerk', T(0, 0, 0), C_GEAR):
-            leg('Bug', P0, A, 0.075, 0.29, 0.16, 0.08, 'FW 1')
-            with Part('Rollscheinwerfer', T(*(P0.lerp(A, 0.3) + Vector((0.09, 0, 0)))), C_GEAR):
+            leg('Bug', P0, Ap, 0.075, 0.32, 0.25, 'FW 1')
+            with Part('Landescheinwerfer', T(*(P0.lerp(Ap, 0.3) + Vector((0.09, 0, 0)))), C_GEAR):
                 box('Lampenhalter', 0.05, 0.16, 0.04, 0, 0, 0, M['gun'], 0.006)
                 for sg in (1, -1): rod('Scheinwerfer', (0, sg * 0.05, 0.0), (0.06, sg * 0.05, 0.0), 0.03, M['gun'], 16); cyl('Lampe', 0.024, 0.006, 0.062, sg * 0.05, 0, M['blitz'], 'X', n=14)
     gelenk('fwn', tuple(P0), 'Y', math.radians(92), 'fw', 0.05, 0.72)
@@ -420,14 +643,13 @@ def nose_gear():
             ob = hull_patch('Bugradklappe', x0 + 0.02, x1 - 0.02, 0.006 * sg, hw * sg, False, M['graphit'], 0.002, 10, 6, 0.022, C_GEAR)
             ob.matrix_world = T(xm, hy, hz) @ RX(sg * math.radians(88)) @ T(-xm, -hy, -hz)
         gelenk(tag, (xm, hy, hz), 'X', -sg * math.radians(88), 'fw', 0.72, 1.0)
-    ANCH['bugrad'] = A
+    ANCH['bugrad'] = Vector((Ap.x, 0, 0.15))
 def main_gear(s):
-    yc = s * SP[0]; P0 = Vector((-2.05, yc, 2.2)); A = Vector((-2.05, yc, 0.34))
+    yc = s * SP[0]; P0 = Vector((-2.05, yc, 2.2)); Ap = Vector((-2.05, yc, 0.27))
     tag = 'fwh_' + ('l' if s > 0 else 'r')
     with Gruppe(tag):
         with Part('Hauptfahrwerk', T(0, 0, 0), C_GEAR):
-            leg('Haupt', P0, A, 0.085, 0.34, 0.2, 0.06, 'FW %d' % (2 if s > 0 else 3))
-            for sg in (1, -1): slab('Bremssattel', A + Vector((-0.2, sg * 0.25, 0.12)), (1, 0, 0), (0, 1, 0), (0.1, 0.04, 0.12), M['rotlack'], 0.01)
+            leg('Haupt', P0, Ap, 0.085, 0.4, 0.255, 'FW %d' % (2 if s > 0 else 3))
     gelenk(tag, tuple(P0), 'Y', math.radians(88), 'fw', 0.0, 0.7)
     CUR[0] = C_PART
     open_box('Wulstschacht', -4.35, -1.85, yc - 0.3, yc + 0.3, 0, 2.7, M['schacht'], '-z', C_PART, floor=lambda x, y: sp_bot(y - yc) + 0.01)
@@ -438,7 +660,7 @@ def main_gear(s):
             ob = box('Wulstklappe', 2.46, 0.3, 0.025, 0, 0, 0, M['graphit'], 0.006)
             ob.matrix_world = T(xm, hy, hz) @ RX(sg * math.radians(88)) @ T(-xm, -hy, -hz) @ T(xm, yc + sg * 0.15, hz)
         gelenk(tagk, (xm, hy, hz), 'X', -sg * math.radians(88), 'fw', 0.72, 1.0)
-    if s > 0: ANCH['hauptrad'] = A + Vector((0, 0.3, 0.3))
+    if s > 0: ANCH['hauptrad'] = Vector((-2.05, yc + 0.28, 0.4))
 
 # =====================================================================================
 # 7. Details: Seitenleitwerk, Dachluke, Handläufe, Antennen, Lichter, Kinnlaser, Kanonen, Steuerdüsen, Klappen, Beschriftung
@@ -545,7 +767,7 @@ ZUST = {}
 def view(name, path, res=(1600, 900)):
     st = ZUST.get(name, {}); zustand(st.get('fw', 0.0), st.get('rampe', 0.0), st.get('tuer', 0.0))
     for o in bpy.data.objects:
-        if o.name.startswith('Kanzelglas'): o.hide_render = name == 'cockpit'
+        if o.name.startswith('Kanzelglas'): o.hide_render = name.startswith('cockpit')
     for o in [STAGE['kiste']] + list(STAGE['kiste'].children_recursive): o.hide_render = not st.get('kiste', False)
     boden = bpy.data.objects.get('Boden grau'); bz = boden.location.z if boden else 0
     if boden and name == 'unten': boden.location.z = -60
@@ -553,8 +775,8 @@ def view(name, path, res=(1600, 900)):
     finally:
         if boden: boden.location.z = bz
 PLAN_FEAT = [
-    ('RUNDUMVERGLASUNG', 'kanzel', (-60, -160)), ('EINSTIEGSTÜR MIT TREPPE', 'tuer', (-110, 195)), ('BUGRAD, ZWILLINGSRÄDER', 'bugrad', (-260, 50)),
-    ('HAUPTFAHRWERK IM WULST', 'hauptrad', (-60, 170)), ('LADERAUM 5,7 × 3,1 × 2,4 M', 'laderaum', (240, 45)), ('HECKRAMPE', 'rampe_spitze', (140, 120)),
+    ('RUNDUMVERGLASUNG', 'kanzel', (-60, -160)), ('EINSTIEGSTÜR MIT TREPPE', 'tuer', (-110, 195)), ('BUGBEIN MIT LANDEFUSS', 'bugrad', (-260, 50)),
+    ('LANDEBEINE IM WULST', 'hauptrad', (-60, 170)), ('LADERAUM 5,7 × 3,1 × 2,4 M', 'laderaum', (240, 45)), ('HECKRAMPE', 'rampe_spitze', (140, 120)),
     ('TRIEBWERKSGONDELN', 'gondel1', (150, -120)), ('WERKZEUGLASER', 'laser', (-220, 80)),
 ]
 def plan_txt(ext):
@@ -585,6 +807,8 @@ def build():
     glazing(); cockpit(); entry(); hold()
     for s in (1, -1): build_nacelle(s); nacelle_parts(s); sponson(s); main_gear(s)
     lift_fans(); nose_gear(); details(); markings()
+    for c in (C_ROOM, C_HOLD):      # Innenräume: der Export hängt den Materialien „ ~i…“ an (Oberflächen-Shader im Spiel)
+        for o in c.all_objects: o['innen'] = 1
     gelenke_anlegen()
     stages(); world('grau')
     for nm, loc, yaw in (('Figur Studio', (-0.6, 4.1, 0), -2.2), ('Figur Pilot', (1.4, 3.3, 0), -1.9), ('Figur Techniker', (-9.4, -1.2, 0), 1.2)):
@@ -594,7 +818,7 @@ def build():
         c = CAMS[nm]; c.location = loc; c.rotation_euler = (Vector(tgt) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler(); c.data.lens = lens
     CAMS['Seite'].location = (1.0, 60, 2.7); CAMS['Front'].location = (60, 0, 2.6); CAMS['Front'].data.ortho_scale = 11; CAMS['Seite'].data.ortho_scale = 20
     CAMS['Draufsicht'].data.ortho_scale = 20; CAMS['Draufsicht'].location = (1.0, 0, 60)
-    cam('Fahrwerk', (8.6, 2.8, 0.8), (6.6, 0.0, 1.0), 30); cam('Fahrwerk hinten', (0.3, 4.6, 0.8), (-2.2, 2.0, 1.1), 30)
+    cam('Fahrwerk', (8.6, 2.8, 0.8), (6.6, 0.0, 1.0), 30); cam('Fahrwerk hinten', (-1.0, 5.2, 0.7), (-2.3, 2.0, 0.65), 32); cam('Cockpit innen', (6.12, 0.32, 3.42), (7.9, -0.05, 2.75), 22)
     cam('Fracht', (-12.6, -2.8, 3.4), (-4.0, 0, 2.3), 30); cam('Unten', (6.5, 7.0, -4.0), (0.0, 0, 2.0), 38); cam('Einstieg', (4.2, 6.4, 2.2), (1.0, 1.6, 1.8), 30)
     global VIEWS
     V6 = {
@@ -604,7 +828,7 @@ def build():
         'weltraum': ('Weltraum', 'weltraum', True, 0.0, 6.0, {'fw': 1.0}), 'unten': ('Unten', 'grau', True, 0.6, 0.0, {'fw': 1.0}),
         'fahrwerk': ('Fahrwerk', 'grau', True, 0.3, 0.0, {}), 'fahrwerk2': ('Fahrwerk hinten', 'grau', True, 0.3, 0.0, {}),
         'fracht': ('Fracht', 'hangar', True, 0.6, 0.0, {'rampe': 1.0, 'kiste': True}), 'einstieg': ('Einstieg', 'grau', True, 0.2, 0.0, {'tuer': 1.0}),
-        'halb': ('Schraeg', 'grau', True, 0.0, 0.0, {'fw': 0.55}),
+        'halb': ('Schraeg', 'grau', True, 0.0, 0.0, {'fw': 0.55}), 'cockpit2': ('Cockpit innen', 'grau', True, 0.3, 0.0, {}),
     }
     VIEWS = {k: v[:5] for k, v in V6.items()}; ZUST.update({k: v[5] for k, v in V6.items()})
     anchors = {'duese': list(ANCH['duese1']), 'kanone': list(ANCH['kanone1']), 'laser': list(ANCH['laser']), 'fracht': list(ANCH['fracht']), 'raum': ANCH['raum'],

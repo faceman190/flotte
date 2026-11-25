@@ -1,5 +1,6 @@
 # Dohle fürs Spiel exportieren: blender.exe -b Dohle.blend --python doh_export.py (nach els_export.py)
 # Ganzes Modell in einer Datei (unter 30 m: kein begehbarer Innenraum; das Cockpit bleibt durch die Kanzel sichtbar).
+# Innenräume (seit 26.11.2026): Materialien der Objekte mit „innen“ tragen „ ~iw/~ib/~ig/~im“ (Oberflächen-Shader im Spiel, wie Kormoran und Wisent).
 # Ohne Bühnen (Studio, Hangar, Kameras, Planet), Lampen, Schraubeninstanzen und die durchscheinenden Lauf- und Abriebspuren.
 # Jedes Material wird zu einem schlichten PBR-Material aus seinen Angaben (m['bk']): Grundfarbe, Metall, Rauheit, Leuchten; Glas halbdurchsichtig.
 # Rumpfmaterialien mit Plattenfugen heißen ext_pan_* (das Spiel rechnet Fugen und Nieten im Shader aus den Koordinaten „Platten“).
@@ -15,9 +16,19 @@ PAN = {'Rumpf Sandweiss': 'ext_pan_sand', 'Rumpf Schiefer': 'ext_pan_schiefer', 
 anker = json.load(open(os.path.join(B, 'doh-anker.json')))
 TAGS = [g['tag'] for g in anker['gelenke']]
 CACHE = {}
-def exp_mat(m, tag=None):
+# Innenräume (Objekte mit 'innen', doh_kit.py): Materialien bekommen eine Kennung für den Oberflächen-Shader des Spiels
+# (src/models/innenFlaeche.ts): „ ~iw“ Wand/Decke, „ ~ib“ Boden, „ ~ig“ Gitterrost, „ ~im“ Metall. Leuchten, Glas, Schrift, Schraffur, Bildschirme bleiben schlicht.
+def innen_art(o, m):
+    if m is None or o.type == 'FONT' or not o.get('innen'): return ''
+    bk = json.loads(m['bk']) if 'bk' in m.keys() else {}
+    n = m.name.lower()
+    if not bk or bk.get('emit') or bk.get('stripes') or m.name in GLASS or n.startswith('schrift') or 'glas' in n or 'licht' in n or 'anzeige' in n: return ''
+    if 'rost' in n or 'gitter' in n or 'grate' in n: return 'g'
+    if any(k in n for k in ('boden', 'floor', 'stufe', 'podest')): return 'b'
+    return 'm' if float(bk.get('metal', 0.3)) >= 0.7 else 'w'
+def exp_mat(m, tag=None, art=''):
     if m is None: return None
-    key = (m.name, tag)
+    key = (m.name, tag, art)
     if key in CACHE: return CACHE[key]
     bk = json.loads(m['bk']) if 'bk' in m.keys() else {}
     if bk.get('stripes'): col = [(a + c) / 2 for a, c in zip(bk['a'], bk['c'])]
@@ -26,7 +37,7 @@ def exp_mat(m, tag=None):
     emit, es = bk.get('emit'), float(bk.get('es', 0.0))
     if bk.get('stripes') and es: emit = col
     if tag: rough = min(1.0, rough + 0.0013 * (1 + TAGS.index(tag)))
-    name = PAN.get(m.name, m.name + ' (Spiel)') + (' |' + tag if tag else '')
+    name = PAN.get(m.name, m.name + ' (Spiel)') + (' ~i' + art if art else '') + (' |' + tag if tag else '')
     e = bpy.data.materials.new(name); e.use_nodes = True
     b = next(n for n in e.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
     b.inputs['Base Color'].default_value = (*col[:3], 1); b.inputs['Metallic'].default_value = metal; b.inputs['Roughness'].default_value = rough
@@ -57,7 +68,7 @@ for o in list(bpy.data.objects):
     for v in me.vertices:
         for k in range(3): lo[k] = min(lo[k], v.co[k]); hi[k] = max(hi[k], v.co[k])
     tag = tag_of(o)
-    for i, m in enumerate(me.materials): me.materials[i] = exp_mat(m, tag)
+    for i, m in enumerate(me.materials): me.materials[i] = exp_mat(m, tag, innen_art(o, m))
     ob = bpy.data.objects.new(o.name, me); out.objects.link(ob)
     n_obj += 1; n_tri += sum(len(p.vertices) - 2 for p in me.polygons)
 for o in SC.objects: o.select_set(False)
