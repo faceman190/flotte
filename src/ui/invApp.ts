@@ -19,7 +19,8 @@ const equippedId = (s: { w: string; k: string }) => (s.w === 'g' ? P.gear[s.k as
 // Werte eines Gegenstands; cmp = das Angelegte auf demselben Platz (zeigt den Unterschied)
 export function statRows(d: GearDef, cmp?: GearDef) {
   const keys = STAT_IDS.filter(k => d.st?.[k] || cmp?.st?.[k]);
-  return keys.map(k => {
+  const extra = (d.vakuum ? '<div class="row"><span>Druckdicht</span><b>für Außenbord</b></div>' : '') + (d.duesen ? '<div class="row"><span>Kaltgasdüsen</span><b>freies Fliegen im All</b></div>' : '');
+  return extra + keys.map(k => {
     const v = d.st?.[k] || 0, diff = cmp ? v - (cmp.st?.[k] || 0) : 0;
     return `<div class="row"><span>${STAT_N[k].n}</span><b>${statText(k, v)}${cmp && diff ? ` <span class="${diff > 0 ? 'good' : 'bad'}">(${sgn(diff)})</span>` : ''}</b></div>`;
   }).join('');

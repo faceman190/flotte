@@ -66,4 +66,7 @@ testserver“. Leitlinien wie immer: realistisch statt verspielt, im Browser fl�
 - 8 Bergbau mit der Hand: `src/game/dungeon.ts` (buildAdern, updateAbbau), Handbohrer `werk_handbohrer` und sieben Kristall-Fundstücke in `src/data/gear.ts`.
 - 10 Recht und Ordnung: `src/game/recht.ts`, Treffer in `combat.ts`, Patrouillen in `npc.ts`, Bußgeld beim Andocken (`main.ts`, `hud.ts`); Testlabor setzt die Stufe.
 - 7 Außenbord: `src/game/eva.ts`, Modus `eva` (main.ts), Container von Hand in `begegnungen.ts` (evaContainer). Nicht am Andockpunkt einer Station.
+  Überarbeitet 25.11.2026: hinaus nur mit druckdichtem Helm und Anzug (gear.ts `vakuum`: EVA-Helm, Pilotenhelm, Sturmhelm; Raumanzug, Druckanzug,
+  Sturmrüstung, Veteranenrüstung). Freies Fliegen nur mit dem Manövrierrucksack MR-1 (`ruck_mmu`, 2.800 Cr, `duesen`), sonst führt der Traktorstrahl
+  des Schiffs langsam bis 60 m. Schwebehaltung per Zwei-Knochen-IK, Rucksackmodell, gelbe Leine, feiner Kaltgasnebel, Triebwerksleuchten aus.
 - 9 Quartier: gebaut (Aufzug „QUARTIERE“ auf Deck 3, eigenes Modell mit gebackenem Licht, Fassung je Pilot, Besuch auf Einladung), siehe docs/quartier.md.
