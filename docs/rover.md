@@ -8,7 +8,7 @@ Erkundungsrover geben. Wie ein Buggy. Erstell den noch. Gib dir Mühe.“
 
 | | Dachs (Bergbau) | Wiesel (Erkundung) |
 |---|---|---|
-| Wer hat ihn | jeder Pilot | Werft, 9.500 Cr |
+| Wer hat ihn | Leihrover an jeder Planetenbasis, eigener in der Werft 6.500 Cr (fährt in Pfeil und Wisent mit) | Werft, 9.500 Cr (fährt in Kormoran, Pfeil, Wisent mit) |
 | Räder | 6, Radius 0,75 m, Spur 3,2 m | 4, Radius 0,52 m, Spur 2,04 m, Radstand 2,8 m |
 | Höchsttempo | 86 km/h, mit Umschalt 119 km/h | 119 km/h, mit Umschalt 158 km/h |
 | Anzug | 0 → 65 km/h in 3 s | 0 → 93 km/h in 3 s |
@@ -72,3 +72,5 @@ Alle Fahrwerte stehen in `src/models/rover.ts` (`FZ`), `updateRover` in `src/gam
 - Fahrgefühl nur gemessen und auf Standbildern geprüft; der Nutzer ist noch nicht selbst gefahren.
 - Andere Spieler sehen fremde Bodenfahrzeuge nicht (wie bisher beim Rover).
 - Stellschrauben: `FZ` in models/rover.ts (Tempo, Griff, `jump`), Luftschwerkraft in surface.ts.
+
+Seit 25.11.2026 passen Fahrzeuge zu den Schiffen: siehe docs/konzept-schiffe-fracht.md (Stand der Umsetzung) und `src/game/fahrzeuge.ts`.

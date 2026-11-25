@@ -21,6 +21,7 @@ import { world } from './world';
 import { releaseAll } from '../core/input';
 import { radio } from '../ui/radio';
 import { quartierHooks, eigeneDeko, quartierNr } from './quartier';
+import { testAnBord } from './fahrzeuge';
 import { esc, fmtN } from '../core/util';
 import type { Paint } from '../models/gltfShips';
 
@@ -166,7 +167,7 @@ function act(a: string, k: string) {
     P.quartier ||= { nr: quartierNr(P.name), seit: Date.now() };
     vorWeg(); zu(); testHooks.reise('st:heimstatt:bastion:in'); setTimeout(() => quartierHooks.fahren(P.name, eigeneDeko()), 1500); say('Reise: Quartier'); return;
   }
-  if (a === 'reise') { const z = v('tlZiel'); if (!z) return; if (z.endsWith(':wiesel')) (P.fahrzeuge ||= []).includes('wiesel') || P.fahrzeuge!.push('wiesel'); vorWeg(); zu(); testHooks.reise(z); say('Reise: ' + (ziele().find(x => x[0] === z)?.[1] || z)); return; }
+  if (a === 'reise') { const z = v('tlZiel'); if (!z) return; if (z.endsWith(':wiesel') || z.endsWith(':dachs')) testAnBord(z.endsWith(':wiesel') ? 'wiesel' : 'dachs'); vorWeg(); zu(); testHooks.reise(z); say('Reise: ' + (ziele().find(x => x[0] === z)?.[1] || z)); return; }
   if (a === 'geld') { P.credits += 100000; say(`+100.000 Credits · Kontostand ${fmtN(P.credits)}`); }
   if (a === 'voll') { const s = stats(); P.hull = s.maxHull; P.shield = s.maxShield; P.ammo = s.maxAmmo; P.rockets = s.maxRockets; P.charges = s.maxCharges; say('Hülle, Schild, Munition, Raketen und Ladungen aufgefüllt.'); }
   if (a === 'schiff') {

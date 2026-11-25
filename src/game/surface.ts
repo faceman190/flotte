@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { KEEP } from './keep';
+import { ausgabe, wahl } from './fahrzeuge';
 import { scene, camera, view, ux, glowMat } from '../core/engine';
 import { texMat, std, boxUV } from '../core/textures';
 import { setSky, setSurfaceSky } from '../core/sky';
@@ -507,7 +508,9 @@ export function landInfo() {
 // ---------------- Rover ----------------
 // Seit 2026-11-24 die Fahrzeuge aus Blender (models/rover.ts): Bergbaurover „Dachs“ oder Erkundungsbuggy „Wiesel“ (P.fahrzeug).
 // Solange das Modell lädt (und als Rückfall), steht der alte Rover aus Grundformen da; updateRover tauscht, sobald es geladen ist.
-export const fzWahl = (): FzId => { const k = normFz(P.fahrzeug); return k === 'wiesel' && !(P.fahrzeuge || []).includes('wiesel') ? 'dachs' : k; };
+export const fzWahl = (): FzId => ausgabe(true)?.kind || 'dachs';
+// an einer Planetenbasis gelandet? (dort stellt die Fahrzeughalle einen Leihrover bereit)
+const anBasis = (x: number, z: number) => world.stations.some(s => Math.hypot(s.x - x, s.z - z) < 500);
 export function buildRover(kind: FzId = fzWahl()): RoverModel { fzLaden(kind); return buildFahrzeug(kind) || buildRoverAlt(); }
 function buildRoverAlt() {
   const g = new THREE.Group(), body = new THREE.Group();
@@ -545,20 +548,29 @@ type RoverModel = ReturnType<typeof buildRoverAlt> | RoverNeu;
 export const ROVER = {
   active: false, x: 0, y: 0, z: 0, yaw: 0, speed: 0, model: null as RoverModel | null, kind: 'dachs' as FzId,
   ship: { x: 0, y: 0, z: 0, yaw: 0 }, target: null as Asteroid | null, acc: 0, drilling: false, prompt: '',
-  cap: 40, warn: 0,
+  cap: 40, warn: 0, leih: false, ohne: false,      // leih: Leihrover der Basis; ohne: kein Fahrzeug (zu Fuß, game/fahrzeuge.ts)
   vx: 0, vy: 0, vz: 0, yr: 0, steer: 0, pitch: 0, roll: 0, air: false, susp: [0, 0, 0, 0, 0, 0], slip: 0,
 };
 export const roverLoad = () => ITEM_IDS.reduce((a, k) => a + (P.rover?.[k] || 0), 0);
 
 // quiet: beim Laden eines Spielstands (main.ts, resumeAt) – ohne Prüfung der Fluglage, ohne Staub, Ton und Funk
-export function landShip(quiet = false) {
+export function landShip(quiet = false, basis = false) {
   const li = quiet ? null : landInfo();
   if (!quiet && (!li || !li.ok)) { if (li) radio('SYSTEM', li.text + '.'); return false; }
   const r = stats().radius;
   ROVER.ship = { x: P.x, y: heightAt(P.x, P.z) + r * 0.55, z: P.z, yaw: P.yaw };
   P.vx = P.vy = P.vz = 0; P.pitch = 0;
   if (!P.rover) P.rover = {};
-  const kind = fzWahl();
+  // Fahrzeug nur, wenn eins an Bord ist, an einer Basis sonst der Leihrover; sonst zu Fuß (game/fahrzeuge.ts)
+  const aus = ausgabe(basis || anBasis(P.x, P.z));
+  ROVER.ohne = !aus; ROVER.leih = !!aus?.leih;
+  if (!aus) {
+    if (ROVER.model) { scene.remove(ROVER.model.g); ROVER.model = null; }
+    fahrerWeg(); ROVER.x = P.x; ROVER.z = P.z; ROVER.y = heightAt(P.x, P.z); ROVER.yaw = P.yaw; ROVER.speed = 0; ROVER.active = true;
+    if (!quiet) { burst(P.x, heightAt(P.x, P.z) + 1, P.z, '#4a4238', 24, 12, 0.9); snd(180, 0.6, 'sawtooth', 0.04, -80); radio('SYSTEM', `Gelandet. Die ${P.shipName} trägt kein Fahrzeug: zu Fuß hinaus. Leihrover gibt es an jeder Planetenbasis, eigene Fahrzeuge fahren in Kormoran, Pfeil oder Wisent mit.`); }
+    return true;
+  }
+  const kind = aus.kind;
   if (ROVER.model && ROVER.model.kind !== kind && ROVER.model.neu) { scene.remove(ROVER.model.g); ROVER.model = null; }
   const m = ROVER.model || buildRover(kind);
   ROVER.model = m; ROVER.kind = kind; ROVER.cap = FZ[kind].cap;
@@ -572,8 +584,10 @@ export function landShip(quiet = false) {
   if (quiet) return true;
   burst(ROVER.x, ROVER.y + 1, ROVER.z, '#4a4238', 30, 14, 1.0);
   snd(180, 0.6, 'sawtooth', 0.04, -80);
-  radio('SYSTEM', kind === 'wiesel' ? 'Gelandet. Buggy ausgesetzt: WASD fahren, [R] Umgebung abtasten, [E] am Schiff einsteigen, [X] am Schiff Fahrzeug tauschen.'
-    : `Gelandet. Rover ausgesetzt: WASD fahren, Klick halten zum Bohren, [E] am Schiff einsteigen.${(P.fahrzeuge || []).includes('wiesel') ? ' [X] am Schiff: Buggy nehmen.' : ''}`);
+  const mehr = wahl(basis || anBasis(P.x, P.z)).length > 1 ? ' [X] am Schiff: anderes Fahrzeug.' : '';
+  radio('SYSTEM', aus.leih ? `Die Fahrzeughalle der Basis stellt dir einen Leihrover „Dachs“ bereit: WASD fahren, Klick halten zum Bohren. Er bleibt auf dem Planeten.${mehr}`
+    : kind === 'wiesel' ? `Gelandet. Buggy aus dem Laderaum: WASD fahren, [R] Umgebung abtasten, [E] am Schiff einsteigen.${mehr}`
+    : `Gelandet. Rover aus dem Laderaum: WASD fahren, Klick halten zum Bohren, [E] am Schiff einsteigen.${mehr}`);
   return true;
 }
 
@@ -581,6 +595,7 @@ export function landShip(quiet = false) {
 export function relandShip(ship: { x: number; y: number; z: number; yaw: number }, rover: { x: number; z: number; yaw: number }) {
   P.x = ship.x; P.y = ship.y; P.z = ship.z; P.yaw = ship.yaw;
   landShip(true);
+  if (ROVER.ohne) { ROVER.ship = { ...ship }; return; }
   ROVER.ship = { ...ship };
   if (isFinite(rover.x) && isFinite(rover.z) && Math.abs(rover.x) < SURF.limit && Math.abs(rover.z) < SURF.limit && !liquidAt(rover.x, rover.z)) {
     ROVER.x = rover.x; ROVER.z = rover.z; ROVER.yaw = rover.yaw || 0; ROVER.y = heightAt(ROVER.x, ROVER.z);
@@ -601,8 +616,10 @@ export function unloadRover() {
 }
 // Am Schiff das andere Fahrzeug nehmen (Taste X, main.ts): Der Dachs lädt vorher seine Ladung ins Schiff. null: kein zweites Fahrzeug.
 export function fahrzeugTauschen(): string | null {
-  if (!ROVER.model || !(P.fahrzeuge || []).includes('wiesel')) return null;
-  const neu: FzId = ROVER.kind === 'dachs' ? 'wiesel' : 'dachs';
+  const w = wahl(anBasis(ROVER.ship.x, ROVER.ship.z));
+  if (!ROVER.model || w.length < 2) return null;
+  const i = w.findIndex(q => q.kind === ROVER.kind && q.leih === ROVER.leih), nx = w[(i + 1) % w.length], neu: FzId = nx.kind;
+  ROVER.leih = nx.leih;
   let msg = '';
   if (ROVER.kind === 'dachs' && roverLoad()) { const { moved, left } = unloadRover(); msg = moved ? ` ${moved} Einheiten Erz in den Frachtraum verladen.${left ? ` ${left} bleiben im Dachs.` : ''}` : ''; }
   scene.remove(ROVER.model.g); fahrerWeg(); laserSound(false);
@@ -613,7 +630,7 @@ export function fahrzeugTauschen(): string | null {
   ROVER.vx = ROVER.vz = ROVER.vy = 0; ROVER.speed = 0; ROVER.air = false; ROVER.yr = ROVER.steer = 0; ROVER.drilling = false; ROVER.target = null;
   camInit = false;
   snd(220, 0.5, 'sawtooth', 0.04, 120);
-  return (neu === 'wiesel' ? 'Buggy „Wiesel“ ausgeladen, der Dachs bleibt im Schiff. [R] tastet die Umgebung ab.' : 'Rover „Dachs“ ausgeladen, der Buggy bleibt im Schiff.') + msg;
+  return (nx.leih ? 'Leihrover „Dachs“ der Basis genommen.' : neu === 'wiesel' ? 'Buggy „Wiesel“ aus dem Laderaum. [R] tastet die Umgebung ab.' : 'Rover „Dachs“ aus dem Laderaum.') + msg;
 }
 export function boardShip() {
   const { moved, left } = unloadRover();
@@ -624,7 +641,8 @@ export function boardShip() {
   P.vx = P.vy = P.vz = 0;
   G.camInit = false;
   snd(300, 0.6, 'sawtooth', 0.05, 500);
-  radio('SYSTEM', moved ? `${moved} Einheiten in den Frachtraum verladen.${left ? ` ${left} passen nicht mehr und bleiben im Rover.` : ''}` : 'Rover verstaut. Abheben mit [W].');
+  const fz = ROVER.ohne ? '' : ROVER.leih ? ' Der Leihrover fährt zurück in die Halle der Basis.' : ' Fahrzeug im Laderaum.';
+  radio('SYSTEM', (moved ? `${moved} Einheiten in den Frachtraum verladen.${left ? ` ${left} passen nicht mehr und bleiben im Rover.` : ''}` : 'An Bord. Abheben mit [W].') + fz);
 }
 
 const _f = new THREE.Vector3();

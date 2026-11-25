@@ -36,6 +36,7 @@ import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
 import { quartierFahrt, inKojeAufwachen, startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
 import { quartierHooks } from './game/quartier';
+import { fzOrdnen } from './game/fahrzeuge';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
 import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, liquidAt, ROVER, SURF } from './game/surface';
@@ -210,7 +211,7 @@ function resumeStation(st: Station, at: Extract<PlayerAt, { k: 'st' }>) {
 function resumeLanded(land: Extract<PlayerAt, { k: 'land' }>) {
   relandShip(land.ship, land.rover);
   const f = land.foot;
-  if (f === 'ship') leaveShipOnFoot();
+  if (f === 'ship' || (ROVER.ohne && !f)) leaveShipOnFoot();
   else if (f && isFinite(f.x) && isFinite(f.z) && Math.abs(f.x) < SURF.limit && Math.abs(f.z) < SURF.limit) footAt(f.x, f.z, f.yaw || 0);
   else footOff();
   G.mode = 'rover'; resetRoverCamera(); releaseAll();
@@ -292,6 +293,7 @@ function resumeAt(at: PlayerAt | null) {
 function startGame(p: Player, fresh: boolean) {
   setMusicMode(fresh ? 'menu' : 'game');
   setPlayer(p);
+  fzOrdnen();      // Fahrzeuge an ihren Ort (game/fahrzeuge.ts): an Bord, wenn sie passen, sonst in die Halle
   setShipModel(P.cls, (P.paint || 'Orange') as Paint, true);
   hideMainMenu();
   clearRadio();
@@ -563,7 +565,7 @@ onKey(code => {
       const st = nearDock();
       if (st && world.surface && settings.walk && basePad(st)) { if (landAtBase(st)) { G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); } }   // Planetenbasis: aufs Landefeld, zu Fuß hinein
       else if (st) { const rd = rechtDock(st.name, stationFaction(st.id, P.sector)); if (!rd.ok) radio(st.name.toUpperCase(), rd.text + '.', '#ff6b5b'); else { if (rd.text) rechtZahlen(rd.zahlen, st.name); openDock(st); } }      // Recht und Ordnung: Bußgeld
-      else if (world.surface && landShip()) { footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); }
+      else if (world.surface && landShip()) { if (ROVER.ohne) leaveShipOnFoot(); else footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); }      // ohne Fahrzeug an Bord: zu Fuß (game/fahrzeuge.ts)
       else if (!world.surface && !G.dead) { for (const k of orteKey) if (k()) break; }   // Orte im Sektor (z. B. Bergung in der Alten Werft)
     }
   }

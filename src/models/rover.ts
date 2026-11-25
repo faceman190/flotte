@@ -26,8 +26,8 @@ export interface FzDef {
 }
 export const FZ: Record<FzId, FzDef> = {
   dachs: {
-    n: 'Bergbaurover „Dachs“ R-4', kurz: 'Dachs', glb: 'Rover', price: 0,
-    d: 'Schwerer Bergbaurover mit Druckkabine, sechs Rädern und Schneckenbohrer. Bohrt Lagerstätten an und fasst 40 Einheiten Erz.',
+    n: 'Bergbaurover „Dachs“ R-4', kurz: 'Dachs', glb: 'Rover', price: 6500,
+    d: 'Schwerer Bergbaurover mit Druckkabine, sechs Rädern und Schneckenbohrer. Bohrt Lagerstätten an und fasst 40 Einheiten Erz. Jede Planetenbasis verleiht einen; ein eigener fährt in Pfeil oder Wisent überall mit.',
     radR: 0.75, wb: 4.1, trk: 3.2, ax: [-2.05, 0, 2.05],
     v: 24, vB: 33, eng: 7, engB: 9, brake: 15, grip: 7.5, gripEis: 3.5, lat: 8, latEis: 5.5,
     steer: 0.55, steerFade: 0.45, steerRef: 24, susp: [-0.32, 0.26], jump: { k: 4, vy: -5, v: 14, abs: 2.0 },

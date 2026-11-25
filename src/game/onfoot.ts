@@ -93,7 +93,7 @@ export function leaveShipOnFoot() {
 export function landAtBase(st: Station, quiet = false) {      // quiet: beim Laden eines Spielstands (main.ts, resumeAt)
   const p = basePad(st); if (!p) return false;
   const px = P.x, pz = P.z; P.x = p.x; P.z = p.z;
-  if (!landShip(quiet)) { P.x = px; P.z = pz; return false; }
+  if (!landShip(quiet, true)) { P.x = px; P.z = pz; return false; }
   const r = stats().radius;
   let ax = p.x - st.x, az = p.z - st.z; const L = Math.hypot(ax, az) || 1; ax /= L; az /= L;   // vom Gebäude weg
   ROVER.ship = { x: p.x, y: p.y + r * 0.55, z: p.z, yaw: Math.atan2(-ax, -az) };
