@@ -4,7 +4,7 @@ kurz: Vom ersten Start bis zum ersten verdienten Credit – Steuerung, Bastion, 
 reihe: 1
 stufe: Einsteiger
 bild: ../../assets/bilder/bastion2-spiel.jpg
-stand: Alpha 1.58
+stand: Alpha 1.59
 ---
 
 Letzte Crew läuft direkt im Browser. Öffne [spielen.letztecrew.de](https://spielen.letztecrew.de/) in Chrome, Edge oder Firefox. Beim ersten
@@ -109,12 +109,22 @@ gute Wege zum Geld:
 2. **Lieferaufträge** aus dem Auftragsbüro: Ware von A nach B bringen. Siehe [Handel](/guides/handel/).
 3. **Die Geschichte** spielen. Die ersten Kapitel führen Schritt für Schritt durch die Grundlagen.
 
+## Dein Quartier
+
+Sobald du 2.500 Credits übrig hast, lohnt sich ein **Quartier** auf der Bastion: Aufzug **QUARTIERE** an der Nordseite von Deck 3,
+zwischen Handelskontor und Werft. Dort ruhst du dich in der Koje aus (Hülle und Schild voll, Spielstand gesichert), lagerst Ausrüstung im
+Spind und siehst im Regal deine Schiffe und Fundstücke. Am Bildschirm lädst du Mitspieler ein.
+
 ## Wenn es schiefgeht
 
 Wird dein Schiff zerstört, rettet dich die Kapsel. Du startest mit einem reparierten Schiff im Heimathafen, die **Fracht ist aber
-verloren**. Wer mit vollem Frachtraum ins Grenzgebiet fliegt, riskiert also seine Ladung.
+verloren**. Wer mit vollem Frachtraum ins Grenzgebiet fliegt, riskiert also seine Ladung. Hast du in deiner Koje im Quartier geschlafen,
+wachst du dort auf.
+
+Schieß nicht auf Frachter und Patrouillen: Das bringt eine **Fahndungsstufe** (Stern im HUD). Ab Stufe 2 greift die Wacht an, und
+Stationen verlangen beim Andocken ein Bußgeld. Ohne neue Tat sinkt die Stufe von selbst.
 
 ## Gemeinsam spielen
 
 Im Mehrspieler siehst du andere Piloten in denselben Sektoren und Stationen. Steht ihr zu Fuß nebeneinander, bietet <kbd>T</kbd> einen
-Handel an: Waren und Credits gegen Waren und Credits, beide bestätigen.
+Handel an: Waren und Credits gegen Waren und Credits, beide bestätigen. In dein Quartier kommen andere nur, wenn du sie einlädst.

@@ -4,7 +4,7 @@ kurz: Scannen, Laser, Hitze, Sprengladungen und Raffinerie – wie aus Gestein C
 reihe: 2
 stufe: Einsteiger
 bild: ../../assets/bilder/elster-spiel-hangar.jpg
-stand: Alpha 1.51
+stand: Alpha 1.59
 ---
 
 Bergbau ist das Rückgrat der Crew. Jede Werft, jede Panzerplatte und jede Treibstoffzelle beginnt als Brocken in einem Asteroidenfeld.
@@ -63,9 +63,19 @@ Je gefährlicher der Sektor, desto wertvoller das Gestein.
 
 ## Auf Planeten
 
-Über einem Planeten bietet <kbd>E</kbd> **Landen** an. Das Schiff setzt einen **Bergbau-Rover** aus: <kbd>W</kbd>/<kbd>S</kbd> Gas und Bremse,
-<kbd>A</kbd>/<kbd>D</kbd> lenken, Maustaste halten zum Bohren. Nur hier findest du Seltene Erden und Helium-3. Dazu liegen Wracks und
-Versorgungskisten in der Landschaft.
+Über einem Planeten bietet <kbd>E</kbd> **Landen** an. Das Schiff setzt den **Bergbaurover „Dachs“** aus: <kbd>W</kbd>/<kbd>S</kbd> Gas und
+Bremse, <kbd>A</kbd>/<kbd>D</kbd> lenken, Maustaste halten zum Bohren. Er fasst 40 Einheiten Erz. Nur hier findest du Seltene Erden und
+Helium-3. Dazu liegen Wracks und Versorgungskisten in der Landschaft.
+
+Der **Buggy „Wiesel“** (Werft, 9.500 Credits) bohrt nicht, ist aber schnell und tastet mit dem Sensormast (<kbd>R</kbd>) 1,6 km Umkreis
+nach Fundstellen ab. Am Schiff wechselst du mit <kbd>X</kbd> zwischen beiden. Achte auf das Wetter: Im Sturm sieht man wenig, und die
+Fahrzeuge rutschen. Am **Schwarzen Brett** der Basis gibt es Aufgaben, unter anderem Erz für die Basis.
+
+## Kristalle von Hand
+
+In den Minen auf den Planeten wachsen leuchtende Kristalladern aus den Wänden. Mit dem **Handbohrer HB-1** (Ausrüster, 650 Credits) hältst
+du <kbd>E</kbd> an einer Ader. Nach ein paar Sekunden fallen ein bis drei Kristalle in den Rucksack, je nach Planet Eisen, Kupfer, Titan,
+Iridium, Seltene Erden, Klareis oder selten ein Ferritsplitter (rund 950 Credits). Abgebaute Adern wachsen nach einer Stunde nach.
 
 ## Schmelzen statt verkaufen
 

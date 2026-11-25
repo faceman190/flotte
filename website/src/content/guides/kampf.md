@@ -4,7 +4,7 @@ kurz: Kanonen, Raketen, Schilde und die Angriffe des Schwarms – und mit welche
 reihe: 4
 stufe: Fortgeschritten
 bild: ../../assets/bilder/wuerger-spiel.jpg
-stand: Alpha 1.51
+stand: Alpha 1.59
 ---
 
 Die **Ferrox** sind ein Schwarm aus Metall. Sie fressen Erz, Wracks und Schiffe. Der Erstkontakt war im Jahr 12 bei Rotfels, seit dem
@@ -42,6 +42,13 @@ Entfernung, Angreifer sind rötlich markiert, und ein Pfeil am Bildrand zeigt Fe
 
 Stationen im Menschenraum und im Grenzgebiet haben eine **Flak**. Sie schießt auf Ferrox und Torpedos in bis zu 950 m Abstand
 (Außenposten: 750 m). Wird es eng, flieg zur nächsten Station und lass die Flak mitarbeiten. Im Ferrox-Gebiet gibt es diesen Schutz nicht.
+
+## Nicht auf Freunde schießen
+
+Treffer auf Frachter, Patrouillen und Wachen zählen: Der erste Treffer bringt eine Warnung der Wacht, ein weiterer kurz danach die erste **Fahndungsstufe**, ein Abschuss zwei Stufen (höchstens drei).
+Ab Stufe 2 greifen Patrouillen in der Nähe an, und die Stationen von Flottenrat und Wacht verlangen beim Andocken ein Bußgeld (1.500 oder 4.000 Credits), das die Fahndung aufhebt.
+Ab Stufe 3 kommen zwei Kopfgeldjäger dazu. Ohne neue Tat sinkt die Stufe nach einigen Minuten von selbst. In Heimstatt gibt es keine
+Kämpfe mit der Wacht, und die Bastion lässt dich immer andocken.
 
 ## Lohn
 
