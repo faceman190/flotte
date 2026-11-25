@@ -9,7 +9,8 @@
 #  - einteilige Blasenkanzel, hinten angeschlagen (klappt vorn hoch); darunter Cockpit mit Schleudersitz, Tafel, HUD, Knüppel, Konsolen
 #  - Rückengrat hinter der Kanzel; im Heck des Grats das Frachtfach für eine Normkiste (1,2 × 0,8 × 0,8 m = 10 E) mit Heckklappe
 #  - Flügel mit Wurzelleiste (LERX), echtem Profil, Ruderfugen, Startschienen mit Flugkörpern; zwei schräge Seitenleitwerke, zwei Bauchflossen
-#  - einziehbares Fahrwerk: Bugrad fährt nach hinten ein, die Haupträder nach vorn in die Rumpfseiten; Schächte mit Klappen
+#  - einziehbares Fahrwerk (seit 25.11.2026 Landebeine mit Füßen statt Rädern, der Nutzer: Raumschiffe starten senkrecht): Bugbein
+#    fährt nach hinten ein, die Hauptbeine nach vorn in die Rumpfseiten; Schächte mit Klappen. foot() und bein_fuss() nutzt auch die Dohle
 #  - Bordleiter links unter der Kanzel hinter einer Klappe, Trittmulde und Haltegriff
 # Bewegliche Teile hängen an Gelenken (GELENKE). Blender zeigt jeden Zustand (zustand()); die Gelenke gehen als Liste nach mil-anker.json,
 # mil_export.py rechnet sie in die Koordinaten der GLB-Datei um (für src/models/gltfShips.ts).
@@ -639,17 +640,55 @@ def fork_wheel(name, P0, A, rw, ww, fw=Vector((1, 0, 0))):      # Gabel mit Brü
     t0 = P0.lerp(A, 0.55) + fw * 0.1; t1 = P0.lerp(A, 0.82) + fw * 0.1; kn = (t0 + t1) / 2 + fw * 0.17
     link_bar('Drehmomentlenker', t0, kn, 0.05, 0.026, (0, 1, 0), M['mittel']); link_bar('Drehmomentlenker', kn, t1, 0.05, 0.026, (0, 1, 0), M['mittel'])
     for p in (t0, kn, t1): rod('Lenkerbolzen', p - Vector((0, 0.05, 0)), p + Vector((0, 0.05, 0)), 0.018, M['chrom'], 12)
+def foot(name, Ap, E, hx, hy):
+    # Landefuß unter dem Querbolzen Ap (der Fuß kippt um y und legt sich an schrägen Boden an): Gummisohle, Rand, Warnkante,
+    # zweistufiger Teller, vier Rippen, Nabe mit Lageraugen, Querbolzen, zwei Federdämpfer vorn und hinten (halten ihn waagrecht),
+    # Bodenkontaktfühler mit grüner Lampe, Zurraugen. E: Gabelbrücke am Kolbenende (oberes Auge der Dämpfer)
+    F = Vector((Ap.x, Ap.y, 0.0)); rad = min(hx, hy) * 0.62
+    def RR(ex, z0, z1, m, bev, nm):
+        prism(name + nm, [(F.x + x, F.y + y) for x, y in rrect(-hx - ex, hx + ex, -hy - ex, hy + ex, max(0.03, rad + ex), 6)], z0, z1, m, 'Z', bev)
+    RR(0.0, 0.0, 0.035, M['rubber'], 0.008, ' Sohle'); RR(0.012, 0.035, 0.048, M['gun'], 0.004, ' Sohlenrand')
+    RR(0.0, 0.048, 0.075, M['warnrw'], 0.003, ' Warnkante'); RR(-0.03, 0.075, 0.1, M['graphit'], 0.008, ' Teller')
+    RR(-0.09, 0.1, 0.125, M['graphit'], 0.012, ' Oberteller'); hz = 0.125
+    for sx in (1, -1): prism(name + ' Rippe', [(F.x + sx * 0.09, hz), (F.x + sx * (hx - 0.07), hz), (F.x + sx * 0.09, hz + 0.1)], F.y - 0.012, F.y + 0.012, M['gun'], 'Y', 0.003)
+    for sy in (1, -1): prism(name + ' Rippe', [(F.y + sy * 0.09, hz), (F.y + sy * (hy - 0.07), hz), (F.y + sy * 0.09, hz + 0.08)], F.x - 0.012, F.x + 0.012, M['gun'], 'X', 0.003)
+    rod(name + ' Nabe', F + Vector((0, 0, hz)), F + Vector((0, 0, hz + 0.08)), 0.1, M['gun'], 28, r2=0.075)
+    zp = Ap.z; lh = zp + 0.045 - hz - 0.08
+    for sy in (1, -1): slab(name + ' Lagerauge', (F.x, F.y + sy * 0.05, hz + 0.08 + lh / 2), (1, 0, 0), (0, 0, 1), (0.11, lh, 0.022), M['gun'], 0.006)
+    rod(name + ' Querbolzen', Ap - Vector((0, 0.135, 0)), Ap + Vector((0, 0.135, 0)), 0.022, M['chrom'], 14)
+    for sy in (1, -1): rod(name + ' Bolzenkappe', Ap + Vector((0, sy * 0.125, 0)), Ap + Vector((0, sy * 0.145, 0)), 0.032, M['gun'], 14)
+    for sx in (1, -1):      # Federdämpfer: oben an der Gabelbrücke, unten auf dem Teller
+        a = E + Vector((sx * 0.13, 0, -0.03)); b = F + Vector((sx * (hx - 0.11), 0, 0.105))
+        sphere(name + ' Daempferauge', 0.024, *a, M['gun'], 10); sphere(name + ' Daempferauge', 0.022, *b, M['gun'], 10)
+        rod(name + ' Daempfer', a, a.lerp(b, 0.6), 0.019, M['gun'], 12); rod(name + ' Daempferkolben', a.lerp(b, 0.55), b, 0.011, M['chrom'], 10)
+        for f in (0.12, 0.24, 0.36, 0.48): ring(name + ' Feder', 0.029, 0.005, tuple(a.lerp(b, f)), tuple((b - a).normalized()), M['ocker'] if 'ocker' in M else M['orange'], 12)
+    rod(name + ' Fuehler', F + Vector((hx - 0.05, 0, 0.14)), F + Vector((hx - 0.05, 0, 0.012)), 0.013, M['mittel'], 10)
+    sphere(name + ' Fuehlerlampe', 0.018, *(F + Vector((hx - 0.05, 0, 0.15))), M['e_green'], 8)
+    for sy in (1, -1): ring(name + ' Zurrauge', 0.03, 0.009, tuple(F + Vector((-(hx - 0.07), sy * (hy - 0.08), 0.13))), (1, 0, 0), M['mittel'], 12)
+def bein_fuss(name, P0, Ap, r, hx, hy, lenker=1):
+    # Landebein (25.11.2026, statt Rad): Federbein bis zum Kolbenende E, Gabelkopf, Gabelbrücke, Gabel zum Querbolzen Ap, Landefuß.
+    # Drehmomentlenker vorn (lenker 1) oder hinten (−1), Hydraulikleitung mit Schellen dicht am Bein. Gibt (E, A2) zurück.
+    u = (Ap - P0).normalized(); E = Ap - u * 0.2; A2 = P0 + (E - P0) / 0.82      # strut() rechnet in Anteilen bis 0,82 (Kolbenende)
+    strut(name, P0, A2, r)
+    rod(name + ' Gabelkopf', E - u * 0.04, E + u * 0.03, r * 0.9, M['gun'], 24)
+    slab(name + ' Gabelbruecke', E + u * 0.03, (1, 0, 0), (0, 1, 0), (0.3, 0.26, 0.05), M['gun'], 0.01)
+    for sg in (1, -1): link_bar(name + ' Gabel', E + u * 0.03 + Vector((0, sg * 0.1, 0)), Ap + Vector((0, sg * 0.1, 0)), 0.07, 0.024, (0, 1, 0), M['gun'])
+    foot(name + 'fuss', Ap, E + u * 0.03, hx, hy)
+    fw = Vector((lenker, 0, 0)); t0 = P0.lerp(A2, 0.55) + fw * 0.1; t1 = E + fw * 0.1; kn = (t0 + t1) / 2 + fw * 0.17
+    link_bar('Drehmomentlenker', t0, kn, 0.05, 0.026, (0, 1, 0), M['mittel']); link_bar('Drehmomentlenker', kn, t1, 0.05, 0.026, (0, 1, 0), M['mittel'])
+    for p in (t0, kn, t1): rod('Lenkerbolzen', p - Vector((0, 0.04, 0)), p + Vector((0, 0.04, 0)), 0.016, M['chrom'], 12)
+    for f in (0.22, 0.42): ring('Leitungsschelle', r + 0.012, 0.008, tuple(P0.lerp(A2, f)), tuple(u), M['mittel'], 24)
+    return E, A2
 def nose_gear():
     xp, zp = 5.0, 1.92; xa, za, rw = 5.12, 0.25, 0.25
     P0 = Vector((xp, 0, zp)); A = Vector((xa, 0, za))
     with Gruppe('fwn'):
         with Part('Bugfahrwerk', T(0, 0, 0), C_GEAR):
-            strut('Bug', P0, A, 0.072)
+            bein_fuss('Bug', P0, A, 0.072, 0.27, 0.19, 1)      # Fußgelenk auf 0,25 m, wo früher die Radachse lag
             rod('Lagerachse', P0 - Vector((0, 0.2, 0)), P0 + Vector((0, 0.2, 0)), 0.05, M['chrom'], 20)
             for sg in (1, -1): rod('Achskappe', P0 + Vector((0, sg * 0.18, 0)), P0 + Vector((0, sg * 0.22, 0)), 0.07, M['gun'], 20)
-            fork_wheel('Bugrad', P0, A, rw, 0.17)
             rod('Lenkzylinder', P0.lerp(A, 0.2) + Vector((-0.06, 0.08, 0)), P0.lerp(A, 0.36) + Vector((0.04, 0.09, 0)), 0.022, M['gun'], 12)
-            with Part('Rollscheinwerfer', T(*(P0.lerp(A, 0.32) + Vector((0.08, 0, 0)))), C_GEAR):
+            with Part('Landescheinwerfer', T(*(P0.lerp(A, 0.32) + Vector((0.08, 0, 0)))), C_GEAR):
                 box('Lampenhalter', 0.05, 0.12, 0.04, 0, 0, 0, M['gun'], 0.006)
                 for sg in (1, -1): rod('Scheinwerfer', (0, sg * 0.04, 0.0), (0.06, sg * 0.04, 0.0), 0.028, M['gun'], 16); cyl('Lampe', 0.022, 0.006, 0.062, sg * 0.04, 0, M['blitz'], 'X', n=14)
             pipe('Hydraulikleitung', [P0 + Vector((-0.08, -0.07, 0.02)), P0.lerp(A, 0.25) + Vector((-0.08, -0.08, 0)), P0.lerp(A, 0.52) + Vector((-0.07, -0.08, 0))], 0.01, M['rubber'], rad=0.05)
@@ -667,21 +706,17 @@ def nose_gear():
             ob = hull_patch('Bugradklappe', x0 + 0.02, x1 - 0.02, 0.006 * sg, hw * sg, False, M['graphit'], 0.002, 10, 6, 0.022, C_GEAR)
             ob.matrix_world = T(xm, hy, hz) @ RX(sg * math.radians(88)) @ T(-xm, -hy, -hz)
         gelenk(tag, (xm, hy, hz), 'X', -sg * math.radians(88), 'fw', 0.72, 1.0)
-    ANCH['bugrad'] = A
+    ANCH['bugrad'] = Vector((A.x, 0, 0.15))
 def main_gear(s):
     xp, yp, zp = -2.25, s * 1.355, 1.98; rw, ww = 0.31, 0.22
-    P0 = Vector((xp, yp, zp)); A = Vector((xp, yp, rw))
+    P0 = Vector((xp, yp, zp)); A = Vector((xp, yp, rw)); Ap = Vector((xp, yp, 0.27))
     tag = 'fwh_' + ('l' if s > 0 else 'r')
     with Gruppe(tag):
         with Part('Hauptfahrwerk', T(0, 0, 0), C_GEAR):
-            strut('Haupt', P0, A, 0.082)
+            E, A2 = bein_fuss('Haupt', P0, Ap, 0.082, 0.32, 0.19, 1)
             rod('Lagerachse', P0 - Vector((0, 0.24, 0)), P0 + Vector((0, 0.24, 0)), 0.055, M['chrom'], 20)
             for sg in (1, -1): rod('Lagerbock', P0 + Vector((0, sg * 0.2, 0)), P0 + Vector((0, sg * 0.26, 0)), 0.09, M['gun'], 20)
-            fork_wheel('Hauptrad', P0, A, rw, ww)
-            for sg in (1, -1):
-                rod('Bremsscheibe', A + Vector((0, sg * (ww / 2 + 0.012), 0)), A + Vector((0, sg * (ww / 2 + 0.026), 0)), rw * 0.62, M['duese'], 32)
-            slab('Bremssattel', A + Vector((-rw * 0.45, s * (ww / 2 + 0.03), rw * 0.18)), (1, 0, 0), (0, 1, 0), (0.1, 0.05, 0.13), M['rotlack'], 0.01)
-            pipe('Bremsleitung', [P0 + Vector((-0.1, s * 0.09, 0)), P0.lerp(A, 0.5) + Vector((-0.1, s * 0.1, 0)), A + Vector((-0.12, s * (ww / 2 + 0.05), 0.16))], 0.01, M['rubber'], rad=0.05)
+            pipe('Hydraulikleitung', [P0 + Vector((-0.1, s * 0.09, 0)), P0.lerp(A2, 0.12) + Vector((-0.02, s * 0.108, 0)), P0.lerp(A2, 0.5) + Vector((-0.02, s * 0.108, 0)), E + Vector((-0.02, s * 0.11, 0))], 0.01, M['rubber'], rad=0.05)
             # Knickstrebe nach vorn in den Schacht (mit Verriegelung), Einziehzylinder
             B0 = P0 + Vector((0.62, 0, 0.08)); B1 = P0.lerp(A, 0.36); Bk = B0.lerp(B1, 0.5) + Vector((0.12, 0, -0.1))
             rod('Knickstrebe', B0, Bk, 0.04, M['gun'], 16); rod('Knickstrebe', Bk, B1, 0.04, M['gun'], 16)
@@ -707,7 +742,7 @@ def main_gear(s):
         ob = hull_patch('Fahrwerksklappe', xa_, xb_, s * (yi + 0.01), s * (yo - 0.005), False, M['graphit'], 0.002, 6, 6, 0.022, C_GEAR)
         ob.matrix_world = T(xm, hy, hz) @ RX(s * math.radians(88)) @ T(-xm, -hy, -hz)
     gelenk(tagk, (xm, hy, hz), 'X', -s * math.radians(88), 'fw', 0.72, 1.0)
-    if s > 0: ANCH['hauptrad'] = A + Vector((0, 0, 0.3))
+    if s > 0: ANCH['hauptrad'] = Ap + Vector((0, 0, 0.25))
 
 # =====================================================================================
 # 9. Bordleiter links unter der Kanzel: Klappe (oben angeschlagen, schwenkt nach außen) und Leiter, die aus dem Schacht gleitet
@@ -841,14 +876,14 @@ def markings():
 # =====================================================================================
 # Bauplan-Blatt: die Funktion aus der Elster, mit Titel, Texten und Kameras des Milan (Quelltext ersetzt, dann ausgeführt)
 PLAN_FEAT = [  # Beschriftung, Ankerpunkt, Versatz des Textes in Pixeln
-    ('BLASENKANZEL, HINTEN ANGESCHLAGEN', 'kanzel', (-60, -170)), ('SEITENEINLAUF MIT SPLITTERPLATTE', 'einlauf1', (-120, -205)), ('BUGRAD, FÄHRT NACH HINTEN EIN', 'bugrad', (-300, 40)),
-    ('HAUPTFAHRWERK, FÄHRT NACH VORN EIN', 'hauptrad', (90, 175)), ('BORDLEITER', 'leiter', (-120, 170)), ('FRACHTFACH: 1 NORMKISTE (10 E)', 'fracht', (160, 70)),
+    ('BLASENKANZEL, HINTEN ANGESCHLAGEN', 'kanzel', (-60, -170)), ('SEITENEINLAUF MIT SPLITTERPLATTE', 'einlauf1', (-120, -205)), ('BUGBEIN MIT LANDEFUSS', 'bugrad', (-300, 40)),
+    ('LANDEBEINE, FAHREN NACH VORN EIN', 'hauptrad', (90, 175)), ('BORDLEITER', 'leiter', (-120, 170)), ('FRACHTFACH: 1 NORMKISTE (10 E)', 'fracht', (160, 70)),
     ('SCHRÄGE LEITWERKE', 'leitwerk1', (140, -130)), ('ZWEI SCHUBDÜSEN', 'duese1', (150, 130)), ('KANONE', 'kanone1', (-260, -40)), ('WERKZEUGLASER', 'laser', (-220, 90)),
 ]
 def plan_txt(ext):
     return ['HERSTELLER: BASTION-WERFT, DECK 3', 'MODELL: MILAN', 'KLASSE: LEICHTER JÄGER (STARTSCHIFF)', 'BESATZUNG: 1',
             'LÄNGE: %.1f M' % ext['laenge'], 'SPANNWEITE: %.1f M' % ext['breite'], 'HÖHE: %.1f M (AUSGEFAHREN)' % ext['hoehe'],
-            'FRACHT: 1 NORMKISTE (10 E)', 'WAFFEN: 2 KANONEN, 2 FLUGKÖRPER', 'WERKZEUG: KUGELLASER UNTER DEM KINN', 'FAHRWERK: EINZIEHBAR, BUGRAD', 'KENNUNG: ML 01']
+            'FRACHT: 1 NORMKISTE (10 E)', 'WAFFEN: 2 KANONEN, 2 FLUGKÖRPER', 'WERKZEUG: KUGELLASER UNTER DEM KINN', 'FAHRWERK: EINZIEHBARE LANDEBEINE', 'KENNUNG: ML 01']
 def mark_plan_edges(): pass
 _src = open(_ek, encoding='utf-8').read(); _a = _src.index('def bauplan(path):'); _b = _src.index('\nHULL_GRID = {}')
 _bp = _src[_a:_b]

@@ -581,31 +581,7 @@ def sponson(s):
 def sp_bot(d):      # Unterkante des Wulsts bei seitlichem Abstand d von seiner Mitte (volle Breite)
     w = 0.42; zc = (SP[4] + SP[5]) / 2; hz = (SP[5] - SP[4]) / 2 + 0.02
     sn = min(1.0, abs(d) / w) ** (1 / 0.6); cs = math.sqrt(max(0.0, 1 - sn * sn)); return zc - hz * cs ** 0.6
-def foot(name, Ap, E, hx, hy):
-    # Landefuß unter dem Querbolzen Ap (der Fuß kippt um y und legt sich an schrägen Boden an): Gummisohle, Rand, Warnkante,
-    # zweistufiger Teller, vier Rippen, Nabe mit Lageraugen, Querbolzen, zwei Federdämpfer vorn und hinten (halten ihn waagrecht),
-    # Bodenkontaktfühler mit grüner Lampe, Zurraugen. E: Gabelbrücke am Kolbenende (oberes Auge der Dämpfer)
-    F = Vector((Ap.x, Ap.y, 0.0)); rad = min(hx, hy) * 0.62
-    def RR(ex, z0, z1, m, bev, nm):
-        prism(name + nm, [(F.x + x, F.y + y) for x, y in rrect(-hx - ex, hx + ex, -hy - ex, hy + ex, max(0.03, rad + ex), 6)], z0, z1, m, 'Z', bev)
-    RR(0.0, 0.0, 0.035, M['rubber'], 0.008, ' Sohle'); RR(0.012, 0.035, 0.048, M['gun'], 0.004, ' Sohlenrand')
-    RR(0.0, 0.048, 0.075, M['warnrw'], 0.003, ' Warnkante'); RR(-0.03, 0.075, 0.1, M['graphit'], 0.008, ' Teller')
-    RR(-0.09, 0.1, 0.125, M['graphit'], 0.012, ' Oberteller'); hz = 0.125
-    for sx in (1, -1): prism(name + ' Rippe', [(F.x + sx * 0.09, hz), (F.x + sx * (hx - 0.07), hz), (F.x + sx * 0.09, hz + 0.1)], F.y - 0.012, F.y + 0.012, M['gun'], 'Y', 0.003)
-    for sy in (1, -1): prism(name + ' Rippe', [(F.y + sy * 0.09, hz), (F.y + sy * (hy - 0.07), hz), (F.y + sy * 0.09, hz + 0.08)], F.x - 0.012, F.x + 0.012, M['gun'], 'X', 0.003)
-    rod(name + ' Nabe', F + Vector((0, 0, hz)), F + Vector((0, 0, hz + 0.08)), 0.1, M['gun'], 28, r2=0.075)
-    zp = Ap.z; lh = zp + 0.045 - hz - 0.08
-    for sy in (1, -1): slab(name + ' Lagerauge', (F.x, F.y + sy * 0.05, hz + 0.08 + lh / 2), (1, 0, 0), (0, 0, 1), (0.11, lh, 0.022), M['gun'], 0.006)
-    rod(name + ' Querbolzen', Ap - Vector((0, 0.135, 0)), Ap + Vector((0, 0.135, 0)), 0.022, M['chrom'], 14)
-    for sy in (1, -1): rod(name + ' Bolzenkappe', Ap + Vector((0, sy * 0.125, 0)), Ap + Vector((0, sy * 0.145, 0)), 0.032, M['gun'], 14)
-    for sx in (1, -1):      # Federdämpfer: oben an der Gabelbrücke, unten auf dem Teller
-        a = E + Vector((sx * 0.13, 0, -0.03)); b = F + Vector((sx * (hx - 0.11), 0, 0.105))
-        sphere(name + ' Daempferauge', 0.024, *a, M['gun'], 10); sphere(name + ' Daempferauge', 0.022, *b, M['gun'], 10)
-        rod(name + ' Daempfer', a, a.lerp(b, 0.6), 0.019, M['gun'], 12); rod(name + ' Daempferkolben', a.lerp(b, 0.55), b, 0.011, M['chrom'], 10)
-        for f in (0.12, 0.24, 0.36, 0.48): ring(name + ' Feder', 0.029, 0.005, tuple(a.lerp(b, f)), tuple((b - a).normalized()), M['ocker'], 12)
-    rod(name + ' Fuehler', F + Vector((hx - 0.05, 0, 0.14)), F + Vector((hx - 0.05, 0, 0.012)), 0.013, M['mittel'], 10)
-    sphere(name + ' Fuehlerlampe', 0.018, *(F + Vector((hx - 0.05, 0, 0.15))), M['e_green'], 8)
-    for sy in (1, -1): ring(name + ' Zurrauge', 0.03, 0.009, tuple(F + Vector((-(hx - 0.07), sy * (hy - 0.08), 0.13))), (1, 0, 0), M['mittel'], 12)
+# foot() (Landefuß) steht seit dem Umbau des Milan in ../milan/mil_kit.py
 def leg(name, P0, Ap, r, hx, hy, tag_label):
     # Federbein vom Lagerbock bis zum Kolbenende E, darunter Gabelbrücke und Gabel zum Querbolzen Ap des Landefußes
     u = (Ap - P0).normalized(); E = Ap - u * 0.2; A2 = P0 + (E - P0) / 0.82      # strut() rechnet in Anteilen bis 0,82 (Kolbenende)

@@ -13,6 +13,8 @@ Es ist ein eigener Entwurf ohne Vorbild. Der Name passt zu den anderen Greifvög
 ![Schräg](bilder/milan-schraeg.jpg)
 ![Hangar](bilder/milan-hangar.jpg)
 ![Frachtfach](bilder/milan-fracht.jpg)
+![Landebeine im Spiel](bilder/milan-spiel-fuss.jpg)
+![Bugbein](bilder/milan-fahrwerk.jpg)
 
 ## Maße und Aufbau
 
@@ -30,9 +32,11 @@ Es ist ein eigener Entwurf ohne Vorbild. Der Name passt zu den anderen Greifvög
 - **Rückengrat mit Frachtfach:** Im Heck des Grats liegt ein Fach für genau eine Normkiste (1,2 × 0,8 × 0,8 m = 10 E). Es hat Zurrschienen, eine Leuchte und eine Heckklappe, die oben angeschlagen ist und nach oben aufklappt.
 - **Flügel:** Schulterflügel mit Wurzelleiste über den Einläufen, echtem Profil (NACA, 5 → 4 %), Klappen- und Querruderfugen, Ruderantrieben, Kantenleiste und Laufweg. An den Spitzen sitzen Startschienen mit Flugkörpern, Positionslichtern und orangen Spitzenbändern.
 - **Leitwerke:** zwei Seitenleitwerke, 21° nach außen geneigt, mit Ruderfuge, Licht und Zeichen der Bastion. Dazu zwei Bauchflossen.
-- **Fahrwerk (einziehbar):**
-  - **Bugrad:** fährt nach hinten in einen Schacht. Federbein mit Kolben, Drehmomentlenker, Gabel, Rollscheinwerfer, Lenkzylinder und zwei Schachtklappen.
-  - **Haupträder:** fahren nach vorn in die Rumpfseiten. Gabel, Bremsscheiben und Sattel, Knickstrebe mit Verriegelung, Beinklappe hinter dem Bein (deckt eingefahren den Schacht) und vordere Klappe.
+- **Fahrwerk (einziehbar), seit 25.11.2026 Landebeine mit Füßen statt Rädern.** Der Nutzer: Raumschiffe starten senkrecht. Bauteile `bein_fuss()` und `foot()` in `mil_kit.py`, dieselben wie bei der Dohle:
+  - **Bugbein:** fährt nach hinten in einen Schacht. Federbein mit Kolben, Gabel, Drehmomentlenker, Landescheinwerfer, Lenkzylinder und zwei Schachtklappen. Fuß 0,54 × 0,38 m.
+  - **Hauptbeine:** fahren nach vorn in die Rumpfseiten. Knickstrebe mit Verriegelung, Beinklappe hinter dem Bein (deckt eingefahren den Schacht) und vordere Klappe. Fuß 0,64 × 0,38 m.
+  - Fuß: Gummisohle, Warnkante, Teller mit Rippen, Querbolzen (der Fuß kippt), zwei Federdämpfer, Bodenkontaktfühler.
+  - Gelenke unverändert; die Füße passen in die alten Radschächte.
 - **Einstieg:** Bordleiter links unter der Kanzel hinter einer Klappe, dazu Trittmulde und Haltegriff.
 - **Sonst:**
   - Werkzeuglaser als Kugelkopf unter dem Kinn
@@ -49,7 +53,7 @@ Die Teile hängen in Blender an Gelenken (`gelenk()` in `mil_kit.py`). `zustand(
 
 | Gruppe | Teile | im Spiel |
 |---|---|---|
-| fw (0 unten … 1 eingefahren, 3,2 s) | Bugrad, zwei Bugradklappen, zwei Hauptbeine mit Beinklappe, zwei vordere Klappen | `setGear` in `src/models/gltfShips.ts`: im Flug eingefahren, im Landeanflug und am Boden ausgefahren |
+| fw (0 unten … 1 eingefahren, 3,2 s) | Bugbein, zwei Bugklappen, zwei Hauptbeine mit Beinklappe, zwei vordere Klappen | `setGear` in `src/models/gltfShips.ts`: im Flug eingefahren, im Landeanflug und am Boden ausgefahren |
 | fracht (1,6 s) | Heckklappe | `setDoors`: am Boden offen, im Hangar mit dem Rampenschalter, im Flug, wenn der Traktorstrahl eine Kiste heranzieht |
 | leiter (2,2 s) | Leiterklappe, Leiter (gleitet aus dem Schacht) | `setDoors`, aber nur bei ausgefahrenem Fahrwerk (`boden`) |
 | Kanzel | Glas, Bügel, Rahmen | `setKanzel` (Gelenk am hinteren Rahmen, 0,62 rad) |
