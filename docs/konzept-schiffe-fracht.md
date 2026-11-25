@@ -97,4 +97,10 @@ Jedes Schiff hat seine Ausstiege als Punkte im Modell. Danach richten sich Ausst
   wechselt zwischen den Fahrzeugen an Bord und dem Leihrover. Werft: Maße, „passt in“, Stellplätze, Kaufen (an Bord oder in die Halle),
   Verladen zwischen Halle und Schiff. Der Dachs ist jetzt auch zu kaufen (6.500 Cr). Alte Spielstände: der Dachs wird zum Leihrover, ein
   Wiesel kommt an Bord, wenn er passt, sonst in die Halle der Bastion. Testlabor setzt Fahrzeuge ohne Prüfung an Bord.
+- **Schritt 2 gebaut (25.11.2026, auf test):** `src/game/ausstieg.ts`, Kanzel in `models/gltfShips.ts` (setKanzel, kanzelInfo). Die Modelle haben
+  keine eigene Kanzel; das Kanzelglas (Material) hängt an einem Gelenk an seiner hinteren Oberkante und klappt vorn hoch: Würger (Schauglas,
+  54°), Elster (Kuppelglas, 60°, statt einer Seitenluke), Venom (das Glas vor z = −1,2 m wird abgetrennt, 15°). Am Planeten hängt dann eine
+  Bordleiter vom linken Kanzelrand zum Boden, man steigt an ihrem Fuß aus (kurze Blende) und dort ein. Im All schwebt man über der offenen
+  Kanzel, die Leine hängt am Kanzelrand. Kormoran und Wisent: Außenbord erst nach 4 s Leerpumpen des Laderaums (Ansage, Warnton), dann öffnet
+  die Rampe; Start und Leine am Heckende (nach der Schiffslänge). Pfeil: wie bisher hinten. Ohne Kletteranimation (Blende statt Klettern).
 - Garagen an den Basen sind vorerst nur Leihrover; eigene Fahrzeuge in einer Basishalle abstellen kommt mit Schritt 3 (Rampe).

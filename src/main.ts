@@ -59,7 +59,8 @@ import { openChat } from './ui/mp';
 const openMap = () => openBand('karte'), closeMap = closeBand;
 import { menuHooks, showMainMenu, hideMainMenu, showPause, hidePause, applySettings, pauseSubOpen, closePauseSub } from './ui/menus';
 import { SECTOR, FACTION } from './data/galaxy';
-import { loadShipModels, setGear, setDoors, RAMP, type Paint } from './models/gltfShips';
+import { loadShipModels, setGear, setDoors, setKanzel, kanzelInfo, RAMP, type Paint } from './models/gltfShips';
+import { leiterZeigen } from './game/ausstieg';
 import { hasInterior, SHIPS } from './data/ships';
 import { loadRockModel } from './game/world';
 import { updateFarView } from './game/farview';
@@ -915,12 +916,15 @@ function loop(now: number, manual = false) {
   if (world.def && G.mode !== 'map') {
     animateStructures(dt);
     // Rampe und Leiter (setDoors): im Hangar und am Boden offen, im Flug und beim Landeanflug zu
-    if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); setDoors(SHIP.g, hangarGearDown() && RAMP.want, dt); }
-    else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); setDoors(SHIP.g, true, dt); }
+    // Kanzel der Jäger und der Elster (ausstieg.ts): offen, solange der Pilot draußen ist (am Boden mit Bordleiter, im All beim Außenbord)
+    if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); setDoors(SHIP.g, hangarGearDown() && RAMP.want, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }
+    else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); setDoors(SHIP.g, true, dt); setKanzel(SHIP.g, true, dt); leiterZeigen((kanzelInfo(SHIP.g)?.p || 0) > 0.6, ROVER.ship); }
     else {
       SHIP.g.visible = (G.mode === 'play' || G.mode === 'jump' || G.mode === 'pause' || G.mode === 'entry' || G.mode === 'eva') && !G.dead;
       setGear(SHIP.g, G.mode === 'entry');   // im Flug eingezogen, beim Landeanflug ausgefahren
-      setDoors(SHIP.g, G.mode === 'eva' || (G.mode === 'pause' && EVA.active), dt);      // Außenbord: Heckrampe offen
+      const draussen = G.mode === 'eva' || (G.mode === 'pause' && EVA.active);
+      setDoors(SHIP.g, draussen && EVA.pump <= 0, dt);      // Außenbord: Heckrampe offen, sobald der Laderaum leer gepumpt ist
+      setKanzel(SHIP.g, draussen, dt); leiterZeigen(false);
       if (SHIP.g.visible) syncShip();
     }
     setDustVisible(!IN.active);

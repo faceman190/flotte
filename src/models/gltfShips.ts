@@ -199,3 +199,56 @@ export function setDoors(root: THREE.Object3D, open: boolean, dt = 0) {
 // Koordinatensystem eines Modells im Spiel (für Innenmodelle, die deckungsgleich zum Außenmodell sitzen sollen):
 // Modell um 180° gedreht, um innerPos verschoben, mit s × Länge skaliert
 export const modelFrame = (name: string) => TPL[name]?.frame || null;
+
+// ---------- Kanzel (seit 2026-11-25, Konzept docs/konzept-schiffe-fracht.md, Schritt 2) ----------
+// Jäger und Elster steigen über die Kanzel aus. Die Modelle haben dafür kein eigenes bewegliches Teil, aber das Kanzelglas ist ein eigenes
+// Material: Diese Netze hängen an einem Gelenk an der hinteren Oberkante des Glases und klappen vorn hoch. Venom: das ganze Glas ist ein Stück.
+const KANZEL: Record<string, { mats: string[]; angle: number; zMax?: number }> = {
+  Venom: { mats: ['glass_clear'], angle: 0.26, zMax: -1.2 },      // nur das Glas vor z = −1,2 m (über dem Cockpit), der Rest bleibt fest
+  Wuerger: { mats: ['Schauglas (Spiel)'], angle: 0.95 },
+  Elster: { mats: ['Kuppelglas (Spiel)'], angle: 1.05 },
+};
+interface KanzelRig { pivot: THREE.Object3D; angle: number; p: number; box: THREE.Box3 }
+function rigKanzel(root: THREE.Object3D): KanzelRig | null {
+  let name = ''; root.traverse(o => { if (!name && o.userData.model) name = o.userData.model; });
+  const cfg = KANZEL[name]; if (!cfg) return null;
+  let list: THREE.Mesh[] = []; root.traverse((o: any) => { if (o.isMesh && cfg.mats.includes(o.material?.name)) list.push(o); });
+  if (!list.length) return null;
+  root.updateMatrixWorld(true);
+  if (cfg.zMax !== undefined) list = list.map(m => kanzelTeil(m, root, cfg.zMax!)).filter(Boolean) as THREE.Mesh[];
+  if (!list.length) return null;
+  let gr = list[0].parent; while (gr && !gr.userData.glbRoot) gr = gr.parent;
+  if (!gr) return null;
+  const ginv = new THREE.Matrix4().copy(gr.matrixWorld).invert(), rinv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const gb = new THREE.Box3(), sb = new THREE.Box3();
+  for (const m of list) { m.geometry.computeBoundingBox(); gb.union(m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(ginv, m.matrixWorld))); sb.union(m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(rinv, m.matrixWorld))); }
+  // Nase im Rahmen der GLB-Datei: Schiffs-Nase ist −Z im Spiel
+  const nose = new THREE.Vector3(0, 0, -1).transformDirection(root.matrixWorld).transformDirection(ginv);
+  const front = nose.z >= 0 ? 1 : -1, pivot = new THREE.Object3D(); pivot.name = 'Gelenk Kanzel';
+  gr.add(pivot); pivot.position.set((gb.min.x + gb.max.x) / 2, gb.max.y, front > 0 ? gb.min.z : gb.max.z); pivot.updateMatrixWorld(true);
+  for (const m of list) pivot.attach(m);
+  return { pivot, angle: -front * cfg.angle, p: 0, box: sb };      // vorn hoch: um x mit dem Vorzeichen gegen die Nasenrichtung
+}
+// Glas in zwei Netze teilen: Dreiecke mit dem Schwerpunkt vor zMax (Schiffskoordinaten) werden die Kanzel (eigene Kopie der Geometrie)
+function kanzelTeil(m: THREE.Mesh, root: THREE.Object3D, zMax: number): THREE.Mesh | null {
+  const g = m.geometry, idx = g.index, p = g.attributes.position; if (!idx) return null;
+  const M = new THREE.Matrix4().multiplyMatrices(new THREE.Matrix4().copy(root.matrixWorld).invert(), m.matrixWorld), v = new THREE.Vector3();
+  const vorn: number[] = [], rest: number[] = [];
+  for (let t = 0; t < idx.count; t += 3) {
+    let z = 0; for (let k = 0; k < 3; k++) z += v.fromBufferAttribute(p, idx.getX(t + k)).applyMatrix4(M).z;
+    (z / 3 < zMax ? vorn : rest).push(idx.getX(t), idx.getX(t + 1), idx.getX(t + 2));
+  }
+  if (!vorn.length) return null;
+  const gv = g.clone(); gv.setIndex(vorn); const gr = g.clone(); gr.setIndex(rest); m.geometry = gr;
+  const k = new THREE.Mesh(gv, m.material); k.matrix.copy(m.matrix); k.matrixAutoUpdate = m.matrixAutoUpdate; k.position.copy(m.position); k.quaternion.copy(m.quaternion); k.scale.copy(m.scale);
+  m.parent!.add(k); k.updateMatrixWorld(true); return k;
+}
+const kRig = (root: THREE.Object3D) => { let r = root.userData.kanzel as KanzelRig | null | undefined; if (r === undefined) r = root.userData.kanzel = rigKanzel(root); return r; };
+/** Kanzel öffnen oder schließen (jedes Bild, dt = Spielzeit); 1,2 s für den ganzen Weg */
+export function setKanzel(root: THREE.Object3D, open: boolean, dt = 0) {
+  const r = kRig(root); if (!r) return;
+  r.p = Math.max(0, Math.min(1, r.p + (open ? 1 : -1) * Math.min(0.1, dt) / 1.2));
+  r.pivot.rotation.x = r.angle * ease(r.p);
+}
+/** Lage des Kanzelglases im Schiff (Schiffskoordinaten: Nase −Z, oben +Y) und wie weit sie offen ist; null = keine Kanzel */
+export function kanzelInfo(root: THREE.Object3D): { box: THREE.Box3; p: number } | null { const r = kRig(root); return r ? { box: r.box, p: r.p } : null; }
