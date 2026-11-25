@@ -12,8 +12,8 @@ import { SECTOR, type StationDef } from '../data/galaxy';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { PLANETS, PTYPE, planetBaseId, type PlanetDef } from '../data/planets';
 import { buildGate } from '../models/structures';
-import { buildFahrzeug, fzLaden, fzBereit, FZ, normFz, type FzId, type RoverNeu, type RoverRad } from '../models/rover';
-import { updateFahrer, fahrerWeg } from './fahrer';
+import { buildFahrzeug, fzLaden, fzBereit, FZ, GETRIEBE, drehmoment, normFz, type FzId, type RoverNeu, type RoverRad } from '../models/rover';
+import { updateFahrer, fahrerWeg, fahrerZeigen } from './fahrer';
 import { updateWieselScan, drawWieselScan, wieselScanWeg, WSCAN } from './wiesel';
 import { BODEN_OBST, bodenHooks } from './bodenaufgaben';
 import { wetterStart, WETTER } from './wetter';
@@ -541,13 +541,18 @@ function buildRoverAlt() {
 }
 type RoverModel = ReturnType<typeof buildRoverAlt> | RoverNeu;
 // Fahrzustand (seit 2026-11-24 mit Schwung, Federung und Seitenführung): vx/vz Tempo über Grund, vy senkrecht (Sprünge über Kuppen),
-// spd Tempo längs, yr Drehrate, steer Lenkeinschlag (rad), pitch/roll Lage der Karosserie, air in der Luft, susp Einfederung je Rad
+// spd Tempo längs, yr Drehrate, steer Lenkeinschlag (rad), pitch/roll Lage der Karosserie, air in der Luft, susp Einfederung je Rad.
+// Seit 2026-11-25: thr/st geglättete Eingabe (Gas −1…1, Lenkung −1…1), hb Handbremse gezogen, rpm Drehzahl, gear Gang (0 = rückwärts),
+// shift verbleibende Schaltpause (s), view Kamera (0 Verfolger, 1 Motorhaube bzw. Fahrersitz)
 export const ROVER = {
   active: false, x: 0, y: 0, z: 0, yaw: 0, speed: 0, model: null as RoverModel | null, kind: 'dachs' as FzId,
   ship: { x: 0, y: 0, z: 0, yaw: 0 }, target: null as Asteroid | null, acc: 0, drilling: false, prompt: '',
   cap: 40, warn: 0,
   vx: 0, vy: 0, vz: 0, yr: 0, steer: 0, pitch: 0, roll: 0, air: false, susp: [0, 0, 0, 0, 0, 0], slip: 0,
+  thr: 0, st: 0, hb: false, rpm: 900, gear: 1, shift: 0, view: 0,
 };
+// Motor und Eingabe in Ruhe (Aussetzen, Fahrzeugtausch)
+function roverStill() { const R = ROVER; R.thr = R.st = 0; R.hb = false; R.rpm = GETRIEBE.idle; R.gear = 1; R.shift = 0; }
 export const roverLoad = () => ITEM_IDS.reduce((a, k) => a + (P.rover?.[k] || 0), 0);
 
 // quiet: beim Laden eines Spielstands (main.ts, resumeAt) – ohne Prüfung der Fluglage, ohne Staub, Ton und Funk
@@ -562,7 +567,7 @@ export function landShip(quiet = false) {
   if (ROVER.model && ROVER.model.kind !== kind && ROVER.model.neu) { scene.remove(ROVER.model.g); ROVER.model = null; }
   const m = ROVER.model || buildRover(kind);
   ROVER.model = m; ROVER.kind = kind; ROVER.cap = FZ[kind].cap;
-  ROVER.vx = ROVER.vz = ROVER.vy = 0; ROVER.air = false; ROVER.yr = ROVER.steer = 0;
+  ROVER.vx = ROVER.vz = ROVER.vy = 0; ROVER.air = false; ROVER.yr = ROVER.steer = 0; roverStill();
   scene.add(m.g);
   const rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
   ROVER.x = P.x + rx * (r + 7); ROVER.z = P.z + rz * (r + 7); ROVER.yaw = P.yaw; ROVER.speed = 0;
@@ -610,7 +615,7 @@ export function fahrzeugTauschen(): string | null {
   const m = buildRover(neu); ROVER.model = m; scene.add(m.g);
   const r = stats().radius, rx = Math.cos(ROVER.ship.yaw), rz = -Math.sin(ROVER.ship.yaw);
   ROVER.x = ROVER.ship.x + rx * (r + 7); ROVER.z = ROVER.ship.z + rz * (r + 7); ROVER.yaw = ROVER.ship.yaw; ROVER.y = heightAt(ROVER.x, ROVER.z);
-  ROVER.vx = ROVER.vz = ROVER.vy = 0; ROVER.speed = 0; ROVER.air = false; ROVER.yr = ROVER.steer = 0; ROVER.drilling = false; ROVER.target = null;
+  ROVER.vx = ROVER.vz = ROVER.vy = 0; ROVER.speed = 0; ROVER.air = false; ROVER.yr = ROVER.steer = 0; roverStill(); ROVER.drilling = false; ROVER.target = null;
   camInit = false;
   snd(220, 0.5, 'sawtooth', 0.04, 120);
   return (neu === 'wiesel' ? 'Buggy „Wiesel“ ausgeladen, der Dachs bleibt im Schiff. [R] tastet die Umgebung ab.' : 'Rover „Dachs“ ausgeladen, der Buggy bleibt im Schiff.') + msg;
@@ -625,6 +630,29 @@ export function boardShip() {
   G.camInit = false;
   snd(300, 0.6, 'sawtooth', 0.05, 500);
   radio('SYSTEM', moved ? `${moved} Einheiten in den Frachtraum verladen.${left ? ` ${left} passen nicht mehr und bleiben im Rover.` : ''}` : 'Rover verstaut. Abheben mit [W].');
+}
+
+// Motor mit Drehzahl und fünf Gängen (seit 2026-11-25, Werte wie im Fahrzeug-Template aus Unreal 5.8): Die Drehzahl folgt aus dem Tempo,
+// dem Radradius und der Übersetzung; der Maßstab ist so gewählt, dass das Höchsttempo mit Umschalt im 5. Gang bei rpmTop liegt (das Spiel
+// fährt schneller, als die echten Übersetzungen hergäben). Hochschalten bei 6000, runter bei 2000, dazwischen 0,2 s Schaltpause mit
+// kurzem Zugkraftloch (updateRover). Rückwärts fährt im 1. Gang (Anzeige R). In der Luft dreht der Motor frei hoch.
+function roverMotor(dt: number, vF: number, th: number, radR: number, vB: number, rpmTop: number) {
+  const R = ROVER, T = GETRIEBE, k = rpmTop / (vB / radR * T.achse * 60 / (2 * Math.PI));
+  const rpmIn = (g: number) => Math.abs(vF) / radR * T.g[g - 1] * T.achse * 60 / (2 * Math.PI) * k;
+  R.shift = Math.max(0, R.shift - dt);
+  if (vF < -0.5 && th < 0) R.gear = 0;
+  else if (R.gear === 0) R.gear = 1;
+  else if (R.shift <= 0 && !R.air) {
+    if (R.gear < T.g.length && rpmIn(R.gear) > T.hoch && th > 0) { R.gear++; R.shift = T.pause; }
+    else if (R.gear > 1 && rpmIn(R.gear) < T.runter) { R.gear--; R.shift = T.pause * 0.5; }
+  }
+  const g = Math.max(1, R.gear);
+  // Kupplung: bei kleinem Tempo hält das Gas die Drehzahl über dem Leerlauf; in der Luft und in der Schaltpause dreht er nach dem Gas
+  let want = Math.max(T.idle + Math.abs(th) * (g === 1 ? 2200 : 900), rpmIn(g));
+  if (R.air) want = T.idle + Math.abs(th) * (T.max - T.idle) * 0.85;
+  else if (R.shift > 0) want = Math.max(T.idle, rpmIn(g) * (0.85 + 0.15 * Math.abs(th)));
+  want = Math.min(want, T.max + (Math.abs(th) > 0 ? Math.sin(G.time * 60) * 120 : 0));      // Begrenzer: flattert am Anschlag
+  R.rpm += (want - R.rpm) * Math.min(1, dt * (R.air ? 5 : 14));
 }
 
 const _f = new THREE.Vector3();
@@ -642,8 +670,19 @@ export function updateRover(dt: number) {
   // Vorher wurde der Rover einfach auf die Geländehöhe gesetzt und fuhr wie auf Schienen (Tempo längs, keine Trägheit, keine Federung).
   // Die Werte je Fahrzeug stehen in models/rover.ts (FZ): der schwere Dachs, der leichte, schnelle Wiesel.
   const F = FZ[R.kind];
-  const th = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), stIn = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
+  const thK = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), stK = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
+  // Eingabe glätten (seit 2026-11-25, wie im Fahrzeug-Template): Gas und Lenkung laufen mit begrenzter Rate auf den Tastenwert zu, zurück
+  // schneller als hin; die Lenkung wirkt quadratisch (kleine Ausschläge fein, voller Einschlag erst am Ende)
+  const ramp = (cur: number, want: number, up: number, down: number) => {
+    const rate = Math.abs(want) > Math.abs(cur) && want * cur >= 0 ? up : down;
+    return cur + clamp(want - cur, -rate * dt, rate * dt);
+  };
+  R.thr = ramp(R.thr, thK, F.inp[0], F.inp[1]); R.st = ramp(R.st, stK, F.inp[2], F.inp[3]);
+  const th = Math.abs(R.thr) < 0.02 ? 0 : R.thr, stIn = Math.sign(R.st) * R.st * R.st;
+  // Handbremse (Q, im Wiesel auch Leertaste: er hat keinen Bohrer): blockiert die Hinterräder
+  R.hb = !!(keys.KeyQ || (R.kind === 'wiesel' && keys.Space)) && !G.dead;
   const boost = !!(keys.ShiftLeft || keys.ShiftRight), ice = curType === PTYPE.eis || (curType as any)?.rock === 'ice';
+  const hbOn = R.hb && !R.air, HB = F.hb;
   const GR = 9.0, VMAX = boost ? F.vB : F.v, ENG = boost ? F.engB : F.eng, BRAKE = F.brake, ROLL = 0.35, WB = F.wb, DRAG = F.drag, RADR = F.radR;
   const fx = -Math.sin(R.yaw), fz = -Math.cos(R.yaw), rx0 = Math.cos(R.yaw), rz0 = -Math.sin(R.yaw);
   // Gelände unter den Rädern: Ebene durch die Radpunkte (vorn/hinten, links/rechts)
@@ -658,29 +697,35 @@ export function updateRover(dt: number) {
   const onGround = !R.air;
   if (onGround) {
     // Antrieb und Bremse
-    if (th > 0) vF += (vF < -0.5 ? BRAKE : vF < VMAX ? ENG * (1 - 0.6 * clamp(vF / VMAX, 0, 1)) : 0) * dt;      // Zugkraft nimmt mit dem Tempo ab
-    else if (th < 0) vF -= (vF > 0.5 ? BRAKE : ENG * 0.6) * dt;
+    // Zugkraft nimmt mit dem Tempo ab, die Drehmomentkurve formt sie leicht, in der Schaltpause fast keine, am Begrenzer keine
+    const zug = (R.shift > 0 ? 0.15 : 1) * (R.rpm >= GETRIEBE.max - 50 && R.gear === GETRIEBE.g.length ? 0 : 1) * (0.72 + 0.3 * drehmoment(R.rpm));
+    if (th > 0) vF += (vF < -0.5 ? BRAKE : vF < VMAX ? ENG * zug * (1 - 0.6 * clamp(vF / VMAX, 0, 1)) : 0) * th * dt;
+    else if (th < 0) vF -= (vF > 0.5 ? BRAKE : ENG * 0.6 * zug) * -th * dt;
     vF -= Math.sign(vF) * Math.min(Math.abs(vF), (ROLL + (th === 0 ? 0.5 : 0)) * dt);      // Rollwiderstand, ohne Gas etwas mehr (Motorbremse)
+    if (hbOn) vF -= Math.sign(vF) * Math.min(Math.abs(vF), HB.brk * dt);                   // Handbremse: blockierte Hinterräder bremsen längs nur mäßig
     vF -= vF * Math.abs(vF) * DRAG * dt;                                                 // Luft- und Bodenwiderstand
     vF = clamp(vF, -9, VMAX + 4);
     // Hangabtrieb: Schwerkraft längs der Fläche (bergab schneller, bergauf langsamer; zu steil = kein Hochkommen). Steht der Rover ohne Gas
     // langsam auf flachem Hang, hält die Feststellbremse.
     const slopeF = Math.sin(gPitch), slopeL = Math.sin(gRoll);
-    const hold = th === 0 && Math.abs(vF) < 1.2 && Math.abs(slopeF) < 0.45 && Math.abs(slopeL) < 0.5;
+    const hold = (th === 0 || hbOn) && Math.abs(vF) < 1.2 && Math.abs(slopeF) < 0.45 && Math.abs(slopeL) < 0.5;
     if (!hold) { vF -= GR * slopeF * dt; vL -= GR * slopeL * dt * 0.6; } else { vF *= Math.pow(0.02, dt); }
     // Seitenführung: Quertempo wird von den Reifen aufgefangen (auf Eis deutlich weniger: der Rover rutscht in Kurven)
-    const grip = (ice ? F.gripEis : F.grip) * (1 - 0.3 * WETTER.sturm);      // im Sturm (wetter.ts) halten die Reifen schlechter
+    // Handbremse: hinten fast keine Seitenführung mehr, das Heck kommt (Drift)
+    const grip = (ice ? F.gripEis : F.grip) * (1 - 0.3 * WETTER.sturm) * (hbOn ? HB.grip : 1);      // im Sturm (wetter.ts) halten die Reifen schlechter
     R.slip = Math.abs(vL);
     vL *= Math.exp(-grip * dt);
     // Lenkung: Einschlag nimmt mit dem Tempo ab; Drehrate nach Einspurmodell, weich nachgeführt
     const maxSt = F.steer - F.steerFade * clamp(Math.abs(vF) / F.steerRef, 0, 1);
-    R.steer += (stIn * maxSt - R.steer) * Math.min(1, dt * 6);
+    R.steer += (stIn * maxSt - R.steer) * Math.min(1, dt * 10);      // die Eingabe ist schon geglättet
     // Querbeschleunigung begrenzt (Reifen halten so viel, wie sie halten: Dachs 8 m/s², Wiesel 10, auf Eis weniger): schnelle Kurven werden weiter
-    const yrMax = (ice ? F.latEis : F.lat) / Math.max(2, Math.abs(vF));
-    const wantYr = clamp((vF * Math.tan(R.steer)) / WB, -yrMax, yrMax) + (Math.abs(vF) < 0.8 ? stIn * 0.35 : 0);      // im Stand ein wenig auf der Stelle drehen
+    // Handbremse: das Heck bricht aus, das Fahrzeug dreht stärker ein, als die Reifen sonst zulassen
+    const yrMax = (ice ? F.latEis : F.lat) / Math.max(2, Math.abs(vF)) * (hbOn ? HB.yr : 1);
+    const wantYr = clamp((vF * Math.tan(R.steer)) / WB * (hbOn ? 1 + (HB.yr - 1) * 0.6 : 1), -yrMax, yrMax) + (Math.abs(vF) < 0.8 ? stIn * 0.35 : 0);      // im Stand ein wenig auf der Stelle drehen
     R.yr += (wantYr - R.yr) * Math.min(1, dt * (ice ? 4.5 : 8));
   } else { R.steer *= Math.pow(0.3, dt); R.yr *= Math.pow(0.6, dt); }
   R.yaw += R.yr * dt;
+  roverMotor(dt, vF, th, F.radR, F.vB, F.rpmTop);
   const fx2 = -Math.sin(R.yaw), fz2 = -Math.cos(R.yaw), rx2 = Math.cos(R.yaw), rz2 = -Math.sin(R.yaw);
   // Bewegung bleibt in der alten Richtung: Hat sich das Fahrzeug gedreht, erscheint das im nächsten Bild als Quertempo, das die Reifen
   // abbauen (normal schnell, auf Eis langsam: der Rover driftet)
@@ -723,7 +768,7 @@ export function updateRover(dt: number) {
     }
   }
   // Karosserie: Lage aus der Geländeebene, dazu Einnicken beim Bremsen/Beschleunigen und Neigen in der Kurve (gefedert, weich)
-  const aF = th > 0 ? 1 : th < 0 ? -1 : 0, aL = vF * R.yr;
+  const aF = th, aL = vF * R.yr;
   const wantP = (R.air ? R.pitch : gPitch) - aF * F.squat * (onGround ? 1 : 0), wantR = (R.air ? R.roll : gRoll) - clamp(aL * F.lean, -0.1, 0.1);
   R.pitch += (wantP - R.pitch) * Math.min(1, dt * (R.air ? 1.5 : 9)); R.roll += (wantR - R.roll) * Math.min(1, dt * (R.air ? 1.5 : 9));
   m.g.position.set(R.x, R.y, R.z);
@@ -743,7 +788,7 @@ export function updateRover(dt: number) {
   else for (const w of m.wheels) w.rotation.x += vF * dt / 0.75;
   (m.beacon.material as THREE.SpriteMaterial).opacity = Math.sin(G.time * 6) > 0 ? 1 : 0.2;
   // Staub hinter den Rädern: mit dem Tempo, mehr beim Rutschen
-  if (!R.air && (Math.abs(vF) > 4 || R.slip > 2) && Math.random() < 0.18 + Math.min(0.5, R.slip * 0.08)) {
+  if (!R.air && (Math.abs(vF) > 4 || R.slip > 2) && Math.random() < 0.18 + Math.min(0.5, R.slip * 0.08) + (hbOn && Math.abs(vF) > 3 ? 0.3 : 0)) {
     const side = Math.random() < 0.5 ? -1 : 1;
     const back = axB + RADR * 0.5;
     puff(R.x - fx2 * back + rx2 * side * ht + rand(-0.4, 0.4), R.y + 0.3, R.z - fz2 * back + rz2 * side * ht + rand(-0.4, 0.4), -R.vx * 0.15 + rand(-1.5, 1.5), rand(0.8, 2.5), -R.vz * 0.15 + rand(-1.5, 1.5), ice ? '#cfd8e0' : '#3a342c', R.kind === 'wiesel' ? 0.8 : 1.0);
@@ -751,6 +796,8 @@ export function updateRover(dt: number) {
   // Wiesel: Radarleiste dreht, Fahrer im Sitz, Abtasten der Umgebung (wiesel.ts); kein Bohrer
   if (m.sensor) m.sensor.rotation.y += (WSCAN.t >= 0 ? 9 : 2.2) * dt;
   updateFahrer(m, dt);
+  if (R.view === 1) fahrerZeigen(false);      // Fahrersicht: die eigene Figur nicht von innen sehen
+  if (m.neu) for (const c of m.body.children) if (c.userData.vorn) c.visible = R.view !== 1;      // und nicht in die eigenen Scheinwerfer
   if (R.kind === 'wiesel') updateWieselScan(dt);
   // Bohren (nur der Dachs)
   const dpx = R.x + fx2 * 4.2, dpz = R.z + fz2 * 4.2, dpy = R.y + 1.1;
@@ -798,23 +845,61 @@ export function syncLandedShip() {
   for (const g2 of SHIP.glows) g2.scale.setScalar(0.6 * (g2.userData.base || 1));
 }
 
-// Verfolgerkamera hinter dem Rover
-const _cam = new THREE.Vector3(), _look = new THREE.Vector3();
-let camInit = false;
+// Verfolgerkamera hinter dem Rover. Seit 2026-11-25: Die Kamera schwenkt der Drehung verzögert nach (FZ.camLag; in Drifts sieht man
+// das Fahrzeug schräg), das Sichtfeld weitet sich mit dem Tempo (FZ.fov), V schaltet auf Motorhauben- bzw. Fahrersicht (FZ.hood)
+const _cam = new THREE.Vector3(), _look = new THREE.Vector3(), _hq = new THREE.Quaternion(), _hx = new THREE.Quaternion(), _xa = new THREE.Vector3(1, 0, 0);
+let camInit = false, camYaw = 0, camFov = 70;
 export function roverCamera(dt: number) {
-  const R = ROVER, fx = -Math.sin(R.yaw), fz = -Math.cos(R.yaw);
-  const [cb, cu] = FZ[R.kind].cam, want = new THREE.Vector3(R.x - fx * cb, 0, R.z - fz * cb);
+  const R = ROVER, F = FZ[R.kind];
+  if (!camInit) { camYaw = R.yaw; camFov = F.fov[0]; }
+  // Sichtfeld mit dem Tempo, weich nachgeführt
+  camFov += (F.fov[0] + (F.fov[1] - F.fov[0]) * clamp(Math.abs(R.speed) / F.vB, 0, 1) - camFov) * Math.min(1, dt * 2.5);
+  if (Math.abs(camera.fov - camFov) > 0.05) { camera.fov = camFov; camera.updateProjectionMatrix(); }
+  const m = R.model;
+  if (R.view === 1 && m) {
+    // Motorhaube (Dachs) bzw. Fahrersitz (Wiesel): fest am Aufbau, leicht nach unten geneigt (hood[3])
+    m.g.updateMatrixWorld(true);
+    _cam.set(F.hood[0], F.hood[1], F.hood[2]); m.body.localToWorld(_cam);
+    camera.position.copy(_cam);
+    m.body.getWorldQuaternion(_hq); camera.quaternion.copy(_hq).multiply(_hx.setFromAxisAngle(_xa, F.hood[3]));
+    camYaw = R.yaw; camInit = true;
+    return;
+  }
+  // Drehung verzögert nachschwenken (kürzester Weg)
+  let d = R.yaw - camYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+  camYaw += d * (1 - Math.exp(-dt * F.camLag));
+  const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw), hx = -Math.sin(R.yaw), hz = -Math.cos(R.yaw);
+  const [cb, cu] = F.cam, want = new THREE.Vector3(R.x - fx * cb, 0, R.z - fz * cb);
   want.y = Math.max(R.y + cu, heightAt(want.x, want.z) + 2.5);
   if (!camInit) { _cam.copy(want); camInit = true; }
-  _cam.lerp(want, 1 - Math.exp(-dt * 5));
+  _cam.lerp(want, 1 - Math.exp(-dt * 8));
   camera.position.copy(_cam);
-  _look.set(R.x + fx * 8, R.y + 2, R.z + fz * 8);
+  // Blickpunkt: vor dem Fahrzeug, halb in Kamera-, halb in Fahrzeugrichtung
+  _look.set(R.x + (fx + hx) * 4, R.y + 2, R.z + (fz + hz) * 4);
   camera.lookAt(_look);
-  if (Math.abs(camera.fov - 70) > 0.05) { camera.fov = 70; camera.updateProjectionMatrix(); }
+}
+// V im Fahrzeug (main.ts): Verfolger ↔ Motorhaube/Fahrersitz
+export function roverView() {
+  ROVER.view = ROVER.view ? 0 : 1; camInit = false;
+  if (!ROVER.view) fahrerZeigen(true);
+  return ROVER.view;
 }
 export function resetRoverCamera() { camInit = false; }
 
 // ---------------- Anzeige für den Rover ----------------
+// Motor (seit 2026-11-25): Gang, Drehzahlbalken mit rotem Bereich ab dem Schaltpunkt, Handbremse. Unterste Zeile im Panel.
+function drawMotor(w: number) {
+  const R = ROVER, T = GETRIEBE, y = 132, bw = w - 28 - 74, f = clamp(R.rpm / T.max, 0, 1);
+  ux.save();
+  ux.textAlign = 'left'; ux.font = '700 13px "Share Tech Mono",Consolas,monospace';
+  ux.fillStyle = R.shift > 0 ? '#8aa0b0' : '#e4eef5'; ux.fillText(R.gear === 0 ? 'R' : String(R.gear), 14, y + 5);
+  ux.fillStyle = '#0e1e28'; ux.fillRect(30, y - 4, bw, 8);
+  ux.fillStyle = 'rgba(255,90,70,.35)'; ux.fillRect(30 + bw * T.hoch / T.max, y - 4, bw * (1 - T.hoch / T.max), 8);
+  ux.fillStyle = R.rpm > T.hoch ? '#ff6b5b' : '#e09030'; ux.fillRect(30, y - 4, bw * f, 8);
+  ux.font = '11px "Share Tech Mono",Consolas,monospace'; ux.textAlign = 'right';
+  ux.fillStyle = R.hb ? '#ff6b5b' : '#8aa0b0'; ux.fillText(R.hb ? 'HANDBR.' : `${Math.round(R.rpm / 100) * 100}`, w - 14, y + 4);
+  ux.restore();
+}
 const _p = new THREE.Vector3();
 export function drawRoverHUD() {
   if (!ROVER.active || G.mode !== 'rover') return;
@@ -854,6 +939,7 @@ export function drawRoverHUD() {
   ux.strokeStyle = '#e09030'; ux.lineWidth = 2; ux.beginPath(); ux.moveTo(0, 1); ux.lineTo(100, 1); ux.stroke();
   ux.textAlign = 'left'; ux.font = '700 11px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = '#e09030'; ux.fillText(R.kind === 'wiesel' ? 'ERKUNDUNGSBUGGY' : 'BERGBAU-ROVER', 14, 20);
   ux.textAlign = 'right'; ux.font = '11px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = '#e4eef5'; ux.fillText(`${Math.abs(Math.round(R.speed * 3.6))} km/h`, w - 14, 20);
+  drawMotor(w);
   if (R.kind === 'wiesel') {
     // Sensormast: Bereitschaft, letzter Scan, Funde in der Anzeige
     const S = WSCAN, n = S.funde.length, cool = S.cool > 0;

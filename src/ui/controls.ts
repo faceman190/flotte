@@ -60,6 +60,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     const r: Row[] = [];
     if (nearShip()) r.push(['E', `An Bord der ${P.shipName}`, true]);
     if (ROVER.target) r.push(['Klick halten', 'Bohren', true]);
+    r.push(['Q', ROVER.kind === 'wiesel' ? 'Handbremse (auch Leertaste)' : 'Handbremse'], ['V', ROVER.view ? 'Verfolgerkamera' : ROVER.kind === 'wiesel' ? 'Fahrersicht' : 'Motorhaubensicht']);
     r.push(['F', 'Aussteigen']);
     return { title: 'Rover', rows: r };
   }

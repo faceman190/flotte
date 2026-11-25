@@ -157,9 +157,11 @@ export const gunPart = (kind: GunKind, part: 'out' | 'in' | 'end', vol = 0.5, fa
 // Explosion: eine von drei Aufnahmen, Tonhöhe leicht gestreut (rate < 1 = größer, tiefer)
 export function boom(vol = 0.8, rate = 1, fallback?: () => void) { return sfx('explosion' + Math.floor(Math.random() * 3), vol, rate * (0.92 + Math.random() * 0.16), fallback); }
 // Zusätzliche Schleifen neben dem Grundgeräusch (Rover, Bohrer, Drohnen, Mutterschiff, Torpedo): Lautstärke je Bild setzen, 0 blendet aus
+// rate (seit 2026-11-25, Rovermotor nach Drehzahl): Tonhöhe bzw. Abspieltempo; ohne Angabe bleibt sie, wie sie ist
 const loops: Record<string, { src: AudioBufferSourceNode; g: GainNode; vol: number }> = {};
-export function loopVol(key: string, vol: number) {
+export function loopVol(key: string, vol: number, rate?: number) {
   const cur = loops[key], v = Math.max(0, vol) * audio.volume;
+  if (cur && rate !== undefined && AC && Math.abs(cur.src.playbackRate.value - rate) > 0.004) cur.src.playbackRate.setTargetAtTime(rate, AC.currentTime, 0.04);
   if (v < 0.002) {
     if (cur && AC) { cur.g.gain.setTargetAtTime(0, AC.currentTime, 0.15); const c = cur; setTimeout(() => { try { c.src.stop(); } catch (e) { /* schon aus */ } }, 900); delete loops[key]; }
     return;
@@ -169,6 +171,7 @@ export function loopVol(key: string, vol: number) {
   if (!b || !AC) return;
   const s = AC.createBufferSource(), g = AC.createGain();
   s.buffer = b; s.loop = true; s.loopStart = TRIM[key][0]; s.loopEnd = TRIM[key][1];
+  if (rate !== undefined) s.playbackRate.value = rate;
   g.gain.value = 0; g.gain.setTargetAtTime(v, AC.currentTime, 0.25);
   s.connect(g).connect(AC.destination); s.start(0, TRIM[key][0]);
   loops[key] = { src: s, g, vol: v };
