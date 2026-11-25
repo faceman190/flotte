@@ -1,6 +1,6 @@
 # Dohle fürs Spiel exportieren: blender.exe -b Dohle.blend --python doh_export.py (nach els_export.py)
 # Ganzes Modell in einer Datei (unter 30 m: kein begehbarer Innenraum; das Cockpit bleibt durch die Kanzel sichtbar).
-# Innenräume (seit 26.11.2026): Materialien der Objekte mit „innen“ tragen „ ~iw/~ib/~ig/~im“ (Oberflächen-Shader im Spiel, wie Kormoran und Wisent).
+# Innenräume (seit 25.11.2026): Materialien der Objekte mit „innen“ tragen „ ~iw/~ib/~ig/~im“ (Oberflächen-Shader im Spiel, wie Kormoran und Wisent).
 # Ohne Bühnen (Studio, Hangar, Kameras, Planet), Lampen, Schraubeninstanzen und die durchscheinenden Lauf- und Abriebspuren.
 # Jedes Material wird zu einem schlichten PBR-Material aus seinen Angaben (m['bk']): Grundfarbe, Metall, Rauheit, Leuchten; Glas halbdurchsichtig.
 # Rumpfmaterialien mit Plattenfugen heißen ext_pan_* (das Spiel rechnet Fugen und Nieten im Shader aus den Koordinaten „Platten“).

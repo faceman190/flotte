@@ -9,9 +9,9 @@
 #  - Laderaum (5,7 × 3,1 × 2,4 m) für Paletten und Normkisten, Heckrampe bis zum Boden, Zurrschienen, Leuchten, Netz, Warnmarken
 #  - zwei Triebwerksgondeln oben an Pylonen (Einlauf mit Lüfterrad, Schubdüse mit Klappen), Leitflossen, Seitenleitwerk
 #  - zwei Hubdüsen unter dem Rumpf, Ladescheinwerfer über der Heckluke, Dachluke mit Handläufen
-#  - Fahrwerk (26.11.2026 auf Wunsch des Nutzers ohne Räder: „die starten senkrecht und nicht auf einer Landebahn“): Landebeine mit
+#  - Fahrwerk (25.11.2026 auf Wunsch des Nutzers ohne Räder: „die starten senkrecht und nicht auf einer Landebahn“): Landebeine mit
 #    Füßen (Federbein, Gabel, kippbarer Fußteller mit Gummisohle und zwei Dämpfern); Bugbein fährt nach hinten ein, Hauptbeine in die Wülste
-#  - Innenräume (26.11.2026 aufgewertet): Cockpit mit Schalensitz, Seitenstick, Pult mit Blendschutz; Vorraum und Gang verbunden, Luke
+#  - Innenräume (25.11.2026 aufgewertet): Cockpit mit Schalensitz, Seitenstick, Pult mit Blendschutz; Vorraum und Gang verbunden, Luke
 #    zum Laderaum; Laderaum mit Rollenbahnen, Wandfeldern, Kabelpritschen und Kettenzug (Kleinteile aus innen/innen_detail.py)
 # Bewegliche Teile hängen an Gelenken (Gruppen fw, rampe, tuer); mil_kit.py liefert Werkzeuge, Federbein, Gelenkverwaltung.
 # Aufruf ohne Fenster: blender.exe -b --python doh_lauf.py -- <ansichten> | alle | bauplan
@@ -35,7 +35,7 @@ M['ocker'] = hull_mat('Lack Ocker', (0.34, 0.19, 0.028), 0.25, 0.45, 1.0)
 M['gangwand'] = mk('Gangwand', (0.11, 0.115, 0.12), 0.25, 0.5, var=0.1, scale=3.0, bump=0.2, wear=0.4)
 M['boden2'] = mk('Ladeboden', (0.05, 0.052, 0.056), 0.6, 0.45, var=0.15, scale=4.0, bump=0.4, bscale=200, wear=0.9)
 HULL_MATS = ['d_weiss', 'd_schiefer', 'd_nase', 'd_ocker']
-# Innenräume (26.11.2026): helle Wände, dunklere Felder, Polster, Rahmen; Kleinteile über innen_detail.py (wie Kormoran und Wisent)
+# Innenräume (25.11.2026): helle Wände, dunklere Felder, Polster, Rahmen; Kleinteile über innen_detail.py (wie Kormoran und Wisent)
 M['d_innen'] = mk('Innenwand hell', (0.25, 0.255, 0.25), 0.15, 0.55, var=0.08, scale=3.0, bump=0.15, wear=0.3)
 M['d_feld'] = mk('Innenfeld', (0.13, 0.138, 0.145), 0.2, 0.5, var=0.1, scale=3.0, bump=0.15, wear=0.3)
 M['d_polster'] = mk('Polster', (0.06, 0.062, 0.066), 0.0, 0.8, var=0.12, scale=6.0, bump=0.5, bscale=120)

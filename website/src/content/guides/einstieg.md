@@ -102,7 +102,7 @@ Die Figur wechselst du später an der Garderobe, ebenfalls im Fenster Ausrüstun
 
 ## Die ersten Credits
 
-Du fliegst die **Venom**, einen schnellen Abfangjäger mit kleinem Frachtraum und einem einfachen Bergbaulaser. Für den Anfang gibt es drei
+Du fliegst den **Milan**, einen wendigen leichten Jäger mit Werkzeuglaser und einem Frachtfach für eine Normkiste. Wer lieber handelt, kauft sich in der Werft für 1.500 Credits die **Dohle**: einen kleinen Frachter mit Laderaum und Heckrampe (60 Einheiten). Für den Anfang gibt es drei
 gute Wege zum Geld:
 
 1. **Erz abbauen** im Eisengürtel von Heimstatt und gleich nebenan an der Gildehütte **Eisenkrone** verkaufen oder schmelzen. Siehe [Bergbau](/guides/bergbau/).

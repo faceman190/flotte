@@ -19,7 +19,7 @@ Osten wird es ernst.
 | Rechtsklick | Rakete auf das erfasste Ziel |
 
 **Zielerfassung:** Halte einen Ferrox nah an der Bildmitte, bis zu 1.400 m entfernt. Ein Ton meldet das erfasste Ziel, links unten
-leuchtet dann **Rakete abfeuern** auf. Raketen sind knapp: Die Venom trägt vier, der schwere Frachter Wisent zwanzig.
+leuchtet dann **Rakete abfeuern** auf. Raketen sind knapp: Der Milan trägt zwei, der schwere Frachter Wisent zwanzig.
 
 Schaden, Feuerrate, Rumpf und Schild baust du in der **Werkstatt** der Bastion in Stufen aus. Module aus dem Inventar (<kbd>I</kbd>)
 geben weitere Prozente. Waffenmodule wie Gauss-Beschleuniger, Zwillingslafette oder Ferrox-Lanze verschießen eigene Geschosse.
@@ -33,7 +33,7 @@ geben weitere Prozente. Waffenmodule wie Gauss-Beschleuniger, Zwillingslafette o
   hängen halb gefressene Frachter. Aus den Startschächten an der Flanke setzen sie Jäger aus, aus dem Maul feuern sie auf alles in
   der Nähe. Treffer zählen am ganzen Rumpf. Einen Bienenstock zu zerstören ist eine eigene Mission.
 
-![Ein Bienenstock der Ferrox im Kristallbruch, davor eine Venom](../../assets/bilder/ferrox-150-bienenstock.jpg)
+![Ein Bienenstock der Ferrox im Kristallbruch, davor ein Jäger](../../assets/bilder/ferrox-150-bienenstock.jpg)
 
 Treffer lassen die Panzerung der Ferrox kurz aufglühen, so siehst du, ob du triffst. Ferrox in der Ferne bekommen einen Rahmen mit
 Entfernung, Angreifer sind rötlich markiert, und ein Pfeil am Bildrand zeigt Ferrox bis 2,5 km Abstand.
@@ -68,7 +68,8 @@ Höchstens zwei Missionen laufen gleichzeitig. Abbrechen kostet Ruf.
 
 | Schiff | Rolle | Stärke |
 |---|---|---|
-| Venom | Abfangjäger | schnell und wendig, wenig Panzerung |
+| Milan | Leichter Jäger | schnell und wendig, wenig Panzerung |
+| Dohle | Kleiner Frachter | robuster Rumpf, kaum bewaffnet, keine Flugkörper |
 | Würger | Schwerer Jäger | Schienenkanone, höchster Schaden, dicke Panzerung |
 | Kormoran | Korvette | Rückenturm, sechs Flugkörper, innen begehbar |
 | Pfeil | Kreuzer | starker Rumpf, Bergbaulaser und Drohne, innen begehbar |

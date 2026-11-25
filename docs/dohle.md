@@ -16,7 +16,7 @@ Gebaut am 25.11.2026, als Gegenstück zum Milan. Wunsch des Nutzers: ein zweiter
 16,7 × 8,2 × 5,5 m (Fahrwerk ausgefahren). Achsen wie beim Milan: +X nach vorn, +Y Backbord, +Z oben, Boden bei z = 0. Rund 254.000 Dreiecke in Blender.
 
 - **Rumpf:** Superellipsen-Spanten. Stumpfe Cockpitnase mit Rundumverglasung, Übergang, kastenförmiges Frachtmodul, offenes Heck. Oben Sandweiß, unten Schiefer, Ocker für Kanten und Warnmarken, dunkle Nase. Plattenfugen und Nieten im Shader.
-- **Cockpit (26.11.2026 aufgewertet):**
+- **Cockpit (25.11.2026 aufgewertet):**
   - Schalensitz auf Schienen mit Seitenwangen, Steppnähten, Fünfpunktgurt und Kopfstütze mit Wangen
   - rechts ein Seitenstick, links zwei Schubhebel, Pedale, Gummimatte
   - Pult mit großem Mittelbild und vier Seitenbildern mit Randtasten, eingelassenen Feldern, Drehknöpfen und Tastenfeld
@@ -25,20 +25,20 @@ Gebaut am 25.11.2026, als Gegenstück zum Milan. Wunsch des Nutzers: ein zweiter
   - gepolsterte Rückwand mit Helm am Haken, Datentafel und Feuerlöscher; Kabelstränge, Fußraumleisten
   - Stufen führen hinunter in den Gang.
 - **Einstieg:** Tür links mit eingebauter Treppe. Sie klappt unten angeschlagen nach außen bis auf den Boden.
-- **Vorraum und Gang (26.11.2026):**
+- **Vorraum und Gang (25.11.2026):**
   - Beide sind jetzt verbunden; vorher trennte eine Wand sie.
   - helle Wände, Bodenplatten, Gitterrost mit Leitstreifen in der Gangmitte
   - Wandfelder mit Lüftung, Wartungsklappen und Anschlusskästen, Stoßleisten, Deckenraster, Leitungen mit Schellen, Leuchten in Fassungen
   - Spind, Verbandskasten, Feuerlöscher, Türbedienung
   - geschlossene Luke „LADERAUM“ in der Rückwand, Schrift „COCKPIT“ an den Stufen
-- **Laderaum:** 5,7 × 3,1 × 2,4 m für Paletten und Normkisten, Heckrampe bis zum Boden. Seit 26.11.2026:
+- **Laderaum:** 5,7 × 3,1 × 2,4 m für Paletten und Normkisten, Heckrampe bis zum Boden. Seit 25.11.2026:
   - Ladeplatten mit zwei Rollenbahnen unter den Ladereihen, drei Ankerschienen, Warnkante zur Rampe
   - Spanten bis über die Decke mit Knotenblechen; Wandfelder zwischen den Spanten, Ankerschiene oben an den Wänden
   - Kabelpritschen und Leitungen unter der Decke, Laufschiene mit Kettenzug (MAX 500 KG), sechs Leuchten in Fassungen, Notleuchten
   - an der Stirnwand die Luke „VORRAUM“, daneben das Netz, Feuerlöscher und die Aufschrift „LADERAUM · MAX 2,5 T“
   - hinten rechts die Rampenbedienung mit Notaus
 - **Antrieb:** zwei Gondeln oben an Pylonen (Einlauf mit Lüfterrad, Schubdüse mit Klappen), Leitflossen, Seitenleitwerk. Zwei Hubdüsen unter dem Rumpf.
-- **Fahrwerk (einziehbar), seit 26.11.2026 ohne Räder.** Der Nutzer wollte keine Räder: „Das sind Raumschiffe, die starten senkrecht und nicht auf einer Landebahn.“ Jetzt sind es Landebeine mit Füßen (`leg()` und `foot()` in `doh_kit.py`):
+- **Fahrwerk (einziehbar), seit 25.11.2026 ohne Räder.** Der Nutzer wollte keine Räder: „Das sind Raumschiffe, die starten senkrecht und nicht auf einer Landebahn.“ Jetzt sind es Landebeine mit Füßen (`leg()` und `foot()` in `doh_kit.py`):
   - Federbein bis zum Kolbenende, darunter Gabelbrücke und Gabel zum Querbolzen. Am Bolzen kippt der Fuß und legt sich an den Boden.
   - Fuß: Gummisohle, Rand, Warnkante, zweistufiger Teller mit Rippen und Nabe. Zwei Federdämpfer vorn und hinten halten ihn waagrecht. Dazu ein Bodenkontaktfühler mit grüner Lampe und Zurraugen.
   - Drehmomentlenker hinten, Hydraulikleitung mit Schellen am Bein.
@@ -70,7 +70,7 @@ Wie beim Milan hängen die Teile an Gelenken (`gelenk()` aus `mil_kit.py`). `zus
   - Laser 0 / −1,12 / −7,74
 - HUD-Umriss `SIL.dohle` (`src/ui/hud.ts`). Fliegt auch im Stadtverkehr (`city.ts`).
 - Weg: `sh asset-src/neu/dohle/doh_spiel.sh`, danach `npm run assets`.
-  - `Dohle.glb`: 254.000 → 146.000 Dreiecke (vor dem Umbau am 26.11.: 113.000)
+  - `Dohle.glb`: 254.000 → 146.000 Dreiecke (vor dem Umbau: 113.000)
   - `DohleFern.glb`: 33.000 Dreiecke
 - Innenräume: Objekte in den Sammlungen „Innenraeume“ und „Laderaum innen“ tragen `innen`. Ihre Materialien bekommen im Export „ ~iw/~ib/~ig/~im“. Das Spiel legt darauf den Oberflächen-Shader (`src/models/innenFlaeche.ts`), wie bei Kormoran und Wisent. Die Kleinteile kommen aus `asset-src/neu/innen/innen_detail.py` (Sammel, platten, gitter, wandfeld, deckenraster, zurrschiene, schelle).
 

@@ -11,11 +11,12 @@ Bergbau ist das Rückgrat der Crew. Jede Werft, jede Panzerplatte und jede Treib
 
 ## Ausrüstung
 
-Drei Schiffe der Werft haben einen Bergbaulaser. Würger, Kormoran und Wisent sind Kampf- und Frachtschiffe und können nicht abbauen.
+Vier Schiffe der Werft haben einen Bergbaulaser. Würger, Kormoran und Wisent sind Kampf- und Frachtschiffe und können nicht abbauen.
 
 | Schiff | Laser | Frachtraum | Besonderheit |
 |---|---|---|---|
-| Venom | einfach | 32 | Startschiff, gut für die ersten Runden |
+| Milan | einfach | 10 | Startschiff, Werkzeuglaser unter dem Kinn |
+| Dohle | schwach (0,7 ×) | 60 | kleiner Frachter, Laderaum mit Heckrampe |
 | Elster | stark (1,7 ×) | 70 | weiter Scanner, vier Sprengladungen |
 | Pfeil | mittel (1,2 ×) | 220 | Kreuzer mit Drohne und Sprengladungen, innen begehbar |
 
