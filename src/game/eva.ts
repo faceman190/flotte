@@ -13,6 +13,8 @@ import { radio } from '../ui/radio';
 import { gearDef } from '../data/gear';
 import { SHIPS } from '../data/ships';
 import { ausArt, kanzelPunkte, schiffZuWelt } from './ausstieg';
+import { KISTEN, KISTE_INFO, ladePunkt, ladenGrund, einladen, type WeltKiste } from './kisten';
+import { ITEMS } from '../data/items';
 
 // =====================================================================================
 // Außenbordeinsatz in der Schwerelosigkeit (seit 2026-11-24, Konzept docs/konzept-welt-und-leben.md Punkt 7; überarbeitet 2026-11-25)
@@ -22,6 +24,7 @@ import { ausArt, kanzelPunkte, schiffZuWelt } from './ausstieg';
 //  - Ohne Rucksack: nur die Leine und der Traktorstrahl des Schiffs. Dieselben Tasten, aber langsam (2 m/s) und nur bis 60 m ums Schiff;
 //    weiter draußen zieht der Strahl zurück. Kein Gasverbrauch.
 //  - [E] an treibenden Containern (Begegnung „Treibgut“): von Hand geborgen, anderthalbmal so viel Ware wie mit dem Traktorstrahl.
+//  - [E] an einer Normkiste (kisten.ts): greifen und schieben (schwere Stücke bremsen), an der Rampe bzw. Frachtklappe wird sie geladen.
 //  - [F] an der Schleuse: wieder einsteigen. Sauerstoff 4 Minuten; leer: Notrückholung, die Hülle zahlt den Preis.
 //  - Figur: eine Kopie der Spielfigur mit der eigenen Tracht in einer Schwebehaltung (Arme und Beine leicht angewinkelt, wie Astronauten
 //    entspannt im All hängen), aus der Ruhelage per Zwei-Knochen-IK gestellt (wie der Fahrer im Wiesel, fahrer.ts). Sie neigt sich in
@@ -36,6 +39,10 @@ let sk: THREE.Object3D | null = null, fig: Figur | null = null, holder: THREE.Gr
 const rest = new Map<THREE.Object3D, THREE.Quaternion>();
 let pack: THREE.Group | null = null, leine: THREE.Line | null = null, strahl: THREE.Mesh | null = null, nebel: Nebel | null = null;
 let grabT = 0, poseT = 0, dressT = 0;
+let gegriffen: WeltKiste | null = null;      // Normkiste, die gerade geschoben wird
+const LAST = { kiste: 0.85, palette: 0.6, container: 0.35 };      // Schub mit Kiste (Anteil)
+const kisteNah = () => KISTEN.filter(k => !k.hand && d3(k.x, k.y, k.z, EVA.x, EVA.y, EVA.z) < KISTE_INFO[k.art].r + 2.2).sort((a, b) => d3(a.x, a.y, a.z, EVA.x, EVA.y, EVA.z) - d3(b.x, b.y, b.z, EVA.x, EVA.y, EVA.z))[0];
+function loslassen() { if (gegriffen) { gegriffen.hand = false; gegriffen.vx = EVA.vx; gegriffen.vy = EVA.vy; gegriffen.vz = EVA.vz; } gegriffen = null; }
 const lean = { x: 0, z: 0 };
 const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3(0, 1, 0), _c = new THREE.Vector3(), _l = new THREE.Vector3(), _a = new THREE.Vector3(), _s = new THREE.Vector3();
 
@@ -200,6 +207,7 @@ export function startEva() {
   return true;
 }
 export function endEva(not = false) {
+  loslassen();
   EVA.active = false; G.mode = 'play'; holder?.removeFromParent(); leine?.removeFromParent(); strahl?.removeFromParent(); nebel?.g.removeFromParent(); loopVol('rover_engine', 0);
   for (const gl of SHIP.glows) gl.visible = true;
   document.getElementById('hud')?.classList.remove('hidden');
@@ -259,7 +267,8 @@ export function updateEva(dt: number) {
   const thrust = !!(f || s || u) && (!EVA.duesen || EVA.fuel > 0);
   const acc = _l.set(_f.x * f + _r.x * s, _f.y * f + u, _f.z * f + _r.z * s);
   if (thrust) {
-    EVA.vx += acc.x * M.acc * dt; EVA.vy += acc.y * M.acc * dt; EVA.vz += acc.z * M.acc * dt;
+    const last = gegriffen ? LAST[gegriffen.art] : 1;
+    EVA.vx += acc.x * M.acc * last * dt; EVA.vy += acc.y * M.acc * last * dt; EVA.vz += acc.z * M.acc * last * dt;
     if (EVA.duesen) EVA.fuel = Math.max(0, EVA.fuel - dt);
   }
   const brake = (keys.ShiftLeft || keys.ShiftRight) && (!EVA.duesen || EVA.fuel > 0);
@@ -276,13 +285,30 @@ export function updateEva(dt: number) {
   const r = stats().radius * 0.55, d = d3(EVA.x, EVA.y, EVA.z, P.x, P.y, P.z);
   if (d < r) { const k = r / Math.max(0.01, d); EVA.x = P.x + (EVA.x - P.x) * k; EVA.y = P.y + (EVA.y - P.y) * k; EVA.z = P.z + (EVA.z - P.z) * k; EVA.vx *= -0.3; EVA.vy *= -0.3; EVA.vz *= -0.3; }
   loopVol('rover_engine', thrust && EVA.duesen ? 0.05 : 0);
+  // Kiste vor sich her schieben; an der Rampe bzw. Frachtklappe einladen
+  if (gegriffen && !KISTEN.includes(gegriffen)) gegriffen = null;
+  if (gegriffen) {
+    const k = gegriffen, ab = KISTE_INFO[k.art].r + 1.1, kk = Math.min(1, dt * 6);
+    k.hand = true; grabT = 0.45;      // Hände bleiben vorn an der Kiste (Greifbewegung auf halbem Weg = ganz ausgestreckt)
+    k.x += (EVA.x + _f.x * ab - k.x) * kk; k.y += (EVA.y + _f.y * ab - 0.2 - k.y) * kk; k.z += (EVA.z + _f.z * ab - k.z) * kk;
+    k.vx = EVA.vx; k.vy = EVA.vy; k.vz = EVA.vz; k.life = Math.max(k.life, 120);
+    const lp = ladePunkt();
+    if (d3(k.x, k.y, k.z, lp.x, lp.y, lp.z) < KISTE_INFO[k.art].r + 3) {
+      const g = ladenGrund(k);
+      if (g) { if (!k.gemeldet) { k.gemeldet = true; radio('ANZUG', g + '.', '#ffb347'); } }
+      else { k.hand = false; einladen(k); gegriffen = null; }
+    }
+  }
   // Sauerstoff, Entfernung, Gas
   EVA.o2 -= dt; EVA.warnT -= dt; grabT = Math.max(0, grabT - dt);
   if (EVA.o2 <= 0) { endEva(true); return; }
   if (EVA.o2 < 45 && EVA.warnT <= 0) { EVA.warnT = 15; radio('ANZUG', `Sauerstoff knapp: noch ${Math.ceil(EVA.o2)} Sekunden.`, '#ffb347'); snd(880, 0.12, 'square', 0.04); }
   if (dS > M.reich - 5 && EVA.warnT <= 0) { EVA.warnT = 12; radio('ANZUG', EVA.duesen ? 'Leine am Ende: zurück zum Schiff.' : 'Rand des Traktorstrahls. Weiter kommst du nur mit einem Manövrierrucksack.', '#ffb347'); }
   if (EVA.duesen && EVA.fuel <= 0) { EVA.duesen = false; radio('ANZUG', 'Düsengas leer. Ab jetzt führt dich der Traktorstrahl des Schiffs.', '#ffb347'); }
-  EVA.prompt = nahAmSchiff() ? '[F] Durch die Schleuse einsteigen' : evaContainer(EVA.x, EVA.y, EVA.z, false) ? '[E] Container von Hand bergen' : '';
+  const kn = gegriffen ? null : kisteNah();
+  EVA.prompt = gegriffen ? `[E] ${KISTE_INFO[gegriffen.art].n} loslassen · zur ${ausArt() === 'rampe' ? 'Rampe' : 'Frachtklappe'} schieben`
+    : nahAmSchiff() ? '[F] Durch die Schleuse einsteigen' : kn ? `[E] ${KISTE_INFO[kn.art].n} greifen · ${kn.n} ${ITEMS[kn.ware].n}`
+    : evaContainer(EVA.x, EVA.y, EVA.z, false) ? '[E] Container von Hand bergen' : '';
   // Figur: Schwebehaltung, neigt sich in Schubrichtung (der Rucksack schiebt am Rücken), dreht sich mit dem Blick
   if (sk && fig) {
     if (!holder) { holder = new THREE.Group(); holder.add(sk); }
@@ -321,7 +347,11 @@ export function evaCamera() {
   camera.position.copy(_c); _l.set(EVA.x, EVA.y + 0.3, EVA.z).addScaledVector(_f, 3); camera.lookAt(_l);
 }
 /** Taste E im Außenbordeinsatz */
-export function evaE() { if (evaContainer(EVA.x, EVA.y, EVA.z, true)) { grabT = 0.9; snd(700, 0.15, 'triangle', 0.05, 300); } }
+export function evaE() {
+  if (gegriffen) { loslassen(); snd(400, 0.12, 'triangle', 0.04, -100); return; }
+  const kn = kisteNah(); if (kn) { gegriffen = kn; kn.hand = true; grabT = 0.9; snd(700, 0.15, 'triangle', 0.05, 300); return; }
+  if (evaContainer(EVA.x, EVA.y, EVA.z, true)) { grabT = 0.9; snd(700, 0.15, 'triangle', 0.05, 300); }
+}
 /** Taste F im Außenbordeinsatz */
 export function evaF() { if (nahAmSchiff()) endEva(); else radio('ANZUG', 'Zu weit von der Schleuse. Näher ans Schiff.'); }
 /** Anzeige: Sauerstoff, Düsengas oder Traktorstrahl, Abstand, Hinweis */

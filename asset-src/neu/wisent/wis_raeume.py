@@ -18,6 +18,15 @@ M['kiste2'] = mk('Kiste Grau', (0.16, 0.165, 0.17), 0.35, 0.45, var=0.1, scale=2
 M['reifen'] = mk('Reifen', (0.02, 0.02, 0.022), 0.0, 0.85, var=0.05, scale=12.0, bump=0.6, bscale=60)
 M['i_wand'] = mk('Wandplatte Weiss', (0.56, 0.57, 0.58), 0.1, 0.36, var=0.05, rvar=0.05, scale=1.5, bump=0.08, bscale=120, wear=0.2)
 M['orange'] = mk('Polster Orange', (0.5, 0.18, 0.03), 0.0, 0.6, var=0.1)
+# Details (25.11.2026, innen_detail.py): Bodenplatten, Gitterrost, Ankerschienen, Stoßbleche, Leitungen mit Schellen
+M['wb_platte'] = mk('Ladeboden Platte', (0.05, 0.052, 0.058), 0.6, 0.46, var=0.1, scale=6.0, bump=0.15, wear=0.6)
+M['wb_platte2'] = mk('Ladeboden Platte hell', (0.07, 0.072, 0.078), 0.6, 0.44, var=0.1, scale=6.0, bump=0.15, wear=0.6)
+M['wb_schacht'] = mk('Schacht', (0.008, 0.008, 0.01), 0.3, 0.85, var=0.05, grime=False)
+M['wb_gitter'] = mk('Gitterrost', (0.09, 0.092, 0.097), 0.85, 0.42, var=0.1, wear=0.7)
+M['wb_stoss'] = mk('Stossblech', (0.11, 0.113, 0.12), 0.8, 0.4, var=0.12, wear=0.8)
+M['wb_rohr1'] = mk('Leitung Petrol', (0.03, 0.12, 0.13), 0.4, 0.42, var=0.08, wear=0.5)
+M['wb_rohr2'] = mk('Leitung Grau', (0.2, 0.205, 0.21), 0.7, 0.4, var=0.08, wear=0.5)
+exec(compile(open(os.path.join(os.path.dirname(bpy.data.filepath), '..', 'innen', 'innen_detail.py'), encoding='utf-8').read(), 'innen_detail.py', 'exec'))
 
 def rrect_path(y, z0, z1, r, n=8):      # gerundetes Rechteck (y = halbe Breite) in der YZ-Ebene, unten offen
     pts = [(-y, z0)]
@@ -46,6 +55,10 @@ def bunk(x0, x1, s):      # Kojennische auf der Seite s zwischen x0 und x1
         slab('Leselicht', (xm, (yi + yo) / 2, z + 1.0 if lvl == 0 else GZ - 0.06), (1, 0, 0), (0, 1, 0), (x1 - x0 - 0.6, 0.06, 0.012), M['i_licht'], 0)
     slab('Kojenboden oben', (xm, (yi + yo) / 2, GF + 1.62 - 0.17), (1, 0, 0), (0, 1, 0), (x1 - x0 - 0.2, abs(yo - yi), 0.04), M['i_grau'], 0.01)
     slab('Nischenrueckwand', (xm, yo + s * 0.05, (GF + GZ) / 2), (1, 0, 0), (0, 0, 1), (x1 - x0, GZ - GF, 0.1), M['i_wand'], 0.02)
+    if GW[0] is not None:      # Wandfelder auf der Rückwand der Nische (zwischen und über den Kojen sichtbar)
+        a3 = Vector((x0, yo, 0)); n3 = Vector((0, -s, 0)); half = (x1 - x0) / 2
+        for k, (s0, s1) in enumerate(((0.05, half - 0.02), (half + 0.02, x1 - x0 - 0.05))):
+            wandfeld(GW[0], a3, Vector((1, 0, 0)), n3, s0, s1, GF + 0.12, GZ - 0.12, 3 + k * 2 + (1 if s > 0 else 0), M['i_kunst'], M['i_grau'], M['wb_schacht'], M['mittel'], M['i_grau'])
     for k in range(2): slab('Spindtuer', (x0 + 0.55 + k * 0.62, yo, GF + 2.1), (1, 0, 0), (0, 0, 1), (0.56, 0.42, 0.06), M['i_grau'], 0.02)
     # Leiter an der Gangseite
     lx = x0 + 0.45
@@ -54,6 +67,7 @@ def bunk(x0, x1, s):      # Kojennische auf der Seite s zwischen x0 und x1
     for zz in (0, 1): rod('Leiterholm', Vector((lx + zz * 0.36, yi - s * 0.04, GF)), Vector((lx + zz * 0.36, yi - s * 0.04, GF + 2.0)), 0.022, M['i_kunst'], 10)
     for k in range(6): rod('Leitersprosse', Vector((lx, yi - s * 0.04, GF + 0.3 + k * 0.3)), Vector((lx + 0.36, yi - s * 0.04, GF + 0.3 + k * 0.3)), 0.016, M['g_rot'] if k == 5 else M['mittel'], 8)
     o = text('WISENT', 0.08, (x1 - 0.35, yi - s * 0.15, GF + 1.47), (-s * 0, 0, 0) if False else (s * -1 if False else (1, 0, 0)), (0, 0, 1), M['i_schwarz'], align='RIGHT', name='Kojenschrift') if False else None
+GW = [None]      # Sammler für Wanddetails im Gang (in corridor() angelegt)
 def corridor():
     W = 1.45; xs = [22.5, 19.5, 16.5, 13.5, 10.5, 7.5]
     slab('Gangboden', ((GX0 + GX1) / 2, 0, GF - 0.05), (1, 0, 0), (0, 1, 0), (GX1 - GX0, 2 * 3.45, 0.1), M['i_boden'], 0.01)
@@ -62,6 +76,11 @@ def corridor():
         slab('Laufstreifen', ((GX0 + GX1) / 2, sg * 0.7, GF + 0.004), (1, 0, 0), (0, 1, 0), (GX1 - GX0 - 0.4, 0.07, 0.008), M['g_rot'], 0)
         slab('Laufstreifen', ((GX0 + GX1) / 2, sg * 0.82, GF + 0.004), (1, 0, 0), (0, 1, 0), (GX1 - GX0 - 0.4, 0.03, 0.008), M['g_rot'], 0)
     slab('Gangmitte', ((GX0 + GX1) / 2, 0, GF + 0.003), (1, 0, 0), (0, 1, 0), (GX1 - GX0 - 0.4, 0.8, 0.006), M['i_grau'], 0.002)
+    SG = Sammel('Gangdetail Boden', C_ROOM, 0.003); GW[0] = Sammel('Gangdetail Wand', C_ROOM)
+    deckenraster(GW[0], GX0, GX1, -3.45, 3.45, GZ, M['i_grau'], p=1.0, b=0.04, t=0.012)
+    n = int(GX1 - GX0 - 0.4)
+    for k in range(n): gitter(SG, GX0 + 0.2 + k * (GX1 - GX0 - 0.4) / n + 0.01, GX0 + 0.2 + (k + 1) * (GX1 - GX0 - 0.4) / n - 0.01, -0.38, 0.38, GF + 0.006, M['wb_gitter'], M['wb_schacht'])
+    SG.fertig()
     for x in xs: portal(x)
     for i in range(len(xs) - 1):
         for s in (1, -1): bunk(xs[i + 1] + 0.2, xs[i] - 0.2, s)
@@ -74,6 +93,7 @@ def corridor():
     slab('Gangstirn vorn', (GX1 - 0.05, 0, (GF + GZ) / 2), (1, 0, 0), (0, 1, 0), (0.1, 6.9, GZ - GF), M['i_wand'], 0.02) if False else None
     # Geländer um den Treppenaustritt am hinteren Gangende (die Treppe selbst steht im Laderaum, stairs())
     for sg in (1, -1): pipe('Austrittsgelaender', [Vector((GX0 + 0.3, sg * 1.15, GF)), Vector((GX0 + 0.3, sg * 1.15, GF + 1.0)), Vector((GX0 - 0.5, sg * 1.15, GF + 1.0))], 0.03, M['g_rot'], rad=0.1)
+    GW[0].fertig(); GW[0] = None
     cam('Gang', (23.6, 0.35, GF + 1.6), (8.0, -0.2, GF + 1.2), 20); VIEWS['gang'] = ('Gang', 'weltraum', False, 0.5, 0.0)
     cam('Koje', (14.6, -0.9, GF + 1.5), (16.0, 2.8, GF + 0.9), 20); VIEWS['koje'] = ('Koje', 'weltraum', False, 0.5, 0.0)
 
@@ -208,7 +228,7 @@ def cargo_bay():
         for s in (1, -1):
             for y in (2.3, 3.9, 5.3):
                 if y > bay_w(x) - 0.5: continue
-                for dx in (-0.12, 0.12): slab('Leuchtmarke', (x + dx, s * y, BF + 0.008), (1, 0, 0), (0, 1, 0), (0.12, 0.2, 0.01), M['i_boden_licht'], 0)
+                for dx in (-0.12, 0.12): slab('Leuchtmarke', (x + dx, s * y, BF + 0.015), (1, 0, 0), (0, 1, 0), (0.12, 0.2, 0.01), M['i_boden_licht'], 0)
             slab('Randmarke', (x, s * 1.55, BF + 0.014), (1, 0, 0), (0, 1, 0), (0.7, 0.06, 0.004), M['i_kunst'], 0)
     for y in (-4.6, -1.9, 1.9, 4.6): slab('Zurrschiene', ((BX0 + 2 + BX1) / 2, y, BF + 0.012), (1, 0, 0), (0, 1, 0), (L - 3.0, 0.12, 0.024), M['mittel'], 0.004)
     for k in range(4):
@@ -216,6 +236,7 @@ def cargo_bay():
         prism('Bodenpfeil', [(x + 0.35, 0.0), (x - 0.15, 0.55), (x - 0.35, 0.55), (x + 0.12, 0.0), (x - 0.35, -0.55), (x - 0.15, -0.55)], BF + 0.012, BF + 0.018, M['i_kunst'], 'Z', 0)
     slab('Rampenwarnfeld innen', (BX0 + 0.5, 0, BF + 0.01), (1, 0, 0), (0, 1, 0), (0.6, 2 * (DOOR_Y - 0.3), 0.012), M['warnrw'], 0)
     o = text('LADEBUCHT 1', 0.55, (BX0 + 6.5, 0, BF + 0.016), (0, 1, 0), (-1, 0, 0), M['i_kunst'], align='CENTER', name='Bodenschrift')
+    laderaum_details(ribs)
     # Stirnwand vorn: Tor mit Lichtrahmen, Leitstand mit Fenster darüber, Schrift
     W1 = bay_w(BX1)
     prism('Stirnwand', [(p[0], p[1]) for p in bay_profile(W1)], BX1 - 0.12, BX1, M['i_kunst'], 'X', 0.02)
@@ -238,6 +259,40 @@ def cargo_bay():
     cam('Treppe', (-8.0, -4.2, BF + 1.8), (4.0, 0.0, BF + 3.6), 24); VIEWS['treppe'] = ('Treppe', 'weltraum', False, 0.3, 0.0)
     cam('Laderaum2', (-37.5, 3.4, BF + 3.2), (2.0, -1.4, BF + 1.6), 20); VIEWS['laderaum2'] = ('Laderaum2', 'wueste', False, 0.2, 0.0)
     cam('Rampe', (-78.0, -26.0, 7.5), (-34.0, 0.0, 7.0), 32); VIEWS['rampe'] = ('Rampe', 'wueste', True, 0.0, 0.0)
+
+def laderaum_details(ribs):
+    # Seitenbahnen: schwere Platten 1,5 × 1,5 m (folgen der Breite, die zum Heck hin abnimmt), Mittelbahn: Bodenluken mit Rahmen
+    SB, SW = Sammel('Laderaumdetail Boden', C_ROOM, 0.003), Sammel('Laderaumdetail Wand', C_ROOM)
+    xa = BX0 + 0.85; n = int((BX1 - 0.2 - xa) / 1.5); px = (BX1 - 0.2 - xa) / n
+    for i in range(n):
+        x0, x1 = xa + i * px, xa + (i + 1) * px
+        y1 = min(bay_w(x0), bay_w(x1)) - 0.45
+        for s in (1, -1):
+            ya, yb = (1.66, y1) if s > 0 else (-y1, -1.66)
+            platten(SB, x0, x1, ya, yb, BF + 0.002, M['wb_platte'], M['wb_schacht'], M['mittel'], M['wb_platte2'], p=1.5, q=1.5, h=0.009, fuge=0.01)
+        if i % 3 == 1 and x0 > BX0 + 8.0:      # Bodenluke in der Mittelbahn
+            xm = (x0 + x1) / 2
+            for sy in (-1, 1):
+                SB.box(0.86, 0.02, 0.006, xm, sy * 0.42, BF + 0.015, M['wb_schacht'])
+                SB.box(0.02, 0.86, 0.006, xm + sy * 0.42, 0, BF + 0.015, M['wb_schacht'])
+                for sx in (-1, 1): SB.cyl(0.012, 0.005, (xm + sx * 0.36, sy * 0.36, BF + 0.0145), (0, 0, 1), M['mittel'], 6)
+            SB.box(0.2, 0.05, 0.012, xm, 0.3, BF + 0.017, M['wb_stoss'])
+    # Wände zwischen den Rippen (gerader Teil): Stoßblech unten mit Oberkante, Ankerschiene, Leitungsbündel oben mit Schellen
+    for i in range(len(ribs) - 1):
+        x0, x1 = ribs[i] + 0.25, ribs[i + 1] - 0.25
+        if x0 < -35.0: continue
+        for s in (1, -1):
+            w = bay_w(x0); yf = s * (w - 0.012)
+            SW.box(x1 - x0, 0.022, 0.34, (x0 + x1) / 2, yf, BF + 0.25, M['wb_stoss'])
+            SW.box(x1 - x0, 0.035, 0.03, (x0 + x1) / 2, s * (w - 0.02), BF + 0.43, M['wb_stoss'])
+            for k in range(int((x1 - x0) / 0.5)): SW.cyl(0.011, 0.006, ((x0 + 0.25 + k * 0.5), s * (w - 0.024), BF + 0.32), (0, -s, 0), M['mittel'], 6)
+            zurrschiene(SW, x0, x1, (s * (w - 0.005), BF + 1.08), (0, -s, 0), M['mittel'], M['wb_schacht'], breite=0.07, dicke=0.018)
+    for s in (1, -1):
+        xs = [x for x in [BX0 + 0.6 + i * 0.75 for i in range(int((BX1 - BX0 - 1.0) / 0.75) + 1)]]
+        for r, dz, dy, mm in ((0.05, 0.38, 0.16, 'wb_rohr1'), (0.032, 0.52, 0.26, 'wb_rohr2')):
+            pipe('Laderaumleitung', [Vector((x, s * (bay_w(x) - dy - r), ZW - dz)) for x in xs], r, M[mm])
+            for x in ribs: schelle(SW, (x + 0.3, s * (bay_w(x + 0.3) - dy - r), ZW - dz), (0, -s, 0), r, M['i_grau'])
+    SB.fertig(); SW.fertig()
 
 corridor(); cargo_bay()
 for o in C_ROFF.all_objects: o.hide_render = True      # Grundzustand: Rampe zu (view() schaltet um)

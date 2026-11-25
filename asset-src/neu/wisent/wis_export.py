@@ -25,10 +25,23 @@ def tag_of(o):
         p = p.parent
     return ''
 CACHE = {}
-def exp_mat(m, tag='', has_uv=True):
+
+# Innenraum-Materialien bekommen eine Kennung für den Oberflächen-Shader des Spiels (src/models/innenFlaeche.ts, 25.11.2026):
+# „ ~iw“ Wand/Decke, „ ~ib“ Boden, „ ~ig“ Gitterrost, „ ~im“ Metall. Leuchten, Glas, Schrift, Schraffur und Bildschirme bleiben schlicht.
+INNEN_COLL = {'Cockpit'}
+def innen_art(o, m):
+    if m is None or not any(c.name in INNEN_COLL for c in o.users_collection): return ''
+    bk = json.loads(m['bk']) if 'bk' in m.keys() else {}
+    n = m.name.lower()
+    if not bk or bk.get('emit') or bk.get('stripes') or m.name in GLASS or n.startswith('schrift') or 'glas' in n or 'licht' in n or 'anzeige' in n: return ''
+    if n == 'rost' or n.startswith('gitter'): return 'g'
+    if any(k in n for k in ('boden', 'floor', 'stufe', 'podest')): return 'b'
+    return 'm' if float(bk.get('metal', 0.3)) >= 0.7 else 'w'
+def exp_mat(m, tag='', has_uv=True, art=''):
     if m is None: return None
     pan = PAN.get(m.name) if has_uv else None
-    key = (m.name, tag, bool(pan))
+    if pan: art = ''
+    key = (m.name, tag, bool(pan), art)
     if key in CACHE: return CACHE[key]
     bk = json.loads(m['bk']) if 'bk' in m.keys() else {}
     if bk.get('stripes'): col = [(a + c) / 2 for a, c in zip(bk['a'], bk['c'])]
@@ -36,7 +49,7 @@ def exp_mat(m, tag='', has_uv=True):
     metal, rough = float(bk.get('metal', 0.3)), float(bk.get('rough', 0.5))
     emit, es = bk.get('emit'), float(bk.get('es', 0.0))
     if bk.get('stripes') and es: emit = col
-    name = (pan[0] if pan else m.name + ' (Spiel)') + (' |' + tag if tag else '')
+    name = (pan[0] if pan else m.name + ' (Spiel)') + (' ~i' + art if art else '') + (' |' + tag if tag else '')
     e = bpy.data.materials.new(name); e.use_nodes = True
     if tag: rough = min(1.0, rough + 0.0013 * (1 + TAGS.index(tag)))      # nicht mit gleichen Materialien zusammenlegen
     b = next(n for n in e.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
@@ -73,7 +86,7 @@ def export(frame, path, tagged):
         else:
             has_uv = 'Platten' in me.uv_layers
             src = list(me.materials)
-            for i, m in enumerate(src): me.materials[i] = exp_mat(m, tag, has_uv)
+            for i, m in enumerate(src): me.materials[i] = exp_mat(m, tag, has_uv, innen_art(o, m))
             if has_uv:      # UV je Material auf das Plattenmaß des Spiels strecken, nur die UV „Platten“ behalten
                 uvl = me.uv_layers['Platten']
                 for p in me.polygons:

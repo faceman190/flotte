@@ -151,6 +151,7 @@ export function drawMap() {
     cx.globalAlpha = 1;
     if (s.id === P.home.sector) { cx.fillStyle = '#7fe0a0'; cx.font = '11px "Share Tech Mono",Consolas,monospace'; cx.fillText('⌂', x - 15, y + 4); }
     if (P.fleet.some(r => r.loc.sector === s.id)) { cx.fillStyle = '#7fe0a0'; cx.font = '700 11px "Share Tech Mono",Consolas,monospace'; cx.fillText('▲', x - 15, y - 10); }
+    if (Object.values(P.fzOrt || {}).includes('pl:' + s.id)) { cx.fillStyle = '#e09030'; cx.font = '700 11px "Share Tech Mono",Consolas,monospace'; cx.fillText('▣', x + 15, y - 10); }      // eigenes Fahrzeug dort abgestellt
     if (P.contracts.some(c => c.sector === s.id)) { cx.fillStyle = '#ffb347'; cx.font = '700 12px "Share Tech Mono",Consolas,monospace'; cx.fillText('◆', x + 15, y + 5); }
     if (s.id === sel || s.id === hover) { cx.strokeStyle = 'rgba(255,255,255,.6)'; cx.lineWidth = 1; cx.beginPath(); cx.arc(x, y, r + 6, 0, Math.PI * 2); cx.stroke(); }
     if (s.id === P.route) { cx.strokeStyle = HOLO; cx.lineWidth = 2; cx.beginPath(); cx.arc(x, y, r + 9, 0, Math.PI * 2); cx.stroke(); }
@@ -163,7 +164,7 @@ export function drawMap() {
   cx.textAlign = 'left'; cx.font = '11px "Share Tech Mono",Consolas,monospace';
   const lg = [['#ffb347', 'Menschenraum'], ['#f2d36b', 'Grenzgebiet'], ['#c070ff', 'Ferrox-Gebiet']];
   lg.forEach(([c, n], i) => { cx.fillStyle = c; cx.beginPath(); cx.arc(22, H - 74 + i * 18, 5, 0, Math.PI * 2); cx.fill(); cx.fillStyle = '#8aa0b0'; cx.fillText(n, 34, H - 70 + i * 18); });
-  cx.fillStyle = '#8aa0b0'; cx.fillText('■ Station   ⬢ Bienenstock   ⌂ Heimathafen   ◆ Auftragsziel   ▲ eigene Schiffe   ? unerforscht   · Klick: Route setzen', 18, H - 14);
+  cx.fillStyle = '#8aa0b0'; cx.fillText('■ Station   ⬢ Bienenstock   ⌂ Heimathafen   ◆ Auftragsziel   ▲ eigene Schiffe   ▣ abgestelltes Fahrzeug   ? unerforscht   · Klick: Route setzen', 18, H - 14);
 }
 
 function resourceSummary(s: SectorDef) {

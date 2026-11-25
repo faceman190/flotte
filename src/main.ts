@@ -62,6 +62,7 @@ import { SECTOR, FACTION } from './data/galaxy';
 import { loadShipModels, setGear, setDoors, setKanzel, kanzelInfo, RAMP, type Paint } from './models/gltfShips';
 import { leiterZeigen } from './game/ausstieg';
 import { laderaumUpdate, hatLaderaum } from './game/laderaum';
+import { updateKisten, TRAKTOR, kistenLeeren } from './game/kisten';
 import { anBordStellen } from './game/fahrzeuge';
 import { hasInterior, SHIPS } from './data/ships';
 import { loadRockModel } from './game/world';
@@ -385,6 +386,7 @@ async function continueGame() {
 }
 function toMenu() {
   setMusicMode('menu');
+  kistenLeeren();
   if (IN.active) leaveInterior();
   if (DUN.active) leaveDungeon(false);   // aus der Mine ins Menü: Mine abbauen (sonst blieb ihr letztes Bild stehen, auch nach „Weiterspielen“)
   clearFootFx();
@@ -923,6 +925,7 @@ function loop(now: number, manual = false) {
     animateStructures(dt);
     // Rampe und Leiter (setDoors): im Hangar und am Boden offen, im Flug und beim Landeanflug zu
     // Kanzel der Jäger und der Elster (ausstieg.ts): offen, solange der Pilot draußen ist (am Boden mit Bordleiter, im All beim Außenbord)
+    updateKisten(dt);      // Kisten in der Welt, Traktorstrahl zur Rampe (kisten.ts)
     laderaumUpdate(ROVER.model?.g.parent && !ROVER.leih ? ROVER.kind : null);      // draußen = Modell steht in der Szene (auch während man an Bord ist)      // Kisten und Fahrzeug im Laderaum (laderaum.ts)
     if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); setDoors(SHIP.g, hangarGearDown() && RAMP.want, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }
     else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); setDoors(SHIP.g, true, dt); setKanzel(SHIP.g, true, dt); leiterZeigen((kanzelInfo(SHIP.g)?.p || 0) > 0.6, ROVER.ship); }
@@ -930,7 +933,7 @@ function loop(now: number, manual = false) {
       SHIP.g.visible = (G.mode === 'play' || G.mode === 'jump' || G.mode === 'pause' || G.mode === 'entry' || G.mode === 'eva') && !G.dead;
       setGear(SHIP.g, G.mode === 'entry');   // im Flug eingezogen, beim Landeanflug ausgefahren
       const draussen = G.mode === 'eva' || (G.mode === 'pause' && EVA.active);
-      setDoors(SHIP.g, draussen && EVA.pump <= 0, dt);      // Außenbord: Heckrampe offen, sobald der Laderaum leer gepumpt ist
+      setDoors(SHIP.g, (draussen && EVA.pump <= 0) || TRAKTOR.offen, dt);      // Außenbord: Heckrampe offen, sobald der Laderaum leer gepumpt ist; Traktorstrahl: offen, wenn eine Kiste naht
       setKanzel(SHIP.g, draussen, dt); leiterZeigen(false);
       if (SHIP.g.visible) syncShip();
     }

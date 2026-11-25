@@ -28,7 +28,7 @@ import { showShip, hideShip, showModel } from './shipPreview';
 import { FZ, FZ_IDS, buildFahrzeug, fzLaden, normFz, type FzId } from '../models/rover';
 import { bodenAushang, bodenAnnehmen, bodenAbgeben } from '../game/bodenaufgaben';
 import { aufgabenAushang } from '../game/aufgaben';
-import { eigene, ortText, kaufen as fzKaufen, verladen as fzVerladen, passtIn, schiffePasst, anBord, freiePlaetze, stellplaetze, ortVon, FZ_MASS } from '../game/fahrzeuge';
+import { abholen as fzAbholen, ABHOLEN_PREIS, eigene, ortText, kaufen as fzKaufen, verladen as fzVerladen, passtIn, schiffePasst, anBord, freiePlaetze, stellplaetze, ortVon, FZ_MASS } from '../game/fahrzeuge';
 import { QS, QPREIS, quartierHooks, eigeneDeko, mieten, nrText, gueltigeEinladungen, funde, schiffe, fundName, QEINLADUNG_MS, type QDeko } from '../game/quartier';
 
 // Stationsterminals (seit Alpha 1.25): Jeder Dienst hat seinen eigenen Ort auf der Station und sein eigenes Terminal.
@@ -291,7 +291,7 @@ function vWerft(): View {
   // Bodenfahrzeuge (seit 2026-11-25 mit Maßen): fahren nur in Schiffen mit Laderaum mit (game/fahrzeuge.ts)
   h += `<p class="lb">Bodenfahrzeuge</p>`;
   for (const k of FZ_IDS) {
-    const f = FZ[k], have = eigene().includes(k), on = selFz === k, wo = have ? (ortVon(k) === 'sh:' + P.uid ? 'an Bord' : ortVon(k) === 'st:' + st().id ? 'in der Halle' : 'woanders') : '';
+    const f = FZ[k], have = eigene().includes(k), on = selFz === k, wo = have ? (ortVon(k) === 'sh:' + P.uid ? 'an Bord' : ortVon(k) === 'st:' + st().id ? 'in der Halle' : ortVon(k).startsWith('pl:') ? 'draußen abgestellt' : 'woanders') : '';
     h += `<button class="row ${on ? 'sel' : ''}" data-a="fz" data-k="${k}" ${on ? 'aria-current="true"' : ''}><span><b>${f.kurz}</b><small>${k === 'dachs' ? 'Bergbaurover' : 'Erkundungsbuggy'}${have ? ` · <i class="up">${wo}</i>` : ''}</small></span><span class="mo ${have ? 'dim' : P.credits < f.price ? 'dn' : 'hi'}">${have ? 'gehört dir' : fmtN(f.price) + ' Cr'}</span></button>`;
   }
   h += `<p class="hint end">Rot: Dafür reichen deine Credits nicht.</p></nav>`;
@@ -331,6 +331,7 @@ function vWerftFz(nav: string, k: FzId): View {
     ${!have ? `<button class="pri big" data-a="buyfz" data-k="${k}" ${P.credits >= f.price ? '' : 'disabled'}><span>Kaufen</span><span class="mo">${fmtN(f.price)} Cr</span></button>`
       : wo === 'sh:' + P.uid ? `<button class="pri big" data-a="ladefz" data-k="${k}"><span>In die Fahrzeughalle stellen</span><span class="mo"></span></button>`
       : wo === 'st:' + st().id ? `<button class="pri big" data-a="ladefz" data-k="${k}" ${pass && freiePlaetze() > 0 ? '' : 'disabled'}><span>${!pass ? `Passt nicht in die ${esc(P.shipName)}` : freiePlaetze() > 0 ? `In die ${esc(P.shipName)} laden` : 'Kein Stellplatz frei'}</span><span class="mo"></span></button>`
+      : wo.startsWith('pl:') ? `<button class="pri big" data-a="holfz" data-k="${k}" ${P.credits >= ABHOLEN_PREIS ? '' : 'disabled'}><span>Vom Bergungstrupp holen lassen</span><span class="mo">${fmtN(ABHOLEN_PREIS)} Cr</span></button><p class="hint">Oder selbst hinfliegen: Die Karte zeigt, wo er steht.</p>`
       : `<p class="hint">Steht nicht hier. Hol ihn mit einem passenden Schiff dort ab, wo er steht.</p>`}</div></aside>`;
   return { k: kpi('Credits', `${fmtN(P.credits)} Cr`) + kpi('Fahrzeuge an Bord', String(anBord().length)), cols: '300px minmax(0,1fr) 370px', h };
 }
@@ -700,6 +701,7 @@ $('dockCard').addEventListener('click', e => {
   if (a === 'boddel') note = bodenAbgeben(k) || note;
   if (a === 'fz') selFz = normFz(k);
   if (a === 'buyfz') { note = fzKaufen(normFz(k), st().id); snd(600, 0.5, 'triangle', 0.06, 600); }
+  if (a === 'holfz') { note = fzAbholen(normFz(k), st().id); snd(500, 0.3, 'triangle', 0.04, 200); }
   if (a === 'ladefz') { note = fzVerladen(normFz(k), st().id); snd(500, 0.3, 'triangle', 0.04, 200); }
   if (a === 'upsel') selUp = k as UpgId;
   if (a === 'shmode' && shop.nurSpind && k === 'kauf') return;
