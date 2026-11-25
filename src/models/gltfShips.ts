@@ -290,3 +290,14 @@ export function setKanzel(root: THREE.Object3D, open: boolean, dt = 0) {
 }
 /** Lage des Kanzelglases im Schiff (Schiffskoordinaten: Nase −Z, oben +Y) und wie weit sie offen ist; null = keine Kanzel */
 export function kanzelInfo(root: THREE.Object3D): { box: THREE.Box3; p: number } | null { const r = kRig(root); return r ? { box: r.box, p: r.p } : null; }
+
+/** tiefster Punkt des Fahrwerks (ausgefahren) in Schiffskoordinaten, als positive Höhe über dem Boden; null = Modell ohne Fahrwerk */
+export function fahrwerkTiefe(root: THREE.Object3D): number | null {
+  if (root.userData.fwTiefe !== undefined) return root.userData.fwTiefe;
+  const list: THREE.Mesh[] = []; root.traverse((o: any) => { if (o.isMesh && o.material?.name === 'gear') list.push(o); });
+  if (!list.length) return (root.userData.fwTiefe = null);
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(); let y = 0;
+  for (const m of list) { m.geometry.computeBoundingBox(); y = Math.min(y, m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld)).min.y); }
+  return (root.userData.fwTiefe = y < -0.3 ? -y : null);
+}

@@ -9,7 +9,7 @@ import { clamp } from '../core/util';
 import { sfx, snd } from '../core/audio';
 import { P, G, settings, stats } from './state';
 import { world } from './world';
-import { ROVER, SURF, terrainAt, liquidAt, resetRoverCamera, buildRover } from './surface';
+import { ROVER, SURF, terrainAt, liquidAt, resetRoverCamera, buildRover , landeHoehe } from './surface';
 import { updateFlora, treeNear } from './flora';
 import { gearFactor } from './inventory';
 import { radio } from '../ui/radio';
@@ -100,7 +100,7 @@ export function landAtBase(st: Station, quiet = false) {      // quiet: beim Lad
   if (!landShip(quiet, true)) { P.x = px; P.z = pz; return false; }
   const r = stats().radius;
   let ax = p.x - st.x, az = p.z - st.z; const L = Math.hypot(ax, az) || 1; ax /= L; az /= L;   // vom Gebäude weg
-  ROVER.ship = { x: p.x, y: p.y + r * 0.55, z: p.z, yaw: Math.atan2(-ax, -az) };
+  ROVER.ship = { x: p.x, y: p.y + landeHoehe(), z: p.z, yaw: Math.atan2(-ax, -az) };
   const off = Math.max(p.hu, p.hv) + 6;
   ROVER.x = p.x + ax * off; ROVER.z = p.z + az * off; ROVER.y = terrainAt(ROVER.x, ROVER.z); ROVER.yaw = ROVER.ship.yaw;
   place(p.x - ax * (r * 0.8 + 2.5), p.z - az * (r * 0.8 + 2.5), Math.atan2(ax, az));   // zwischen Schiff und Tür, Blick zur Basis

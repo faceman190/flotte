@@ -105,4 +105,21 @@ Jedes Schiff hat seine Ausstiege als Punkte im Modell. Danach richten sich Ausst
   die Rampe; Start und Leine am Heckende (nach der Schiffslänge). Pfeil: wie bisher hinten. Ohne Kletteranimation (Blende statt Klettern).
   Seit dem Nachtrag gehen Rahmen und Streben mit: alle übrigen Flächen, deren Schwerpunkt höchstens 12 cm vom Kanzelglas und über dem
   Kanzelrand liegt (gltfShips.ts kanzelStreben), einmal beim ersten Öffnen berechnet (0,05–0,12 s).
-- Garagen an den Basen sind vorerst nur Leihrover; eigene Fahrzeuge in einer Basishalle abstellen kommt mit Schritt 3 (Rampe).
+- **Schritt 3 gebaut (25.11.2026, auf test), nur Kormoran und Wisent** (Pfeil fliegt bald raus, Nutzer: „nichts machen“):
+  - **Normkisten** aus Blender: `asset-src/neu/rover/fr_bau.py` (ein Modell je Lauf, `FR_NAME`), `fr_lauf.py`, Export über `rv_export.py`
+    nach `deco/FrachtKiste|FrachtPalette|FrachtContainer`. Kiste 1,2 × 0,8 × 0,8 m (10 E), Palette 1,2 m Würfel auf Kufen mit Spanngurten (25 E),
+    Halbcontainer 3 × 2,4 × 2,4 m (100 E, nur Wisent). Der helle Lack nimmt die Farbe der Ware an (Instanzfarbe), Stahl und Gurte bleiben.
+  - **Laderaum** `src/game/laderaum.ts`: Maße je Schiff (`RAEUME`: Boden, Breite, Tür, Rampe, Fahrgasse, Stellplätze, Kistenreihen), gemessen
+    aus Laufkarte und Modell. Fracht steht als InstancedMesh-Stücke in Reihen an den Wänden, abwechselnd links und rechts, von vorn nach
+    hinten; neu gestellt, sobald sich die Fracht ändert. Im Kormoran weichen die festen Attrappen im Modell (Container001, Kiste010,
+    Netzschnur096) den echten Kisten (ausgeblendet, Laufkarte dort aufgefüllt).
+  - **Fahrzeug an Bord** steht auf seinem Stellplatz (Blick zur Rampe, Lichter aus). Das gefahrene steht vorn an der Rampe (Platz 0), weitere
+    dahinter, damit keins das andere zuparkt. Laderaumboden und offene Rampe sind befahrbar (`schiffBoden`), seitlich auf die Gasse zwischen
+    den Kistenreihen begrenzt (`gasse`), die Kamera bleibt im Raum. Nicht passende Fahrzeuge und Leihrover halten an der Rampe.
+  - **Abläufe:** Landen mit Fahrzeug an Bord → es steht im Laderaum, hinausfahren. Hinauffahren und im Laderaum [E] → abgestellt, man ist zu
+    Fuß an Bord (neben dem Fahrzeug). An Bord am Stellplatz [E] „In den X steigen und hinausfahren“. An einer Basis: eigenes Fahrzeug aus
+    deren Halle steht draußen bereit, [E] an der Basis stellt es in die Halle; mit Kormoran oder Wisent kann man es hinauf in den Laderaum fahren.
+  - **Landen mit Rampe:** Das Schiff setzt so auf, dass die Rampenspitze den Boden berührt (Fahrwerk darf 0,5 m einsinken). Endet die Rampe
+    mehr als 1,2 m über dem Boden oder hängt das Fahrwerk mehr als 3 m in der Luft, verweigert die Landung („Gelände zu uneben … drehen“).
+    Landehöhe allgemein: tiefster Punkt des Fahrwerks (`fahrwerkTiefe`) statt Radius × 0,55, große Schiffe schwebten vorher 4–8 m hoch.
+  - An Bord sind Kisten und abgestellte Fahrzeuge Hindernisse der Laufkarte (vorher galten in Modell-Räumen gar keine Hindernisse).

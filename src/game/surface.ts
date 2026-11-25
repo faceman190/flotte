@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { KEEP } from './keep';
-import { ausgabe, wahl } from './fahrzeuge';
+import { ausgabe, wahl, anBordStellen, inHalleStellen, anBord, passtIn } from './fahrzeuge';
+import { platzVon, aufsetzen, hatLaderaum, schiffBoden, imSchiff, gasse, stellplatz, kameraImRaum } from './laderaum';
+import { fahrwerkTiefe } from '../models/gltfShips';
+import { FZ_MASS } from './fahrzeuge';
 import { scene, camera, view, ux, glowMat } from '../core/engine';
 import { texMat, std, boxUV } from '../core/textures';
 import { setSky, setSurfaceSky } from '../core/sky';
@@ -502,6 +505,8 @@ export function landInfo() {
   // nicht zu steil
   const s = 10, dx = heightAt(P.x + s, P.z) - heightAt(P.x - s, P.z), dz = heightAt(P.x, P.z + s) - heightAt(P.x, P.z - s);
   if (Math.hypot(dx, dz) / (2 * s) > 0.6) return { ok: false, text: 'Gelände zu steil: flachere Stelle suchen' };
+  const au = aufsetzen(P.x, P.z, P.yaw, landeHoehe(), heightAt);      // Kormoran, Wisent: Rampe muss aufsetzen
+  if (au && !au.ok) return { ok: false, text: 'Gelände zu uneben, die Rampe setzt nicht auf: flachere Stelle suchen oder das Schiff drehen' };
   return { ok: true, text: '[E] Landen und Rover aussetzen' };
 }
 
@@ -511,6 +516,30 @@ export function landInfo() {
 export const fzWahl = (): FzId => ausgabe(true)?.kind || 'dachs';
 // an einer Planetenbasis gelandet? (dort stellt die Fahrzeughalle einen Leihrover bereit)
 const anBasis = (x: number, z: number) => world.stations.some(s => Math.hypot(s.x - x, s.z - z) < 500);
+const basisId = () => world.stations[0]?.id || '';
+/** Höhe des gelandeten Schiffs über dem Boden: tiefster Punkt des Fahrwerks (Rampen setzen genau dort auf), ohne Fahrwerk wie früher */
+export const landeHoehe = () => fahrwerkTiefe(SHIP.g) ?? stats().radius * 0.55;
+// Boden unter einem Punkt: im Laderaum und auf der offenen Rampe der Schiffsboden, sonst das Gelände
+const bodenAt = (x: number, z: number) => schiffBoden(x, z, ROVER.ship) ?? heightAt(x, z);
+/** eigenes Fahrzeug auf den Stellplatz im Laderaum setzen (Landen mit Kormoran oder Wisent, Einsteigen im Laderaum) */
+export function fzImLaderaum(kind: FzId) {
+  P.fahrzeug = kind;      // das gefahrene steht vorn an der Rampe (laderaum.ts platzVon)
+  const sp = stellplatz(ROVER.ship, platzVon(kind)); if (!sp) return false;
+  if (ROVER.model) { scene.remove(ROVER.model.g); ROVER.model = null; }
+  const m = buildRover(kind); ROVER.model = m; ROVER.kind = kind; ROVER.cap = FZ[kind].cap; ROVER.leih = false; ROVER.ohne = false; scene.add(m.g);
+  ROVER.x = sp.x; ROVER.z = sp.z; ROVER.y = sp.y; ROVER.yaw = sp.yaw; ROVER.speed = 0; ROVER.vx = ROVER.vz = ROVER.vy = 0; ROVER.air = false; ROVER.yr = ROVER.steer = 0;
+  ROVER.active = true; camInit = false;
+  return true;
+}
+/** Fahrzeug auf dem Stellplatz abstellen bzw. in die Halle der Basis: Modell weg (im Laderaum steht dann das Standbild, laderaum.ts) */
+export function fzWeg() { if (ROVER.model) { scene.remove(ROVER.model.g); ROVER.model = null; } fahrerWeg(); laserSound(false); }
+/** Taste E im Fahrzeug an einer Basis: eigenes Fahrzeug in deren Fahrzeughalle stellen */
+export function fzInHalle(): string | null {
+  if (!ROVER.model || ROVER.leih || !world.stations.some(s => Math.hypot(s.x - ROVER.x, s.z - ROVER.z) < 70)) return null;
+  if (Math.abs(ROVER.speed) > 3) return 'Erst anhalten.';
+  unloadRover(); inHalleStellen(ROVER.kind, basisId()); fzWeg(); ROVER.ohne = true;
+  return `${FZ[ROVER.kind].kurz} in die Fahrzeughalle gestellt. Er wartet dort, bis du wiederkommst.`;
+}
 export function buildRover(kind: FzId = fzWahl()): RoverModel { fzLaden(kind); return buildFahrzeug(kind) || buildRoverAlt(); }
 function buildRoverAlt() {
   const g = new THREE.Group(), body = new THREE.Group();
@@ -563,11 +592,11 @@ export function landShip(quiet = false, basis = false) {
   const li = quiet ? null : landInfo();
   if (!quiet && (!li || !li.ok)) { if (li) radio('SYSTEM', li.text + '.'); return false; }
   const r = stats().radius;
-  ROVER.ship = { x: P.x, y: heightAt(P.x, P.z) + r * 0.55, z: P.z, yaw: P.yaw };
+  ROVER.ship = { x: P.x, y: aufsetzen(P.x, P.z, P.yaw, landeHoehe(), heightAt)?.y ?? heightAt(P.x, P.z) + landeHoehe(), z: P.z, yaw: P.yaw };
   P.vx = P.vy = P.vz = 0; P.pitch = 0;
   if (!P.rover) P.rover = {};
   // Fahrzeug nur, wenn eins an Bord ist, an einer Basis sonst der Leihrover; sonst zu Fuß (game/fahrzeuge.ts)
-  const aus = ausgabe(basis || anBasis(P.x, P.z));
+  const aus = ausgabe(basis || anBasis(P.x, P.z), basisId());
   ROVER.ohne = !aus; ROVER.leih = !!aus?.leih;
   if (!aus) {
     if (ROVER.model) { scene.remove(ROVER.model.g); ROVER.model = null; }
@@ -589,7 +618,12 @@ export function landShip(quiet = false, basis = false) {
   if (quiet) return true;
   burst(ROVER.x, ROVER.y + 1, ROVER.z, '#4a4238', 30, 14, 1.0);
   snd(180, 0.6, 'sawtooth', 0.04, -80);
-  const mehr = wahl(basis || anBasis(P.x, P.z)).length > 1 ? ' [X] am Schiff: anderes Fahrzeug.' : '';
+  // Kormoran und Wisent: das eigene Fahrzeug steht im Laderaum und fährt über die Rampe hinaus
+  if (!aus.leih && anBord().includes(kind) && hatLaderaum() && ROVER.model && fzImLaderaum(kind)) {      // aus der Halle der Basis: steht draußen
+    if (!quiet) radio('SYSTEM', `Gelandet. Rampe öffnet: Der ${FZ[kind].kurz} steht im Laderaum, fahr ihn über die Rampe hinaus. Zum Einladen hinauffahren und im Laderaum [E].`);
+    return true;
+  }
+  const mehr = wahl(basis || anBasis(P.x, P.z), basisId()).length > 1 ? ' [X] am Schiff: anderes Fahrzeug.' : '';
   radio('SYSTEM', aus.leih ? `Die Fahrzeughalle der Basis stellt dir einen Leihrover „Dachs“ bereit: WASD fahren, Klick halten zum Bohren. Er bleibt auf dem Planeten.${mehr}`
     : kind === 'wiesel' ? `Gelandet. Buggy aus dem Laderaum: WASD fahren, [R] Umgebung abtasten, [E] am Schiff einsteigen.${mehr}`
     : `Gelandet. Rover aus dem Laderaum: WASD fahren, Klick halten zum Bohren, [E] am Schiff einsteigen.${mehr}`);
@@ -621,7 +655,7 @@ export function unloadRover() {
 }
 // Am Schiff das andere Fahrzeug nehmen (Taste X, main.ts): Der Dachs lädt vorher seine Ladung ins Schiff. null: kein zweites Fahrzeug.
 export function fahrzeugTauschen(): string | null {
-  const w = wahl(anBasis(ROVER.ship.x, ROVER.ship.z));
+  const w = wahl(anBasis(ROVER.ship.x, ROVER.ship.z), basisId());
   if (!ROVER.model || w.length < 2) return null;
   const i = w.findIndex(q => q.kind === ROVER.kind && q.leih === ROVER.leih), nx = w[(i + 1) % w.length], neu: FzId = nx.kind;
   ROVER.leih = nx.leih;
@@ -704,7 +738,7 @@ export function updateRover(dt: number) {
   const GR = 9.0, VMAX = boost ? F.vB : F.v, ENG = boost ? F.engB : F.eng, BRAKE = F.brake, ROLL = 0.35, WB = F.wb, DRAG = F.drag, RADR = F.radR;
   const fx = -Math.sin(R.yaw), fz = -Math.cos(R.yaw), rx0 = Math.cos(R.yaw), rz0 = -Math.sin(R.yaw);
   // Gelände unter den Rädern: Ebene durch die Radpunkte (vorn/hinten, links/rechts)
-  const hAt = (lx: number, lz: number) => heightAt(R.x + rx0 * lx - fx * lz, R.z + rz0 * lx - fz * lz);      // lz: −vorn … +hinten (Spielachsen)
+  const hAt = (lx: number, lz: number) => bodenAt(R.x + rx0 * lx - fx * lz, R.z + rz0 * lx - fz * lz);      // lz: −vorn … +hinten (Spielachsen)
   const ht = F.trk / 2, axF = F.ax[0], axB = F.ax[F.ax.length - 1];
   const gh = F.ax.map(z => [hAt(-ht, z), hAt(ht, z)]);
   const front = (gh[0][0] + gh[0][1]) / 2, back = (gh[gh.length - 1][0] + gh[gh.length - 1][1]) / 2;
@@ -759,7 +793,9 @@ export function updateRover(dt: number) {
   // Kollision mit Lagerstätten, Station, Schiff, Wracks: hinausschieben, Tempo in die Wand weg (mit etwas Rückprall)
   const obst: { x: number; z: number; r: number }[] = world.asteroids.map(a => ({ x: a.x, z: a.z, r: a.r * 0.85 + 2.0 }));
   for (const s of world.stations) obst.push({ x: s.x, z: s.z, r: 34 }, { x: s.dock.x, z: s.dock.z, r: 6 });
-  obst.push({ x: R.ship.x, z: R.ship.z, r: stats().radius * 0.75 + 2.0 });
+  const drin = imSchiff(nx, nz, R.ship) || imSchiff(R.x, R.z, R.ship);      // im Laderaum oder auf der Rampe: kein runder Rumpf, dafür die Gasse
+  if (!drin) obst.push({ x: R.ship.x, z: R.ship.z, r: stats().radius * 0.75 + 2.0 });
+  else { const [fl, fb] = FZ_MASS[R.kind], g = gasse(nx, nz, R.ship, fb / 2 + 0.15, fl / 2, R.kind, R.leih || !passtIn(R.kind, P.cls)); if (g) { nx = g.x; nz = g.z; R.vx *= 0.6; R.vz *= 0.6; } }
   for (const w of SALV.wrecks) obst.push({ x: w.x, z: w.z, r: w.r + 2.4 });
   for (const b of BODEN_OBST) obst.push({ x: b.x, z: b.z, r: b.r + 2.0 });      // Außenstelle, verunglückter Rover (bodenaufgaben.ts)
   for (const o of obst) {
@@ -772,7 +808,7 @@ export function updateRover(dt: number) {
   R.x = nx; R.z = nz;
   // Senkrecht: am Boden folgt der Rover dem Gelände (das Tempo nach oben bleibt erhalten); fällt der Boden schneller weg als die Schwerkraft
   // zieht, hebt er ab und landet mit Federschlag
-  const gNow = (heightAt(R.x - fx2 * axF, R.z - fz2 * axF) + heightAt(R.x - fx2 * axB, R.z - fz2 * axB) + 2 * heightAt(R.x, R.z)) / 4;
+  const gNow = (bodenAt(R.x - fx2 * axF, R.z - fz2 * axF) + bodenAt(R.x - fx2 * axB, R.z - fz2 * axB) + 2 * bodenAt(R.x, R.z)) / 4;
   if (!R.air) {
     const vyG = dt > 0 ? (gNow - R.y) / dt : 0, J = F.jump;
     if (vyG < R.vy - GR * dt * J.k - J.abs && vyG < J.vy && Math.abs(vF) > J.v) { R.air = true; R.vy = Math.min(Math.max(R.vy, 0) * 0.6, 5); }      // Kuppe: der Boden fällt weg (Schwung nach oben begrenzt)
@@ -797,7 +833,7 @@ export function updateRover(dt: number) {
   const spinD = vF * dt / RADR, [s0, s1] = F.susp;
   if (m.rads.length) m.rads.forEach((w, i) => {
     const lx = w.rest.x, lz = w.rest.z, hub = _f.set(lx, w.rest.y, lz).applyMatrix4(m.g.matrixWorld);
-    const want = R.air ? s0 : clamp(heightAt(hub.x, hub.z) + RADR - hub.y, s0, s1);
+    const want = R.air ? s0 : clamp(bodenAt(hub.x, hub.z) + RADR - hub.y, s0, s1);
     R.susp[i] += (want - R.susp[i]) * Math.min(1, dt * 18);
     w.mount.position.set(w.rest.x, w.rest.y + R.susp[i], w.rest.z);
     w.mount.rotation.y = w.front ? R.steer : 0;
@@ -851,9 +887,15 @@ export function updateRover(dt: number) {
   // Hinweise
   const dShip = Math.hypot(R.x - R.ship.x, R.z - R.ship.z);
   const tausch = (P.fahrzeuge || []).includes('wiesel') ? ` · [X] ${R.kind === 'dachs' ? 'Buggy nehmen' : 'Dachs nehmen'}` : '';
+  // Kormoran und Wisent mit eigenem Fahrzeug: Einladen nur über die Rampe in den Laderaum
+  const lr = !R.leih && hatLaderaum() ? imSchiff(R.x, R.z, R.ship) : null;
+  if (!R.leih && hatLaderaum() && dShip < stats().radius + 12 && !lr) { R.prompt = 'Über die Rampe in den Laderaum fahren'; return; }
+  if (lr?.wo === 'rampe') { R.prompt = 'Hinauf in den Laderaum fahren, dort [E] abstellen'; return; }
+  if (lr?.wo === 'raum') { R.prompt = `[E] ${FZ[R.kind].kurz} abstellen und an Bord gehen`; return; }
+  if (!R.leih && world.stations.some(s => Math.hypot(s.x - R.x, s.z - R.z) < 70) && dShip > stats().radius + 12) { R.prompt = `[E] ${FZ[R.kind].kurz} in die Fahrzeughalle stellen`; return; }
   R.prompt = dShip < stats().radius + 12 ? `[E] ${settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`}${R.kind === 'dachs' && roverLoad() ? ` und ${roverLoad()} E verladen` : ''}${tausch}` : R.target ? (roverLoad() >= R.cap ? 'Rover voll' : 'Klick halten: bohren') : '';
 }
-export const nearShip = () => ROVER.active && Math.hypot(ROVER.x - ROVER.ship.x, ROVER.z - ROVER.ship.z) < stats().radius + 12;
+export const nearShip = () => ROVER.active && (ROVER.leih || !ROVER.model || !hatLaderaum() ? Math.hypot(ROVER.x - ROVER.ship.x, ROVER.z - ROVER.ship.z) < stats().radius + 12 : imSchiff(ROVER.x, ROVER.z, ROVER.ship)?.wo === 'raum');
 
 // Gelandetes Schiff an seinem Platz halten
 export function syncLandedShip() {
@@ -888,7 +930,8 @@ export function roverCamera(dt: number) {
   camYaw += d * (1 - Math.exp(-dt * F.camLag));
   const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw), hx = -Math.sin(R.yaw), hz = -Math.cos(R.yaw);
   const [cb, cu] = F.cam, want = new THREE.Vector3(R.x - fx * cb, 0, R.z - fz * cb);
-  want.y = Math.max(R.y + cu, heightAt(want.x, want.z) + 2.5);
+  want.y = Math.max(R.y + cu, bodenAt(want.x, want.z) + 2.5);
+  kameraImRaum(want, R.ship, R);      // im Laderaum: nicht durch Wände und Decke
   if (!camInit) { _cam.copy(want); camInit = true; }
   _cam.lerp(want, 1 - Math.exp(-dt * 8));
   camera.position.copy(_cam);

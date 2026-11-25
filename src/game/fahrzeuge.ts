@@ -51,14 +51,17 @@ export function fzOrdnen() {
   }
 }
 /** Was beim Landen ausgesetzt wird: ein eigenes Fahrzeug an Bord (bevorzugt P.fahrzeug), an einer Basis sonst der Leihrover; null = zu Fuß */
-export function ausgabe(anBasis: boolean): { kind: FzId; leih: boolean } | null {
+export function ausgabe(anBasis: boolean, basis = ''): { kind: FzId; leih: boolean } | null {
   const ab = anBord();
   if (ab.length) { const w = normFz(P.fahrzeug); return { kind: ab.includes(w) ? w : ab[0], leih: false }; }
+  const h = basis ? inHalle(basis) : [];      // eigene Fahrzeuge in der Halle dieser Basis
+  if (anBasis && h.length) return { kind: h[0], leih: false };
   return anBasis ? { kind: LEIH_KIND, leih: true } : null;
 }
 /** Fahrzeuge zur Wahl am Schiff (Taste X): die an Bord, an der Basis dazu der Leihrover */
-export function wahl(anBasis: boolean): { kind: FzId; leih: boolean }[] {
+export function wahl(anBasis: boolean, basis = ''): { kind: FzId; leih: boolean }[] {
   const o: { kind: FzId; leih: boolean }[] = anBord().map(kind => ({ kind, leih: false }));
+  if (anBasis && basis) for (const kind of inHalle(basis)) if (!o.some(q => q.kind === kind)) o.push({ kind, leih: false });
   if (anBasis && !o.some(q => q.kind === LEIH_KIND)) o.push({ kind: LEIH_KIND, leih: true });
   return o;
 }
@@ -81,6 +84,10 @@ export function verladen(kind: FzId, station: string): string {
   setzeOrt(kind, 'sh:' + P.uid); P.fahrzeug = kind;
   return `${FZ[kind].kurz} in den Laderaum der ${P.shipName} gefahren. Er wird beim Landen ausgesetzt.`;
 }
+/** In der Fahrzeughalle einer Basis abstellen (Taste E an der Basis) */
+export function inHalleStellen(kind: FzId, basis: string) { setzeOrt(kind, 'st:' + basis); }
+/** Ein Fahrzeug aus der Halle über die Rampe in den Laderaum gefahren: steht jetzt an Bord */
+export function anBordStellen(kind: FzId) { if (eigene().includes(kind) && passtIn(kind, P.cls) && (ortVon(kind) === 'sh:' + P.uid || freiePlaetze() > 0)) { setzeOrt(kind, 'sh:' + P.uid); P.fahrzeug = kind; return true; } return false; }
 /** Testlabor: Fahrzeug ohne Rücksicht auf die Maße an Bord stellen */
 export function testAnBord(kind: FzId) { if (!eigene().includes(kind)) (P.fahrzeuge ||= []).push(kind); setzeOrt(kind, 'sh:' + P.uid); P.fahrzeug = kind; }
 export function ortText(kind: FzId, stName: (id: string) => string): string {
