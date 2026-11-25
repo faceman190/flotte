@@ -67,7 +67,9 @@ export const interiorHooks = {
   tabs: () => [] as string[],
   takeoff: () => {},     // Planet: vom Pilotensitz aus abheben
   toRover: () => {},     // Planet: über die Rampe zurück zum Rover
-  toFahrzeug: (_kind: string) => {},      // Planet: im Laderaum ins eigene Fahrzeug steigen und über die Rampe hinausfahren (laderaum.ts)
+  toFahrzeug: (_kind: string) => {},
+  zumSteuer: () => {},   // im Flug: zurück an den Pilotensitz (bordflug.ts)
+  ausBord: () => {},     // im Flug: über die Heckrampe Außenbord (bordflug.ts, eva.ts)      // Planet: im Laderaum ins eigene Fahrzeug steigen und über die Rampe hinausfahren (laderaum.ts)
   leaveBase: () => {},   // Planetenbasis: durch die Tür wieder hinaus (zu Fuß)
 };
 export const IN = {
@@ -77,7 +79,7 @@ export const IN = {
   jy: 0, jv: 0,   // Sprung: Höhe über dem Boden und Geschwindigkeit nach oben
   target: null as Inter | null,
   say: { who: '', text: '', t: 0 },
-  ship: null as null | { cls: string; uid: number; name: string; ctx: 'hangar' | 'planet' },
+  ship: null as null | { cls: string; uid: number; name: string; ctx: 'hangar' | 'planet' | 'flug' },      // flug: im All an Bord, Autopilot fliegt (bordflug.ts)
   panel: null as null | { title: string; lines: any[]; x: number; z: number },
 };
 
@@ -761,6 +763,13 @@ export function updateHangarSequence(dt: number) {
 
 // Das aktive Schiff jeden Frame auf dem Stellplatz halten (das Modell kann beim Umsteigen wechseln)
 const _wp = new THREE.Vector3();
+/** im Flug an Bord (bordflug.ts): Der Innenraum folgt dem fliegenden Schiff (Lage und Kurs), jedes Bild vor der Kamera */
+export function folgeSchiff() {
+  if (!room || IN.ship?.ctx !== 'flug' || !roomModel) return;
+  roomModel.getWorldPosition(_sv);
+  room.g.position.copy(_sv); room.g.rotation.set(0, roomModel.rotation.y, 0);
+  room.g.updateMatrixWorld(true);
+}
 export function syncParkedShip() {
   if (!group) return;
   if (!IN.station) { SHIP.g.visible = !IN.ship || !!mesh; return; }   // Planet: Schiff steht auf dem Landeplatz
@@ -1109,7 +1118,7 @@ type ShipInfo = NonNullable<typeof IN.ship>;
 const _sv = new THREE.Vector3();
 // Betritt den Innenraum eines Schiffs. Im Hangar wird der Stationsraum zwischengespeichert, auf Planeten gibt es keinen.
 export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: number }) {
-  const planet = info.ctx === 'planet', active = info.uid === P.uid;
+  const planet = info.ctx === 'planet', flug = info.ctx === 'flug', active = info.uid === P.uid;
   const rec = active ? null : P.fleet.find(f => f.uid === info.uid) || null;
   const cargo = active ? P.cargo : rec ? rec.cargo : {};
   const cap = active ? stats().cargo : rec ? computeStats(rec.cls, rec.up as Up, shipMods(rec.gear)).cargo : 0;
@@ -1130,7 +1139,7 @@ export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: num
     return;
   }
   if (room) leaveShip();
-  if (!planet) {
+  if (!planet && !flug) {
     saved = { group, rects, obstacles, shipObs, inters, shipInters, labels, shipLabels, x: IN.x, z: IN.z, yaw: IN.yaw, lamps: lamps.map(l => [l.position.clone(), l.distance, l.intensity] as [THREE.Vector3, number, number]), light: [ambient.intensity, sun.intensity, rim.intensity] };
   } else {
     IN.active = true; IN.station = null; G.inside = true;
@@ -1169,14 +1178,24 @@ export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: num
   }
   if (stl && fzk && !at && Math.hypot(IN.x - stl.x, IN.z - stl.z) < 4.5 && free(stl.x + 1.62, stl.z + 0.8)) { IN.x = stl.x + 1.62; IN.z = stl.z + 0.8; }      // gerade abgestellt: neben dem Fahrzeug aussteigen
   if (mesh && !free(IN.x, IN.z)) for (const d of [1.7, -1.7, 2.3, -2.3, 3, -3]) if (free(IN.x + d, IN.z)) { IN.x += d; break; }      // nicht im abgestellten Fahrzeug beginnen
+  if (flug && mesh) {      // im Flug aufgestanden: hinter dem Pilotensitz, Blick nach hinten ins Schiff
+    const sp = room.spots.find(s => s.kind === 'seat') as (ShipSpot & { y?: number }) | undefined;
+    if (sp) suche: for (const r of [0.7, 1.0, 1.3, 1.7, 2.1, 2.6]) for (let k = 0; k < 16; k++) {
+      const a = k / 16 * Math.PI * 2, x = sp.x + Math.sin(a) * r, z = sp.z + Math.abs(Math.cos(a)) * r;      // bevorzugt hinter dem Sitz (+z)
+      const fy = mesh.floorAt(x, z, sp.y ?? IN.fy); if (fy === null) continue;
+      const fy0 = IN.fy; IN.fy = fy;      // free() prüft auf der Bodenhöhe der Figur
+      if (free(x, z)) { IN.x = x; IN.z = z; IN.yaw = Math.PI; break suche; }
+      IN.fy = fy0;
+    }
+  }
   lamps.forEach((l, i) => { const q = room!.lamps[i]; room!.g.localToWorld(l.position.set(q[0], q[1], q[2])); l.distance = 22; l.intensity = mesh ? 0 : q[3] * Math.PI; });   // Modell-Räume bringen eigene Lampen mit
-  setExposure(planet ? 0.5 : 0.2);
+  setExposure(planet ? 0.5 : flug ? 0.3 : 0.2);
   // Modell-Räume: Grund- und Sonnenlicht von draußen gelten auch an Bord und machten weiße Flächen (Leuchtenabdeckungen, Wände) von allein
   // überhell. An Bord tragen die Lampen des Innenraums; das Grundlicht bleibt als Aufhellung der Schatten (leaveShip setzt es zurück).
   if (mesh) { ambient.intensity *= 0.3; sun.intensity *= 0.3; rim.intensity *= 0.3; }
   G.mode = 'walk';
-  if (!at) sfx('door_open', 0.6, 1, () => snd(220, 0.5, 'sawtooth', 0.03, -120));
-  say('SYSTEM', `An Bord der ${info.name}.`);
+  if (!at && !flug) sfx('door_open', 0.6, 1, () => snd(220, 0.5, 'sawtooth', 0.03, -120));
+  say('SYSTEM', flug ? 'Gurte gelöst. Der Autopilot fliegt.' : `An Bord der ${info.name}.`);
 }
 // Verlässt den Schiffsraum: zurück in den Hangar oder (auf Planeten) ganz aus der Ego-Ansicht
 export function leaveShip(exitWorld?: THREE.Vector3) {
@@ -1251,12 +1270,13 @@ function cargoLines(c: Partial<Record<ItemId, number>>): [string, string][] {
   return l.length ? l : [['Frachtraum leer', '#9a9284']];
 }
 function shipInter(sp: ShipSpot, info: ShipInfo): Inter {
-  const active = info.uid === P.uid, planet = info.ctx === 'planet', base = { x: sp.x, z: sp.z, r: sp.r };
+  const active = info.uid === P.uid, planet = info.ctx === 'planet', flug = info.ctx === 'flug', base = { x: sp.x, z: sp.z, r: sp.r };
   switch (sp.kind) {
     case 'seat': return {
-      ...base, label: () => planet ? 'Pilotensitz: abheben' : active ? 'Pilotensitz: ablegen' : `Pilotensitz: auf die ${info.name} umsteigen`,
+      ...base, label: () => flug ? 'Pilotensitz: Steuer übernehmen' : planet ? 'Pilotensitz: abheben' : active ? 'Pilotensitz: ablegen' : `Pilotensitz: auf die ${info.name} umsteigen`,
       act: () => {
-        if (planet) interiorHooks.takeoff();
+        if (flug) interiorHooks.zumSteuer();
+        else if (planet) interiorHooks.takeoff();
         else if (active) interiorHooks.undock();
         else {
           const r = P.fleet.find(f => f.uid === info.uid), st = IN.station!;
@@ -1266,10 +1286,10 @@ function shipInter(sp: ShipSpot, info: ShipInfo): Inter {
       },
     };
     case 'ramp': return {
-      ...base, label: () => !active ? 'Rampenschalter (nur am aktiven Schiff)' : RAMP.want ? 'Laderampe schließen' : 'Laderampe öffnen',
-      act: () => { if (!active) return; RAMP.want = !RAMP.want; sfx('gear', 0.6, 1, () => snd(140, 0.5, 'sawtooth', 0.03, RAMP.want ? -40 : 40)); say('SYSTEM', RAMP.want ? 'Laderampe fährt aus.' : 'Laderampe fährt ein.'); },
+      ...base, label: () => flug ? 'Rampenschalter: Außenbord (Schiff muss stehen)' : !active ? 'Rampenschalter (nur am aktiven Schiff)' : RAMP.want ? 'Laderampe schließen' : 'Laderampe öffnen',
+      act: () => { if (flug) { interiorHooks.ausBord(); return; } if (!active) return; RAMP.want = !RAMP.want; sfx('gear', 0.6, 1, () => snd(140, 0.5, 'sawtooth', 0.03, RAMP.want ? -40 : 40)); say('SYSTEM', RAMP.want ? 'Laderampe fährt aus.' : 'Laderampe fährt ein.'); },
     };
-    case 'hatch': return { ...base, label: () => planet ? 'Über die Rampe zum Rover' : 'Von Bord gehen', act: () => planet ? interiorHooks.toRover() : leaveShip() };
+    case 'hatch': return { ...base, label: () => flug ? 'Heckrampe: Außenbord (Schiff muss stehen)' : planet ? 'Über die Rampe zum Rover' : 'Von Bord gehen', act: () => flug ? interiorHooks.ausBord() : planet ? interiorHooks.toRover() : leaveShip() };
     case 'log': return {
       ...base, label: () => 'Logbuch lesen',
       act: () => openPanel(`Logbuch · ${info.name}`, active ? logLines() : [{ h: 'Geparktes Schiff · Ladung' }, ...cargoLines(P.fleet.find(f => f.uid === info.uid)?.cargo || {})]),
@@ -1295,8 +1315,8 @@ function shipInter(sp: ShipSpot, info: ShipInfo): Inter {
     };
     case 'bed': return { ...base, label: () => 'Ausruhen (Spielstand sichern)', act: () => { saveGame(); say('SYSTEM', 'Spielstand gesichert. Du fühlst dich ausgeruht.'); snd(330, 0.6, 'sine', 0.03, -60); } };
     case 'locker': return {
-      ...base, label: () => planet ? 'Spind' : 'Spind: Lackierung ändern',
-      act: () => planet ? say('SYSTEM', 'Neu lackieren geht nur im Stationshangar.') : interiorHooks.openTab('hangar', 'Spind: Lackierungen für dein Schiff findest du im Hangar.'),
+      ...base, label: () => planet || flug ? 'Spind' : 'Spind: Lackierung ändern',
+      act: () => planet || flug ? say('SYSTEM', 'Neu lackieren geht nur im Stationshangar.') : interiorHooks.openTab('hangar', 'Spind: Lackierungen für dein Schiff findest du im Hangar.'),
     };
   }
 }

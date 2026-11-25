@@ -34,7 +34,7 @@ import { START, leaveToBlack, startBusy, bootLog, bootReady, openCover, settled,
 import type { IntroEnd } from './game/intro';
 import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
-import { quartierFahrt, inKojeAufwachen, startLaunch, updateHangarSequence, hangarGearDown, IN, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
+import { quartierFahrt, inKojeAufwachen, startLaunch, updateHangarSequence, hangarGearDown, IN, folgeSchiff, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
 import { quartierHooks } from './game/quartier';
 import { fzOrdnen } from './game/fahrzeuge';
 import { setDustVisible } from './core/ambience';
@@ -63,6 +63,7 @@ import { loadShipModels, setGear, setDoors, setKanzel, kanzelInfo, RAMP, type Pa
 import { leiterZeigen } from './game/ausstieg';
 import { laderaumUpdate, hatLaderaum } from './game/laderaum';
 import { updateKisten, TRAKTOR, kistenLeeren } from './game/kisten';
+import { BORD, aufstehen, updateBordflug, zumSteuer, ausBord } from './game/bordflug';
 import { anBordStellen } from './game/fahrzeuge';
 import { hasInterior, SHIPS } from './data/ships';
 import { loadRockModel } from './game/world';
@@ -387,6 +388,7 @@ async function continueGame() {
 function toMenu() {
   setMusicMode('menu');
   kistenLeeren();
+  BORD.aktiv = false;
   if (IN.active) leaveInterior();
   if (DUN.active) leaveDungeon(false);   // aus der Mine ins Menü: Mine abbauen (sonst blieb ihr letztes Bild stehen, auch nach „Weiterspielen“)
   clearFootFx();
@@ -475,6 +477,8 @@ interiorHooks.pause = pause;
 interiorHooks.tabs = () => (G.dockedAt ? dockTabs(G.dockedAt) : []);
 interiorHooks.takeoff = () => { leaveInterior(); boardShip(); G.mode = 'play'; $('hud').classList.remove('hidden'); saveGame(); };
 interiorHooks.toFahrzeug = (kind: string) => { leaveInterior(); ROVER.active = true; if (fzImLaderaum(kind as any)) { footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); radio('SYSTEM', 'Über die Rampe hinausfahren. Zum Einladen hinauffahren und im Laderaum [E].'); } };
+interiorHooks.zumSteuer = () => zumSteuer();
+interiorHooks.ausBord = ausBord;
 interiorHooks.toRover = () => { leaveInterior(); ROVER.active = true; leaveShipOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); };
 bandHooks.closed = m => {
   if (m === 'pause') showPause();
@@ -527,7 +531,8 @@ onKey(code => {
   if (code === 'KeyR' && G.mode === 'rover' && !FOOT.active && ROVER.active && ROVER.kind === 'wiesel' && !G.dead) { wieselScan(ROVER.x, ROVER.y, ROVER.z); return; }
   if (code === 'KeyX' && G.mode === 'rover' && !G.dead && (FOOT.active ? footNearShip() : nearShip())) { const t = fahrzeugTauschen(); if (t) radio('SYSTEM', t); return; }
   if (code === 'KeyR' && (G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { gunReload(); return; }   // zu Fuß: nachladen (footgun.ts)
-  if (code === 'KeyG' && G.mode === 'rover' && FOOT.active) { footGrenade(); return; }      // zu Fuß: Granate werfen (in der Mine: dungeonKey)
+  if (code === 'KeyG' && G.mode === 'rover' && FOOT.active) { footGrenade(); return; }
+  if (code === 'KeyG' && G.mode === 'play') { aufstehen(); return; }      // im Flug vom Pilotensitz aufstehen, Autopilot hält Kurs (bordflug.ts)      // zu Fuß: Granate werfen (in der Mine: dungeonKey)
   if (code === 'KeyJ' && G.mode === 'play') { toggleJumpDrive(); return; }
   if (code === 'KeyH' && G.mode === 'play') { toggleSchnellflug(); return; }                                  // Schnellflug / Kurzsprung (schnellflug.ts)
   if (code === 'KeyN' && G.mode === 'play' && !world.surface) { pickNav(camera.getWorldDirection(new THREE.Vector3())); return; }   // Navigationsziel im Fadenkreuz
@@ -822,7 +827,7 @@ function simulate(dt: number) {
     else if (world.surface && !G.dead && P.y > SURF.ceiling) startEntry('orbit');
     updateSurfaceFlight(dt);
   } else if (m === 'jump') updateJump(dt);
-  else if (m === 'walk') updateWalk(dt);
+  else if (m === 'walk') { updateBordflug(dt); if (G.mode === 'walk') updateWalk(dt); }      // im Flug an Bord: Autopilot bewegt das Schiff (bordflug.ts)
   else if (m === 'dungeon') updateDungeon(dt);
   else if (m === 'eva') updateEva(dt);      // Außenbordeinsatz (eva.ts)
   else if ((m as string) === 'launch') { updateHangarSequence(dt); updateRoomLife(dt); }
@@ -927,7 +932,8 @@ function loop(now: number, manual = false) {
     // Kanzel der Jäger und der Elster (ausstieg.ts): offen, solange der Pilot draußen ist (am Boden mit Bordleiter, im All beim Außenbord)
     updateKisten(dt);      // Kisten in der Welt, Traktorstrahl zur Rampe (kisten.ts)
     laderaumUpdate(ROVER.model?.g.parent && !ROVER.leih ? ROVER.kind : null);      // draußen = Modell steht in der Szene (auch während man an Bord ist)      // Kisten und Fahrzeug im Laderaum (laderaum.ts)
-    if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); setDoors(SHIP.g, hangarGearDown() && RAMP.want, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }
+    if (IN.active && BORD.aktiv) { syncShip(); folgeSchiff(); setGear(SHIP.g, false); setDoors(SHIP.g, false, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }      // im Flug an Bord: Schiff fliegt, Innenraum folgt
+    else if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown()); setDoors(SHIP.g, hangarGearDown() && RAMP.want, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }
     else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true); setDoors(SHIP.g, true, dt); setKanzel(SHIP.g, true, dt); leiterZeigen((kanzelInfo(SHIP.g)?.p || 0) > 0.6, ROVER.ship); }
     else {
       SHIP.g.visible = (G.mode === 'play' || G.mode === 'jump' || G.mode === 'pause' || G.mode === 'entry' || G.mode === 'eva') && !G.dead;

@@ -142,3 +142,16 @@ Jedes Schiff hat seine Ausstiege als Punkte im Modell. Danach richten sich Ausst
   - **Außenbord:** [E] an einer Kiste greift sie (die Hand bleibt vorn), mit ihr ist der Schub schwächer (Kiste 85 %, Palette 60 %,
     Container 35 %). An der Rampe bzw. Frachtklappe wird sie geladen, wenn sie passt; [E] lässt los, sie treibt mit dem eigenen Tempo weiter.
   - Kisten sind nur für den eigenen Piloten da (nicht über das Netz geteilt) und verschwinden beim Sektorwechsel und auf Planeten.
+- **Schritt 5 gebaut (25.11.2026, auf test):** `src/game/bordflug.ts`. Begehen im Flug, nur in Schiffen mit Modell-Innenraum (Kormoran, Wisent).
+  - **[G] im All:** Das Schiff richtet sich waagrecht aus, man steht hinter dem Pilotensitz auf. Gesperrt über Planeten, im Schnellflug, beim
+    Laden des Sprungantriebs und mit Ferrox näher als 1,5 km. Die Flugleiste zeigt „G Aufstehen“, sobald es geht.
+  - **Autopilot:** Er fliegt mit Kurs und Tempo von eben weiter. Liegt in den nächsten 10 s ein Hindernis auf dem Kurs (Station, Tor,
+    Planetenorbit, Felsen, Sektorrand), bremst er mit 18 m/s² bis zum Stillstand und meldet sich über Funk.
+  - **Gefahr:** Treffer auf Schild oder Hülle lösen Alarm aus, ebenso Ferrox im Anflug. Ist das Schiff zerstört, geht es zurück in den
+    Flug, dort läuft der übliche Ablauf.
+  - **Zurück:** Am Pilotensitz übernimmt [E] wieder das Steuer. Am Rampenschalter bzw. der Heckrampe geht es mit [E] Außenbord (eva.ts: Schiff
+    muss stehen, druckdichter Anzug).
+  - **Technik:** In `interior.ts` gibt es den Zusammenhang `ctx: 'flug'`. Er wird wie am Planeten behandelt, nur ohne Fahrzeug, und mit
+    einem Aufstehpunkt am Sitz. `folgeSchiff()` setzt den Innenraum jedes Bild auf Lage und Kurs des Schiffs. In `main.ts` fliegt das Schiff
+    im Modus walk weiter (`updateBordflug`, `syncShip`), Fahrwerk und Rampe bleiben zu.
+  - **Speichern:** Wer im Flug an Bord speichert, wird als „im Schiff“ gesichert (`P.at` leer) und setzt beim Weiterspielen im Flug fort.

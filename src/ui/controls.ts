@@ -15,6 +15,7 @@ import { SECTOR } from '../data/galaxy';
 import { FOOT } from '../game/onfoot';
 import { grenadeCount } from '../game/granate';
 import { GUN } from '../game/footgun';
+import { aufstehGrund } from '../game/bordflug';
 
 // Steuerungsleiste links unten: nur was gerade wichtig ist (seit Alpha 1.51, Wunsch des Spielers).
 // Keine Grundtasten mehr (W/S, Maus, A/D, V, Mausrad, Laufen, Springen …): die sind in jedem Spiel ähnlich und stehen unter Esc → Steuerung.
@@ -88,6 +89,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
       else if (nt) r.push(['H', `Kurzsprung → ${nt.name}`, true]);
       else if (world.def?.size && !world.stations.some(s => near(s.x, s.y, s.z, 5000)) && !foes) r.push(['N', 'Ziel im Fadenkreuz wählen'], ['H', 'Schnellflug']);
     }
+    if (!aufstehGrund()) r.push(['G', 'Aufstehen, Autopilot fliegt']);      // begehbare Schiffe im All (bordflug.ts)
     if (look.free) r.push(['V', 'Freie Kamera beenden', true]);
     if (fresh()) r.push(['Umschalt', G.cruise ? 'Reiseflug aus' : 'Reiseflug'], ['B', 'Flottenband'], ['M', 'Karte']);
     return { title: 'Flug', rows: r.slice(0, 8) };
