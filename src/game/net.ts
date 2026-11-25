@@ -37,7 +37,7 @@ import { quartierHooks, einladungAn, dekoAusNetz, ortKennung, nrText } from './q
 export const NET = {
   ws: null as WebSocket | null, status: 'aus' as 'aus' | 'verbinde' | 'online' | 'fehler', id: 0, url: '', err: '',
   roster: [] as { id: number; name: string; room: string }[],
-  account: null as string | null, authErr: '', savedAt: 0, tempStore: false,
+  account: null as string | null, authErr: '', authOk: '', savedAt: 0, tempStore: false,      // authOk: Bestätigung nach dem Anlegen eines Kontos
 };
 export const netHooks = { changed: () => {}, trade: (_m: any) => {}, lost: () => {} };   // Status oder Online-Liste geändert (Menüs neu zeichnen)
 export interface Remote {
@@ -59,6 +59,8 @@ export function defaultUrl() {
 export const isOnline = () => NET.status === 'online';
 
 export function connect(url = settings.server || defaultUrl()) {
+  // schon verbunden (oder beim Verbinden) mit derselben Adresse: nichts tun (2026-11-26: mehrfaches Klicken auf „Verbinden“ trennte jedes Mal)
+  if (NET.ws && url === NET.url && (NET.status === 'online' || NET.status === 'verbinde')) { netHooks.changed(); return; }
   disconnect(true);
   wantOnline = true;
   NET.url = url; NET.status = 'verbinde'; NET.err = '';
@@ -101,6 +103,7 @@ function onMsg(m: any) {
     SHARED.online = true;
     // angemeldet bleiben: mit gespeichertem Token automatisch anmelden
     const tok = getToken(); if (tok) sendMsg({ t: 'login', token: tok });
+    fehlerSenden();
     if (m.online > 1) radio('SYSTEM', `${m.online - 1 === 1 ? 'Ein weiterer Pilot' : `${m.online - 1} weitere Piloten`} online.`);   // allein: keine Meldung
     netHooks.changed();
   } else if (m.t === 'roster') {
@@ -516,6 +519,32 @@ function foeHitByOther(m: any) {
 }
 
 // =====================================================================================
+// Fehler im Browser an den Server melden (seit 2026-11-26): erscheinen im Serverlog mit Name, Fassung und Ort.
+// Gleiche Meldungen werden zusammengefasst; ohne Verbindung warten höchstens 10 bis zum Verbinden.
+// =====================================================================================
+const fehler = new Map<string, { msg: string; wo: string; n: number; sent: number }>();
+function fehlerMerken(msg: string, wo: string) {
+  if (!msg || /ResizeObserver loop|^Script error\.?$/.test(msg)) return;
+  const k = msg + '|' + wo, f = fehler.get(k);
+  if (f) { f.n++; return; }
+  if (fehler.size >= 30) return;
+  fehler.set(k, { msg: msg.slice(0, 300), wo: wo.slice(0, 160), n: 1, sent: 0 });
+  fehlerSenden();
+}
+function fehlerSenden() {
+  if (NET.status !== 'online') return;
+  const ver = (document.querySelector('.ver')?.textContent || '').split('·')[0].trim();
+  const ort = (world.def ? world.def.id + (world.surface ? ':planet' : '') : 'menü') + ' · ' + G.mode;
+  for (const f of fehler.values()) if (f.n > f.sent) { sendMsg({ t: 'err', msg: f.msg, wo: f.wo, n: f.n, ver, ort }); f.sent = f.n; }
+}
+const kurzWo = (stack?: string) => (stack || '').split('\n').slice(1, 3).map(l => l.trim().replace(/https?:\/\/[^/]+\//, '').replace(/^at /, '')).join(' < ');
+addEventListener('error', e => fehlerMerken(String(e.message || e.error || 'Fehler'), kurzWo(e.error?.stack) || `${String(e.filename || '').split('/').pop()}:${e.lineno}`));
+addEventListener('unhandledrejection', e => { const r: any = e.reason; fehlerMerken('Promise: ' + String(r?.message || r), kurzWo(r?.stack)); });
+/** abgefangener Fehler (main.ts hook): trotzdem melden */
+export function meldeFehler(msg: string, stack?: string) { fehlerMerken(msg, kurzWo(stack)); }
+setInterval(fehlerSenden, 10000);      // Wiederholungen derselben Meldung gesammelt nachreichen
+
+// =====================================================================================
 // Pilotenkonten: Spielstand auf dem Server
 // Nach der Anmeldung gilt ein eigener Speicherplatz je Konto; jedes Speichern geht zusätzlich (gebremst) an den Server.
 // Beim Anmelden gewinnt der neuere Stand (Server oder dieses Gerät), damit Offline-Fortschritt nicht verloren geht.
@@ -527,9 +556,11 @@ export const authHooks = { changed: () => {} };
 export function register(name: string, pass: string, takeLocal: boolean) {
   NET.authErr = '';
   const d = takeLocal ? localSave() : null;
+  regWait = true;
   sendMsg({ t: 'register', name, pass, data: d && d.v === 2 ? d : null });
 }
-export function login(name: string, pass: string) { NET.authErr = ''; sendMsg({ t: 'login', name, pass }); }
+let regWait = false;
+export function login(name: string, pass: string) { regWait = false; NET.authErr = ''; NET.authOk = ''; sendMsg({ t: 'login', name, pass }); }
 export function logout() {
   if (NET.account) saveGame();
   sendMsg({ t: 'logout', token: getToken() });
@@ -538,12 +569,14 @@ export function logout() {
 }
 function onAuth(m: any) {
   if (!m.ok) {
+    regWait = false;
     if (m.out) { NET.account = null; if (G.mode === 'menu') setSaveSlot(null); }
     if (m.err) { NET.authErr = m.err; if (/abgelaufen/.test(m.err)) setToken(''); if (m.out) radio('SYSTEM', m.err); }
     authHooks.changed(); netHooks.changed();
     return;
   }
   NET.account = m.name; NET.authErr = '';
+  NET.authOk = regWait ? `Konto „${m.name}“ angelegt. Du bist angemeldet und verbunden.` : ''; regWait = false;
   if (m.token) setToken(m.token);
   setSaveSlot(m.name);
   const local = rawSave(), server = m.data;

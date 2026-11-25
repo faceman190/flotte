@@ -52,7 +52,7 @@ import { PLANETS, PTYPE, planetBaseId } from './data/planets';
 import { d3 } from './core/util';
 import { openBand, closeBand, drawBand, bandHooks } from './ui/band';
 import { updateControls } from './ui/controls';
-import { netUpdate, NET, isOnline, gastAusstieg } from './game/net';
+import { netUpdate, NET, isOnline, gastAusstieg, meldeFehler } from './game/net';
 import { TRADE, requestTrade } from './game/trade';
 import { openChat } from './ui/mp';
 // Die Galaxiekarte ist eine App im Flottenband
@@ -872,7 +872,7 @@ let last = performance.now(), shadowSweep = 0;
 // Zusatzabläufe (Geschichte, Stadt, Effekte) dürfen das Bild nie anhalten: Ein Fehler dort wird einmal gemeldet, der Rest des Bildes läuft weiter.
 // (Alpha 0.99 bis 0.99d: Ein Zugriff auf den fehlenden Spielstand im Hauptmenü warf hier in jedem Bild, die Schleife endete, der Schirm blieb leer.)
 const hookErr = new Set<string>();
-function hook(name: string, f: () => void) { try { f(); } catch (e) { if (!hookErr.has(name)) { hookErr.add(name); console.error('Fehler in ' + name + ':', e); } } }
+function hook(name: string, f: () => void) { try { f(); } catch (e) { if (!hookErr.has(name)) { hookErr.add(name); console.error('Fehler in ' + name + ':', e); meldeFehler('Fehler in ' + name + ': ' + String((e as any)?.message || e), (e as any)?.stack); } } }      // auch ans Serverlog (net.ts)
 let ekHail = false, ekOut = false;      // Funkgruß der Eisenkrone schon gesendet; Schiff war seit dem letzten Ablegen schon weiter draußen
 function loop(now: number, manual = false) {
   if (!manual) requestAnimationFrame(t => loop(t));      // zuerst das nächste Bild anmelden: Ein Fehler weiter unten beendet die Schleife nicht

@@ -32,7 +32,7 @@ function render() {
   acc.classList.toggle('hidden', st !== 'online');
   $('mpAccIn').classList.toggle('hidden', !!NET.account || !inMenu);
   $('mpAccOut').classList.toggle('hidden', !NET.account && inMenu);
-  $('mpAccTxt').innerHTML = NET.account ? `<span class="good">●</span> Angemeldet als <b>${esc(NET.account)}</b>. Dein Spielstand wird auf dem Server gesichert${NET.savedAt ? `, zuletzt um ${new Date(NET.savedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : ''}.` : 'Anmelden geht im Hauptmenü.';
+  $('mpAccTxt').innerHTML = NET.account ? `${NET.authOk ? `<b class="good">${esc(NET.authOk)}</b><br>` : ''}<span class="good">●</span> Angemeldet als <b>${esc(NET.account)}</b>. Dein Spielstand wird auf dem Server gesichert${NET.savedAt ? `, zuletzt um ${new Date(NET.savedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : ''}.` : 'Anmelden geht im Hauptmenü.';
   ($('mpLogout') as HTMLButtonElement).classList.toggle('hidden', !NET.account || !inMenu);
   $('mpErr').textContent = NET.authErr || (NET.tempStore ? 'Hinweis: Dieser Server hat noch keine Datenbank. Spielstände gehen beim nächsten Neustart verloren.' : '');
   ($('mpGo') as HTMLButtonElement).disabled = st === 'verbinde';

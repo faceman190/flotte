@@ -174,6 +174,12 @@ wss.on('connection', ws => {
       const list = (a, n, len) => (Array.isArray(a) ? a.slice(0, n).map(v => clean(v, len)).filter(Boolean) : []);
       const ws2 = wsOf(o);
       if (ws2) send(ws2, { t: 'qi', from: c.id, name: c.name, deko: { nr: Math.floor(+d.nr) || 0, schiffe: list(d.schiffe, 4, 16), funde: list(d.funde, 5, 20), legenden: list(d.legenden, 8, 32) } });
+    } else if (m.t === 'err') {
+      // Fehler im Browser eines Spielers (seit 2026-11-26): ins Log, höchstens 10 je Verbindung und Minute
+      const now = Date.now(); c.errs = (c.errs || []).filter(t => now - t < 60000);
+      if (c.errs.length >= 10) return;
+      c.errs.push(now);
+      console.log(`! Fehler bei ${c.name || '?'} (#${c.id}) [${clean(m.ver, 40)} · ${clean(m.ort, 60)}]: ${clean(m.msg, 300)}${m.wo ? ' @ ' + clean(m.wo, 160) : ''}${m.n > 1 ? ` (${Math.min(999, +m.n || 0)}×)` : ''}`);
     } else if (m.t === 'chat') {
       const now = Date.now(), text = clean(m.text, 200);
       if (!text || now - c.chatT < 700) return;   // einfache Bremse gegen Spam
