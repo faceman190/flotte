@@ -6,7 +6,7 @@ import { fahrwerkTiefe } from '../models/gltfShips';
 import { FZ_MASS } from './fahrzeuge';
 import { scene, camera, view, ux, glowMat } from '../core/engine';
 import { texMat, std, boxUV } from '../core/textures';
-import { setSky, setSurfaceSky } from '../core/sky';
+import { setSky, setSurfaceSky, sunDir } from '../core/sky';
 import { groundTexture, groundNormal, groundRough, groundLayer } from '../core/planetVis';
 import { setAmbience } from '../core/ambience';
 import { keys, mouse } from '../core/input';
@@ -34,6 +34,8 @@ import { SHIP, hurtPlayer } from './player';
 import { burst, puff } from './fx';
 import { radio } from '../ui/radio';
 import { groundShade, GROUND_SHADE_PARS } from './groundShade';
+import { GELAENDE, TERRAIN_LOOK, makeHeightFn, noiseSet, smoothField, erode, buildMaps, bakeLight, type TerrainMaps, type ErodeOut } from './terrain';
+import { buildGrass } from './grass';
 
 // =====================================================================================
 // Planetenoberflächen: Gelände, Atmosphäre, Lagerstätten, Bodenstation und Bergbau-Rover.
@@ -56,8 +58,13 @@ function noise2(seed: number) {
 }
 
 // ---------------- Höhenfeld ----------------
-const N = 257;
+// 257 Punkte (31-m-Felder); mit dem neuen Gelände (?gelaende=neu, terrain.ts) 513 Punkte (15,6-m-Felder)
+let N = 257;
 let HM = new Float32Array(N * N), liquidLevel = -1e9, plateau = 0;
+// Neues Gelände: Karten für Shader und Bewuchs; Höhen und Erosion je Planet zwischengespeichert (Erosion kostet rund eine Sekunde)
+let terrMaps: TerrainMaps | null = null;
+export const terrainMaps = () => terrMaps;
+const TERR_CACHE = new Map<string, { hm: Float32Array; ero: ErodeOut | null; lift: number }>();
 function heightAt(x: number, z: number) {
   const half = SURF.size / 2, cell = SURF.size / (N - 1);
   const gx = clamp((x + half) / cell, 0, N - 1.001), gz = clamp((z + half) / cell, 0, N - 1.001);
@@ -95,11 +102,13 @@ export function buildSurface(sector: string) {
   KEEP.r = pd.city ? 360 : pd.model ? 270 : 130;
   world.def = { ...sec, name: pd.name, danger: pd.danger, stations: base ? [base] : [], fields: [], hives: 0, links: [] };
   // Höhen
+  N = GELAENDE.neu ? 513 : 257;
+  if (HM.length !== N * N) HM = new Float32Array(N * N);
   const half = SURF.size / 2, cell = SURF.size / (N - 1);
   const craters = Array.from({ length: T.craters }, () => ({ x: R.range(-3000, 3000), z: R.range(-3000, 3000), r: R.range(250, 700), d: R.range(80, 200) }));
   let mn = 1e9, mx = -1e9;
   // Höhenformel: gilt für die Karte und für das ferne Gelände drumherum
-  const hfun = (x: number, z: number) => {
+  const hfunOld = (x: number, z: number) => {
     let h = T.amp * (0.6 * nz.fbm(x / 1700, z / 1700) + 0.55 * Math.pow(nz.ridge(x / 950 + 3.1, z / 950 - 1.7), 1.6) - 0.42);
     h += T.amp * 0.03 * (nz.fbm(x / 130 + 7.7, z / 130 - 2.3, 4) - 0.5);          // feine Unruhe
     for (const c of craters) {
@@ -115,18 +124,69 @@ export function buildSurface(sector: string) {
     }
     return h;
   };
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const h = hfun(-half + i * cell, -half + j * cell);
-    HM[j * N + i] = h;
-    mn = Math.min(mn, h); mx = Math.max(mx, h);
+  // Neues Gelände (terrain.ts): eigene Höhenformel; Gebirge am Rand wie bisher, aber mit runden Graten.
+  // Das ferne Gelände nutzt dieselbe Formel mit gröberer Feinheit (sein Netz hat 125-m-Felder).
+  let lift = 0;      // Verschiebung der Höhen, damit Seen und Meere einen festen Anteil der Karte bedecken (siehe unten)
+  const neuFn = (minWL: number) => {
+    const base = makeHeightFn(pd.type, T.amp, hashStr(sector) % 100000, craters, minWL), en = noiseSet(hashStr(sector + ':rand') % 100000, minWL);
+    return (x: number, z: number) => {
+      let h = base(x, z);
+      const edge = Math.max(Math.abs(x), Math.abs(z));
+      if (edge > SURF.limit - 200) {
+        const t = (edge - SURF.limit + 200) / 600, sm = (u: number) => u * u * (3 - 2 * u);
+        h += t <= 1 ? sm(t) * 260 : 260 + Math.min(t - 1, 3) * 210 * (en.ridge(x, z, 3200, 5, 0.12) * 1.6 - 0.25) + Math.min(t - 1, 1) * 90 * (en.ridge(x + 900, z - 400, 1100, 4, 0.12) - 0.3);
+      }
+      return h + lift;
+    };
+  };
+  const hfun = GELAENDE.neu ? neuFn(cell * 2.5) : hfunOld, hfunFar = GELAENDE.neu ? neuFn(320) : hfunOld;
+  let ero: ErodeOut | null = null;
+  if (!GELAENDE.neu) {
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const h = hfun(-half + i * cell, -half + j * cell);
+      HM[j * N + i] = h;
+      mn = Math.min(mn, h); mx = Math.max(mx, h);
+    }
+  } else {
+    // Neues Gelände: weiches Rauschen ohne Details unter 2,5 Feldern, glätten, Erosion (Rinnen, Talböden, Schutthalden), noch einmal leicht glätten
+    const ck = sector + ':' + N, hit = TERR_CACHE.get(ck);
+    if (hit) { HM.set(hit.hm); ero = hit.ero; lift = hit.lift; }
+    else {
+      const L = TERRAIN_LOOK[pd.type] || TERRAIN_LOOK.fels;
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) HM[j * N + i] = hfun(-half + i * cell, -half + j * cell);
+      smoothField(HM, N, L.smooth, 0.5);
+      // Erosion wirkt nur im Spielgebiet (zum Kartenrand hin aus, damit das ferne Gelände anschließt)
+      const W = new Float32Array(N * N);
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const e = Math.max(Math.abs(-half + i * cell), Math.abs(-half + j * cell)); W[j * N + i] = 1 - Math.min(1, Math.max(0, (e - SURF.limit + 500) / 500)); }
+      ero = erode(HM, N, cell, rng(hashStr(sector + ':erosion')).next, L, W);
+      smoothField(HM, N, 1, 0.35);
+      // Planeten mit Flüssigkeit: Höhen so verschieben, dass etwa 7 % des Spielgebiets darunter liegen (Seen in den Senken wie bisher,
+      // statt überflutetem Land). Gilt auch für das ferne Gelände (lift in neuFn).
+      if (T.liquid) {
+        const smp: number[] = [];
+        for (let j = 0; j < N; j += 4) for (let i = 0; i < N; i += 4) { const x = -half + i * cell, z = -half + j * cell; if (Math.max(Math.abs(x), Math.abs(z)) < SURF.limit && Math.hypot(x, z) > 950) smp.push(HM[j * N + i]); }
+        smp.sort((a, b) => a - b);
+        lift = T.liquid.level - smp[Math.floor(smp.length * 0.07)];
+        for (let k = 0; k < HM.length; k++) HM[k] += lift;
+      }
+      if (TERR_CACHE.size > 3) TERR_CACHE.delete(TERR_CACHE.keys().next().value!);
+      TERR_CACHE.set(ck, { hm: HM.slice(), ero, lift });
+    }
+    for (let k = 0; k < HM.length; k++) { mn = Math.min(mn, HM[k]); mx = Math.max(mx, HM[k]); }
   }
   liquidLevel = T.liquid ? T.liquid.level : -1e9;
   // Plateau für die Bodenstation
   plateau = Math.max(heightAt(0, 0), liquidLevel + 35);
+  const eroP = ero ? { flow: ero.flow.slice(), sed: ero.sed.slice(), talus: ero.talus.slice() } : null;      // Masken: auf dem Plateau gelten sie nicht mehr
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const x = -half + i * cell, z = -half + j * cell, d = Math.hypot(x, z);
-    if (d < 950) { const t = d < 520 ? 1 : 1 - (d - 520) / 430, s = t * t * (3 - 2 * t); HM[j * N + i] = HM[j * N + i] * (1 - s) + plateau * s; }
+    if (d < 950) {
+      const t = d < 520 ? 1 : 1 - (d - 520) / 430, s = t * t * (3 - 2 * t), k = j * N + i; HM[k] = HM[k] * (1 - s) + plateau * s;
+      if (eroP) { eroP.flow[k] *= 1 - s; eroP.sed[k] *= 1 - s; eroP.talus[k] *= 1 - s; }
+    }
   }
+  if (terrMaps) { terrMaps.nrm.dispose(); terrMaps.mask.dispose(); terrMaps.height.dispose(); terrMaps.light.value?.dispose(); }
+  terrMaps = GELAENDE.neu ? buildMaps(HM, N, SURF.size, eroP) : null;
   // Geländemodell
   const geo = new THREE.PlaneGeometry(SURF.size, SURF.size, N - 1, N - 1);
   geo.rotateX(-Math.PI / 2);
@@ -144,7 +204,7 @@ export function buildSurface(sector: string) {
     if (t < 0.5) c.copy(c0).lerp(c1, t * 2); else c.copy(c1).lerp(c2, (t - 0.5) * 2);
     const slope = 1 - nrm.getY(k);
     slp[k] = slope;
-    const v = 0.9 + Math.random() * 0.12;
+    const v = GELAENDE.neu ? 1 : 0.9 + Math.random() * 0.12;      // neues Gelände: kein Zufall je Eckpunkt (zeichnete das Dreiecksraster nach)
     if (gTex) {
       // Mit Bodentextur: Vertexfarbe nur als Helligkeits- und leichte Farbvariation (Täler dunkler, Gipfel heller)
       const f = clamp(lum(c) / l1, 0.6, 1.5) * v;
@@ -159,7 +219,7 @@ export function buildSurface(sector: string) {
   geo.setAttribute('slope', new THREE.BufferAttribute(slp, 1));
   const tm = texMat(0xffffff, 'rock', { vertexColors: true, roughness: 0.95, metalness: 0.05, flatShading: false }, 1.4);
   tm.envMapIntensity = 0.25;
-  if (gTex) groundShader(tm, gTex, c1, pd.type, T.fog, liquidLevel > -1e8 ? liquidLevel : mn, GROUNDSET[sector] || TYPESET[pd.type]);
+  if (gTex) groundShader(tm, gTex, c1, pd.type, T.fog, liquidLevel > -1e8 ? liquidLevel : mn, (GELAENDE.neu && mwSet(pd.type)) || GROUNDSET[sector] || TYPESET[pd.type], terrMaps);
   const terrain = new THREE.Mesh(geo, tm);
   scene.add(terrain);
   world.extras.push(terrain);
@@ -170,7 +230,7 @@ export function buildSurface(sector: string) {
     const fp = fg.attributes.position as THREE.BufferAttribute;
     for (let k = 0; k < fp.count; k++) {
       const x = fp.getX(k), z = fp.getZ(k), e = Math.max(Math.abs(x), Math.abs(z));
-      fp.setY(k, hfun(x, z) - (e < half - 1 ? 70 : e < half + 1 ? 5 : 0));
+      fp.setY(k, hfunFar(x, z) - (e < half - 1 ? 70 : e < half + 1 ? 5 : 0));
     }
     fg.computeVertexNormals();
     const fn = fg.attributes.normal as THREE.BufferAttribute, fc = new Float32Array(fp.count * 3), fsl = new Float32Array(fp.count), fuv = fg.attributes.uv as THREE.BufferAttribute;
@@ -199,7 +259,10 @@ export function buildSurface(sector: string) {
   const rot: [number, number, number] = [SR.range(-0.5, 0.5), SR.range(0, 6.28), SR.range(-0.4, 0.4)];
   const sd: [number, number, number] = [SR.range(-1, 1), SR.range(0.2, 1), SR.range(-1, 1)];
   sd[1] = Math.max(0.45, sd[1]);
+  // Neues Gelände: tiefere Sonne (etwa 17 bis 26 Grad), lange Schatten zeigen die Formen der Landschaft
+  if (GELAENDE.neu) { const l = Math.hypot(sd[0], sd[2]) || 1; sd[0] /= l; sd[2] /= l; sd[1] = 0.3 + 0.18 * SR.next(); }
   setSky({ neb: sec.neb, tint: sec.tint, rot, sunDir: sd });
+  if (terrMaps) terrMaps.light.value = bakeLight(HM, N, SURF.size, sunDir);      // Bergschatten und Umgebungsverdeckung (terrain.ts)
   const SL = SKYLOOK[pd.type];
   setSurfaceSky({ horizon: T.sky[0], zenith: T.sky[1], fog: T.fog, fogDensity: T.fogDensity, clouds: SL.clouds, cloudCol: SL.cloudCol, stars: SL.stars, body: skyBody(sector),
     ...(pd.type === 'mond' ? { air: 0.15, moon: { dir: [-0.86, 0.5, -0.1] as [number, number, number], rad: 0.036, col: 0xb8bcc4 } } : {}) });
@@ -232,7 +295,11 @@ export function buildSurface(sector: string) {
       a.max = a.yld = r >= 16 ? 60 : r >= 12 ? 40 : 24;
     }
   }
-  buildFlora(pd.type, R, heightAt, liquidLevel, hashStr(sector) % 1000);
+  buildFlora(pd.type, R, heightAt, liquidLevel, hashStr(sector) % 1000, terrMaps ? terrMaps.sample : undefined);
+  if (terrMaps) {      // dichtes Gras (grass.ts); Schneeflecken nach demselben Muster wie im Bodenshader, damit dort kein Gras steht
+    const SL = SKYLOOK[pd.type] || SKYLOOK.fels;
+    buildGrass(terrMaps, pd.type, liquidLevel, SL.snow[2], !!SL.veg, KEEP.r, gTex ? { map: gTex, scale: 1 / (GROUND[pd.type]?.m ?? 24), k: SL.snow[1], y: SL.snow[2] } : null);
+  }
   buildDungeonEntrances(sector, heightAt, liquidLevel);                         // Stolleneingänge (src/game/dungeon.ts)
   void 0;      // Felsbrocken, Felsnadeln, Pflanzen (src/game/flora.ts)
   world.surface = { planet: sector, limit: SURF.limit, type: pd.type };
@@ -286,6 +353,14 @@ const TYPESET: Record<string, GroundSet> = {
   // Mond: Staubflächen mit kleinen Einschlägen, feiner Regolith als Decke, das bisherige Geröll an den Hängen
   mond: { fine: { tex: 'l_einschlag', m: 6, col: 0x8e8e92, tint: 0.75 }, scree: { tex: 'l_regolith', m: 3.1, col: 0x7c7c80, tint: 0.75 } },
 };
+// Neues Gelände (?gelaende=neu): Böden aus dem Fab-Paket „MW Landscape Auto Material“ (scripts/ue/mw_export.py, scripts/mw-import.mjs),
+// sobald sie im Spiel liegen. Fehlt eines der Bilder, gilt der Satz oben.
+const MWSET: Record<string, GroundSet> = {
+  fels: { fine: { tex: 'l_mw_gras', m: 6, col: 0x626a30, tint: 0.35 }, scree: { tex: 'l_mw_erde', m: 4, col: 0x6a5a40, tint: 0.3 }, veg: true },
+  wueste: { fine: { tex: 'l_mw_sand2', m: 6, col: 0xd2b48a, tint: 0.45 }, scree: { tex: 'l_mw_sand', m: 5, col: 0xb89060, tint: 0.45 } },
+  eis: { fine: { tex: 'l_mw_schnee', m: 6, col: 0xd4e0ea, tint: 0.3 }, scree: { tex: 'l_mw_schnee', m: 3, col: 0xc8d6e4, tint: 0.35 } },
+};
+const mwSet = (type: string) => { const d = MWSET[type], g = (window as any).PLANETDATA?.ground; return d && g && g[d.fine.tex] && g[d.scree.tex] ? d : undefined; };
 const GROUNDSET: Record<string, GroundSet> = {
   // Heimstatt II: saftige Wiese mit Steinnestern in den Ebenen (Luftbild, hier auf 12 m gelegt), Waldboden mit Gras und Zweigen als Decke
   // (beide zur selben Grasfarbe gezogen: Aus der Luft stünden die Wiesenflecken sonst als dunkle Dreiecke im helleren Waldboden)
@@ -315,7 +390,7 @@ function skyBody(sector: string) {
   const h = hashStr(sector + ':himmel'), a = (h % 628) / 100, el = 0.3 + ((h >> 4) % 30) / 100, cols = [0xe8d8b8, 0xc8d0e8, 0xe0b090, 0xb8c8b0, 0xd8b8d8];
   return { dir: [Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)] as [number, number, number], rad: 0.07 + ((h >> 8) % 60) / 1000, col: cols[h % cols.length], ring: (h >> 3) % 5 < 3 ? 1 : 0 };
 }
-function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: THREE.Color, type: string, fogCol: number, lowY: number, setDef?: GroundSet) {
+function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: THREE.Color, type: string, fogCol: number, lowY: number, setDef?: GroundSet, terr?: TerrainMaps | null) {
   const gn = groundNormal(type), gr = groundRough(type), P = GROUND[type] || { m: 24, tint: 0, nrm: 0 };
   // Materialsatz: nur wenn beide weiteren Böden samt Relief vorhanden sind
   const lf = setDef ? groundLayer(setDef.fine.tex) : null, ls = setDef ? groundLayer(setDef.scree.tex) : null;
@@ -336,6 +411,7 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
     sh.uniforms.snowCol = { value: new THREE.Color(SL.snow[0]) }; sh.uniforms.snowK = { value: SL.snow[1] }; sh.uniforms.snowY = { value: SL.snow[2] };
     sh.uniforms.vegCol = { value: new THREE.Color(SL.veg ? SL.veg[0] : 0) }; sh.uniforms.vegK = { value: SL.veg ? SL.veg[1] : 0 };
     sh.uniforms.mistK = { value: SL.mist }; sh.uniforms.mistY = { value: lowY + 25 };
+    if (terr) { sh.uniforms.tNrm = { value: terr.nrm }; sh.uniforms.tMask = { value: terr.mask }; sh.uniforms.tLight = terr.light; sh.uniforms.tGeo = { value: new THREE.Vector2(terr.size / 2, terr.N) }; }
     sh.uniforms.bShMap = groundShade.map; sh.uniforms.bShMat = groundShade.mat; sh.uniforms.bShOn = groundShade.on; sh.uniforms.bShPx = groundShade.px;   // Gebäudeschatten (groundShade.ts)
     if (set) {
       sh.uniforms.gFineMap = { value: lf!.map }; sh.uniforms.gFineNrm = { value: lf!.nrm }; sh.uniforms.gScreeMap = { value: ls!.map }; sh.uniforms.gScreeNrm = { value: ls!.nrm };
@@ -349,6 +425,7 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSlope = slope; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz; vWNrm = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
+        ${terr ? '#define TERR\n        uniform sampler2D tNrm; uniform sampler2D tMask; uniform sampler2D tLight; uniform vec2 tGeo;' : ''}
         ${set ? '#define GSET\n        uniform sampler2D gFineMap; uniform sampler2D gFineNrm; uniform sampler2D gScreeMap; uniform sampler2D gScreeNrm; uniform vec3 gFineCol; uniform vec3 gScreeCol; uniform vec4 gSetP; uniform float gSetK; uniform float gSetVeg;' : ''}
         uniform sampler2D groundMap; uniform sampler2D groundNrm; uniform sampler2D groundRgh; uniform vec3 cliffCol; uniform vec3 gCol;
         uniform float gScale; uniform float gTint; uniform float gNrmK; uniform float gHasR; uniform vec3 snowCol; uniform float snowK; uniform float snowY; uniform float mistK; uniform float mistY; uniform vec3 vegCol; uniform float vegK; varying float vSlope; varying vec3 vWPos; varying vec3 vWNrm;
@@ -368,15 +445,23 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
           if (w.z > 0.01) { r += w.z * gS(t, P.xy + 0.53, B); n += w.z; }
           return r / max(n, 1e-4); }`)
       .replace('#include <map_fragment>', `
+        // Neigung und Normale: aus der Geländekarte pro Bildpunkt (neues Gelände, glatt ohne Dreieckskanten), sonst aus dem Netz
+        float gSlp = vSlope; vec3 gNw = normalize(vWNrm); vec4 tM = vec4(0.0, 0.0, 0.0, 0.5);
+        #ifdef TERR
+          vec2 tUV = ((vWPos.xz + tGeo.x) / (2.0 * tGeo.x) * (tGeo.y - 1.0) + 0.5) / tGeo.y;
+          float tIn = step(max(abs(vWPos.x), abs(vWPos.z)), tGeo.x - 2.0);
+          if (tIn > 0.5) { gNw = normalize(texture2D(tNrm, tUV).xyz); gSlp = 1.0 - gNw.y; tM = texture2D(tMask, tUV); }
+        #endif
+        float tFl = tM.r, tSed = tM.g, tTal = tM.b, tCv = tM.a * 2.0 - 1.0;      // Abfluss, Sediment, Schutt, Krümmung (+ Mulde, - Kuppe)
         vec4 rockC = texture2D(map, vMapUv);
         vec3 gP = vWPos * gScale;
         float gD = length(vWPos - cameraPosition);
         vec2 gB = vec2(smoothstep(12.0, 70.0, gD), smoothstep(140.0, 900.0, gD));
-        vec3 gw = pow(abs(normalize(vWNrm)), vec3(4.0)); gw /= (gw.x + gw.y + gw.z);
+        vec3 gw = pow(abs(gNw), vec3(4.0)); gw /= (gw.x + gw.y + gw.z);
         vec3 gC = gT(groundMap, gP, gw, gB);
         vec3 gMean = max(textureLod(groundMap, vec2(0.5), 12.0).rgb, vec3(0.02));
         // flacher Blickwinkel: Dort kann die Filterung das feine Bild nicht mehr sauber verkleinern, es verwischt zu Streifen → weniger Kontrast
-        float gGraz = smoothstep(0.06, 0.4, abs(dot(normalize(cameraPosition - vWPos), normalize(vWNrm))));
+        float gGraz = smoothstep(0.06, 0.4, abs(dot(normalize(cameraPosition - vWPos), gNw)));
         gC = mix(gMean, gC, mix(1.0, 0.5, gB.x) * mix(1.0, 0.55, gB.y) * mix(0.4, 1.0, gGraz));   // gröbere Stufen mit weniger Kontrast: sonst sieht man das Kachelraster
         float gLum = dot(gMean, vec3(0.3, 0.59, 0.11));
         float gL = dot(texture2D(groundMap, gP.xz / 97.0 + 0.13).rgb, vec3(0.3, 0.59, 0.11)) / gLum;
@@ -386,11 +471,16 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
         #ifdef GSET
           // Materialsatz: Anteile nach Hangneigung, von groben Flecken verschoben (x fein, y Geröll, z Schutt)
           // feiner Grund in Flecken auf flachen Stellen, und zwar dort, wo keine Wiese liegt (die Wiese nimmt die hellen Flecken des groben Musters)
-          // vSlope ist 1 - Normale.y: 0,004 sind 5 Grad, 0,012 sind 9 Grad, 0,05 sind 18 Grad, 0,1 sind 26 Grad (die Steilwand beginnt bei 0,2 = 37 Grad)
+          // gSlp ist 1 - Normale.y: 0,004 sind 5 Grad, 0,012 sind 9 Grad, 0,05 sind 18 Grad, 0,1 sind 26 Grad (die Steilwand beginnt bei 0,2 = 37 Grad)
           float gAlt = mix(1.0, 1.0 - smoothstep(snowY - 60.0, snowY + 160.0, vWPos.y), gSetVeg);      // oben wächst nichts mehr (nur bei Bewuchs)
-          float gWf = (1.0 - smoothstep(0.004, 0.03, vSlope)) * smoothstep(0.0, 0.2, (1.0 - gL2) * 1.5 + (1.0 - gL) * 0.8) * gAlt;
+          float gWf = (1.0 - smoothstep(0.004, 0.03, gSlp)) * smoothstep(0.0, 0.2, (1.0 - gL2) * 1.5 + (1.0 - gL) * 0.8) * gAlt;
           // Decke des sanften Geländes bis etwa 20 Grad; in Flecken schaut das Geröll durch
-          float gWs = (1.0 - smoothstep(0.05, 0.11, vSlope + (gL - 1.0) * 0.03)) * (1.0 - 0.9 * smoothstep(0.1, 0.28, (gL - 1.0) * 1.7)) * gAlt * (1.0 - gWf);
+          float gWs = (1.0 - smoothstep(0.05, 0.11, gSlp + (gL - 1.0) * 0.03)) * (1.0 - 0.9 * smoothstep(0.1, 0.28, (gL - 1.0) * 1.7)) * gAlt * (1.0 - gWf);
+          #ifdef TERR
+            // Sediment in Talböden: feiner Grund; Schutthalden: das Geröll schaut durch die Decke
+            gWf = max(gWf, smoothstep(0.12, 0.55, tSed) * (1.0 - smoothstep(0.03, 0.12, gSlp)) * gAlt);
+            gWs = min(gWs * (1.0 - smoothstep(0.08, 0.45, tTal)), 1.0 - gWf);
+          #endif
           gWf *= gSetK; gWs *= gSetK;
           vec3 gHW = vec3(gWf, max(0.0, 1.0 - gWf - gWs), gWs);
           float gCon = mix(1.0, 0.5, gB.x) * mix(1.0, 0.55, gB.y) * mix(0.4, 1.0, gGraz);
@@ -410,23 +500,46 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
           gMix /= max(gMix.x + gMix.y + gMix.z, 1e-4);
           gC = gFc * gMix.x + gC * gMix.y + gSc * gMix.z;
         #endif
-        float sm = smoothstep(0.2, 0.4, vSlope);
+        float sm = smoothstep(0.2, 0.4, gSlp);
+        #ifdef TERR
+          // Fels kommt an Kuppen und Kanten früher durch, Sediment deckt ihn zu
+          sm = smoothstep(0.2 - 0.09 * clamp(-tCv * 2.0, 0.0, 1.0), 0.4, gSlp) * (1.0 - 0.55 * smoothstep(0.2, 0.7, tSed));
+          gC *= mix(1.0, 0.86, smoothstep(0.1, 0.6, tTal));      // Schutt etwas dunkler
+        #endif
         diffuseColor.rgb *= mix(gC, rockC.rgb * cliffCol * 2.4, sm);
         // Auflage in Flecken (Schnee, Sand, Asche): auf flachen Stellen, nach grobem Muster, mit der Höhe zunehmend
         float gPat = gL2 * 0.3 + gL * 0.22;
         // Wiese: flache, tiefe Lagen bekommen die Farbe des Bewuchses (aus der Ferne wirkt das Gras so geschlossen)
-        float vg = vegK * smoothstep(0.36, 0.5, gPat) * (1.0 - smoothstep(0.1, 0.24, vSlope)) * (1.0 - smoothstep(snowY - 60.0, snowY + 160.0, vWPos.y));
+        float vg = vegK * smoothstep(0.36, 0.5, gPat) * (1.0 - smoothstep(0.1, 0.24, gSlp)) * (1.0 - smoothstep(snowY - 60.0, snowY + 160.0, vWPos.y));
         #ifdef GSET
           vg *= 1.0 - 0.85 * gSetK * gSetVeg;      // mit Materialsatz bringen die Böden ihr Grün selbst mit
         #endif
         diffuseColor.rgb = mix(diffuseColor.rgb, vegCol * (0.55 + 0.5 * gL) * (0.6 + 0.4 * dot(gC, vec3(0.34))), vg);
-        float sn = snowK * smoothstep(0.5, 0.64, gPat + clamp((vWPos.y - snowY) * 0.0009, -0.4, 0.2)) * (1.0 - smoothstep(0.14, 0.32, vSlope));
-        diffuseColor.rgb = mix(diffuseColor.rgb, snowCol * (0.5 + 0.16 * gL), sn);`)
+        float sn = snowK * smoothstep(0.5, 0.64, gPat + clamp((vWPos.y - snowY) * 0.0009, -0.4, 0.2)) * (1.0 - smoothstep(0.14, 0.32, gSlp));
+        diffuseColor.rgb = mix(diffuseColor.rgb, snowCol * (0.5 + 0.16 * gL), sn);
+        #ifdef TERR
+          // feuchte Abflussrinnen dunkler, Mulden etwas dunkler, Kuppen etwas heller (liest sich aus der Luft als Relief)
+          float tWet = smoothstep(0.45, 0.85, tFl) * (1.0 - sm) * (1.0 - sn);
+          diffuseColor.rgb *= mix(1.0, 0.74, tWet) * (1.0 - 0.14 * clamp(tCv * 1.6, 0.0, 1.0) + 0.07 * clamp(-tCv * 1.6, 0.0, 1.0));
+        #endif`)
       .replace('#include <roughnessmap_fragment>', `
         float roughnessFactor = roughness;
         if (gHasR > 0.5) roughnessFactor = mix(mix(0.6, 1.0, gT(groundRgh, gP, gw, gB).r), roughness, sm);   // matt halten: glatte Stellen spiegelten sonst den Himmel
         #ifdef GSET
           roughnessFactor = mix(roughnessFactor, 0.93, (gMix.x + gMix.z) * (1.0 - sm));      // feiner Grund und Schutt: matt, ohne eigenes Rauheitsbild
+        #endif
+        #ifdef TERR
+          roughnessFactor *= mix(1.0, 0.78, tWet);
+        #endif`)
+      .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
+        #ifdef TERR
+          // Grundnormale aus der Geländekarte statt aus dem Dreiecksnetz; Tangentenrahmen dazu neu
+          if (tIn > 0.5) {
+            normal = normalize((viewMatrix * vec4(gNw, 0.0)).xyz); nonPerturbedNormal = normal;
+            #ifdef USE_NORMALMAP_TANGENTSPACE
+              tbn = getTangentFrame(- vViewPosition, normal, vNormalMapUv);
+            #endif
+          }
         #endif`)
       .replace('#include <normal_fragment_maps>', `
         #ifdef USE_NORMALMAP_TANGENTSPACE
@@ -452,7 +565,11 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
         #endif`);
     // Gebäudeschatten der Bodenstation: nimmt das direkte Licht weg (das Himmelslicht bleibt)
     sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
-        { float bS = bShade(vWPos); reflectedLight.directDiffuse *= bS; reflectedLight.directSpecular *= bS; }`);
+        { float bS = bShade(vWPos); reflectedLight.directDiffuse *= bS; reflectedLight.directSpecular *= bS; }
+        #ifdef TERR
+          // Bergschatten und Umgebungsverdeckung aus dem Gelände (terrain.ts bakeLight)
+          if (tIn > 0.5) { vec2 tL = texture2D(tLight, (vWPos.xz + tGeo.x) / (2.0 * tGeo.x)).rg; reflectedLight.directDiffuse *= tL.r; reflectedLight.directSpecular *= tL.r; reflectedLight.indirectDiffuse *= mix(0.45, 1.0, tL.g); }
+        #endif`);
     // Dunst sammelt sich in tiefen Lagen und wächst mit der Entfernung
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <fog_fragment>', `
@@ -463,7 +580,7 @@ function groundShader(m: THREE.MeshStandardMaterial, g: THREE.Texture, cliff: TH
           gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
         #endif`);
   };
-  m.customProgramCacheKey = () => (set ? 'ground-set' : 'ground');
+  m.customProgramCacheKey = () => (set ? 'ground-set' : 'ground') + (terr ? '-terr' : '');
 }
 
 // ---------------- Anflugzone im Orbit ----------------
