@@ -1196,6 +1196,9 @@ export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: num
   G.mode = 'walk';
   if (!at && !flug) sfx('door_open', 0.6, 1, () => snd(220, 0.5, 'sawtooth', 0.03, -120));
   say('SYSTEM', flug ? 'Gurte gelöst. Der Autopilot fliegt.' : `An Bord der ${info.name}.`);
+  // Modell-Räume: Mit den Lampen des Innenraums braucht jedes beleuchtete Material eine neue Shader-Fassung (Bericht 25.11.2026: 2,5 s Stillstand
+  // beim Einsteigen, danach Hänger beim Umsehen, weil Teile erst beim ersten Anblick übersetzt wurden). Hinter der Blende alles auf einmal übersetzen.
+  if (mesh) void warmScene(flug ? 'Aufstehen' : 'An Bord', () => { if (room) uploadAll(room.g); });
 }
 // Verlässt den Schiffsraum: zurück in den Hangar oder (auf Planeten) ganz aus der Ego-Ansicht
 export function leaveShip(exitWorld?: THREE.Vector3) {
