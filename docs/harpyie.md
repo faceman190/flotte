@@ -7,10 +7,10 @@ Eigenes schweres Landungsschiff, gebaut am 26.11.2026. Der Nutzer schickte Bilde
 | | |
 |---|---|
 | Maße | 37,6 × 19,7 × 10,2 m |
-| Besatzung | 2 im Cockpit, 12 Klappsitze im Truppenraum |
+| Besatzung | 2 im Cockpit, 1 Schütze, 4 Kojen, 12 Klappsitze im Truppenraum |
 | Spielwerte | `harpyie` in `src/data/ships.ts`: 38.000 Cr, Rumpf 480, Schild 180, Fracht 140, 8 Flugkörper |
 | Laderaum | Truppenraum 22 m, Heckrampe 4,6 m breit, ein Dachs |
-| Begehbar | ja, 122 m² Laufkarte vom Fuß der Heckrampe über die Treppe bis in die Cockpitsitze |
+| Begehbar | ja, 146 m² Laufkarte: Heckrampe, Truppenraum, Waffenkammer, Technikraum, Treppe, Oberdeck, Cockpit |
 
 ## Aufbau außen
 
@@ -32,14 +32,31 @@ Eigenes schweres Landungsschiff, gebaut am 26.11.2026. Der Nutzer schickte Bilde
 
 ## Innenraum und Cockpit
 
-- `har_innen.py`: Truppenraum mit zwölf Klappsitzen auf Podesten, Netzen und Ablagen, Waffenspinden (`locker`), Systempult (`scanner`), Rampenpult (`ramp`), Leiter zum Rückenturm, Spanten mit Lichtleisten, Stellplatz für ein Fahrzeug. Vorn führt eine Treppe durch das Schott ins Cockpit.
-- `har_cockpit.py`: Cockpit-Baukasten Stil 2 (Vorlage `moe_cockpit.py`), zwei Plätze, Boden 4,1 m, Augpunkt bei x 14,55. Ich-Sicht aus `HarpyieCockpit.glb`.
+Nutzer: „Hast du den ganzen Innenraum? Was ist alles im Flieger drin, außer der Bucht für die Truppen und das Cockpit?“ Zuerst gab es nur diese beiden. Seit der zweiten Runde nutzt der Ausbau die 4,2 m Höhe des Rumpfs mit zwei Decks im vorderen Teil (`har_innen.py`):
 
-![Truppenraum](bilder/harpyie-truppenraum.jpg)
+- **Truppenraum** (hinten, volle Höhe): zwölf Klappsitze auf Podesten, Netze, Ablagen, Rampenpult (`ramp`), Stellplatz für einen Dachs, Spanten mit Lichtleisten.
+- **Oberdeck** (x 1,9 … 10,3, Boden 4,15 m wie das Cockpit, 2,07 m lichte Höhe), über eine Treppe aus dem Truppenraum: Schützenplatz unter dem Rückenturm (Drehsitz, Richtgriffe, Visierschirm, Korbring in der Decke), Anzugschränke, Geräteregal, zwei Doppelstockkojen (`bed`), Messe mit Tisch und Bank (`log`: Einsatzschirm), Kombüse mit Hängeschrank. Vorn das Schott mit Tür ins Cockpit.
+- **Unterdeck** darunter: Waffenkammer, offen zum Truppenraum (Waffenspinde `locker`, Waffenständer, Systempult `scanner`), dahinter ein Schott mit Tür zum **Technikraum** (Energiekern, Lebenserhaltung mit Tanks und Luftwäscher, Schaltschränke, Werkbank, Deckenleitungen).
+- **Cockpit** (`har_cockpit.py`, Cockpit-Baukasten Stil 2): zwei Plätze, Augpunkt bei x 14,55. Ich-Sicht aus `HarpyieCockpit.glb`.
+- Die Panzerwülste enthalten nur die Fahrwerksschächte, sie sind nicht begehbar.
+
+Damit das Oberdeck bis zum Cockpitschott Kopfhöhe hat, bleibt das Rumpfdach bis x 10,5 auf voller Höhe (Tabelle `RT`); die Spanten sind über dem Oberdeck flach.
+
+![Truppenraum mit Treppe und Galerie](bilder/harpyie-truppenraum.jpg)
+
+![Oberdeck](bilder/harpyie-oberdeck.jpg)
+
+![Technikraum](bilder/harpyie-technik.jpg)
 
 ![Cockpit nach hinten](bilder/harpyie-cockpit.jpg)
 
 ![Cockpit-Sicht im Spiel](bilder/harpyie-cockpit-spiel.jpg)
+
+## Details außen (zweite Runde)
+
+`greebles2()` in `har_kit.py`: Raketenbehälter unter den vorderen Flügeln, Klappenfugen, Scharnierverkleidungen und statische Entlader, Lüfterkästen, Luken und Leitungskanal auf den Wülsten, Warnstreifen und Schrift an den Fahrwerksschächten, Hebepunkte, Bolzenreihen, aufgesetzte Heckpanzer, Tankstutzen, Sprossen, Handläufe auf dem Dach, Staurohre, Scheibenwischer, Schlepphaken, Warnrahmen an der Rampenöffnung, Ruderfugen und Nummer an den Flossen, Bauchantennen und Bauchscheinwerfer, Beschriftung auf Flügeln und Wülsten. An den Gondeln Bolzenkränze, Leitungen und Lüfterkästen.
+
+![Detail Gondel und Wulst](bilder/harpyie-detail.jpg)
 
 ## Ablauf
 
@@ -52,5 +69,5 @@ Ansichten: `KOR_SAMPLES=24 blender -b --python har_lauf.py -- bild bug flug heck
 
 ## Offen
 
-- Weitere Detailrunden außen (der Nutzer wünscht „alle Details“); Rückenturm und Kinnkanonen sind im Spiel noch nicht als eigene Waffen angesteuert.
+- Rückenturm, Kinnkanonen und Raketenbehälter sind im Spiel noch nicht als eigene Waffen angesteuert; der Schützenplatz ist nur Einrichtung.
 - Seitentür ist nur Optik; Gäste im Mehrspieler kommen über die Heckrampe.

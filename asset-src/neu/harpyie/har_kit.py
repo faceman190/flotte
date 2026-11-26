@@ -52,8 +52,8 @@ XN, XE = 16.5, -18.5
 #        x      w     zt   cu    zm    wb    zb
 RT = [(-18.5, 2.9, 5.95, 0.5, 3.0, 2.3, 1.6),
       (-14.0, 3.2, 6.4, 0.62, 2.6, 2.4, 1.5),
-      (8.5, 3.2, 6.4, 0.62, 2.6, 2.4, 1.5),
-      (12.2, 2.75, 5.95, 0.6, 2.85, 2.0, 1.75),
+      (10.5, 3.2, 6.4, 0.62, 2.6, 2.4, 1.5),      # Dach bleibt bis vor das Cockpitschott hoch (Kopfhöhe auf dem Oberdeck)
+      (12.8, 2.75, 5.9, 0.6, 2.85, 2.0, 1.75),
       (15.2, 1.9, 4.85, 0.45, 3.05, 1.25, 2.2),
       (16.5, 1.35, 4.25, 0.32, 3.25, 0.85, 2.6)]
 def prm(x):
@@ -577,6 +577,14 @@ def gondel(key, s):
                 for k in range(3): box('Gondelgriff', 0.18, 0.04, 0.025, -1.25 + k * 0.3, yy + sg * 0.02, -0.65, M['eisen'], 0.004)
             box('Gondelstreifen', 0.08, 0.9, 0.02, 1.85, 0, 1.58, M['gelb'], 0.002)
             sphere('Gondellicht', 0.06, 1.62, s * 1.05, 1.33, M['nav_r' if s > 0 else 'nav_g'], 10)
+            for dx in (-0.82, 0.82):
+                for k in range(10): a_ = 2 * PI * k / 10; cyl('Kragenbolzen', 0.03, 0.03, dx + 0.6 * math.cos(a_), 0.6 * math.sin(a_), -1.5, M['eisen'], 'Z', n=8)
+            for sg in (1, -1):
+                rod('Gondelleitung', Vector((-1.6, sg * 1.02, -0.95)), Vector((1.5, sg * 1.02, -0.95)), 0.04, M['leitung'], 8)
+                for k in range(3): box('Leitungsschelle', 0.08, 0.1, 0.1, -1.1 + k * 1.1, sg * 1.02, -0.95, M['schwarz'], 0.01)
+            box('Gondelkasten', 0.7, 0.5, 0.12, -1.3, -s * 0.4, 1.63, M['schwarz'], 0.02); box('Kastenlicht', 0.1, 0.3, 0.02, -1.3, -s * 0.4, 1.7, M['streifen'], 0.003)
+            for k in range(4): box('Heckschlitz', 0.5, 0.03, 0.05, -1.55, s * 1.22, 0.55 - k * 0.14, M['gitter'], 0.004)
+            box('Gondelnummer', 0.45, 0.02, 0.3, 0.75, s * 1.215, -0.55, M['eisen'], 0.004)
             box('Gondelkante', 0.14, 2.0, 0.1, 1.95, 0, 1.5, M['gelb'], 0.01); box('Gondelkante', 0.14, 2.0, 0.1, 1.95, 0, -1.5, M['gelb'], 0.01)
     gelenk(tag, tuple(C), 'Y', math.radians(90), 'fw', 0.08, 0.92)
     for dx in (-0.82, 0.82): DUESEN['hub'].append({'p': [round(xc + dx, 3), round(y, 3), round(zc - 1.72, 3)], 'd': [0, 0, -1], 'r': 0.5})
@@ -757,6 +765,106 @@ def greebles():
         for dy in (-0.25, 0.25): rod('Haltebuegel', Vector((x - 0.3, (1.6 if x > 0 else -1.75) + dy, Zd + 0.05)), Vector((x + 0.3, (1.6 if x > 0 else -1.75) + dy, Zd + 0.05)), 0.018, M['chrom'], 6)
     for x, y, h in ((9.2, -1.8, 0.9), (-10.5, 1.9, 1.3), (6.8, -2.0, 0.5)):
         Zd = prm(x)[2] + 0.12; rod('Dachantenne', Vector((x, y, Zd)), Vector((x - 0.12, y, Zd + h)), 0.02, M['schwarz'], 8); sphere('Antennenspitze', 0.03, x - 0.12, y, Zd + h, M['blitz'], 8)
+def fl_unten(key, x, y):
+    xa, xb, z, t, u = fl_geo(key, y); ch = xa - xb; c = max(0.0, min(1.0, (xa - x) / ch)); return z - naca(c, t / ch) * ch * 0.55
+def greebles2():
+    """dritte Detailrunde (Nutzer: „leg noch eine Runde drauf“): Raketenbehälter, Klappen und Entlader an den Flügeln, Wulstdach, Schürzen,
+    Heckpanzer, Handläufe, Flossen, Nase (Staurohre, Wischer, Schlepphaken), Rampenrahmen, Unterseite, Beschriftung"""
+    CUR[0] = C_PART
+    for s in (1, -1):
+        # --- Raketenbehälter unter den vorderen Flügeln (zwei je Seite: innen 6 Rohre) ---
+        x0, y0 = 5.6, 6.0; zu = fl_unten('v', x0, y0)
+        with Part('Raketenbehaelter', T(x0, s * y0, zu), C_WPN):
+            prism('Behaelterpylon', [(-0.7, 0.02), (0.8, 0.02), (0.6, -0.3), (-0.5, -0.3)], -0.1, 0.1, M['schwarz'], 'Y', 0.02)
+            prism('Behaelter', [(-1.3, -0.3), (1.15, -0.3), (1.3, -0.42), (1.3, -0.82), (1.15, -0.94), (-1.3, -0.94), (-1.42, -0.8), (-1.42, -0.44)], -0.46, 0.46, M['graphit'], 'Y', 0.03)
+            box('Behaelterband', 0.12, 0.94, 0.66, 0.5, 0, -0.62, M['gelb'], 0.004); box('Behaelterband', 0.08, 0.94, 0.66, -0.8, 0, -0.62, M['schwarz'], 0.004)
+            for j in range(2):
+                for i in range(3):
+                    cyl('Raketenrohr', 0.115, 0.08, 1.3, -0.29 + i * 0.29, -0.47 - j * 0.3, M['schacht'], 'X', n=20); ring('Rohrrand', 0.12, 0.015, (1.33, -0.29 + i * 0.29, -0.47 - j * 0.3), (1, 0, 0), M['eisen'], 20)
+                    if (i + j) % 2 == 0: cyl('Raketenkopf', 0.095, 0.05, 1.3, -0.29 + i * 0.29, -0.47 - j * 0.3, M['gelb'], 'X', n=16)
+            box('Behaeltergitter', 0.04, 0.7, 0.5, -1.42, 0, -0.62, M['gitter'], 0.005)
+        # --- Flügel: Klappenfugen, Scharnierverkleidungen, statische Entlader, Schrift ---
+        for key, cfl, ya, yb in (('v', 0.82, 3.2, 7.4), ('h', 0.8, 3.4, 7.4)):
+            for k in range(3):
+                y = ya + (yb - ya) * (k + 0.5) / 3; xa_, xb_, z_, t_, u_ = fl_geo(key, y); x = xa_ - (xa_ - xb_) * 0.9
+                slab('Klappenscharnier', (x, s * y, fl_unten(key, x, y) - 0.05), Vector((1, 0, 0)), Vector((0, 1, 0)), (0.9, 0.12, 0.12), M['schwarz'], 0.03)
+                y2 = ya + (yb - ya) * k / 3; xa2, xb2, z2, t2, u2 = fl_geo(key, y2); xk = xa2 - (xa2 - xb2) * cfl
+                slab('Klappenfuge', (xk - (xk - xb2) / 2, s * y2, fl_oben(key, xk - (xk - xb2) / 2, y2) + 0.004), Vector((1, 0, 0)), Vector((0, 1, 0)), (xk - xb2, 0.025, 0.006), M['fuge'], 0.0)
+            for k in range(4):
+                y = ya + 0.4 + (yb - ya - 0.6) * k / 3; xa_, xb_, z_, t_, u_ = fl_geo(key, y)
+                rod('Entlader', Vector((xb_ + 0.02, s * y, z_)), Vector((xb_ - 0.42, s * y, z_ - 0.02)), 0.012, M['schwarz'], 6)
+        CUR[0] = C_PART
+        x, y = -8.6, 5.3; text('HP-1', 0.55, (x, s * y, fl_oben('h', x, y) + 0.012), (0, -1, 0), (1, 0, 0), M['eisen'], align='CENTER', name='Fluegelschrift')
+        x, y = 8.6, 3.4; text('NICHT BETRETEN', 0.11, (x, s * y, fl_oben('v', x, y) + 0.012), (0, -1, 0), (1, 0, 0), M['gelb'], align='CENTER', name='Fluegelschrift')
+        x, y = -4.4, 3.5; text('NICHT BETRETEN', 0.11, (x, s * y, fl_oben('h', x, y) + 0.012), (0, -1, 0), (1, 0, 0), M['gelb'], align='CENTER', name='Fluegelschrift')
+        # --- Wulstdach: Lüfterkästen, Klappen, Leitungskanal, Tritte ---
+        yo, zt, zb, f = wprm(2.0); ym = s * 4.0
+        for k, x in enumerate((-5.6, -2.2, 1.6, 5.2, 9.0)):
+            if k % 2 == 0:
+                box('Wulstluefter', 1.3, 0.9, 0.14, x, ym, zt + 0.07, M['schwarz'], 0.02)
+                for j in range(7): box('Luefterlamelle', 0.05, 0.78, 0.04, x - 0.48 + j * 0.16, ym, zt + 0.15, M['gitter'], 0.004, rot=(0, math.radians(20), 0))
+            else:
+                box('Wulstluke', 1.0, 0.8, 0.05, x, ym, zt + 0.025, M['eisen'], 0.015); box('Lukengriff', 0.3, 0.05, 0.03, x + 0.25, ym, zt + 0.06, M['gelb'], 0.004)
+                for dx in (-0.42, 0.42):
+                    for dy in (-0.32, 0.32): cyl('Lukenbolzen', 0.025, 0.02, x + dx, ym + dy, zt + 0.055, M['chrom'], 'Z', n=8)
+        rod('Wulstkanal', Vector((-6.8, s * 3.45, zt + 0.07)), Vector((10.6, s * 3.45, zt + 0.07)), 0.07, M['schwarz'], 10)
+        for x in (-5.0, -1.0, 3.0, 7.0): box('Kanalschelle', 0.1, 0.2, 0.18, x, s * 3.45, zt + 0.08, M['eisen'], 0.01)
+        # --- Schürze: Warnstreifen an den Fahrwerksschächten, Hebepunkte, Bolzenreihe ---
+        for a, b in (BAY_V, BAY_H):
+            box('Schachtwarnung', b - a, 0.02, 0.14, (a + b) / 2, s * (yo + 0.012), zb + 0.78, M['warnrw'], 0.002)
+            CUR[0] = C_PART; surf_text('FAHRWERK', 0.1, Vector(((a + b) / 2, s * (yo + 0.02), zb + 0.98)), Vector((0, s, 0)), (0, 0, 1), TXT)
+        for x in (-7.0, -2.6, 6.8, 12.4):
+            box('Hebepunkt', 0.3, 0.06, 0.3, x, s * (yo + 0.03), zb + 0.95, M['schwarz'], 0.02); ring('Hebeoese', 0.07, 0.018, (x, s * (yo + 0.08), zb + 0.95), (0, 1, 0), M['gelb'], 14)
+        for k in range(26): cyl('Schuerzenbolzen', 0.022, 0.02, -6.4 + k * 0.7, s * (yo + 0.012), 4.45, M['eisen'], 'Y', n=8)
+        CUR[0] = C_PART; surf_text('GEFAHR · TRIEBWERK SCHWENKT', 0.085, Vector((7.4, s * (yo + 0.105), 4.12)), Vector((0, s, 0)), (0, 0, 1), TXT)
+        # --- Heckrumpf: aufgesetzte Panzerplatten, Tankstutzen, Sprossen, Schrift ---
+        for x0, x1, z0, z1, m_ in ((-13.4, -12.0, 2.75, 4.5, 'graphit'), (-17.6, -15.9, 4.5, 5.25, 'eisen'), (-9.2, -8.0, 5.15, 5.7, 'eisen')):
+            if s < 0 and x0 > -13.5 and x1 < -11.9: continue      # dort sitzt steuerbord die Seitentür
+            side_patch('Heckpanzer', x0, x1, z0, z1, 0.08, s, 0.03, M[m_], 6, 8); side_frame('Panzerfuge', x0 - 0.02, x1 + 0.02, z0 - 0.02, z1 + 0.02, 0.09, s, 0.02, 0.035, M['schwarz'])
+        t = t_for_z(-11.0 if s > 0 else -9.6, 3.2, s); xx = -11.0 if s > 0 else -9.6; p = hull_point(xx, t); n = hull_normal(xx, t)
+        if s > 0:
+            ring('Tankring', 0.2, 0.03, tuple(p + n * 0.02), tuple(n), M['gelb'], 28); cyl('Tankdeckel', 0.17, 0.04, *(p + n * 0.01), M['eisen'], 'Y', n=24)
+            CUR[0] = C_PART; surf_text('TREIBSTOFF', 0.07, p + n * 0.012 + Vector((0, 0, 0.32)), n, (0, 0, 1), TXT)
+        for k in range(6):
+            zz = 2.7 + k * 0.42; tt = t_for_z(-9.75, zz, s); slab('Rumpfsprosse', hull_point(-9.75, tt) + hull_normal(-9.75, tt) * 0.07, Vector((1, 0, 0)), Vector((0, 0, 1)), (0.36, 0.04, 0.05), M['eisen'], 0.008)
+        # --- Dach: Handläufe zwischen Grat und Flügelwurzel, Kästen ---
+        for xa_, xb_ in ((-13.6, -9.4), (-8.6, -3.0)):
+            za, zb_ = prm(xa_)[2] + 0.12, prm(xb_)[2] + 0.12
+            rod('Handlauf', Vector((xa_, s * 1.85, za + 0.32)), Vector((xb_, s * 1.85, zb_ + 0.32)), 0.02, M['eisen'], 8)
+            for k in range(4): xx = xa_ + (xb_ - xa_) * k / 3; zz = prm(xx)[2] + 0.12; rod('Handlaufstuetze', Vector((xx, s * 1.85, zz)), Vector((xx, s * 1.85, zz + 0.32)), 0.018, M['schwarz'], 6)
+        for x, y in ((7.2, 1.3), (9.1, 0.9)):
+            zz = prm(x)[2] + 0.12; box('Dachkasten', 0.7, 0.5, 0.16, x, s * y, zz + 0.08, M['schwarz'], 0.02); box('Kastenleuchte', 0.12, 0.3, 0.02, x + 0.2, s * y, zz + 0.165, M['streifen'], 0.003)
+        # --- Nase: Staurohre, Scheibenwischer, Panzerplatten unter der Kanzel ---
+        t = t_for_z(16.1, 3.5, s); p = hull_point(16.1, t)
+        rod('Staurohr', p + Vector((-0.1, s * 0.03, 0)), p + Vector((0.75, s * 0.12, 0.02)), 0.018, M['chrom'], 8); rod('Staurohrfuss', p + Vector((-0.15, 0, 0)), p + Vector((0.1, s * 0.06, 0)), 0.035, M['schwarz'], 8)
+        zt_, W_ = kparams(16.2); nw = Vector((2.3, 0, 2.05)).normalized()
+        rod('Wischerarm', Vector((16.28, s * 0.92, 4.66)) + nw * 0.04, Vector((16.2, s * 0.45, zt_ + 0.01)) + nw * 0.04, 0.012, M['schwarz'], 6)
+        slab('Wischerblatt', Vector((16.2, s * 0.48, zt_ + 0.012)) + nw * 0.03, Vector((0, 1, 0)), Vector((-2.05, 0, 2.3)).normalized(), (0.72, 0.03, 0.03), M['rubber'], 0.004)
+        for k in range(3):
+            x = 11.6 + k * 1.05; tt = t_for_z(x, prm(x)[2] - prm(x)[3] * 0.5, s); p = hull_point(x, tt); n = hull_normal(x, tt)
+            slab('Kanzelpanzer', p + n * 0.035, Vector((1, 0, 0)), n.cross(Vector((1, 0, 0))).normalized(), (0.95, 0.5, 0.06), M['eisen'] if k == 1 else M['graphit'], 0.015)
+        # --- Rampenrahmen außen: Warnstreifen entlang der Öffnung, Schleppösen ---
+        H0 = Vector((HR_X, 0, FL)); H1 = Vector((XE + 0.05, 0, HK[3])); u = (H1 - H0).normalized(); nout = Vector((-u.z, 0, u.x))
+        if nout.z > 0: nout = -nout
+        slab('Rampenwarnrahmen', H0.lerp(H1, 0.5) + nout * 0.012 + Vector((0, s * (RAMP_HW + 0.24), 0)), u, Vector((0, 1, 0)), ((H1 - H0).length * 0.92, 0.2, 0.014), M['warnrw'], 0.002)
+        ring('Schleppoese', 0.09, 0.022, (XE - 0.08, s * 2.2, HK[3] + 0.35), (0, 1, 0), M['gelb'], 16)
+        # --- Flossen: Ruderfuge und Nummer ---
+        Zf = prm(-16.5)[2] + 0.1; R = Matrix.Translation(Vector((0, s * 2.55, Zf))) @ Matrix.Rotation(-s * math.radians(25), 4, 'X')
+        with Part('Flossenruder', R, C_HULL):
+            box('Ruderfuge', 0.03, 0.28, 2.5, -18.25, 0, 1.6, M['fuge'], 0.002, rot=(0, math.radians(-17), 0))
+            for k in range(3): box('Ruderscharnier', 0.2, 0.32, 0.1, -18.2 - k * 0.3, 0, 0.75 + k * 0.85, M['schwarz'], 0.02)
+        pw = R @ Vector((-16.9, s * 0.14, 2.2)); CUR[0] = C_PART
+        text('07', 0.6, tuple(pw), tuple(R.to_3x3() @ Vector((-s, 0, 0))), tuple(R.to_3x3() @ Vector((0, 0, 1))), M['eisen'], align='CENTER', name='Flossenschrift')
+    # --- Mitte: Schlepphaken, Bauchantennen, Bauchleuchten, Bodenplatten ---
+    zbn = prm(15.6)[1]
+    box('Schleppbock', 0.3, 0.3, 0.14, 15.9, 0, zbn - 0.02, M['schwarz'], 0.02); ring('Schlepphaken', 0.1, 0.025, (16.0, 0, zbn - 0.14), (0, 1, 0), M['gelb'], 16)
+    for x in (9.5, 3.0, -4.0, -9.0):
+        zb_ = prm(x)[1]; prism('Bauchantenne', [(x - 0.25, zb_ + 0.02), (x + 0.3, zb_ + 0.02), (x + 0.05, zb_ - 0.32), (x - 0.15, zb_ - 0.32)], -0.02, 0.02, M['schwarz'], 'Y', 0.008)
+    for x in (11.0, 5.0, -3.0, -12.0):
+        zb_ = prm(x)[1]; box('Bauchplatte', 1.6, 1.4, 0.04, x, 0, zb_ - 0.015, M['schwarz'], 0.01)
+        for dx in (-0.65, 0.65):
+            for dy in (-0.55, 0.55): cyl('Plattenbolzen', 0.025, 0.02, x + dx, dy, zb_ - 0.04, M['eisen'], 'Z', n=8)
+    for x in (8.0, -8.0): zb_ = prm(x)[1]; cyl('Bauchscheinwerfer', 0.14, 0.05, x, 0, zb_ - 0.02, M['landelicht'], 'Z', n=20); ring('Scheinwerferfassung', 0.16, 0.025, (x, 0, zb_ - 0.04), (0, 0, 1), M['schwarz'], 20)
 def label_on(x, z, s, size, text_, m='txtd'):
     t = t_for_z(x, z, s); return surf_text(text_, size, hull_point(x, t), hull_normal(x, t), (0, 0, 1), m)
 def markings():
@@ -810,7 +918,7 @@ def build():
     for s in (1, -1): wulst(s)
     kanzel(); deck(); rueckengrat(); rueckenturm()
     for s in (1, -1): flosse(s); gondel('gv', s); gondel('gh', s)
-    fahrwerk(); heckrampe(); seitentuer(); waffen(); steuerduesen(); details(); greebles(); markings()
+    fahrwerk(); heckrampe(); seitentuer(); waffen(); steuerduesen(); details(); greebles(); greebles2(); markings()
     for nm in ('har_innen.py', 'har_cockpit.py'):
         p = os.path.join(HIER, nm)
         if os.path.exists(p): exec(compile(open(p, encoding='utf-8').read(), nm, 'exec'), globals())

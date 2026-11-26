@@ -1,10 +1,35 @@
 {
- "hinweis": "Harpyie (eigenes Modell aus asset-src/neu/harpyie, Export har_export.py): hier stehen nur die Auslöser im Innenraum (Schiffskoordinaten: x, y, z; Nase nach −Z, Mitte des Modells im Ursprung; aus Blender x = −y, y = z − 5,081, z = −(x + 0,909); Werte aus har-gelenke.json). seat: linker Pilotensitz, log: Deckenkonsole hinter den Sitzen, locker: Waffenspinde vorn backbord im Truppenraum, scanner: Systempult vorn steuerbord, ramp: Rampenpult backbord an der Heckrampe.",
+ "hinweis": "Harpyie (eigenes Modell aus asset-src/neu/harpyie, Export har_export.py): hier stehen nur die Auslöser im Innenraum (Schiffskoordinaten: x, y, z; Nase nach −Z, Mitte des Modells im Ursprung; aus Blender x = −y, y = z − 5,081, z = −(x + 0,909); Werte aus har-gelenke.json). seat: linker Pilotensitz, log: Einsatzschirm am Messetisch (Oberdeck), bed: Kojen (Oberdeck), locker: Waffenspinde vorn backbord im Truppenraum, scanner: Systempult vorn steuerbord, ramp: Rampenpult backbord an der Heckrampe.",
  "spots": {
-  "seat": [-0.62, -0.981, -15.4],
-  "log": [0.0, -0.981, -13.4],
-  "locker": [-1.73, -3.081, -5.909],
-  "scanner": [1.73, -3.081, -6.109],
-  "ramp": [-1.9, -3.081, 12.297]
+  "seat": [
+   -0.62,
+   -0.931,
+   -15.4
+  ],
+  "log": [
+   -1.08,
+   -0.931,
+   -9.209
+  ],
+  "locker": [
+   -1.73,
+   -3.081,
+   -5.909
+  ],
+  "scanner": [
+   1.73,
+   -3.081,
+   -6.109
+  ],
+  "ramp": [
+   -1.9,
+   -3.081,
+   12.297
+  ],
+  "bed": [
+   -1.68,
+   -0.931,
+   -6.209
+  ]
  }
 }

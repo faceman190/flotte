@@ -4,7 +4,11 @@
 #  Truppenraum  Boden FL 2,0 von der Heckrampe (Gelenk x HR_X) bis zum Schott bei x 10,3, Decke 6,2 m (4,2 m lichte Höhe):
 #               zwölf Klappsitze an den Wänden (je sechs), Gepäcknetze und Ablagen darüber, Waffenspinde, Stellplatz für ein Fahrzeug,
 #               Spanten, Deckenleuchten, Leiter zum Rückenturm, Rampenpult, Systempult.
-#  Treppe       mittig von x 8,0 hinauf durch das Schott ins Cockpit (Boden ZC 4,1).
+#  Oberdeck     Mannschaftsdeck über dem vorderen Truppenraum (x 1,9 … 10,3, Boden ZC 4,15 wie das Cockpit, 2,07 m lichte Höhe):
+#               Schützenplatz unter dem Rückenturm, Anzugschränke, Geräteregal, zwei Doppelstockkojen, Messe mit Tisch und Bank, Kombüse.
+#  Unterdeck    darunter (2,07 m): Waffenkammer (offen zum Truppenraum: Spinde, Waffenständer, Systempult) und Technikraum hinter einem
+#               Schott (Energiekern, Lebenserhaltung, Schaltschränke, Werkbank).
+#  Treppe       mittig vom Truppenraum (x −0,25) hinauf aufs Oberdeck; von dort durch das Schott ins Cockpit.
 #  Cockpit      im Kanzelbuckel (har_cockpit.py): zwei Plätze nebeneinander, Pilot links.
 import bpy, bmesh, math
 from mathutils import Vector, Matrix
@@ -23,6 +27,11 @@ M['i_schacht'] = mk('Schacht', (0.012, 0.012, 0.013), 0.3, 0.7, var=0.05, grime=
 M['i_polster'] = mk('Polster', (0.045, 0.047, 0.05), 0.0, 0.85, var=0.12, scale=6.0, bump=0.5, bscale=120)
 M['i_gurt'] = mk('Gurtband', (0.36, 0.25, 0.02), 0.0, 0.8, var=0.1, scale=6.0, bump=0.3, bscale=160)
 M['i_netz'] = mk('Netz', (0.02, 0.02, 0.022), 0.0, 0.9, var=0.05, scale=6.0)
+M['i_bett'] = mk('Bettzeug', (0.2, 0.15, 0.03), 0.0, 0.9, var=0.12, scale=6.0, bump=0.35, bscale=140)
+M['i_decke'] = mk('Wolldecke', (0.1, 0.105, 0.11), 0.0, 0.92, var=0.15, scale=6.0, bump=0.4, bscale=160)
+M['i_tisch'] = mk('Tischplatte', (0.16, 0.158, 0.15), 0.1, 0.4, var=0.08, scale=3.0, wear=0.4)
+M['i_kern'] = mk('Kernglut', (0.3, 0.8, 1.0), 0, 0.2, var=0, rvar=0, emit=(0.35, 0.8, 1.0), es=12.0, grime=False)
+M['i_kupfer'] = mk('Kupfer', (0.45, 0.2, 0.09), 1.0, 0.3, var=0.08, wear=0.5)
 M['i_rot'] = mk('Lack rot', (0.3, 0.02, 0.015), 0.25, 0.42, var=0.1, wear=0.6)
 M['i_licht'] = mk('Deckenlicht', (0.9, 0.95, 1.0), 0, 0.3, var=0, rvar=0, emit=(0.92, 0.96, 1.0), es=6.0, grime=False)
 M['i_warm'] = mk('Ambientlicht', (1.0, 0.6, 0.3), 0, 0.3, var=0, rvar=0, emit=(1.0, 0.55, 0.22), es=4.0, grime=False)
@@ -33,9 +42,11 @@ M['i_schrank'] = mk('Schrank', (0.09, 0.093, 0.098), 0.35, 0.45, var=0.06, scale
 M['i_bild'] = M['mfd']
 C_IN = C_ROOM
 D_IN = 0.17
-ZC = 4.1                         # Cockpitboden
-XS0 = 10.3                       # Schott Truppenraum / Cockpit
-TR_X0 = 8.0                      # Fuß der Treppe
+ZC = 4.15                        # Cockpitboden = Oberdeck
+XS0 = 10.3                       # Schott Oberdeck / Cockpit
+XD0 = 1.9                        # Hinterkante des Oberdecks
+XT = 6.2                         # Schott Waffenkammer / Technikraum (Unterdeck)
+TR_X0 = XD0 - (ZC - 2.0)         # Fuß der Treppe (45°)
 ANCH['raum'] = {}
 
 # ---------- Innenhaut ----------
@@ -281,8 +292,10 @@ def huelle():
         for k in range(6):
             p = H0.lerp(H1, 0.08 + k * 0.15) + nin * 0.205 + Vector((0, s * (RAMP_HW + 0.3), 0)); slab('Warnmarke', p, u, Vector((0, 1, 0)), (0.35, 0.3, 0.012), M['warnrw'], 0.002)
     schott('Heckfutter', XE + 0.17, heck_cut(XE + 0.17) + 0.2, [], M['i_feld'], dicke=0.0, rahmen=False)
-    schott('Schott Cockpit', XS0, FL, [(0.0, 1.4, 4.15)], M['i_feld'], dicke=0.06)
-    tuerschild(XS0, -1, 0.0, FL + 4.3, 'COCKPIT')
+    schott('Schott Cockpit unten', XS0, FL, [], M['i_feld'], dicke=0.06, rahmen=False, ztop=ZC)
+    schott('Schott Cockpit', XS0, ZC, [(0.0, 1.2, 1.99)], M['i_feld'], dicke=0.06)
+    schott('Schott Technik', XT, FL, [(0.0, 1.2, 2.045)], M['i_feld'], dicke=0.06, ztop=ZC - 0.08)
+    CUR[0] = C_IN; text('TECHNIK · KEIN ZUTRITT IM FLUG', 0.06, (XT - 0.04, -1.25, FL + 1.5), (0, 1, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Schottschrift')
     # Seitentür (steuerbord) innen: Rahmen, Griff, Warnfeld
     x0, x1, z0, z1 = TUER; xm = (x0 + x1) / 2; yw = -(half_w(xm, (z0 + z1) / 2) - 0.03)
     box('Tuerinnenseite', x1 - x0, 0.05, z1 - z0, xm, yw, (z0 + z1) / 2, M['i_schrank'], 0.01)
@@ -327,19 +340,21 @@ def truppenraum():
     # Spanten mit Lichtleisten, dazwischen Netze und Wandkästen
     xs = [-13.4 + k * 2.2 for k in range(11)]
     for x in xs:
-        P = querschnitt(x, FL + 0.02, D_IN, 72); rohr_band('Spant', [Vector((x, y, z)) for y, z in P], 0.16, 0.1, M['i_rahmen'])
+        P = querschnitt(x, FL + 0.02, D_IN, 72); rohr_band('Spant', [Vector((x, y, z)) for y, z in P], 0.16, 0.1 if x < XD0 else 0.04, M['i_rahmen'])      # über dem Oberdeck flach (Kopfhöhe)
     for k, (xa, xb) in enumerate(zip(xs, xs[1:])):
         xm = (xa + xb) / 2
         for sg in (1, -1):
             yw = half_w(xm, 4.6)
-            if k % 3 == 2:
+            if xb > XD0 + 0.3: pass      # vorn stehen Oberdeck und Einbauten
+            elif k % 3 == 2:
                 S.box(1.0, 0.24, 0.7, xm, sg * (yw - 0.12), 4.9, M['i_schrank']); S.box(0.36, 0.01, 0.2, xm - 0.2, sg * (yw - 0.245), 5.0, M['i_bild'])
                 S.box(0.07, 0.012, 0.07, xm + 0.3, sg * (yw - 0.246), 5.0, M['i_petrol'])
             else:
                 for j in range(5): S.box(xb - xa - 0.4, 0.015, 0.014, xm, sg * (yw - 0.08), 4.45 + j * 0.25, M['i_netz'])
                 for j in range(6): S.box(0.014, 0.015, 1.1, xa + 0.3 + j * (xb - xa - 0.6) / 5, sg * (yw - 0.08), 4.95, M['i_netz'])
             pu = ipt(xm, t_at(xm, 5.75, sg)); S.box(xb - xa - 0.3, 0.06, 0.06, xm, sg * (abs(pu.y) - 0.06), 5.75, M['i_licht'])
-            for j in range(2): rod('Wandleitung', Vector((xa + 0.2, sg * (yw - 0.07), 4.1 + j * 0.13)), Vector((xb - 0.2, sg * (yw - 0.07), 4.1 + j * 0.13)), 0.035, M['i_rahmen'] if j else M['i_rot'], 10)
+            if xb <= XD0 + 0.3:
+                for j in range(2): rod('Wandleitung', Vector((xa + 0.2, sg * (yw - 0.07), 4.1 + j * 0.13)), Vector((xb - 0.2, sg * (yw - 0.07), 4.1 + j * 0.13)), 0.035, M['i_rahmen'] if j else M['i_rot'], 10)
     # zwölf Klappsitze (je sechs an einer Wand), Ablage darüber
     for k in range(6):
         x = -4.6 + k * 0.85 + (0.9 if k >= 3 else 0.0)
@@ -355,8 +370,8 @@ def truppenraum():
     # Waffenspinde vorn links (Auslöser „locker“), Systempult vorn rechts (Auslöser „scanner“)
     for k in range(4):
         x = 4.0 + k * 0.62; yw = half_w(x, FL + 1.0)
-        S.box(0.6, 0.55, 2.1, x, yw - 0.3, FL + 1.05, M['i_schrank']); S.box(0.54, 0.012, 2.0, x, yw - 0.58, FL + 1.05, M['i_feld'])
-        for zz in (FL + 1.75, FL + 1.85): S.box(0.3, 0.01, 0.012, x, yw - 0.587, zz, M['i_dunkel'])
+        S.box(0.6, 0.55, 1.95, x, yw - 0.3, FL + 0.975, M['i_schrank']); S.box(0.54, 0.012, 1.85, x, yw - 0.58, FL + 0.975, M['i_feld'])
+        for zz in (FL + 1.65, FL + 1.75): S.box(0.3, 0.01, 0.012, x, yw - 0.587, zz, M['i_dunkel'])
         S.box(0.03, 0.02, 0.16, x + 0.22, yw - 0.592, FL + 1.1, M['i_stahl']); S.box(0.1, 0.012, 0.1, x - 0.15, yw - 0.587, FL + 1.55, M['gelb'])
     ANCH['raum']['locker'] = Vector((5.0, half_w(5.0, FL + 1.0) - 1.3, FL))
     with Part('Systempult', T(5.2, -(half_w(5.2, FL + 1.0) - 0.45), FL), C_IN):
@@ -371,12 +386,8 @@ def truppenraum():
         box('Warnsaeule', 0.42, 0.42, 0.12, 0, 0, 0.06, M['warnrw'], 0.01)
     ANCH['raum']['ramp'] = Vector((HR_X + 1.1, RAMP_HW - 0.4, FL))
     CUR[0] = C_IN; text('HECKRAMPE', 0.09, (HR_X + 0.9, RAMP_HW + 0.24, FL + 1.38), (1, 0, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Pultschrift')
-    # Leiter zum Rückenturm, Luke in der Decke, Rotlicht für den Absprung
-    xt = TURM[0] - 0.4; zt = top_in(xt, 0.0)
-    for dy in (-0.25, 0.25): rod('Turmleiterholm', Vector((xt, dy, FL)), Vector((xt, dy, zt - 0.05)), 0.025, M['i_stahl'], 8)
-    for k in range(int((zt - FL) / 0.3)): rod('Turmleitersprosse', Vector((xt, -0.25, FL + 0.3 + k * 0.3)), Vector((xt, 0.25, FL + 0.3 + k * 0.3)), 0.018, M['i_stahl'], 6)
-    S.box(1.0, 1.0, 0.06, TURM[0], 0, zt - 0.03, M['i_rahmen']); S.box(0.8, 0.8, 0.02, TURM[0], 0, zt - 0.065, M['i_schacht'])
-    for x in (-12.6, -9.0, -5.4, -1.8, 1.8, 6.6):
+    # Deckenleuchten im hohen Teil, Rotlicht für den Absprung
+    for x in (-12.6, -9.0, -5.4, -1.8, 0.8):
         for sg in (1, -1): lampe(x, sg * 1.4, top_in(x, sg * 1.4) - 0.045, 1.4, 0.2)
     for sg in (1, -1): S.box(0.3, 0.1, 0.1, HR_X + 0.4, sg * 1.9, top_in(HR_X + 0.4, sg * 1.9) - 0.1, M['i_rotlicht'])
     S.fertig()
@@ -388,7 +399,7 @@ def truppenraum():
 def treppe():
     CUR[0] = C_IN
     S = Sammel('Treppe Kleinteile', C_IN)
-    xe = XS0 + 0.12; n = int(round((ZC - FL) / 0.2)); dz = (ZC - FL) / n; dx = (xe - TR_X0) / n; ya, yb = -0.6, 0.6
+    xe = XD0 + 0.03; n = int(round((ZC - FL) / 0.2)); dz = (ZC - FL) / n; dx = (xe - TR_X0) / n; ya, yb = -0.6, 0.6
     for k in range(n):
         z = FL + dz * (k + 1); xa = TR_X0 + dx * k
         gitter(S, xa + 0.005, xa + dx + 0.04, ya + 0.02, yb - 0.02, z - 0.03, M['i_gitter'], M['i_schacht'], h=0.03)
@@ -403,15 +414,162 @@ def treppe():
     box('Treppenfuss', 0.9, 1.6, 0.004, TR_X0 - 0.45, 0, FL + 0.016, M['warnrw'], 0.0)
     S.fertig()
 
+# =====================================================================================
+# Oberdeck (Mannschaftsdeck) über dem vorderen Truppenraum, auf Höhe des Cockpits: Schützenplatz unter dem Rückenturm, Anzugschränke,
+# Kojen, Kombüse und Messe. Nutzer: „Was ist alles im Flieger drin, außer der Bucht für die Truppen und das Cockpit?“
+# =====================================================================================
+def oberdeck():
+    CUR[0] = C_IN
+    bm = bmesh.new(); n = int((XS0 - XD0) / 0.15); To = []; Un = []
+    for k in range(n + 1):
+        x = XD0 + (XS0 - XD0) * k / n; w = half_w(x, ZC - 0.04) + 0.03
+        To.append((bm.verts.new((x, -w, ZC - 0.002)), bm.verts.new((x, w, ZC - 0.002)))); Un.append((bm.verts.new((x, -w, ZC - 0.08)), bm.verts.new((x, w, ZC - 0.08))))
+    for a, b in zip(To, To[1:]): bm.faces.new((a[0], b[0], b[1], a[1]))
+    for a, b in zip(Un, Un[1:]): bm.faces.new((a[1], b[1], b[0], a[0]))
+    bm.faces.new((To[0][0], To[0][1], Un[0][1], Un[0][0])); bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    mesh_obj('Oberdeck', bm, [M['i_feld']], False, C_IN); CUR[0] = C_IN
+    S = Sammel('Oberdeck Kleinteile', C_IN)
+    xs = [XD0 + 0.02 + k * 0.6 for k in range(int((XS0 - XD0) / 0.6) + 1)] + [XS0 - 0.03]
+    for xa, xb in zip(xs, xs[1:]):
+        if xb - xa < 0.05: continue
+        w = min(half_w(xa, ZC + 0.01), half_w(xb, ZC + 0.01)) - 0.01; platten(S, xa, xb, -w, w, ZC, M['i_boden'], M['i_fuge'], p=0.6, q=0.75)
+    S.box(XS0 - XD0 - 0.5, 1.1, 0.006, (XD0 + XS0) / 2 + 0.1, 0, ZC + 0.015, M['i_dunkel'])
+    # Hinterkante: gelbe Kante, Geländer beiderseits der Treppe
+    w0 = half_w(XD0, ZC + 0.5)
+    S.box(0.08, 2 * w0 - 0.1, 0.1, XD0 + 0.02, 0, ZC - 0.03, M['gelb'])
+    for s in (1, -1):
+        for zz in (ZC + 0.55, ZC + 1.05): rod('Deckgelaender', Vector((XD0 + 0.06, s * 0.68, zz)), Vector((XD0 + 0.06, s * (w0 - 0.05), zz)), 0.022, M['gelb'] if zz > ZC + 1.0 else M['i_stahl'], 10)
+        for yy in (0.68, 1.5, 2.3): rod('Gelaenderpfosten', Vector((XD0 + 0.06, s * yy, ZC)), Vector((XD0 + 0.06, s * yy, ZC + 1.05)), 0.022, M['i_stahl'], 10)
+    # Unterseite: flache Leuchten für Waffenkammer und Technik; Oberdeck: flache Deckenleuchten
+    for x in (3.0, 5.0, 7.4, 9.2):
+        for s in (1, -1): S.box(1.0, 0.18, 0.02, x, s * 1.3, ZC - 0.09, M['i_licht'])
+    for x in (2.9, 4.9, 6.9, 8.9):
+        for s in (1, -1): S.box(0.9, 0.16, 0.02, x, s * 1.15, top_in(x, s * 1.15) - 0.012, M['i_licht'])
+    # Schützenplatz unter dem Rückenturm: Korbring in der Decke, drehbarer Sitz, Richtgriffe, Visierschirm
+    xt = TURM[0]; zt = top_in(xt, 0.0)
+    cyl('Turmkorbring', 0.78, 0.05, xt, 0, zt - 0.025, M['i_rahmen'], 'Z', n=40, bev=0.01); cyl('Turmkorbgrund', 0.66, 0.02, xt, 0, zt - 0.04, M['i_schacht'], 'Z', n=40)
+    ring('Korbring gelb', 0.72, 0.02, (xt, 0, zt - 0.055), (0, 0, 1), M['gelb'], 40)
+    with Part('Schuetzenplatz', T(xt, 0, ZC), C_IN):
+        cyl('Sitzsaeule', 0.09, 0.42, 0, 0, 0.21, M['i_stahl'], 'Z', n=16); cyl('Drehteller', 0.42, 0.04, 0, 0, 0.03, M['i_rahmen'], 'Z', n=32, bev=0.01)
+        box('Schuetzensitz', 0.46, 0.46, 0.08, 0, 0, 0.46, M['i_polster'], 0.02); box('Schuetzenlehne', 0.08, 0.44, 0.62, -0.24, 0, 0.8, M['i_polster'], 0.03)
+        box('Kopfteil', 0.1, 0.28, 0.2, -0.24, 0, 1.22, M['i_polster'], 0.03)
+        for s in (1, -1):
+            rod('Richtarm', Vector((0.05, s * 0.3, 0.5)), Vector((0.42, s * 0.24, 0.92)), 0.02, M['i_stahl'], 8); cyl('Richtgriff', 0.025, 0.14, 0.42, s * 0.24, 0.98, M['i_dunkel'], 'Z', n=10)
+            box('Gurt', 0.012, 0.05, 0.5, -0.19, s * 0.12, 0.82, M['i_gurt'], 0.002)
+        rod('Visierarm', Vector((-0.05, 0, zt - ZC - 0.05)), Vector((0.5, 0, 1.45)), 0.022, M['i_stahl'], 8)
+        box('Visierschirm', 0.03, 0.34, 0.22, 0.52, 0, 1.4, M['i_bild'], 0.004); box('Visierrahmen', 0.05, 0.38, 0.26, 0.535, 0, 1.4, M['i_rahmen'], 0.008)
+        box('Fussraste', 0.3, 0.5, 0.03, 0.42, 0, 0.16, M['i_gitter'], 0.005)
+    box('Schuetzenmarke', 1.3, 1.3, 0.004, xt, 0, ZC + 0.016, M['warnrw'], 0.0)
+    # Anzugschränke backbord, Geräteregal steuerbord (hinten am Deck)
+    for k in range(3):
+        x = 2.45 + k * 0.6; yw = half_w(x, ZC + 1.0)
+        S.box(0.58, 0.55, 1.9, x, yw - 0.3, ZC + 0.95, M['i_schrank']); S.box(0.52, 0.012, 1.8, x, yw - 0.58, ZC + 0.95, M['i_feld'])
+        S.box(0.24, 0.01, 0.3, x, yw - 0.587, ZC + 1.45, M['i_dunkel']); S.box(0.03, 0.02, 0.16, x + 0.2, yw - 0.592, ZC + 0.95, M['i_stahl'])
+        S.box(0.1, 0.012, 0.06, x - 0.15, yw - 0.587, ZC + 1.72, M['i_petrol'])
+    yw = half_w(3.0, ZC + 1.0)
+    for j in range(4):
+        zz = ZC + 0.25 + j * 0.45; S.box(1.7, 0.5, 0.03, 3.05, -(yw - 0.27), zz, M['i_rahmen'])
+        for i in range(3): S.box(0.42, 0.36, 0.28 if (i + j) % 2 else 0.2, 2.5 + i * 0.55, -(yw - 0.27), zz + (0.155 if (i + j) % 2 else 0.115), (M['i_schrank'], M['i_feld'], M['i_dunkel'])[(i + j) % 3])
+    for xx in (2.2, 3.9): S.box(0.04, 0.5, 1.75, xx, -(yw - 0.27), ZC + 0.9, M['i_rahmen'])
+    cyl('Feuerloescher', 0.065, 0.4, 4.15, -(yw - 0.1), ZC + 0.5, M['i_rot'], 'Z', n=16, bev=0.015)
+    # Kojen: je Seite ein Doppelstock (2,0 m), Vorhangschiene, Leselicht
+    for s in (1, -1):
+        yw = half_w(5.3, ZC + 0.6); yi = yw - 0.92
+        for zz in (ZC + 0.32, ZC + 1.18):
+            S.box(2.05, 0.92, 0.07, 5.3, s * (yw - 0.46), zz, M['i_rahmen']); S.box(1.95, 0.8, 0.1, 5.3, s * (yw - 0.46), zz + 0.085, M['i_bett'])
+            S.box(0.36, 0.5, 0.07, 6.05, s * (yw - 0.46), zz + 0.17, M['i_wand']); S.box(0.9, 0.78, 0.03, 4.95, s * (yw - 0.47), zz + 0.15, M['i_decke'])
+            S.box(2.05, 0.04, 0.16, 5.3, s * (yi + 0.02), zz + 0.09, M['i_rahmen']); S.box(0.3, 0.03, 0.04, 6.1, s * (yw - 0.06), zz + 0.6, M['i_warm'])
+        for xx in (4.28, 6.32): S.box(0.05, 0.92, 1.85, xx, s * (yw - 0.46), ZC + 0.93, M['i_schrank'])
+        rod('Vorhangschiene', Vector((4.3, s * yi, ZC + 1.92)), Vector((6.3, s * yi, ZC + 1.92)), 0.012, M['i_stahl'], 6)
+        for k in range(3): S.box(0.03, 0.03, 0.03, 4.75 + k * 0.5, s * (yi - 0.02), ZC + 0.75, M['i_stahl'])
+        for k in range(2): S.box(0.05, 0.04, 0.3, 4.4, s * (yi - 0.02), ZC + 0.5 + k * 0.8, M['i_stahl'])
+    ANCH['raum']['bed'] = Vector((5.3, half_w(5.3, ZC + 0.6) - 1.35, ZC))
+    # Messe backbord: Tisch mit Bank und Hockern (Auslöser „log“: Einsatzschirm am Tisch); Kombüse steuerbord
+    yw = half_w(8.3, ZC + 0.6)
+    wandkasten('Messebank', 7.2, 9.4, yw - 0.42, ZC, ZC + 0.45, 1, M['i_schrank']); S.box(2.1, 0.4, 0.07, 8.3, yw - 0.22, ZC + 0.485, M['i_polster'])
+    S.box(2.1, 0.07, 0.5, 8.3, yw - 0.045, ZC + 0.8, M['i_polster'])
+    with Part('Messetisch', T(8.3, yw - 1.0, ZC), C_IN):
+        box('Tischplatte', 1.7, 0.78, 0.05, 0, 0, 0.74, M['i_tisch'], 0.015); cyl('Tischbein', 0.06, 0.72, 0, 0, 0.36, M['i_stahl'], 'Z', n=16); cyl('Tischfuss', 0.3, 0.03, 0, 0, 0.015, M['i_rahmen'], 'Z', n=24)
+        box('Einsatzschirm', 0.5, 0.34, 0.012, -0.45, 0.05, 0.772, M['i_bild'], 0.003); box('Tischkante', 1.7, 0.02, 0.02, 0, -0.39, 0.745, M['i_petrol'], 0.003)
+        for dx in (0.2, 0.55): cyl('Becher', 0.04, 0.09, dx, 0.1, 0.81, M['i_wand'], 'Z', n=12)
+    for dx in (-0.5, 0.5):
+        cyl('Hocker', 0.17, 0.05, 8.3 + dx, yw - 1.62, ZC + 0.45, M['i_polster'], 'Z', n=20, bev=0.01); cyl('Hockerbein', 0.04, 0.44, 8.3 + dx, yw - 1.62, ZC + 0.22, M['i_stahl'], 'Z', n=12)
+    ANCH['raum']['log'] = Vector((8.3, yw - 1.95, ZC))
+    wandkasten('Kombuese', 7.0, 9.7, yw - 0.62, ZC, ZC + 0.9, -1, M['i_schrank'])
+    S.box(2.7, 0.64, 0.03, 8.35, -(yw - 0.31), ZC + 0.915, M['i_stahl']); S.box(0.5, 0.4, 0.012, 7.5, -(yw - 0.33), ZC + 0.925, M['i_dunkel'])
+    for dx in (-0.12, 0.12): S.cyl(0.07, 0.006, Vector((7.5 + dx, -(yw - 0.33), ZC + 0.936)), (0, 0, 1), M['i_warm'], 16)
+    S.box(0.46, 0.36, 0.02, 8.3, -(yw - 0.33), ZC + 0.9, M['i_schacht']); rod('Wasserhahn', Vector((8.3, -(yw - 0.1), ZC + 0.93)), Vector((8.3, -(yw - 0.25), ZC + 1.12)), 0.015, M['i_stahl'], 8)
+    S.box(0.3, 0.3, 0.38, 9.2, -(yw - 0.3), ZC + 1.12, M['i_dunkel']); S.box(0.1, 0.01, 0.06, 9.2, -(yw - 0.455), ZC + 1.2, M['i_petrol'])
+    for k in range(4): S.box(0.6, 0.012, 0.74, 7.3 + k * 0.68, -(yw - 0.626), ZC + 0.45, M['i_feld']); S.box(0.2, 0.02, 0.03, 7.3 + k * 0.68, -(yw - 0.64), ZC + 0.8, M['i_stahl'])
+    wandkasten('Haengeschrank', 7.0, 9.7, yw - 0.38, ZC + 1.42, ZC + 1.9, -1, M['i_schrank'])
+    for k in range(4): S.box(0.6, 0.012, 0.42, 7.3 + k * 0.68, -(yw - 0.386), ZC + 1.66, M['i_feld'])
+    S.box(2.6, 0.03, 0.03, 8.35, -(yw - 0.4), ZC + 1.4, M['i_licht'])
+    S.fertig()
+
+# =====================================================================================
+# Unterdeck vorn: Waffenkammer (offen zum Truppenraum, Spinde und Pult stehen schon) und Technikraum hinter dem Schott
+# =====================================================================================
+def technik():
+    CUR[0] = C_IN
+    S = Sammel('Technik Kleinteile', C_IN)
+    # Waffenständer steuerbord in der Waffenkammer, Werkbank
+    yw = half_w(3.0, FL + 1.0)
+    S.box(1.8, 0.08, 1.5, 3.2, -(yw - 0.06), FL + 1.05, M['i_dunkel'])
+    for k in range(6):
+        x = 2.5 + k * 0.28; rod('Gewehrlauf', Vector((x, -(yw - 0.16), FL + 0.5)), Vector((x, -(yw - 0.16), FL + 1.55)), 0.022, M['i_stahl'], 8)
+        S.box(0.06, 0.1, 0.34, x, -(yw - 0.17), FL + 0.6, M['i_schrank']); S.box(0.05, 0.07, 0.2, x, -(yw - 0.22), FL + 0.95, M['i_dunkel'])
+    for zz in (FL + 0.42, FL + 1.3): S.box(1.8, 0.14, 0.04, 3.2, -(yw - 0.14), zz, M['i_rahmen'])
+    S.box(1.8, 0.02, 0.12, 3.2, -(yw - 0.11), FL + 1.75, M['warnrw'])
+    # Technikraum x XT … XS0: Energiekern backbord, Lebenserhaltung steuerbord, Schaltschrank an der Stirnwand, Leitungen
+    xm = (XT + XS0) / 2
+    gitter(S, XT + 0.1, XS0 - 0.1, -0.7, 0.7, FL, M['i_gitter'], M['i_schacht'])
+    cx, cy = 7.9, 1.55
+    with Part('Energiekern', T(cx, cy, FL), C_IN):
+        cyl('Kernsockel', 0.62, 0.22, 0, 0, 0.11, M['i_rahmen'], 'Z', n=40, bev=0.02); cyl('Kernmantel', 0.48, 1.5, 0, 0, 0.97, M['i_dunkel'], 'Z', n=40, bev=0.01)
+        for k in range(5): cyl('Kernglut', 0.495, 0.07, 0, 0, 0.42 + k * 0.28, M['i_kern'], 'Z', n=40, bev=0)
+        for k in range(8):
+            a = 2 * PI * k / 8; rod('Kaefigstab', Vector((0.6 * math.cos(a), 0.6 * math.sin(a), 0.22)), Vector((0.6 * math.cos(a), 0.6 * math.sin(a), 1.76)), 0.02, M['i_stahl'], 8)
+        cyl('Kernkappe', 0.62, 0.16, 0, 0, 1.84, M['i_rahmen'], 'Z', n=40, bev=0.02)
+        for k in range(3): a = PI * 0.6 + k * 0.5; rod('Kernleitung', Vector((0.4 * math.cos(a), 0.4 * math.sin(a), 1.9)), Vector((0.4 * math.cos(a), 0.4 * math.sin(a), ZC - FL - 0.09)), 0.06, M['i_kupfer'], 12)
+    box('Warnfeld Kern', 1.5, 1.5, 0.004, cx, cy, FL + 0.016, M['warnrw'], 0.0)
+    ywt = half_w(7.6, FL + 1.0)
+    for k, x in enumerate((7.0, 7.75)):
+        cyl('Tank', 0.3, 1.5, x, -(ywt - 0.42), FL + 0.9, M['i_feld'], 'Z', n=32, bev=0.05); cyl('Tankkappe', 0.18, 0.1, x, -(ywt - 0.42), FL + 1.7, M['i_rahmen'], 'Z', n=24, bev=0.02)
+        for zz in (FL + 0.55, FL + 1.25): box('Tankband', 0.64, 0.64, 0.05, x, -(ywt - 0.42), zz, M['i_rahmen'], 0.01)
+        CUR[0] = C_IN; text(('O2', 'N2')[k], 0.11, (x, -(ywt - 0.735), FL + 0.95), (1, 0, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Tankschrift')
+    with Part('Luftwaescher', T(8.95, -(ywt - 0.45), FL), C_IN):
+        box('Waeschergehaeuse', 1.0, 0.7, 1.6, 0, 0, 0.8, M['i_schrank'], 0.03); cyl('Waescherluefter', 0.26, 0.04, 0, 0.36, 1.1, M['i_dunkel'], 'Y', n=24)
+        for k in range(6): box('Luefterlamelle', 0.5, 0.02, 0.03, 0, 0.375, 0.9 + k * 0.08, M['i_stahl'], 0.003)
+        box('Waescheranzeige', 0.3, 0.012, 0.14, 0.2, 0.356, 1.42, M['i_bild'], 0.003); box('Waescherlicht', 0.08, 0.012, 0.05, -0.3, 0.356, 1.45, M['i_petrol'], 0.002)
+    for yy, m_ in ((0.9, 'i_kupfer'), (1.05, 'i_rahmen'), (-1.0, 'i_rahmen'), (-1.15, 'i_rot')):
+        rod('Deckenleitung', Vector((XT + 0.1, yy, ZC - 0.16)), Vector((XS0 - 0.1, yy, ZC - 0.16)), 0.035, M[m_], 10)
+    yq = half_w(XS0 - 0.2, FL + 1.0)
+    for k in range(3):
+        y = -0.9 + k * 0.9
+        S.box(0.3, 0.8, 1.7, XS0 - 0.2, y, FL + 0.9, M['i_schrank']); S.box(0.012, 0.7, 1.5, XS0 - 0.356, y, FL + 0.95, M['i_feld'])
+        for j in range(5): S.box(0.01, 0.05, 0.02, XS0 - 0.364, y - 0.25, FL + 1.5 - j * 0.08, (M['i_petrol'], M['i_licht'], M['i_warm'], M['i_petrol'], M['i_rotlicht'])[(j + k) % 5])
+        S.box(0.02, 0.03, 0.25, XS0 - 0.37, y + 0.25, FL + 0.9, M['i_stahl'])
+    CUR[0] = C_IN; text('ENERGIEVERTEILUNG', 0.07, (XS0 - 0.365, 0, FL + 1.82), (0, -1, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Schrankschrift')
+    with Part('Werkbank', T(9.4, yq - 0.42, FL), C_IN):
+        box('Bankplatte', 1.3, 0.7, 0.06, 0, 0, 0.9, M['i_stahl'], 0.01); box('Bankkoerper', 1.2, 0.6, 0.86, 0, 0.02, 0.43, M['i_schrank'], 0.02)
+        box('Schraubstock', 0.16, 0.2, 0.14, 0.4, -0.15, 1.0, M['i_dunkel'], 0.02); box('Werkzeugwand', 1.3, 0.04, 0.6, 0, 0.33, 1.4, M['i_dunkel'], 0.01)
+        for k in range(5): box('Werkzeug', 0.05, 0.03, 0.2 + 0.05 * (k % 3), -0.5 + k * 0.25, 0.3, 1.4, M['i_stahl'], 0.005)
+    S.fertig()
+
 def innen_lichter():
-    for x in (-11.0, -6.0, -1.0, 4.0, 8.5): point('Truppenraumlicht', (x, 0, 5.6), 260, (0.95, 0.97, 1.0), 0.3)
+    for x in (-11.0, -6.0, -1.0): point('Truppenraumlicht', (x, 0, 5.6), 260, (0.95, 0.97, 1.0), 0.3)
+    point('Waffenkammerlicht', (4.0, 0, FL + 1.7), 60, (0.95, 0.97, 1.0), 0.2); point('Techniklicht', (8.3, 0, FL + 1.7), 50, (0.7, 0.9, 1.0), 0.2)
+    for x in (3.4, 6.2, 8.8): point('Oberdecklicht', (x, 0, ZC + 1.8), 70, (1.0, 0.92, 0.8), 0.2)
     point('Rotlicht', (HR_X + 0.5, 0, 5.4), 40, (1.0, 0.2, 0.1), 0.2)
 
-huelle(); truppenraum(); treppe(); innen_lichter()
+huelle(); truppenraum(); treppe(); oberdeck(); technik(); innen_lichter()
 for o in C_IN.all_objects: o['innen'] = 1
 cam('Truppenraum', (-13.0, -1.6, 4.0), (6.0, 0.6, 3.6), 16); cam('Truppenraum2', (9.2, 1.8, 4.2), (-10.0, -0.6, 3.4), 16)
-cam('Treppe', (4.5, -1.4, 3.6), (10.6, 0.0, 5.2), 16)
+cam('Treppe', (-4.5, -1.4, 3.7), (2.5, 0.0, 4.4), 16)
+cam('Oberdeck', (2.3, -1.9, ZC + 1.6), (9.5, 1.2, ZC + 0.9), 16); cam('Oberdeck2', (9.9, 1.4, ZC + 1.6), (3.0, -1.0, ZC + 0.8), 16)
+cam('Technik', (6.5, -0.4, FL + 1.6), (9.8, 1.2, FL + 0.9), 16); cam('Waffenkammer', (0.5, 0.9, FL + 1.6), (5.5, -0.6, FL + 1.0), 16)
 IN_VIEWS = {
     'in_truppenraum': ('Truppenraum', 'grau', True, 0.0, 0.0, {'rampe': 1.0}), 'in_truppenraum2': ('Truppenraum2', 'grau', True, 0.0, 0.0, {'rampe': 1.0}),
-    'in_treppe': ('Treppe', 'grau', True, 0.0, 0.0, {}),
+    'in_treppe': ('Treppe', 'grau', True, 0.0, 0.0, {}), 'in_oberdeck': ('Oberdeck', 'grau', True, 0.0, 0.0, {}), 'in_oberdeck2': ('Oberdeck2', 'grau', True, 0.0, 0.0, {}),
+    'in_technik': ('Technik', 'grau', True, 0.0, 0.0, {}), 'in_waffenkammer': ('Waffenkammer', 'grau', True, 0.0, 0.0, {}),
 }
