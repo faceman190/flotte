@@ -40,7 +40,7 @@ import { quartierHooks } from './game/quartier';
 import { fzOrdnen } from './game/fahrzeuge';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
-import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, roverView, liquidAt, ROVER, SURF , fzImLaderaum, fzWeg, fzInHalle, landeHoehe } from './game/surface';
+import { landePose, buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, roverView, liquidAt, ROVER, SURF , fzImLaderaum, fzWeg, fzInHalle, landeHoehe } from './game/surface';
 import { wieselScan } from './game/wiesel';
 import { initTestlabor, updateTestlabor, testHooks } from './game/testlabor';
 import { mannyHooks } from './game/mannyAvatar';
@@ -53,7 +53,7 @@ import { PLANETS, PTYPE, planetBaseId } from './data/planets';
 import { d3 } from './core/util';
 import { openBand, closeBand, drawBand, bandHooks, openModulPlatz } from './ui/band';
 import { updateControls } from './ui/controls';
-import { netUpdate, NET, isOnline, gastAusstieg, meldeFehler, gastSchiff, gastFahrt, gastWarnung } from './game/net';
+import { netUpdate, NET, isOnline, gastAusstieg, meldeFehler, gastSchiff, gastFahrt, gaestePflege, mitMelden } from './game/net';
 import { cockpitUpdate, cockpitKamera, cockpitUmschalten, cockpitLaden } from './game/cockpit';
 import { TRADE, requestTrade } from './game/trade';
 import { openChat } from './ui/mp';
@@ -72,6 +72,7 @@ import { GUN, schuetzeAn, schuetzeAus, schuetzeGrund, updateSchuetze, turmKamera
 import { modulBild } from './game/modulplatz';
 import { invHooks } from './game/inventory';
 import type { ShipSlot } from './data/gear';
+import type { ShipId } from './data/ships';
 import { anBordStellen } from './game/fahrzeuge';
 import { hasInterior, SHIPS } from './data/ships';
 import { loadRockModel } from './game/world';
@@ -498,7 +499,65 @@ interiorHooks.modulPlatz = slot => openModulPlatz(slot as ShipSlot);
 // Schiffsmodule tauschen: nur gelandet oder angedockt (Nutzer 26.11.2026), auch in der Ausrüstungs-App
 invHooks.umbau = () => (G.dockedAt || (IN.active && !!IN.station) || (world.surface && (ROVER.active || FOOT.active || (IN.active && IN.ship?.ctx === 'planet' && !IN.ship.gast))) ? '' : 'Umbauen geht nur gelandet oder angedockt.');
 interiorHooks.ausBord = ausBord;
-interiorHooks.gastRaus = () => { const o = gastAusstieg(); leaveInterior(); ROVER.active = true; if (o) footAt(o.x, o.z, o.yaw); else leaveShipOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); };      // als Gast aus dem Schiff eines Mitspielers (net.ts)
+// als Gast aus dem Schiff eines Mitspielers (net.ts). Nach einer Reise (anderer Planet, oder weiter als 300 m vom eigenen Schiff) folgt das
+// eigene Schiff per Autopilot und landet neben dem Schiff, aus dem man steigt.
+interiorHooks.gastRaus = () => {
+  const o = gastAusstieg(); leaveInterior(); ROVER.active = true;
+  const weit = !!o && world.surface && (o.unterwegs || Math.hypot(ROVER.ship.x - o.x, ROVER.ship.z - o.z) > 300);
+  if (o && weit) {
+    let ziel: { x: number; y: number; z: number; yaw: number } | null = null;
+    suche: for (const d of [75, 95, 120, 150, 190]) for (let k = 0; k < 12; k++) {
+      const a = o.syaw + Math.PI / 2 + k * Math.PI / 6, x = o.sx + Math.sin(a) * d, z = o.sz + Math.cos(a) * d;
+      if (Math.abs(x) > SURF.limit || Math.abs(z) > SURF.limit) continue;
+      const lp = landePose(x, z, o.syaw); if (lp.ok) { ziel = { x, y: lp.lage.y, z, yaw: o.syaw }; break suche; }
+    }
+    if (!ziel) { const x = o.sx + 110, z = o.sz; ziel = { x, y: landePose(x, z, o.syaw).lage.y, z, yaw: o.syaw }; }
+    relandShip(ziel, { x: ziel.x + 8, z: ziel.z + 8, yaw: ziel.yaw });
+    radio('BORDRECHNER', `Die ${P.shipName} ist dir per Autopilot gefolgt und steht ${Math.round(Math.hypot(ziel.x - o.x, ziel.z - o.z))} m entfernt.`, '#8fd3ff');
+  }
+  mitHeimat = null;
+  if (o) footAt(o.x, o.z, o.yaw); else leaveShipOnFoot();
+  G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden');
+  if (weit) saveGame();
+};
+// ---------- Mitreise als Gast (net.ts MIT) ----------
+let mitHeimat: { sector: string; at: Extract<PlayerAt, { k: 'land' }> } | null = null;      // wo das eigene Schiff steht, seit man an Bord gegangen ist
+const blitzAus = () => { const fl = $('flash'); setTimeout(() => { fl.style.transition = 'opacity 1.2s'; fl.style.opacity = '0'; setTimeout(() => (fl.style.background = '#fff'), 1300); }, 40); };
+interiorHooks.mitStart = () => { const at = whereAmI(); mitHeimat = at && at.k === 'land' ? { sector: P.sector, at } : null; };
+interiorHooks.mitBlende = (art, t) => {
+  const fl = $('flash'); fl.style.transition = `opacity ${Math.max(0.2, t)}s ease-in`; fl.style.background = art === 'surface' ? '#ff8a40' : art === 'orbit' ? '#d8ecff' : '#fff'; fl.style.opacity = '1';
+  if (art === 'sprung') sfx('jump_out', 0.6, 1, () => snd(200, 1.2, 'sine', 0.04, 700)); else snd(art === 'surface' ? 120 : 200, t, 'sawtooth', 0.03, art === 'surface' ? -40 : 400);
+};
+// Der Gast baut dieselbe Welt auf wie das Schiff, auf dem er mitfliegt, und wartet dort auf es (net.ts geht dann wieder an Bord)
+interiorHooks.mitWechsel = (art, nach, von) => {
+  const fl = $('flash'); fl.style.transition = 'none'; fl.style.opacity = '1';
+  if (IN.active) leaveInterior();
+  footOff(); ROVER.active = false; SHIP.g.visible = false;
+  if (!SECTOR[nach] || (art === 'surface' && !PLANETS[nach])) { interiorHooks.mitHeim('Das Ziel ist unbekannt.'); return; }
+  if (art === 'surface') void enterSurface(nach); else enterSector(nach, art === 'orbit' ? { orbit: true } : gateTo(von) ? { gateFrom: von } : {});
+  P.vx = P.vy = P.vz = 0; G.mode = 'walk'; $('hud').classList.add('hidden'); releaseAll();
+};
+interiorHooks.mitDa = gun => { G.mode = 'walk'; $('hud').classList.add('hidden'); blitzAus(); if (gun) interiorHooks.schuetze(); };
+interiorHooks.mitDock = (stId, name, cls) => {
+  if (IN.active) leaveInterior();
+  const st = stationById(stId);
+  if (st && resumeStation(st, { k: 'st', id: st.id, base: !!world.surface })) {
+    mitHeimat = null; blitzAus();
+    radio('BORDRECHNER', `Die ${SHIPS[cls as ShipId]?.n || 'Maschine'} von ${name} hat an ${st.name} angedockt. Die ${P.shipName} ist dir per Autopilot gefolgt und steht im Hangar.`, '#8fd3ff');
+    saveGame();
+  } else interiorHooks.mitHeim('Andocken war nicht möglich.');
+};
+interiorHooks.mitHeim = text => {
+  if (IN.active) leaveInterior();
+  const h = mitHeimat; mitHeimat = null;
+  if (h && PLANETS[h.sector]) {
+    if (P.sector !== h.sector || !world.surface) { const fl = $('flash'); fl.style.transition = 'none'; fl.style.opacity = '1'; void enterSurface(h.sector, { x: h.at.ship.x, y: h.at.ship.y, z: h.at.ship.z, yaw: h.at.ship.yaw }).then(blitzAus); } else blitzAus();
+    ROVER.active = true; resumeLanded(h.at);
+  } else if (world.surface) { blitzAus(); ROVER.active = true; leaveShipOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); }
+  else { blitzAus(); G.mode = 'play'; }
+  $('hud').classList.remove('hidden');
+  radio('SYSTEM', `${text} Du bist zurück bei deinem Schiff.`, '#ffb347'); saveGame();
+};
 // Nach dem Landen auf einem Planeten (seit 2026-11-26, Nutzer: „E zum Landen, ob man das Fahrzeug rausfährt, macht man selber“): Begehbare Schiffe
 // lassen den Piloten hinter dem Sitz aufstehen, hinaus geht es über die Rampe zu Fuß oder im Fahrzeug aus dem Laderaum. Kleine Flieger: zu Fuß an der
 // Leiter. Ist der Innenraum noch nicht geladen, steht man draußen (sonst hinge man bis zum Ende des Ladens zwischen Cockpit und Boden).
@@ -635,6 +694,7 @@ onKey(code => {
 function startJump(g: Gate) {
   G.mode = 'jump';
   G.jumpT = 1.3;
+  mitMelden('sprung', g.to, world.def!.id, 1.3);      // Gäste an Bord springen mit (net.ts)
   G.jumpTo = g.to;
   G.jumpFrom = world.def!.id;
   releaseAll();
@@ -685,6 +745,7 @@ function startEntry(to: 'surface' | 'orbit') {
   if (to === 'surface') sfx('entry', 0.7);   // Rauschen und Rütteln beim Eintritt in die Atmosphäre
   G.transT = to === 'surface' ? 2.4 : 1.4;
   G.transTo = to;
+  mitMelden(to, P.sector, '', G.transT);      // Gäste an Bord machen den Übergang mit (net.ts)
   releaseAll();
   snd(to === 'surface' ? 120 : 200, G.transT, 'sawtooth', 0.04, to === 'surface' ? -40 : 400);
   if (to === 'surface') radio('SYSTEM', `Eintritt in die Atmosphäre von ${PLANETS[P.sector].name}.`);
@@ -1000,7 +1061,7 @@ function loop(now: number, manual = false) {
     cockpitUpdate(dt, (G.mode === 'play' || G.mode === 'jump' || (G.mode === 'pause' && !EVA.active)) && !G.dead && !IN.active && !ROVER.active && !DUN.active && SHIP.g.visible);      // Leuchten der Schiffe auf Planeten draußen gedämpft (gltfShips.ts)
     turmBild(dt);      // Rückenturm: Stellung ans Modell (turm.ts)
     modulBild();      // Modulplätze im Technikraum: nach einem Umbau neu bestücken (modulplatz.ts)
-    if (world.surface && G.mode === 'play') gastWarnung(dt, P.y, SURF.ceiling);      // Gäste an Bord: vor der Wolkendecke warnen (net.ts)
+    gaestePflege();      // Gäste an Bord: wer lange schweigt, gilt als fort (net.ts)
     updateCamera(dt);
     shadowSweep -= dt;
     if (shadowSweep <= 0) { shadowSweep = 0.4; markShadows(scene, sky); }

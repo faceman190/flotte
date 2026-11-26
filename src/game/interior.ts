@@ -75,6 +75,9 @@ export const interiorHooks = {
   zumSteuer: () => {},   // im Flug: zurück an den Pilotensitz (bordflug.ts)
   ausBord: () => {},     // im Flug: über die Heckrampe Außenbord (bordflug.ts, eva.ts)      // Planet: im Laderaum ins eigene Fahrzeug steigen und über die Rampe hinausfahren (laderaum.ts)
   leaveBase: () => {},   // Planetenbasis: durch die Tür wieder hinaus (zu Fuß)
+  // Mitreise als Gast (net.ts MIT, main.ts): Standort merken, Blende zum Übergang, Welt wechseln, wieder an Bord, mit andocken, zurück zum eigenen Schiff
+  mitStart: () => {}, mitBlende: (_art: string, _t: number) => {}, mitWechsel: (_art: string, _nach: string, _von: string) => {}, mitDa: (_gun: boolean) => {},
+  mitDock: (_station: string, _name: string, _cls: string) => {}, mitHeim: (_text: string) => {},
   schuetze: () => '' as string,      // Schützenplatz unter dem Rückenturm: an den Turm (turm.ts); Rückgabe = Grund, warum es nicht geht
   modulPlatz: (_slot: string) => {},      // Modulplatz im Technikraum: Auswahl öffnen (modulplatz.ts)
 };
