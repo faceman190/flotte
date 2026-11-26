@@ -2,8 +2,8 @@ import { esc, fmtN } from '../core/util';
 import { snd, sfx } from '../core/audio';
 import { P } from '../game/state';
 import { SHIPS } from '../data/ships';
-import { GEAR_SLOTS, SLOT_N, SHIP_SLOTS, SHIP_SLOT_N, KIND_N, RARITY, STAT_N, STAT_IDS, PILOT_STATS, SHIP_STATS, HANDEL_MAX, gearDef, isShipKind, type GearSlot, type ShipSlot, type GearDef, type StatId } from '../data/gear';
-import { invCap, gearStat, shipStat, equip, unequip, unequipShip, useItem, dropAt, gearSellPrice } from '../game/inventory';
+import { shipSlotKind, GEAR_SLOTS, SLOT_N, SHIP_SLOTS, SHIP_SLOT_N, KIND_N, RARITY, STAT_N, STAT_IDS, PILOT_STATS, SHIP_STATS, HANDEL_MAX, gearDef, isShipKind, type GearSlot, type ShipSlot, type GearDef, type StatId } from '../data/gear';
+import { invCap, gearStat, shipStat, equip, equipShipAt, unequip, unequipShip, useItem, dropAt, gearSellPrice } from '../game/inventory';
 import { gearIcon } from './icons';
 import { BOLTS, type BoltId } from '../game/bolts';
 import { openGarderobe, garderobeHere } from './lookUi';
@@ -12,6 +12,10 @@ import { openGarderobe, garderobeHere } from './lookUi';
 // App „Ausrüstung“ im Flottenband: links, was der Pilot trägt, in der Mitte der Rucksack, rechts der gewählte Gegenstand.
 // =====================================================================================
 let sel: { w: 'i' | 'g' | 's'; k: string } | null = null, msg = '', dropArm = -1, side: 'pilot' | 'schiff' = 'pilot';
+
+// Modulplatz im Technikraum (modulplatz.ts): Die App zeigt die Schiffsseite und im Rucksack nur, was an diesen Platz passt
+let platz: ShipSlot | null = null;
+export function invPlatz(s: ShipSlot | null) { platz = s; if (s) { side = 'schiff'; sel = P.shipGear[s] ? { w: 's', k: s } : null; msg = ''; dropArm = -1; } }
 
 const sgn = (v: number) => (v > 0 ? '+' : '') + v;
 const statText = (k: StatId, v: number) => `${k === 'schutz' || k === 'schaden' ? v : sgn(v)}${STAT_N[k].unit}`;
@@ -47,6 +51,7 @@ export function invApp(): string {
   let cells = '';
   for (let i = 0; i < Math.max(cap, P.inv.length); i++) {
     const it = P.inv[i], d = it && gearDef(it.id);
+    if (platz && (!d || d.kind !== shipSlotKind(platz))) continue;      // am Modulplatz: nur passende Module
     cells += d ? `<button class="icell${sel?.w === 'i' && +sel.k === i ? ' on' : ''}" data-a="inv:i" data-k="${i}" style="--rc:${RARITY[d.rar].c}" title="${esc(d.n)}"><i class="tier">T${d.rar + 1}</i>${gearIcon(it.id, 58)}${it.n > 1 ? `<em>${it.n}</em>` : ''}</button>`
       : '<span class="icell empty"></span>';
   }
@@ -77,7 +82,7 @@ export function invApp(): string {
       ${side === 'pilot' ? `<div class="invFigBox"><canvas id="invFig" width="220" height="300" title="Ziehen zum Drehen"></canvas>
         <button data-a="inv:look" ${garderobeHere() ? '' : 'disabled title="Nur in einer Station"'}>Garderobe</button></div>` : ''}
       <h4>${side === 'pilot' ? 'Ausrüstung' : esc(P.shipName) + ' · ' + SHIPS[P.cls].role}</h4><div class="islots">${slots}</div><h4 style="margin-top:16px">${side === 'pilot' ? 'Werte' : 'Zuschläge der Module'}</h4>${totals}</div>
-    <div class="bcard"><h4>Rucksack · ${P.inv.length}/${cap}</h4><div class="igrid">${cells}</div>
+    <div class="bcard"><h4>${platz ? `Modulplatz · ${SHIP_SLOT_N[platz]}` : `Rucksack · ${P.inv.length}/${cap}`}</h4>${platz && !cells ? '<p class="hint">Im Rucksack liegt kein Modul für diesen Platz. Module gibt es beim Ausrüster und als Fundstücke.</p>' : ''}<div class="igrid">${cells}</div>
       <p class="hint" style="margin-top:12px">Kaufen, verkaufen und einlagern kannst du beim Ausrüster jeder Station. Fundstücke lassen manche Ferrox beim Abschuss zurück.</p></div>
     <div class="bcard"><h4>Gegenstand</h4>${info}${msg ? `<p class="bad" style="margin-top:10px">${esc(msg)}</p>` : ''}</div>
   </div>`;
@@ -95,10 +100,10 @@ export function invAct(a: string, k: string): boolean {
   if (!sel) return true;
   if (op === 'equip' && sel.w === 'i') {
     const id = P.inv[+sel.k]?.id, d = gearDef(id || '');
-    msg = equip(+sel.k);
+    msg = platz && d && isShipKind(d.kind) ? equipShipAt(+sel.k, platz) : equip(+sel.k);
     if (!msg && d) {
       // Auswahl folgt dem Gegenstand an den Körper
-      const s = GEAR_SLOTS.find(x => P.gear[x] === id), ss = SHIP_SLOTS.find(x => P.shipGear[x] === id);
+      const s = GEAR_SLOTS.find(x => P.gear[x] === id), ss = platz && P.shipGear[platz] === id ? platz : SHIP_SLOTS.find(x => P.shipGear[x] === id);
       sel = isShipKind(d.kind) ? (ss ? { w: 's', k: ss } : null) : s ? { w: 'g', k: s } : null;
       side = isShipKind(d.kind) ? 'schiff' : 'pilot';
       sfx('ui_confirm', 0.5, 1, () => snd(700, 0.12, 'sine', 0.05, 200));

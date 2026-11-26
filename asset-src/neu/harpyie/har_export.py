@@ -30,7 +30,7 @@ def zustand(fw=0.0, rampe=0.0):      # wie har_kit.zustand
         if g['slide']: e.location = Vector(g['slide']) * k
         else: e.rotation_euler = (0, 0, 0); e.rotation_euler[{'X': 0, 'Y': 1, 'Z': 2}[g['axis']]] = g['angle'] * k
     bpy.context.view_layer.update()
-TAGS = [g['tag'] for g in anker['gelenke']]
+TAGS = [g['tag'] for g in anker['gelenke']] + ['turm', 'rohr']      # Rückenturm: Kennungen an den Teilen (har_kit.rueckenturm), Gelenke im Spiel (gltfShips.ts TURM)
 INNEN_COLL = {'Cockpit'}
 CACHE = {}
 def innen_art(o, m):
@@ -137,6 +137,16 @@ res = {'gelenke': gel, 'mitte': mitte, 'laenge': round(HI[0] - LO[0], 2), 'breit
        'duesen': du, 'kanone': schiff(anker['kanone1']), 'rampe_scharnier': schiff(anker['rampe_scharnier']),
        'fuesse': [schiff(p) for p in anker['fuesse']], 'boden_innen': round(FL - mitte[2], 3), 'boden_cockpit': round(ZC - mitte[2], 3)}
 if 'auge' in anker: res['auge'] = schiff(anker['auge'])
+# Rückenturm: Gelenkpunkte in der Datei (achse = Drehung um die Hochachse, wiege = Höhenrichtachse) und in Schiffskoordinaten, Mündung backbord
+if 'turm_achse' in anker:
+    res['turm'] = dict(achse=F(anker['turm_achse']), wiege=F(anker['turm_wiege']), b=schiff(anker['turm_achse']), w=schiff(anker['turm_wiege']), m=schiff(anker['turm_muendung']))
+if 'raketen' in anker: res['raketen'] = [schiff(p) for p in anker['raketen']]
+if 'schuetze' in anker: res['schuetze'] = schiff(anker['schuetze'])
+# Modulplätze (../innen/modulplatz.py): Anker, Drehung um die Hochachse (die Vorderseite des Moduls zeigt im Spiel nach +z), Namensfeld
+if 'module' in anker:
+    res['module'] = {}
+    for k, a in anker['module'].items():
+        n = richt(a['n']); res['module'][k] = dict(p=schiff(a['p']), gier=round(math.atan2(n[0], n[2]), 4), schild=schiff(a['schild']), sw=a['sw'], sh=a['sh'], art=a['art'])
 if 'griffe' in anker: res['griffe'] = [schiff(p) for p in anker['griffe']]
 if 'raum' in anker: res['raum'] = {k: schiff(v) for k, v in anker['raum'].items()}
 json.dump(res, open(os.path.join(B, 'har-gelenke.json'), 'w'), indent=1)

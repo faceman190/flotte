@@ -499,26 +499,37 @@ def rueckengrat():
         box('Mastsockel', 0.8, 0.5, 0.2, 0, 0, 0.1, M['schwarz'], 0.02); rod('Mast', Vector((0, 0, 0.15)), Vector((-0.3, 0, 1.4)), 0.04, M['schwarz'], 10)
         sphere('Mastlicht', 0.05, -0.3, 0, 1.42, M['warnlicht'], 10); cyl('Schuessel', 0.35, 0.08, -0.05, 0, 0.55, M['graphit'], 'X', n=24, bev=0.01)
 TURM = (3.0, 0.0)
+TURM_W = (0.95, 0.42)      # Rohrwiege im Turm: nach vorn, nach oben
 def rueckenturm():
     Z = prm(TURM[0])[2] + 0.12; x0, y0 = TURM
     cyl('Turmring', 2.3, 0.16, x0, y0, Z + 0.02, M['schwarz'], 'Z', n=96, bev=0.02)
     ring('Turmring gelb', 2.12, 0.035, (x0, y0, Z + 0.11), (0, 0, 1), M['gelb'], 96)
     cyl('Turmlager', 1.78, 0.22, x0, y0, Z + 0.21, M['graphit'], 'Z', n=96, bev=0.03)
     for k in range(28): a = 2 * PI * k / 28; box('Lagerzahn', 0.12, 0.06, 0.12, x0 + 1.86 * math.cos(a), y0 + 1.86 * math.sin(a), Z + 0.18, M['eisen'], 0.005, rot=(0, 0, a))
-    with Part('Rueckenturm', T(x0, y0, Z + 0.32), C_WPN):
+    with Part('Rueckenturm', T(x0, y0, Z + 0.32), C_WPN) as e_turm:
         prism('Turmkoerper', [(-1.15, 0.0), (0.9, 0.0), (1.3, 0.28), (1.0, 0.72), (-0.95, 0.78), (-1.2, 0.45)], -0.95, 0.95, M['graphit'], 'Y', 0.04)
         for s in (1, -1):
             prism('Turmwange', [(-0.8, 0.05), (0.6, 0.05), (0.95, 0.35), (0.5, 0.7), (-0.7, 0.7)], s * 0.95, s * 1.15, M['schwarz'], 'Y', 0.02)
-            cyl('Rohrwiege', 0.2, 0.9, 0.95, s * 0.55, 0.42, M['schwarz'], 'X', n=20, bev=0.02)
-            rod('Turmrohr', Vector((1.3, s * 0.55, 0.42)), Vector((4.0, s * 0.55, 0.42)), 0.07, M['dunkel'], 16)
-            cyl('Muendungsbremse', 0.1, 0.35, 4.05, s * 0.55, 0.42, M['schwarz'], 'X', n=16, bev=0.01)
-            for k in range(3): box('Bremsschlitz', 0.04, 0.22, 0.03, 3.95 + k * 0.08, s * 0.55, 0.52, M['dunkel'], 0.002)
             slab('Turmkante', (1.05, s * 0.75, 0.62), Vector((0.6, 0, -0.8)).normalized(), Vector((0, 1, 0)), (0.3, 0.3, 0.03), M['gelb'], 0.005)
             for k in range(3): box('Turmschuppe', 0.5, 0.03, 0.18, -0.6 + k * 0.5, s * 1.17, 0.35, M['eisen'], 0.004)
         box('Turmvisier', 0.5, 0.36, 0.3, 0.45, -0.3, 0.92, M['schwarz'], 0.03); cyl('Visierlinse', 0.09, 0.04, 0.72, -0.3, 0.92, M['kanzel'], 'X', n=16)
         box('Turmluke', 0.7, 0.6, 0.05, -0.45, 0.25, 0.8, M['eisen'], 0.02); box('Lukengriff', 0.3, 0.04, 0.03, -0.45, 0.25, 0.84, M['gelb'], 0.004)
         box('Turmgitter', 0.6, 1.2, 0.03, -0.95, 0, 0.62, M['gitter'], 0.004)
+    # Rohrwiege: eigenes Teil mit der Höhenrichtachse (quer durch die Wiege), hängt am Turm. Im Spiel zwei Gelenke (gltfShips.ts TURM):
+    # Kennung turm dreht um die Hochachse, Kennung rohr darunter um die Querachse. Nutzer (26.11.2026): Turm soll im Spiel schießen und sich richten.
+    with Part('Turmrohre', T(x0 + TURM_W[0], y0, Z + 0.32 + TURM_W[1]), C_WPN) as e_rohr:
+        cyl('Wiegenachse', 0.12, 1.5, 0, 0, 0, M['eisen'], 'Y', n=20, bev=0.01)
+        for s in (1, -1):
+            cyl('Rohrwiege', 0.2, 0.9, 0, s * 0.55, 0, M['schwarz'], 'X', n=20, bev=0.02)
+            rod('Turmrohr', Vector((0.35, s * 0.55, 0)), Vector((3.05, s * 0.55, 0)), 0.07, M['dunkel'], 16)
+            cyl('Rohrmanschette', 0.11, 0.5, 0.75, s * 0.55, 0, M['graphit'], 'X', n=16, bev=0.01)
+            cyl('Muendungsbremse', 0.1, 0.35, 3.1, s * 0.55, 0, M['schwarz'], 'X', n=16, bev=0.01)
+            for k in range(3): box('Bremsschlitz', 0.04, 0.22, 0.03, 3.0 + k * 0.08, s * 0.55, 0.1, M['dunkel'], 0.002)
+    bpy.context.view_layer.update(); mw = e_rohr.matrix_world.copy(); e_rohr.parent = e_turm; e_rohr.matrix_world = mw
+    e_turm['tag'] = 'turm'; e_rohr['tag'] = 'rohr'
     ANCH['turm'] = Vector((x0 + 4.1, y0 + 0.55, Z + 0.74))
+    ANCH['turm_achse'] = Vector((x0, y0, Z + 0.32)); ANCH['turm_wiege'] = Vector((x0 + TURM_W[0], y0, Z + 0.32 + TURM_W[1]))
+    ANCH['turm_muendung'] = Vector((x0 + TURM_W[0] + 3.3, y0 + 0.55, Z + 0.32 + TURM_W[1]))
 def flosse(s):
     Z = prm(-16.5)[2] + 0.1; cant = math.radians(25)
     R = Matrix.Translation(Vector((0, s * 2.55, Z))) @ Matrix.Rotation(-s * cant, 4, 'X')
@@ -773,7 +784,7 @@ def greebles2():
     CUR[0] = C_PART
     for s in (1, -1):
         # --- Raketenbehälter unter den vorderen Flügeln (zwei je Seite: innen 6 Rohre) ---
-        x0, y0 = 5.6, 6.0; zu = fl_unten('v', x0, y0)
+        x0, y0 = 5.6, 6.0; zu = fl_unten('v', x0, y0); ANCH.setdefault('raketen', []).append(Vector((x0 + 1.4, s * y0, zu - 0.62)))
         with Part('Raketenbehaelter', T(x0, s * y0, zu), C_WPN):
             prism('Behaelterpylon', [(-0.7, 0.02), (0.8, 0.02), (0.6, -0.3), (-0.5, -0.3)], -0.1, 0.1, M['schwarz'], 'Y', 0.02)
             prism('Behaelter', [(-1.3, -0.3), (1.15, -0.3), (1.3, -0.42), (1.3, -0.82), (1.15, -0.94), (-1.3, -0.94), (-1.42, -0.8), (-1.42, -0.44)], -0.46, 0.46, M['graphit'], 'Y', 0.03)
@@ -947,7 +958,7 @@ def build():
     VIEWS = {k: v[:5] for k, v in V6.items()}; ZUST.update({k: v[5] for k, v in V6.items()})
     anchors = {'duesen': DUESEN, 'rampe_scharnier': list(ANCH['rampe_scharnier']), 'fuesse': [list(ANCH[k]) for k in ('fuss_v1', 'fuss_v-1', 'fuss_h1', 'fuss_h-1')], 'gelenke': GELENKE,
                'masse': dict(FL=FL, RAMP_HW=RAMP_HW, HR_L1=HR_L1, HR_L2=RAMP_L2, HR_X=HR_X, XE=XE, XN=XN, HK=list(HK), ZC=globals().get('ZC', 0.0))}
-    for k in ('auge', 'griffe', 'raum', 'kanone1', 'turm'):
+    for k in ('auge', 'griffe', 'raum', 'kanone1', 'turm', 'turm_achse', 'turm_wiege', 'turm_muendung', 'raketen', 'module', 'schuetze'):
         if k in ANCH: anchors[k] = ANCH[k] if not isinstance(ANCH[k], Vector) else list(ANCH[k])
     open(os.path.join(HIER, 'har-anker.json'), 'w').write(json.dumps(anchors, indent=1, default=lambda v: [round(c, 4) for c in v]))
     zustand(0, 0)

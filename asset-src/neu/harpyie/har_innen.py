@@ -460,6 +460,7 @@ def oberdeck():
         box('Visierschirm', 0.03, 0.34, 0.22, 0.52, 0, 1.4, M['i_bild'], 0.004); box('Visierrahmen', 0.05, 0.38, 0.26, 0.535, 0, 1.4, M['i_rahmen'], 0.008)
         box('Fussraste', 0.3, 0.5, 0.03, 0.42, 0, 0.16, M['i_gitter'], 0.005)
     box('Schuetzenmarke', 1.3, 1.3, 0.004, xt, 0, ZC + 0.016, M['warnrw'], 0.0)
+    ANCH['schuetze'] = Vector((xt, 0, ZC))
     # Anzugschränke backbord, Geräteregal steuerbord (hinten am Deck)
     for k in range(3):
         x = 2.45 + k * 0.6; yw = half_w(x, ZC + 1.0)
@@ -509,6 +510,7 @@ def oberdeck():
 # =====================================================================================
 # Unterdeck vorn: Waffenkammer (offen zum Truppenraum, Spinde und Pult stehen schon) und Technikraum hinter dem Schott
 # =====================================================================================
+exec(compile(open(os.path.join(HIER, '..', 'innen', 'modulplatz.py'), encoding='utf-8').read(), 'modulplatz.py', 'exec'), globals())
 def technik():
     CUR[0] = C_IN
     S = Sammel('Technik Kleinteile', C_IN)
@@ -536,25 +538,32 @@ def technik():
     for k, x in enumerate((7.0, 7.75)):
         cyl('Tank', 0.3, 1.5, x, -(ywt - 0.42), FL + 0.9, M['i_feld'], 'Z', n=32, bev=0.05); cyl('Tankkappe', 0.18, 0.1, x, -(ywt - 0.42), FL + 1.7, M['i_rahmen'], 'Z', n=24, bev=0.02)
         for zz in (FL + 0.55, FL + 1.25): box('Tankband', 0.64, 0.64, 0.05, x, -(ywt - 0.42), zz, M['i_rahmen'], 0.01)
-        CUR[0] = C_IN; text(('O2', 'N2')[k], 0.11, (x, -(ywt - 0.735), FL + 0.95), (1, 0, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Tankschrift')
-    with Part('Luftwaescher', T(8.95, -(ywt - 0.45), FL), C_IN):
+        CUR[0] = C_IN; text(('O2', 'N2')[k], 0.11, (x, -(ywt - 0.735), FL + 0.95), (-1, 0, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Tankschrift')      # Betrachter im Gang blickt nach −y: liest entlang −x
+    with Part('Luftwaescher', T(8.7,-(ywt - 0.45), FL), C_IN):
         box('Waeschergehaeuse', 1.0, 0.7, 1.6, 0, 0, 0.8, M['i_schrank'], 0.03); cyl('Waescherluefter', 0.26, 0.04, 0, 0.36, 1.1, M['i_dunkel'], 'Y', n=24)
         for k in range(6): box('Luefterlamelle', 0.5, 0.02, 0.03, 0, 0.375, 0.9 + k * 0.08, M['i_stahl'], 0.003)
         box('Waescheranzeige', 0.3, 0.012, 0.14, 0.2, 0.356, 1.42, M['i_bild'], 0.003); box('Waescherlicht', 0.08, 0.012, 0.05, -0.3, 0.356, 1.45, M['i_petrol'], 0.002)
     for yy, m_ in ((0.9, 'i_kupfer'), (1.05, 'i_rahmen'), (-1.0, 'i_rahmen'), (-1.15, 'i_rot')):
         rod('Deckenleitung', Vector((XT + 0.1, yy, ZC - 0.16)), Vector((XS0 - 0.1, yy, ZC - 0.16)), 0.035, M[m_], 10)
-    yq = half_w(XS0 - 0.2, FL + 1.0)
-    for k in range(3):
-        y = -0.9 + k * 0.9
-        S.box(0.3, 0.8, 1.7, XS0 - 0.2, y, FL + 0.9, M['i_schrank']); S.box(0.012, 0.7, 1.5, XS0 - 0.356, y, FL + 0.95, M['i_feld'])
-        for j in range(5): S.box(0.01, 0.05, 0.02, XS0 - 0.364, y - 0.25, FL + 1.5 - j * 0.08, (M['i_petrol'], M['i_licht'], M['i_warm'], M['i_petrol'], M['i_rotlicht'])[(j + k) % 5])
-        S.box(0.02, 0.03, 0.25, XS0 - 0.37, y + 0.25, FL + 0.9, M['i_stahl'])
-    CUR[0] = C_IN; text('ENERGIEVERTEILUNG', 0.07, (XS0 - 0.365, 0, FL + 1.82), (0, -1, 0), (0, 0, 1), M['txtd'], align='CENTER', name='Schrankschrift')
-    with Part('Werkbank', T(9.4, yq - 0.42, FL), C_IN):
-        box('Bankplatte', 1.3, 0.7, 0.06, 0, 0, 0.9, M['i_stahl'], 0.01); box('Bankkoerper', 1.2, 0.6, 0.86, 0, 0.02, 0.43, M['i_schrank'], 0.02)
-        box('Schraubstock', 0.16, 0.2, 0.14, 0.4, -0.15, 1.0, M['i_dunkel'], 0.02); box('Werkzeugwand', 1.3, 0.04, 0.6, 0, 0.33, 1.4, M['i_dunkel'], 0.01)
-        for k in range(5): box('Werkzeug', 0.05, 0.03, 0.2 + 0.05 * (k % 3), -0.5 + k * 0.25, 0.3, 1.4, M['i_stahl'], 0.005)
     S.fertig()
+    # Modulplätze (seit 26.11.2026, ../innen/modulplatz.py): Bordsystem 1 und 2 als Einschubgestelle an der Stirnwand neben der Energieverteilung,
+    # Abwehrsystem als Schildbock neben dem Energiekern, Antrieb als Reglerkäfig unter den Treibstoffleitungen, Waffensystem als offenes Gestell
+    # am Schott zur Waffenkammer (steuerbord: backbord steht der Energiekern davor). Die Module selbst setzt das Spiel ein (Schiffsmodule.glb).
+    CUR[0] = C_IN
+    FW = Wand((XS0 - 0.03, 0, FL), (-1, 0, 0)); AW = Wand((XT + 0.07, -1.6, FL), (1, 0, 0))
+    mp_verteiler(FW)
+    ANCH['module'] = {
+        'system1': mp_gestell(FW, -1.1, 'BORDSYSTEM 1'), 'system2': mp_gestell(FW, 1.1, 'BORDSYSTEM 2'),
+        'abwehr': mp_schildbock(9.4, 2.2, FL, ZC - 0.09, quelle=(8.36, 1.82)),
+        'antrieb': mp_regler(9.72, -2.15, FL, ZC - 0.16, leitungen=((-0.2, 'i_rot', -1.15), (0.05, 'i_rahmen', -1.0))),
+        'waffe': mp_gestell(AW, 0, 'WAFFENSYSTEM', offen=True),
+    }
+    # Gurtkanal vom Waffengestell zur Decke (weiter zum Rückenturm), Bodenmarken vor den Plätzen
+    AW.box('Gurtkanal', 0.3, 0.2, ZC - 0.08 - FL - 1.9 + 0.02, -0.3, 0.25, (1.9 + ZC - 0.08 - FL) / 2, M['i_rahmen'], 0.01)
+    for k in range(3): AW.box('Kanalrippe', 0.32, 0.22, 0.02, -0.3, 0.25, 1.93 + k * 0.045, M['i_stahl'], 0.003)
+    for W_, u0, bw in ((FW, -1.1, 1.24), (FW, 1.1, 1.24), (AW, 0, 1.3)):
+        for sg in (1, -1): W_.box('Bodenmarke', 0.03, 0.7, 0.004, u0 + sg * bw / 2, 0.9, 0.012, M['gelb'], 0.0)
+        W_.box('Bodenmarke', bw, 0.03, 0.004, u0, 1.25, 0.012, M['gelb'], 0.0)
 
 def innen_lichter():
     for x in (-11.0, -6.0, -1.0): point('Truppenraumlicht', (x, 0, 5.6), 260, (0.95, 0.97, 1.0), 0.3)

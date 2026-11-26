@@ -36,7 +36,7 @@ Nutzer: „Hast du den ganzen Innenraum? Was ist alles im Flieger drin, außer d
 
 - **Truppenraum** (hinten, volle Höhe): zwölf Klappsitze auf Podesten, Netze, Ablagen, Rampenpult (`ramp`), Stellplatz für einen Dachs, Spanten mit Lichtleisten.
 - **Oberdeck** (x 1,9 … 10,3, Boden 4,15 m wie das Cockpit, 2,07 m lichte Höhe), über eine Treppe aus dem Truppenraum: Schützenplatz unter dem Rückenturm (Drehsitz, Richtgriffe, Visierschirm, Korbring in der Decke), Anzugschränke, Geräteregal, zwei Doppelstockkojen (`bed`), Messe mit Tisch und Bank (`log`: Einsatzschirm), Kombüse mit Hängeschrank. Vorn das Schott mit Tür ins Cockpit.
-- **Unterdeck** darunter: Waffenkammer, offen zum Truppenraum (Waffenspinde `locker`, Waffenständer, Systempult `scanner`), dahinter ein Schott mit Tür zum **Technikraum** (Energiekern, Lebenserhaltung mit Tanks und Luftwäscher, Schaltschränke, Werkbank, Deckenleitungen).
+- **Unterdeck** darunter: Waffenkammer, offen zum Truppenraum (Waffenspinde `locker`, Waffenständer, Systempult `scanner`), dahinter ein Schott mit Tür zum **Technikraum** (Energiekern, Lebenserhaltung mit Tanks und Luftwäscher, Energieverteilung, Deckenleitungen) mit den fünf Modulplätzen (siehe unten).
 - **Cockpit** (`har_cockpit.py`, Cockpit-Baukasten Stil 2): zwei Plätze, Augpunkt bei x 14,55. Ich-Sicht aus `HarpyieCockpit.glb`.
 - Die Panzerwülste enthalten nur die Fahrwerksschächte, sie sind nicht begehbar.
 
@@ -58,6 +58,35 @@ Damit das Oberdeck bis zum Cockpitschott Kopfhöhe hat, bleibt das Rumpfdach bis
 
 ![Detail Gondel und Wulst](bilder/harpyie-detail.jpg)
 
+## Rückenturm und Schützenplatz
+
+Seit dem 26.11.2026 (`src/game/turm.ts`). Der Nutzer: „Fliegt man alleine, soll der Turm mit auf das Ziel des Piloten schießen“, dazu der Schützenplatz für einen zweiten Spieler und für den Piloten selbst.
+
+- **Aufgeschaltet (Pilot allein):** Der Turm folgt dem Ziel, das der Pilot erfasst hat, und feuert mit der Feuertaste mit. Er hält das Ziel auch, wenn es aus dem Fadenkreuz wandert, solange es in seinem Schussfeld und in 1.400 m Reichweite bleibt. 60 % der Feuerrate. Munition aus dem gemeinsamen Vorrat.
+- **Schützenplatz** (Oberdeck, unter dem Turm, [E]): Blick der Turmkamera, die Maus richtet, linke Taste feuert mit voller Feuerrate, rechte Taste vergrößert, [E] steht wieder auf. Dauerfeuer überhitzt die Rohre nach rund drei Sekunden. Geht gelandet und im Flug (das Schiff hält dann Kurs, `bordflug.ts`), nicht im Hangar.
+- **Schussfeld:** rundum, Höhe −5° … +70°. Nach vorn nicht unter die Waagerechte (Kanzel), zwischen den Heckflossen nicht unter 10°. Unter dem Rumpf gibt es kein Schussfeld; dort lässt der Turm das Ziel los. Er dreht mit rund 90° je Sekunde.
+- **Raketen** starten aus den Behältern unter den vorderen Flügeln.
+- **Modell:** Der Turm ist in zwei Teile getrennt, Kennung `turm` (dreht um die Hochachse) und `rohr` (Rohrwiege, darunter). Gelenke in `gltfShips.ts` (`TURM`, `setTurm`), Punkte aus `har-gelenke.json` (`turm`).
+
+![Blick der Turmkamera im Spiel](bilder/harpyie-turmsicht.jpg)
+
+### Mitflug
+
+Ein Mitspieler kann wie bisher über die offene Heckrampe an Bord gehen. Neu: Hebt der Besitzer ab, bleibt der Gast an Bord und fliegt mit (`net.ts gastZiele`, `interior.ts folgeGast`). Der Innenraum folgt dem fliegenden Schiff mit voller Lage, der Gast kann herumlaufen und sich an den Schützenplatz setzen. Er schießt eigene Geschosse und meldet die Stellung des Turms (`tu`); solange Meldungen kommen, ruht beim Besitzer das Aufschalten. Landet das Schiff woanders, steigt der Gast dort aus.
+
+Grenzen der ersten Stufe:
+
+- Der Mitflug gilt innerhalb eines Raums, also über dem Planeten, auf dem der Gast eingestiegen ist. Verlässt das Schiff ihn (Orbit, Sprung, Andocken) oder geht der Besitzer offline, steht der Gast wieder am letzten Landeplatz des Schiffs. Der Besitzer bekommt vor der Wolkendecke eine Warnung.
+- Das eigene Schiff des Gastes bleibt stehen, wo er es gelandet hat.
+- Andere sehen den Gast während des Flugs nicht als Figur.
+- Als Gast verbraucht der Schütze keine Munition des Besitzers.
+
+## Modulplätze im Technikraum
+
+Die fünf Schiffsmodule haben feste Plätze im Technikraum; das eingebaute Modul steht dort als Modell. Alles dazu in [schiffsmodule.md](schiffsmodule.md).
+
+![Technikraum mit Modulplätzen](bilder/module-raum.jpg)
+
 ## Ablauf
 
 ```sh
@@ -69,5 +98,6 @@ Ansichten: `KOR_SAMPLES=24 blender -b --python har_lauf.py -- bild bug flug heck
 
 ## Offen
 
-- Rückenturm, Kinnkanonen und Raketenbehälter sind im Spiel noch nicht als eigene Waffen angesteuert; der Schützenplatz ist nur Einrichtung.
+- Kinnkanonen sind die Bordkanonen des Piloten; sie schwenken nicht.
+- Mitflug über den Raum hinaus (Orbit, Sprung, Andocken mit Gast an Bord).
 - Seitentür ist nur Optik; Gäste im Mehrspieler kommen über die Heckrampe.

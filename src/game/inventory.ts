@@ -11,7 +11,8 @@ import { serviceFactor } from './reputation';
 // =====================================================================================
 export interface InvItem { id: string; n: number }
 export const BASE_SLOTS = 12, LOCKER_SLOTS = 40;
-export const invHooks = { changed: () => {} };
+// umbau: Grund, warum Schiffsmodule gerade nicht getauscht werden können ('' = geht; main.ts: nur gelandet oder angedockt, seit 2026-11-26)
+export const invHooks = { changed: () => {}, umbau: () => '' as string };
 
 // Summe eines Wertes über alles Angelegte
 export function gearStat(k: StatId): number {
@@ -92,9 +93,11 @@ export function unequip(slot: GearSlot): string {
   return '';
 }
 // Schiffsmodul einbauen (ins aktive Schiff); das bisherige Modul des Platzes kommt in den Rucksack
-function equipShip(i: number): string {
+function equipShip(i: number, platz?: ShipSlot): string {
   const it = P.inv[i], d = gearDef(it.id)!;
-  const slot: ShipSlot = d.kind === 'schiffswaffe' ? 'waffe' : d.kind === 'schiffsabwehr' ? 'abwehr' : d.kind === 'schiffsantrieb' ? 'antrieb' : !P.shipGear.system1 ? 'system1' : !P.shipGear.system2 ? 'system2' : 'system1';
+  const grund = invHooks.umbau(); if (grund) return grund;
+  // platz: am Modulplatz im Technikraum gewählt (modulplatz.ts); sonst der erste freie passende Platz
+  const slot: ShipSlot = platz && shipSlotKind(platz) === d.kind ? platz : d.kind === 'schiffswaffe' ? 'waffe' : d.kind === 'schiffsabwehr' ? 'abwehr' : d.kind === 'schiffsantrieb' ? 'antrieb' : !P.shipGear.system1 ? 'system1' : !P.shipGear.system2 ? 'system2' : 'system1';
   const old = P.shipGear[slot];
   P.shipGear[slot] = it.id;
   if (cargoUsed() > stats().cargo) { if (old) P.shipGear[slot] = old; else delete P.shipGear[slot]; return 'Dafür ist zu viel im Frachtraum.'; }
@@ -103,9 +106,17 @@ function equipShip(i: number): string {
   invHooks.changed();
   return '';
 }
+/** Schiffsmodul aus dem Rucksack an einen bestimmten Platz einbauen (Modulplatz im Technikraum) */
+export function equipShipAt(i: number, platz: ShipSlot): string {
+  const it = P.inv[i], d = it && gearDef(it.id);
+  if (!it || !d || !isShipKind(d.kind)) return 'Das ist kein Schiffsmodul.';
+  if (shipSlotKind(platz) !== d.kind) return 'Das Modul passt nicht an diesen Platz.';
+  return equipShip(i, platz);
+}
 export function unequipShip(slot: ShipSlot): string {
   const id = P.shipGear[slot];
   if (!id) return 'Der Platz ist leer.';
+  const grund = invHooks.umbau(); if (grund) return grund;
   if (P.inv.length + 1 > invCap()) return 'Kein Platz im Rucksack.';
   delete P.shipGear[slot];
   if (cargoUsed() > stats().cargo) { P.shipGear[slot] = id; return 'Dafür ist zu viel im Frachtraum.'; }

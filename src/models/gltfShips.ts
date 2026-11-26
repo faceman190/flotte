@@ -376,6 +376,21 @@ export function setDoors(root: THREE.Object3D, open: boolean, dt = 0) {
 
 // Koordinatensystem eines Modells im Spiel (für Innenmodelle, die deckungsgleich zum Außenmodell sitzen sollen):
 // Modell um 180° gedreht, um innerPos verschoben, mit s × Länge skaliert
+// ---------- Rückenturm (seit 2026-11-26, Harpyie) ----------
+// Zwei Gelenke aus den Kennungen „|turm“ (dreht um die Hochachse) und „|rohr“ (Rohrwiege, darunter, dreht um die Querachse). Gelenkpunkte in
+// den Koordinaten der GLB-Datei (har-gelenke.json turm.achse und turm.wiege). Richten: src/game/turm.ts.
+const TURM: Record<string, { achse: number[]; wiege: number[] }> = { Harpyie: { achse: [0, 6.84, 3], wiege: [0, 7.26, 3.95] } };
+export const hatTurm = (model: string) => !!TURM[model];
+/** Turm stellen: gier nach Backbord positiv, hoehe nach oben positiv (Bogenmaß) */
+export function setTurm(root: THREE.Object3D, gier: number, hoehe: number) {
+  let rig = root.userData.turmRig as { d: DoorPart; pivot: THREE.Object3D }[] | null | undefined;
+  if (rig === undefined) {
+    const c = TURM[modelOf(root)];
+    rig = root.userData.turmRig = c ? rigParts(root, [{ tag: 'turm', grp: 'turm', t0: 0, t1: 1, hinge: c.achse }, { tag: 'rohr', grp: 'turm', t0: 0, t1: 1, hinge: c.wiege, under: 'turm' }]) : null;
+  }
+  if (!rig) return;
+  for (const { d, pivot } of rig) { if (d.tag === 'turm') pivot.rotation.y = gier; else pivot.rotation.x = -hoehe; }
+}
 export const modelFrame = (name: string) => TPL[name]?.frame || null;
 
 // ---------- Kanzel (seit 2026-11-25, Konzept docs/konzept-schiffe-fracht.md, Schritt 2) ----------
