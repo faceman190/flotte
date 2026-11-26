@@ -83,7 +83,7 @@ Ein Mitspieler geht über die offene Heckrampe eines gelandeten Schiffs an Bord.
 
 Grenzen:
 
-- Einsteigen geht nur an einem gelandeten Schiff auf einem Planeten. In Stationen sieht man das Schiff eines Mitspielers noch nicht (jeder sieht im Hangar nur seine eigenen Schiffe).
+- Einsteigen geht an einem gelandeten Schiff auf einem Planeten und in der Hangarbucht des Besitzers (mit Einladung, [hangarbuchten.md](hangarbuchten.md)).
 - Andere sehen den Gast während des Flugs nicht als Figur, sein eigenes Schiff ist für sie in dieser Zeit ausgeblendet (Zustand `gast`).
 - Als Gast verbraucht der Schütze keine Munition des Besitzers.
 
@@ -107,5 +107,5 @@ Ansichten: `KOR_SAMPLES=24 blender -b --python har_lauf.py -- bild bug flug heck
 ## Offen
 
 - Kinnkanonen sind die Bordkanonen des Piloten; sie schwenken nicht.
-- Im Hangar einer Station an Bord eines fremden Schiffs gehen (eigene Hangarbucht je Pilot, Vorschlag vom 26.11.2026).
+
 - Seitentür ist nur Optik; Gäste im Mehrspieler kommen über die Heckrampe.

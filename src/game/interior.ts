@@ -12,7 +12,8 @@ import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { shipsAt, board } from './fleet';
 import { SHIPS, hasInterior } from '../data/ships';
 import { SECTORS, FACTION } from '../data/galaxy';
-import { RAMP, rampenVon, doorProgress, type Paint } from '../models/gltfShips';
+import { RAMP, rampenVon, doorProgress, setGear, setDoors, type Paint } from '../models/gltfShips';
+import { HB, buchtFremd } from './hangarbucht';
 import { hasChar, charInstance, animInit, animStep, animTalk, animTurn, animTurning, animHasTurn, type CharAnim } from '../models/charModels';
 import { buildShipRoom, type ShipRoom, type ShipSpot } from './shipInterior';
 import { gearDef, SHIP_SLOT_N, type ShipSlot } from '../data/gear';
@@ -78,6 +79,8 @@ export const interiorHooks = {
   // Mitreise als Gast (net.ts MIT, main.ts): Standort merken, Blende zum Übergang, Welt wechseln, wieder an Bord, mit andocken, zurück zum eigenen Schiff
   mitStart: () => {}, mitBlende: (_art: string, _t: number) => {}, mitWechsel: (_art: string, _nach: string, _von: string) => {}, mitDa: (_gun: boolean) => {},
   mitDock: (_station: string, _name: string, _cls: string) => {}, mitHeim: (_text: string) => {},
+  // Hangarbucht eines Mitspielers (hangarbucht.ts, net.ts): an Bord seines Schiffs, wieder von Bord, er legt ab (aus der Station hinaus)
+  gastAnBord: (_id: number, _name: string, _cls: string) => {}, gastVonBord: () => {}, mitAblegen: () => {},
   schuetze: () => '' as string,      // Schützenplatz unter dem Rückenturm: an den Turm (turm.ts); Rückgabe = Grund, warum es nicht geht
   modulPlatz: (_slot: string) => {},      // Modulplatz im Technikraum: Auswahl öffnen (modulplatz.ts)
 };
@@ -689,6 +692,27 @@ export function refreshHangarShips() {
   shipObs = []; shipLabels = []; shipInters = [];
   while (standGroup!.children.length) { const c = standGroup!.children[0] as THREE.Mesh; standGroup!.remove(c); c.geometry.dispose(); }
   const st = IN.station!;
+  // Buchtenwahl an der Rückwand (hangarbucht.ts): eigene Bucht, Einladungen, Gäste einladen
+  shipInters.push({ x: 0, z: HZ0 + 2.4, r: 2.6, label: () => (buchtFremd() ? `Buchtenwahl · du bist in der Bucht von ${HB.owner}` : 'Buchtenwahl · Gäste einladen, Bucht wechseln'), act: () => { QS.mode = 'bucht'; interiorHooks.openTab('quartier', ''); } } as Inter);
+  if (buchtFremd()) {      // zu Gast: Hier steht das Schiff des Besitzers, das eigene bleibt in der eigenen Bucht
+    SHIP.g.visible = false;
+    const cls = HB.cls as ShipId;
+    if (HB.cls && SHIPS[cls]) {
+      const m = buildShipModel(cls, (HB.paint || 'Orange') as Paint), name = `${SHIPS[cls].n} von ${HB.owner}`, id = HB.id, owner = HB.owner, begehbar = hasInterior(cls) && hasMeshRoom(cls);
+      scene.add(m.g); parked.push({ m, uid: -id });
+      park(m, 0, PADZ, name, SHIPS[cls].role, {
+        x: 0, z: 0, r: 0, label: () => (begehbar ? `An Bord der ${name} gehen` : `${name} · kein begehbarer Innenraum`),
+        act: () => {
+          if (!begehbar) { say('SYSTEM', 'In dieses Schiff passt nur der Pilot.'); return; }
+          interiorHooks.mitStart();
+          enterShip({ cls, uid: -id, name, ctx: 'hangar', gast: id }, m);
+          if (IN.ship?.gast) interiorHooks.gastAnBord(id, owner, cls);
+        },
+      } as Inter);
+      setGear(m.g, true, 0); setDoors(m.g, true, 0);
+    }
+    return;
+  }
   shipPad.z = PADZ;
   shipPad.y = park(SHIP, 0, shipPad.z, P.shipName, SHIPS[P.cls].role, { x: 0, z: 0, r: 0, label: () => hasInterior(P.cls) ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} steigen und ablegen`, act: () => hasInterior(P.cls) ? enterShip({ cls: P.cls, uid: P.uid, name: P.shipName, ctx: 'hangar' }, SHIP) : interiorHooks.undock() });
   for (const re of activeRamps()) {      // Rampenschalter außen am Fuß jeder Rampe (Wisent; Möwe auch am Bug)
@@ -788,6 +812,7 @@ export function folgeGast() {
 }
 export function syncParkedShip() {
   if (!group) return;
+  if (IN.station && buchtFremd()) { SHIP.g.visible = false; return; }      // in der Bucht eines Mitspielers: das eigene Schiff steht in der eigenen
   if (!IN.station) { SHIP.g.visible = !IN.ship || !!mesh; return; }   // Planet: Schiff steht auf dem Landeplatz
   if (saved) { SHIP.g.visible = !(IN.ship && IN.ship.uid === P.uid) || !!mesh; return; }   // Modell-Raum: das Schiffsmodell ist der Innenraum   // im Schiffsraum: Stationsgruppe ist gespeichert
   const so = SEQ.t >= 0 ? seqOffset() : null;
@@ -801,7 +826,7 @@ export function syncParkedShip() {
 // ---------- Betreten / Verlassen ----------
 // mode: false = mit dem Schiff (Landeanflug), true = Planetenbasis zu Fuß, 'city' = aus der Stadt zu Fuß durch die Promenadentür
 export function enterInterior(st: Station, mode: boolean | 'city' = false) {
-  QS.in = false; QS.owner = ''; QS.deko = null;
+  QS.in = false; QS.owner = ''; QS.deko = null; HB.owner = ''; HB.id = 0; HB.cls = ''; HB.zone = false;
   const onFoot = mode === true, fromCity = mode === 'city';
   if (IN.active) leaveInterior();
   IN.active = true; IN.station = st;
@@ -958,7 +983,7 @@ export function leaveInterior() {
   camera.near = 0.5; camera.updateProjectionMatrix();
   IN.active = false; IN.station = null; IN.target = null; IN.say.t = 0;
   G.inside = false; meHolder.visible = false;
-  QS.in = false; QS.owner = ''; QS.deko = null; qDeko = null; qSchild = null; qSchirm = null;
+  QS.in = false; QS.owner = ''; QS.deko = null; HB.owner = ''; HB.id = 0; HB.cls = ''; HB.zone = false; qDeko = null; qSchild = null; qSchirm = null;
 }
 
 // ---------- Quartier auf der Bastion (seit 2026-11-24, game/quartier.ts) ----------
@@ -1102,6 +1127,23 @@ function quartierSetzen(owner: string, deko: QDeko | null) {
   QS.in = !!owner; QS.owner = owner; QS.deko = owner ? deko : null;
   quartierDeko(QS.deko);
 }
+// In eine Hangarbucht fahren: die eigene (owner leer oder der eigene Name) oder die eines Mitspielers, der eingeladen hat (hangarbucht.ts)
+export function buchtFahrt(owner: string, id: number, cls: string, paint: string) {
+  if (!IN.active || !IN.station || room) return;
+  const fremd = !!owner && owner !== P.name;
+  IN.panel = null;
+  sfx('ui_confirm', 0.35, 0.6, () => snd(240, 0.25, 'sine', 0.03, -40));
+  snd(70, 1.4, 'sawtooth', 0.012, 30);
+  void warmScene('Zur Hangarbucht', () => {
+    if (QS.in) quartierSetzen('', null);
+    HB.owner = fremd ? owner : ''; HB.id = fremd ? id : 0; HB.cls = fremd ? cls : ''; HB.paint = fremd ? paint : ''; HB.zone = true;
+    refreshHangarShips();
+    const hs = hangarSpot(); IN.x = hs.x; IN.z = hs.z; IN.yaw = Math.PI; IN.pitch = 0; walkV.x = walkV.z = 0;
+    deck?.update(IN.x, IN.z); deck?.prime();
+  }).then(() => say('SYSTEM', fremd ? `Hangarbucht von ${owner}. Du bist hier zu Gast.` : 'Deine Hangarbucht.'));
+}
+/** der Besitzer der besuchten Bucht hat abgelegt oder ein anderes Schiff genommen (net.ts) */
+export function buchtSchiff(cls: string, paint: string) { if (!buchtFremd() || room) return; HB.cls = cls; HB.paint = paint; refreshHangarShips(); }
 // Aufzug fahren: ins Quartier (owner = Besitzer) oder zurück auf Deck 3 (owner leer)
 export function quartierFahrt(owner: string, deko: QDeko | null) {
   const Q = deck?.quartier; if (!Q || !IN.active || room) return;
@@ -1322,7 +1364,8 @@ function shipInter(sp: ShipSpot, info: ShipInfo): Inter {
       ...base, label: () => flug ? 'Rampenschalter: Außenbord (Schiff muss stehen)' : !active ? 'Rampenschalter (nur am aktiven Schiff)' : RAMP.want ? 'Laderampe schließen' : 'Laderampe öffnen',
       act: () => { if (flug) { interiorHooks.ausBord(); return; } if (!active) return; RAMP.want = !RAMP.want; sfx('gear', 0.6, 1, () => snd(140, 0.5, 'sawtooth', 0.03, RAMP.want ? -40 : 40)); say('SYSTEM', RAMP.want ? 'Laderampe fährt aus.' : 'Laderampe fährt ein.'); },
     };
-    case 'hatch': if (info.gast) return { ...base, label: () => IN.mitflug ? 'Heckrampe (im Flug geschlossen)' : 'Über die Rampe von Bord gehen', act: () => IN.mitflug ? say('SYSTEM', 'Aussteigen geht erst, wenn das Schiff gelandet ist.') : interiorHooks.gastRaus() };
+    case 'hatch': if (info.gast && info.ctx === 'hangar') return { ...base, label: () => 'Von Bord gehen', act: () => { interiorHooks.gastVonBord(); leaveShip(); } };
+      if (info.gast) return { ...base, label: () => IN.mitflug ? 'Heckrampe (im Flug geschlossen)' : 'Über die Rampe von Bord gehen', act: () => IN.mitflug ? say('SYSTEM', 'Aussteigen geht erst, wenn das Schiff gelandet ist.') : interiorHooks.gastRaus() };
       return { ...base, label: () => flug ? 'Heckrampe: Außenbord (Schiff muss stehen)' : planet ? 'Über die Rampe zum Rover' : 'Von Bord gehen', act: () => flug ? interiorHooks.ausBord() : planet ? interiorHooks.toRover() : leaveShip() };
     case 'log': return {
       ...base, label: () => 'Logbuch lesen',
@@ -1497,6 +1540,8 @@ const footGround = (x: number, z: number) => (mesh ? mesh.floorAt(x, z, IN.fy) :
 export function jump() { if (!IN.active || IN.jy > 0 || IN.jv !== 0) return; IN.jv = 4.6; snd(95, 0.05, 'triangle', 0.02, 40); }
 export function updateWalk(dt: number) {
   if (!IN.active || !group) return;
+  HB.zone = !!IN.station && !QS.in && (room ? HB.zone : IN.z > HZ0);      // im Hangar zählt die Bucht (hangarbucht.ts)
+  if (buchtFremd() && !room && IN.station && IN.z < HZ0 - 0.6) { HB.owner = ''; HB.id = 0; HB.cls = ''; refreshHangarShips(); }      // durch die Schleuse zum Deck: beim nächsten Mal wieder die eigene Bucht
   zoneLight();
   IN.say.t = Math.max(0, IN.say.t - dt);
   // Blick: Maus eingefangen → direkte Steuerung; sonst dreht die Zeigerposition wie beim Fliegen
