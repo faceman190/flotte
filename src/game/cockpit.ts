@@ -38,7 +38,7 @@ const COCKPITS: Record<string, CockpitDef> = {
   dohle: { datei: 'DohleCockpit', auge: [0, 0.42, -5.6], laenge: 16.7, stil: 2, aus: / ~i|^Kuppelglas|^Anzeige|^Bildschirm|^Polster|^Leuchte|^Licht |^LED |^Schwarzmetall|^Kanzelrahmen|^Gussgrau.001/, fill: [0.22, 0.16], griff: [[-0.4, 0.098, -5.9193], [0.4, 0.098, -5.9193]] },
   // Kranich: Cockpit steckt im Schiffsmodell (Kennung „ ~cp“, sichtbar von außen und beim Laufen); in der Ich-Sicht dieselben Teile mit gebackenem
   // Licht aus KranichCockpit.glb (asset-src/neu/kranich/kra_export_cockpit.py). Der Innenraum hinter der Tür bleibt sichtbar.
-  kranich: { datei: 'KranichCockpit', auge: [-0.78, 0.085, -11.412], laenge: 32.12, stil: 2, aus: / ~cp|^Kanzelglas/, fill: [0.22, 0.16], griff: [[-1.16, -0.237, -11.731], [-0.4, -0.237, -11.731]] },
+  kranich: { datei: 'KranichCockpit', auge: [-0.78, 0.515, -11.412], laenge: 32.12, stil: 2, aus: / ~cp|^Kanzelglas/, fill: [0.22, 0.16], griff: [[-1.16, 0.193, -11.731], [-0.4, 0.193, -11.731]] },
   kormoran: { datei: 'KormoranCockpit', auge: [-0.85, 1.75, -13.1], laenge: 46, stil: 2, aus: / ~i|^Schauglas|^Anzeige|^Bildschirm|^HUD|^Licht |^LED |^Ambientlicht|^Deckenlicht|^Lack ocker|^Warnschraffur/, fill: [0.22, 0.16], griff: [[-1.23, 1.428, -13.4193], [-0.47, 1.428, -13.4193]] },
 };
 export const COCKPIT = { an: false, sicht: false };      // an: gewünscht (Einstellung), sicht: gerade im Bild

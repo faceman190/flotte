@@ -30,10 +30,11 @@ def kit_netz(bm, m):
     """bmesh in kit-Koordinaten in den Sammler (in Bau-Koordinaten umgerechnet; der Sammler dreht wieder zurück)"""
     bmesh.ops.transform(bm, matrix=BASIS.inverted(), verts=bm.verts); c__ab(bm, m)
 
-AUGE_K = Vector((11.35, 0.78, FLC + 1.15))      # Augpunkt (kit), linker Sitz
+AUGE_K = Vector((11.35, 0.78, FLC + 1.2))       # Augpunkt (kit), linker Sitz
+PULT_TIEF = 0.2      # Pult und Mittelkonsole so viel tiefer als im Baukasten (Sicht über die Nase)
 AUGE = kb(AUGE_K)                               # Bau
 BODEN = FLC - AUGE_K.z
-XS_STUFE = 9.5                                  # Ende der Stufen, ab hier Cockpitboden
+XS_STUFE = 9.95                                 # Ende der Stufen, ab hier Cockpitboden
 
 # ---------- Innenhaut, Verglasung von innen ----------
 def glas_rand(k_x=1.0, k_t=1.0, n=240):
@@ -41,11 +42,11 @@ def glas_rand(k_x=1.0, k_t=1.0, n=240):
     R = []
     for k in range(n):
         a = 2 * PI * k / n; c, s = math.cos(a), math.sin(a)
-        xs = math.copysign(abs(c) ** (2 / GP), c); x = GX + GH * xs * k_x; tw = GT * (1.0 + 0.16 * max(0.0, xs)) * k_t
+        xs = math.copysign(abs(c) ** (2 / GP), c); x = GX + (GH if xs < 0 else GH_V) * xs * k_x; tw = GT * (1.0 + 0.16 * max(0.0, xs)) * k_t
         R.append((x, math.copysign(abs(s) ** (2 / GP), s) * tw))
     return R
 def cockpit_haut():
-    x0, x1 = X_WOHN1 + 0.04, 14.95; nt = 64
+    x0, x1 = X_WOHN1 + 0.04, 15.55; nt = 64
     bm = bmesh.new(); n = int((x1 - x0) / 0.1); R = []
     for i in range(n + 1):
         x = x0 + (x1 - x0) * i / n; tf = abs(t_at(x, FL)); R.append([(x, -tf + 2 * tf * j / nt) for j in range(nt + 1)])
@@ -64,7 +65,7 @@ def cockpit_haut():
     if sc < 0: bmesh.ops.reverse_faces(bm, faces=bm.faces[:])
     kit_netz(bm, 'Verkleidung')
     # Flansch auf der Innenhaut um die Verglasung (deckt die gestuften Lochkanten) und Laibung bis zum Glas
-    A = glas_rand(0.985, 0.975); Bq = glas_rand(1.03, 1.05); bm = bmesh.new()
+    A = glas_rand(0.995, 0.99); Bq = glas_rand(1.03, 1.05); bm = bmesh.new()      # Flansch innen schmal: verdeckt kaum Glas
     def inn(x, t, lift): return ipt(x, t) - hull_normal(x, t) * lift
     ra = [bm.verts.new(inn(x, t, 0.014)) for x, t in A]; rb = [bm.verts.new(inn(x, t, 0.014)) for x, t in Bq]
     ro = [bm.verts.new(hull_point(x, t) + hull_normal(x, t) * 0.004) for x, t in A]; nA = len(A)
@@ -80,17 +81,17 @@ def cockpit_haut():
         bm = bmesh.new(); rows = []
         for x, t in pts:
             d = (hull_point(x, t + 0.01) - hull_point(x, t - 0.01)).normalized() * (w / 2)
-            po, pi = hull_point(x, t) + hull_normal(x, t) * 0.01, ipt(x, t) - hull_normal(x, t) * 0.02
+            po, pi = hull_point(x, t) + hull_normal(x, t) * 0.01, hull_point(x, t) - hull_normal(x, t) * 0.06      # flach: tiefe Streben wirkten schräg gesehen dick
             rows.append([bm.verts.new(p) for p in (po - d, po + d, pi + d, pi - d)])
         for a, b in zip(rows, rows[1:]):
             for k in range(4): bm.faces.new((a[k], a[(k + 1) % 4], b[(k + 1) % 4], b[k]))
         bm.faces.new(rows[0]); bm.faces.new(list(reversed(rows[-1])))
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:]); kit_netz(bm, 'Rahmen')
-    X0, X1 = GX - GH, GX + GH
-    for t0, w in ((0.0, 0.07), (0.86, 0.08), (-0.86, 0.08)):
-        pts = [(X0 + (X1 - X0) * i / 80, t0) for i in range(81)]; pts = [p for p in pts if glas_g(p[0], p[1]) < 1.02]
+    X0, X1 = GX - GH, GX + GH_V
+    for t0, w, xmax in ((0.0, 0.045, 11.6), (1.02, 0.05, 99), (-1.02, 0.05, 99)):      # wie die Pfosten außen (kra_kit.py glazing)
+        pts = [(X0 + (X1 - X0) * i / 80, t0) for i in range(81)]; pts = [p for p in pts if glas_g(p[0], p[1]) < 1.02 and p[0] <= xmax]
         if len(pts) > 2: strebe(pts, w)
-    tb = GT * (1 - abs((11.15 - GX) / GH) ** GP) ** (1 / GP); strebe([(11.15, -tb * 1.02 + 2 * tb * 1.02 * i / 50) for i in range(51)], 0.07)
+    tb = GT * (1 - abs((11.15 - GX) / GH) ** GP) ** (1 / GP); strebe([(11.15, -tb * 1.02 + 2 * tb * 1.02 * i / 50) for i in range(51)], 0.05)
 
 # ---------- Boden, Stufen, Schott ----------
 def boden():
@@ -112,7 +113,7 @@ def boden():
             else: cplatten('Formteil hell', b, a, d, c, 3, 2, 0.012, 0.006, 0.003)
         c_lichtleiste('Licht Warm', (s * 0.315, XS_STUFE + 0.15, FLC + 0.012), (s * 0.315, AUGE.y + 0.6, FLC + 0.012), 0.006, 0.004)
     # Stufen von FL auf FLC (drei), Gitterrost mit gelber Kante, Seitenwangen; daneben ist der Boden auf FLC (Schränke stehen darauf)
-    hb = 0.5; n = 3; dz = (FLC - FL) / n; xs = [X_WOHN1 + 0.12 + k * (XS_STUFE - X_WOHN1 - 0.12) / n for k in range(n + 1)]      # erste Stufe hinter dem Türsturz (Kopfhöhe)
+    hb = 0.5; n = 5; dz = (FLC - FL) / n; xs = [X_WOHN1 + 0.12 + k * (XS_STUFE - X_WOHN1 - 0.12) / n for k in range(n + 1)]      # erste Stufe hinter dem Türsturz (Kopfhöhe)
     c_quader('Metall', (2 * hb + 0.1, 0.24, 0.012), (0, X_WOHN1 + 0.0, FL + 0.006), 0.003)      # Schwelle in der Tür (sonst Spalt zwischen Gangboden und erster Stufe)
     for k in range(n):
         z = FL + dz * (k + 1)
@@ -136,13 +137,13 @@ def station(x0, links):
         c_sitz((0, -0.02, -0.8), sockel=-BODEN - 0.82)
         gr = c_armkonsole(1, -0.42, 0.56, 0.26, 0.56, -0.5, BODEN, 'Energie' if links else 'Waffen', beweglich=links)
         gl = c_armkonsole(-1, -0.42, 0.56, 0.26, 0.56, -0.5, BODEN, 'Funk2' if links else 'Energie', beweglich=links)
-        c_pultmodul(BODEN, sockel=False, fluegel=(links, not links), aussen=('Antrieb' if links else None, None if links else 'Fracht'))
+        with c_Platz((0, 0.03, -PULT_TIEF)): c_pultmodul(BODEN + PULT_TIEF, sockel=False, fluegel=(links, not links), aussen=('Antrieb' if links else None, None if links else 'Fracht'))
         c_pedale((0, 0.86, BODEN + 0.03), 0.15)
-        c_prisma('Formteil', [(-0.5, 0.0), (0.5, 0.0), (0.5, 0.5), (-0.5, 0.5)], 0.06, (0, 0.98, BODEN), fase=0.01, achse='Y')
+        c_prisma('Formteil', [(-0.5, 0.0), (0.5, 0.0), (0.5, 0.5 - PULT_TIEF), (-0.5, 0.5 - PULT_TIEF)], 0.06, (0, 1.01, BODEN), fase=0.01, achse='Y')
         if links: c_flaeche('Schirm Holo', [(-0.8, 1.6, -0.14), (0.8, 1.6, -0.14), (0.8, 1.6, 0.38), (-0.8, 1.6, 0.38)], uv=True)
         return gl, gr
 def mitte():
-    with c_Platz((0, AUGE.y, AUGE.z)):
+    with c_Platz((0, AUGE.y + 0.03, AUGE.z - PULT_TIEF)):
         c_prisma('Formteil', [(0.0, -0.62), (0.3, -0.62), (0.3, -0.02), (0.14, 0.0), (0.03, -0.1), (0.0, -0.34)], 0.56, (0, 0.775, -0.19), fase=0.014, achse='X')
         c_prisma('Gummi', [(-0.28, 0.0), (0.28, 0.0), (0.26, 0.04), (-0.26, 0.04)], 0.2, (0, 0.8, -0.185), fase=0.012, seg=2, achse='Y')
         c_anzeige('Karte', 0.3, 0.2, (0, 0.735, -0.36), rx=-16, tief=0.06, haube=0.028, tasten=6)
@@ -215,7 +216,7 @@ def seiten():
 def schraenke():
     # hinter den Sitzen an den Wänden: links Geräteschrank mit Leuchten, rechts Steh-Pult (Sensoren/Bordwaffen)
     for s in (-1, 1):
-        ya, yb = XS_STUFE + 0.05, 10.35; xi = 1.12; z1 = FLC + 1.75
+        ya, yb = X_WOHN1 + 0.2, 10.35; xi = 1.12; z1 = FLC + 1.75      # stehen auf dem erhöhten Boden neben den Stufen
         w = min(half_w(ya, z1), half_w(yb, z1))
         q = [(xi, 0.0)] + wand_kontur(ya, yb, FLC, z1) + [(xi, 1.62)] if s < 0 else [(xi, 0.0)] + wand_kontur(ya, yb, FLC, FLC + 1.0) + [(xi + 0.25, 1.0), (xi, 0.92)]
         if s < 0: q = [(-x, z) for x, z in reversed(q)]
@@ -240,12 +241,12 @@ def schraenke():
                 with c_Platz((0.0, -0.26, 1.36), -8, 0, 0): c_anzeige('Karte', 0.3, 0.19, (0, 0, 0), rx=0, tief=0.04, haube=0.02, tasten=4)
 # ---------- Deck unter der Scheibe ----------
 def deck():
-    X = [12.1 + k * 0.1 for k in range(29)]      # bis 14,9
+    X = [12.1 + k * 0.1 for k in range(35)]      # bis 15,5
     def rand_z(x):
-        xs = (x - GX) / GH
+        xs = glas_xs(x)
         if abs(xs) >= 1: return 9.0
         tw = GT * (1.0 + 0.16 * max(0.0, xs)); te = tw * (1 - abs(xs) ** GP) ** (1 / GP); return hull_point(x, te).z
-    zr = [rand_z(x) - 0.06 if x <= 14.2 else None for x in X]      # Unterkante des Glases; vorn steigt sie zur Spitze, das Deck nicht
+    zr = [rand_z(x) - 0.06 if x <= 14.9 else None for x in X]      # Unterkante des Glases; vorn steigt sie zur Spitze, das Deck nicht
     last = next(z for z in reversed(zr) if z is not None); Z = []; zmin = last
     for z in reversed(zr): zmin = min(zmin, z if z is not None else last); Z.append(zmin)
     Z = list(reversed(Z)); bm = bmesh.new(); L = []; Rr = []

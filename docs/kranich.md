@@ -19,7 +19,8 @@ Eigener Entwurf, kein Vorbild aus einem anderen Spiel. Die Gestalt folgt dem Vog
 Außen (`asset-src/neu/kranich/kra_kit.py`, Achsen wie Milan und Dohle: +X nach vorn, +Y Backbord, +Z oben, Boden z = 0):
 
 - Rumpf aus Superellipsen-Spanten (Tabelle `TBL`), Ogivnase mit dunklem Radom, flache Heckplatte mit Rampe.
-- Verglasung als Superellipse in (x, Winkel), Rahmen, Mittel- und Seitenstreben, Querspant. Seit dem Cockpitbau reicht das Glas weit an den Seiten herunter (`GT` 1,5), damit man vom Sitz über die Nase sieht.
+- Verglasung als Superellipse in (x, Winkel), nach vorn länger (`GH_V`): eine Glasnase bis 15,3 m. Das Glas reicht bis unter die Rumpfmitte (`GT` 1,75). Schmale Seitenstreben, die Mittelstrebe nur über den Köpfen, ein Querspant hinter dem Kopf.
+- Kopf: hohe Kanzel (Oberkante 6,0 m), die Nase fällt steil ab und liegt unter dem Augpunkt.
 - Rückengrat mit Scanner und Antennen, Seitenwülste am Laderaum (nur außen sichtbar, die Teile im Rumpf sind weggelassen), Panzerplatten mit Fugen, vier Bullaugen am Hals mit echtem Loch im Rumpf.
 - Zwei Gondeln an Stummelflügeln mit Einlauf und Lüfterrad, Schubdüse mit Klappen, zwei schräge Leitwerke.
 - Vier Landebeine mit Füßen (keine Räder): vorn fahren sie nach hinten in den Bug, hinten nach vorn in die Gondeln; je zwei Schachtklappen schließen zuletzt.
@@ -42,7 +43,7 @@ Außen (`asset-src/neu/kranich/kra_kit.py`, Achsen wie Milan und Dohle: +X nach 
 
 `kra_innen.py`. Grundsatz gegen Lücken: Die Innenhaut ist der Rumpf, um 17 cm nach innen versetzt (gleiche Spanten). Böden haben den genauen Umriss der Innenhaut, Schotten ihren Querschnitt (Streifenbau, Türen mit runden Ecken), Decken schließen an die Haut an. Möbel an der Wand folgen der Rumpfform (`wandkasten`, `wmin`): Im Hals zieht der Rumpf unten stark ein, gerade Kästen stachen dort durch die Außenhaut.
 
-Von hinten nach vorn (Boden 2,35 m über Grund, Cockpit 2,92 m):
+Von hinten nach vorn (Boden 2,35 m über Grund, Cockpit 3,30 m):
 
 - **Laderaum** (x −15,4 … −3,0): Heckrampe mit Bedienfeld und Warnstreifen, Mittelbahn mit Platten und Stellplatz für einen Wiesel, seitlich Rollenbahnen mit Zurrschienen, Spanten mit Frachtnetzen und Wandkästen, Lichtbänder, Kranschiene mit Laufkatze, Spinde und Werkzeugwand an der Vorderwand.
 - **Technik** (−3,0 … 1,4): Energiekern mit Glutringen im Käfig und Kupferleitungen zur Decke, Kernpult, zwei Gastanks, Luftwäscher, Werkbank, Leitungsbündel über dem Gitterrost-Gang.
@@ -60,7 +61,7 @@ Auslöser (`asset-src/glb/ship/Kranich.look.json`): Pilotensitz, Schreibplatz (L
 
 `kra_cockpit.py` baut mit dem Cockpit-Baukasten Stil 2 (`asset-src/neu/cockpit/cp_lib.py`, `cp_teile.py`) direkt im Schiffsmodell. Der Baukasten läuft in eigenem Namensraum; sein unterster Rahmen dreht seine Bau-Koordinaten (X rechts, Y vorn) in die des Schiffs (−90° um Z).
 
-- Schott mit Tür auf Gangboden, Schwelle, drei Stufen hinauf (die erste hinter dem Türsturz, sonst fehlt der Laufkarte Kopfhöhe).
+- Schott mit Tür auf Gangboden, Schwelle, fünf Stufen hinauf (die erste hinter dem Türsturz, sonst fehlt der Laufkarte Kopfhöhe).
 - Zwei Plätze mit Sitz, Armkonsolen und Knüppeln, Pult mit drei Anzeigen und Flügel, Pedale, Mittelkonsole mit Karte, Schiffsanzeige und Schubhebeln, Deckenkonsole unter der Mittelstrebe.
 - Seitenbänke zwischen Armkonsole und Wand (in Abschnitten, sie folgen der Wand), Feuerlöscher und Sanitätskasten, Haltegriffe.
 - Hinter den Sitzen links die Energieverteilung, rechts ein Steh-Pult für Sensoren und Bordwaffen mit Schwenkbildschirm.
@@ -87,7 +88,19 @@ npm run assets
 
 `ships.ts` (Klasse), `gltfShips.ts` (`DOORS.Kranich`, `RAMP_ENTRY`), `laderaum.ts` (`RAEUME.Kranich`: Kistenreihen, Stellplatz), `fahrzeuge.ts` (`STELL.kranich`), `ausstieg.ts` (über die Rampe), `playerShips.ts` (Triebwerke, Kanone), `hud.ts` (Umriss), `cockpit.ts`, `interior.ts` (Kernglut an Bord gedämpft), `city.ts` (fliegt im Stadtverkehr), `hilfsduesen.ts`.
 
+## Sicht aus dem Cockpit (26.11.2026)
+
+Nutzer nach dem ersten Stand: „Man hat eine sehr schlechte Sicht nach außen, da das Armaturenbrett sozusagen sehr hoch ist und sehr wenig Glas und dicke Streben.“ Geändert:
+
+- Geradeaus sah man in die Nase: Ihre Oberkante lag über dem Augpunkt. Jetzt hohe Kanzel, steile Nase, Cockpitboden 3,30 m (vorher 2,92), Augpunkt 1,2 m über dem Boden.
+- Glasnase statt spitz zulaufendem Glas, Glas bis unter die Rumpfmitte.
+- Pult und Mittelkonsole 20 cm tiefer als im Baukasten (`PULT_TIEF`).
+- Streben 4,5 bis 5 cm breit und flach (vorher 7 bis 8 cm und bis zur Innenhaut tief), Mittelstrebe vorn weg, Flansch innen schmal.
+- Messung: Strahlen vom Augpunkt treffen geradeaus erst ab 8 bis 12° unter dem Horizont auf etwas (vorher schon am Horizont die Pultkante).
+
 ## Gelernt
+
+- Sicht prüfen mit Strahlen vom Augpunkt (Glas ausgeblendet), nicht nur mit Bildern: Ein Bild mit gesenktem Blick täuscht.
 
 - Ein Gelenk unter einem anderen Gelenk braucht seine Elternumkehr aus `location`, nicht aus `matrix_world`: Die ist direkt nach dem Anlegen noch nicht gerechnet, die Rampenverlängerung hing sonst 15 m hinter dem Schiff.
 - Kopfhöhe an Türen: Die Laufkarte prüft 1,95 m über jeder Zelle. Eine Stufe unter dem Türsturz trennt das Cockpit vom Rest.

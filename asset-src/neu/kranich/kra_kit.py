@@ -46,12 +46,13 @@ HELL, DUNKEL, NASE, ROT = 0, 1, 2, 3
 # =====================================================================================
 # 1. Rumpf: Spanten aus Superellipsen (Tabelle), Ogivnase, flache Heckplatte
 # =====================================================================================
-XN, XT, ZTIP = 13.6, 16.0, 3.35      # Beginn der Nasenrundung, Spitze, Höhe der Spitze
+XN, XT, ZTIP = 13.6, 16.0, 3.2      # Beginn der Nasenrundung, Spitze, Höhe der Spitze
 XR, XE = -14.9, -15.6               # Beginn des Hecks, Heckebene
 TBL = [  # x, halbe Breite, Oberkante, Unterkante, Exponent (größer = kastiger). Körper (Laderaum) → Hals (Kabine) → Kopf (Cockpit), wie beim Vogel
     (-14.9, 3.25, 6.35, 1.78, 4.6), (-11.0, 3.35, 6.45, 1.72, 4.8), (-5.0, 3.35, 6.45, 1.72, 4.8), (-1.6, 3.22, 6.40, 1.75, 4.4),
-    (1.4, 2.72, 5.98, 1.85, 3.6), (4.0, 2.28, 5.48, 1.95, 3.2), (6.6, 2.24, 5.42, 2.0, 3.0), (9.0, 2.38, 5.58, 2.05, 2.8),
-    (11.3, 2.18, 5.38, 2.15, 2.6), (13.6, 1.56, 4.58, 2.4, 2.3)]
+    (1.4, 2.72, 5.98, 1.85, 3.6), (4.0, 2.28, 5.48, 1.95, 3.2), (6.6, 2.24, 5.42, 2.0, 3.0),
+    # Kopf seit dem 26.11. (Nutzer: „sehr schlechte Sicht nach außen“): hohe Kanzel, Nase fällt steil ab und liegt unter dem Augpunkt
+    (8.4, 2.34, 5.75, 2.03, 2.9), (10.2, 2.32, 6.0, 2.08, 2.7), (11.6, 2.12, 5.7, 2.17, 2.6), (13.6, 1.56, 4.05, 2.4, 2.3)]
 _F = [pchip([r[0] for r in TBL], [r[k] for r in TBL], 0.0, 0.0) for k in range(1, 5)]
 def base(x): return tuple(f(x) for f in _F)
 def params(x):
@@ -73,9 +74,12 @@ def x_samples():
     for k in range(K): xs.append(XN + (XT - XN) * math.sin(k / K * PI / 2))
     return sorted(set(round(v, 4) for v in xs))
 # Verglasung: Superellipse in (x, Winkel); vorn tiefer herumgezogen
-GX, GH, GT, GP = 12.35, 2.15, 1.5, 3.0      # GT 1,5: Glas weit an den Seiten herunter (Sicht vom Sitz)
+GX, GH, GT, GP = 12.35, 2.15, 1.75, 3.0      # GT 1,75: Glas bis unter die Rumpfmitte (Nutzer 26.11.: „sehr schlechte Sicht nach außen“)
+GH_V = 2.95      # nach vorn länger: Glasnase bis 15,3 m (sonst lief das Glas vorn spitz zu und man sah geradeaus in die Nase)
+def glas_xs(x): return (x - GX) / (GH if x < GX else GH_V)
+def glas_x(xs): return GX + xs * (GH if xs < 0 else GH_V)
 def glas_g(x, t):
-    tt = ((t + PI) % (2 * PI)) - PI; xs = (x - GX) / GH
+    tt = ((t + PI) % (2 * PI)) - PI; xs = glas_xs(x)
     tw = GT * (1.0 + 0.16 * max(0.0, xs))      # vorn etwas weiter um die Seiten
     return abs(xs) ** GP + abs(tt / tw) ** GP
 def build_hull():
@@ -108,7 +112,7 @@ def build_hull():
 
 # Öffnungen: Verglasung, Bugbeinschächte, Hubdüsen vorn, Heckplatte (eigene Fläche mit Rampenöffnung)
 FL = 2.35                     # Boden innen (Laderaum, Gang, Technik)
-FLC = 2.92                    # Boden im Cockpit (drei Stufen höher, Stufen im Cockpit hinter der Tür; Blick über die Nase)
+FLC = 3.30                    # Boden im Cockpit (fünf Stufen höher, Stufen im Cockpit hinter der Tür; Blick über die Nase)
 RAMP = (1.55, FL, 5.15)       # Rampenöffnung in der Heckplatte: halbe Breite, unten, oben
 NBAY = (11.6, 8.95, 1.0, 1.9)       # Bugbeinschächte (unter dem Cockpitboden): x vorn, x hinten, |y| innen, |y| außen
 HUBV = (7.6, 1.3, 0.5)        # vordere Hubdüsen (unter dem Gangboden): x, |y|, Radius
@@ -177,7 +181,7 @@ def glas_pt(x, t, lift=0.0): return hull_point(x, t) + hull_normal(x, t) * lift
 def glazing():
     CUR[0] = C_PART
     # Glas: Raster in (x, t), nur innerhalb der Maske (Rand per Schnitt der Maskenlinie)
-    bm = bmesh.new(); NX, NT = 56, 72; X0, X1 = GX - GH * 1.02, GX + GH * 1.02; T0 = GT * 1.25
+    bm = bmesh.new(); NX, NT = 56, 72; X0, X1 = GX - GH * 1.02, GX + GH_V * 1.02; T0 = GT * 1.4
     V = {}
     def inside(x, t): return glas_g(x, t) < 0.985
     for i in range(NX + 1):
@@ -197,19 +201,19 @@ def glazing():
     for k in range(240):
         a = 2 * PI * k / 240; c, s = math.cos(a), math.sin(a)
         # Punkt auf der Superellipse g = 1: xs = sign(c)|c|^(2/p), tt/tw = sign(s)|s|^(2/p)
-        xs = math.copysign(abs(c) ** (2 / GP), c); x = GX + GH * xs; tw = GT * (1.0 + 0.16 * max(0.0, xs))
+        xs = math.copysign(abs(c) ** (2 / GP), c); x = glas_x(xs); tw = GT * (1.0 + 0.16 * max(0.0, xs))
         t = math.copysign(abs(s) ** (2 / GP), s) * tw; rim.append((x, t))
     hull_band('Fensterrahmen', rim, 0.11, 0.05, M['anth'], True)
     hull_band('Fensterdichtung', [(x, t * 0.985) for x, t in rim], 0.03, 0.02, M['rubber'], True)
-    def post(t0, name, w=0.075):
+    def post(t0, name, w=0.05, xmax=99.0):
         pts = [(X0 + (X1 - X0) * i / 60, t0) for i in range(61)]
-        pts = [p for p in pts if glas_g(p[0], p[1]) < 1.0]
-        if len(pts) > 2: hull_band(name, pts, w, 0.045, M['anth'])
-    post(0.0, 'Mittelpfosten', 0.07)
-    for s in (1, -1): post(s * 0.86, 'Seitenpfosten', 0.08)
+        pts = [p for p in pts if glas_g(p[0], p[1]) < 1.0 and p[0] <= xmax]
+        if len(pts) > 2: hull_band(name, pts, w, 0.035, M['anth'])
+    post(0.0, 'Mittelpfosten', 0.045, 11.6)      # nur über den Köpfen: die Scheibe vorn ist ein Stück
+    for s in (1, -1): post(s * 1.02, 'Seitenpfosten', 0.05)      # weiter außen, schmal
     for xr in (11.15,):      # Querspant oben
         tb = GT * 1.0 * (1 - abs((xr - GX) / GH) ** GP) ** (1 / GP)
-        hull_band('Querspant', [(xr, -tb + 2 * tb * i / 40) for i in range(41)], 0.07, 0.045, M['anth'])
+        hull_band('Querspant', [(xr, -tb + 2 * tb * i / 40) for i in range(41)], 0.05, 0.035, M['anth'])
     for s in (1, -1):
         with Part('Wischer', place(13.85, s * 0.42, 0.04), C_PART):
             box('Wischerarm', 0.62, 0.02, 0.014, -0.28, 0, 0.01, M['dunkel'], 0.003); box('Wischerblatt', 0.52, 0.012, 0.022, -0.3, s * 0.02, 0.0, M['rubber'], 0.003)
@@ -384,7 +388,7 @@ def rcs_block(name, p, n_out, up, fwd):
     DUESEN['rcs'].extend(dirs)
 def rcs():
     for s in (1, -1):
-        for x, t, upd, fw in ((15.05, 0.85, 1, 1), (12.9, 2.25, -1, 1),      # oben vorn auf dem Radom (vor dem Glas)
+        for x, t, upd, fw in ((15.5, 1.15, 1, 1), (12.9, 2.25, -1, 1),      # vorn am Radom (vor der Glasnase)
                                (-13.9, 1.05, 1, -1), (-13.9, 2.15, -1, -1)):
             tt = s * t; p = hull_point(x, tt); n = hull_normal(x, tt)
             rcs_block('Steuerduesen', p, n, (0, 0, upd), (fw, 0, 0))
@@ -566,7 +570,7 @@ def markings():
         label_on(3.0, s * 1.55, 0.42, 'KRANICH', 'txtd')
         label_on(-9.0, s * 1.45, 0.62, 'KR 1', 'txtd')
         label_on(-1.0, s * 2.05, 0.11, 'BASTION · WERFT 3 · DECK 3', 'txtd')
-        label_on(11.4, s * 1.75, 0.09, 'RETTUNG – GRIFF ZIEHEN', 'txtd')
+        label_on(10.3, s * 1.75, 0.09, 'RETTUNG – GRIFF ZIEHEN', 'txtd')
     for s in (1, -1):      # Warnmarken an den Hubdüsen und am Einlauf
         p = Vector((HUBV[0] - HUBV[2] - 0.35, s * HUBV[1], bot_z(HUBV[0] - HUBV[2] - 0.35, s * HUBV[1]) - 0.01))
         surf_text('ABGASSTRAHL', 0.07, tuple(p), (0, 0, -1), (1, 0, 0), 'txtd')
