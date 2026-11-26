@@ -197,6 +197,12 @@ export function aufgabeObjective(): { title: string; lines: [string, boolean, bo
   L.push([`Lohn <b>${d.lohn.toLocaleString('de-DE')} Cr</b>${d.bonus ? ` + bis ${d.bonus} Eilbonus` : ''} · +${d.ruf} Ruf`, false, true]);
   return { title: `Aufgabe · ${d.titel}`, lines: L };
 }
+/** Wegweiser zu Fuß (interior.ts): erledigte Aufgabe, die in dieser Station abgegeben wird (verfolgte zuerst) */
+export function aufgabeAbgabe(station: string): { npc: string; wer: string } | null {
+  const tr = String(P.track || ''), ids = aufgabenAktiv().sort((a, b) => (tr === 'auf:' + b ? 1 : 0) - (tr === 'auf:' + a ? 1 : 0));
+  for (const id of ids) { const d = DEF[id], a = aktiv(id)!; if (d.station === station && stand(d, a) >= d.n) return { npc: d.npc, wer: d.wer }; }
+  return null;
+}
 /** Marken in der Welt */
 export function aufgabenMarkers() {
   const out: { x: number; y: number; z: number; label: string; col: string; big?: boolean }[] = [];

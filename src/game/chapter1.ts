@@ -40,7 +40,7 @@ function places() {
   return d as { pts: number[][]; frag: number[]; pi: number };
 }
 const route = (to: string) => { if (P.sector !== to) P.route = to; };
-const routeLine = (): Obj => [`Springe ins <b>Sonnenfeld</b>${P.route === SEC ? ' · Route gesetzt (Karte: M)' : ''}`, here(), false];
+const routeLine = (): Obj => [`Springe ins <b>Sonnenfeld</b>${P.route === SEC ? ' · Route steht, <b>J</b> springt' : ''}`, here(), false];
 
 const STEPS: Step[] = [
   { // 0: Funkspruch des Rats

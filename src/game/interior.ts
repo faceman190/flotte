@@ -116,6 +116,7 @@ let rects: Rect[] = [], obstacles: Rect[] = [], shipObs: Rect[] = [];
 let inters: Inter[] = [], shipInters: Inter[] = [];
 let labels: Label[] = [], shipLabels: Label[] = [];
 let persons: Stand[] = [], walkers: Walker[] = [], chats: Chat[] = [], leavers: Leaver[] = [];
+let deckTabs: Record<string, Stand> = {};      // Personal der Dienste auf dem Deck nach Tresen (für den Wegweiser)
 let settledT = 0;   // seit wann der Pilot in diesem Raum steht (Landeablauf vorbei), in Spielzeit
 let parked: { m: ShipModel; uid: number }[] = [];
 let field: THREE.Mesh | null = null, holo: THREE.Object3D | null = null, standGroup: THREE.Group | null = null;
@@ -154,7 +155,8 @@ function signTex(text: string, bg: string, fg = '#0c0d10') {
 function mat<T extends THREE.Material>(m: T) { disposables.push(m); if ((m as any).isMeshStandardMaterial) (m as any).envMapIntensity = 0.3; return m; }
 
 import { gearFactor, shipMods } from './inventory';
-import { aufgabeLabel, aufgabeTalk } from './aufgaben';
+import { aufgabeLabel, aufgabeTalk, aufgabeAbgabe } from './aufgaben';
+import { walkGoal } from './wegweiser';
 const WALK_V = 1.5;   // Gehtempo der Leute in den Stationen (m/s)
 // KI-Figur mit Skelett, falls geladen (Händler stehen, Arbeiter laufen); sonst die einfache Figur aus Grundformen
 function buildPerson(suit: number, skin: number, hair: number, badge: number, role: 'idle' | 'walk' = 'idle', model?: string): Person {
@@ -600,7 +602,7 @@ function build(st: Station) {
 
   // Bastion, Deck 3: Das Personal der Dienste steht an den Tresen in den Räumen (statt an den Ständen der Promenade), dazu Läufer und Gruppen
   if (dk) {
-    const here = new Set(interiorHooks.tabs()), byTab: Record<string, Stand> = {};
+    const here = new Set(interiorHooks.tabs()), byTab: Record<string, Stand> = {}; deckTabs = byTab;
     for (const sp of dk.spots) {
       const svc = sp.tab in TAB_N;      // sonst eine Figur ohne Dienst (Krankenstation, Schmelzmeister): sagt nur ihren Satz
       if (svc && !here.has(sp.tab)) continue;
@@ -1744,6 +1746,58 @@ export function applyWalkCamera() {
   if (Math.abs(camera.fov - 72) > 0.05) { camera.fov = 72; camera.updateProjectionMatrix(); }
 }
 
+// ---------- Wegweiser zu Fuß (seit 2026-11-26) ----------
+// Beim Spieltest suchte ein Mitspieler Ratsherr Hollweg: Die Figuren der Geschichte stehen im Hangar, der Spieler war auf Deck 3, und Namen
+// zeigen sich nur bis 26 m und nicht durch Wände. Jetzt zeigt eine Marke (oder ein Pfeil oben, wenn sie nicht im Bild ist) den Weg:
+// zuerst zu Figuren der Geschichte, dann zu einem Ziel der Geschichte (walkGoal.src, z. B. der Markt-Tresen im Prolog), dann zur Abgabe einer
+// erledigten Stationsaufgabe. Auf dem Deck führt sie um Ecken (deck.route), nicht durch Wände.
+function currentWalkGoal(): { x: number; z: number; label: string; col: string } | null {
+  if (!IN.station || IN.ship || room) return null;
+  const q = persons.find(p => p.story);
+  if (q) return { x: q.x, z: q.z, label: (q.name || '').toUpperCase(), col: labels.find(l => Math.abs(l.p.x - q.x) < 0.05 && Math.abs(l.p.z - q.z) < 0.05)?.col || '#ffb347' };
+  const fromTab = (tab: string, label: string, col: string) => { const t = deckTabs[tab]; return t && persons.includes(t) ? { x: t.x, z: t.z, label, col } : null; };
+  const g = walkGoal.src?.();
+  if (g) { const r = g.tab ? fromTab(g.tab, g.label, g.col || '#ffb347') : g.x !== undefined && g.z !== undefined ? { x: g.x, z: g.z, label: g.label, col: g.col || '#ffb347' } : null; if (r) return r; }
+  const a = aufgabeAbgabe(IN.station.id);
+  if (a) { const r = fromTab(a.npc, `ABGABE · ${a.wer.toUpperCase()}`, '#9fd8ff'); if (r) return r; }
+  return null;
+}
+const _wg = new THREE.Vector3();
+function drawWalkGoal(W: number, H: number) {
+  const g = currentWalkGoal(); if (!g || !group) return;
+  const dStraight = Math.hypot(g.x - IN.x, g.z - IN.z);
+  if (dStraight < 3.2) return;
+  const r = deck && deck.route ? deck.route(IN.x, IN.z, g.x, g.z) : null;
+  const tx = r ? r.x : g.x, tz = r ? r.z : g.z, d = r ? r.d : dStraight;
+  const via = !!r && Math.hypot(tx - g.x, tz - g.z) > 0.5;      // Pfeil zeigt auf einen Wegpunkt, nicht aufs Ziel
+  const text = `◆ ${g.label} · ${Math.round(d)} m`;
+  group.localToWorld(_wg.set(tx, IN.fy + (via ? 1.5 : 2.6), tz));
+  _p.copy(_wg).project(camera);
+  const onScreen = _p.z < 1 && Math.abs(_p.x) < 0.92 && Math.abs(_p.y) < 0.9;
+  ux.save(); ux.textAlign = 'center';
+  if (onScreen) {
+    // nah und sichtbar: Der Name über der Figur reicht
+    if (!via && dStraight < 14 && (!deck || room || g.z > HZ0 || deck.seen(g.x, g.z))) { ux.restore(); return; }
+    const x = (_p.x + 1) / 2 * W, y = (1 - _p.y) / 2 * H;
+    ux.fillStyle = g.col; ux.save(); ux.translate(x, y); ux.rotate(Math.PI / 4); ux.fillRect(-5, -5, 10, 10); ux.restore();
+    ux.font = '700 13px "Share Tech Mono",Consolas,monospace';
+    const tw = ux.measureText(text).width + 14; ux.fillStyle = 'rgba(6,16,26,.7)'; ux.fillRect(x - tw / 2, y - 30, tw, 18);
+    ux.fillStyle = g.col; ux.fillText(text, x, y - 16);
+  } else {
+    // nicht im Bild: Pfeil oben in der Mitte in Richtung des Wegpunkts (Kameraraum: −z ist vorn)
+    _wg.applyMatrix4(camera.matrixWorldInverse);
+    const ang = Math.atan2(_wg.x, -_wg.z);
+    ux.save(); ux.translate(W / 2, 96); ux.rotate(ang); ux.fillStyle = g.col;
+    ux.beginPath(); ux.moveTo(0, -14); ux.lineTo(8, 6); ux.lineTo(-8, 6); ux.closePath(); ux.fill(); ux.restore();
+    ux.font = '700 12px "Share Tech Mono",Consolas,monospace';
+    const tw = ux.measureText(text).width + 14; ux.fillStyle = 'rgba(6,16,26,.7)'; ux.fillRect(W / 2 - tw / 2, 110, tw, 18);
+    ux.fillStyle = g.col; ux.fillText(text, W / 2, 124);
+  }
+  ux.restore();
+}
+/** Prüfwerkzeuge: Ziel und nächster Wegpunkt des Wegweisers */
+export function walkGoalDebug() { const g = currentWalkGoal(); if (!g) return null; const r = deck && deck.route ? deck.route(IN.x, IN.z, g.x, g.z) : null; return { goal: g, via: r, me: [IN.x, IN.z] }; }
+
 // ---------- Anzeige ----------
 const _p = new THREE.Vector3();
 export function drawWalkHUD() {
@@ -1772,6 +1826,7 @@ export function drawWalkHUD() {
     ux.beginPath(); ux.arc(W / 2, H / 2, W / 2 * 0.14, 0, 6.283); ux.stroke();
     ux.fillStyle = 'rgba(255,255,255,.85)'; ux.save(); ux.translate(mouse.x, mouse.y); ux.rotate(Math.PI / 4); ux.fillRect(-3.5, -3.5, 7, 7); ux.restore();
   }
+  drawWalkGoal(W, H);
   // Aufforderung (seit Alpha 1.54 dieselbe wie auf Planeten und in Minen, ui/footHud.ts)
   if (IN.target) drawPrompt(IN.target.label(), pal.css, H * 0.66);
   // Ort oben in der Mitte statt des Kastens oben links (Credits und Fracht stehen an den Terminals und im Flottenband)

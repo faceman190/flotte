@@ -42,7 +42,7 @@ const onPlanet = () => !!world.surface && world.surface.planet === KERN;
 const docked = (id: string) => !!G.dockedAt && G.dockedAt.id === id;
 const fmtDist = (d: number) => (d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m');
 const route = (to: string) => { if (P.sector !== to) P.route = to; };
-const lineSpace = (id: string, name: string): Obj => [`Springe ${jumpTo(name)}${P.route === id ? ' · Route gesetzt (Karte: M)' : ''}`, false, false];
+const lineSpace = (id: string, name: string): Obj => [`Springe ${jumpTo(name)}${P.route === id ? ' · Route steht, <b>J</b> springt' : ''}`, false, false];
 const speed = () => Math.hypot(P.vx, P.vy, P.vz);
 const stealthLine = (): Obj => (hidden.on ? ['Dämpfer wirkt: Der Schwarm sieht dich nicht', true, true] : [`Unter ${SLOW} m/s bleiben, dann sieht dich der Schwarm nicht · jetzt <b>${Math.round(speed())}</b>`, false, true]);
 const dockMark = (id: string, label: string, col: string): Marker[] => { const s = world.stations.find(x => x.id === id); return s && !world.surface ? [{ x: s.dock.x, y: s.dock.y, z: s.dock.z, label, col, big: true }] : []; };
@@ -189,7 +189,7 @@ const STEPS: Step[] = [
     },
     lines: () => {
       const d = c4(), n = Math.min(FERRIT, P.cargo.ferrit || 0), here = IN.active && docked(TAL);
-      const way: Obj = here ? ['In <b>Talstadt</b> gelandet', true, false] : world.surface && P.sector === HOME ? ['In die Stadt <b>Talstadt</b> fliegen und im Hangar landen', false, false] : P.sector === HOME ? ['Auf <b>Heimstatt II</b> landen (Ziel: Talstadt)', false, false] : [`Springe nach <b>Heimstatt</b>, dort nach <b>Talstadt</b> auf Heimstatt II${P.route === HOME ? ' · Route gesetzt (Karte: M)' : ''}`, false, false];
+      const way: Obj = here ? ['In <b>Talstadt</b> gelandet', true, false] : world.surface && P.sector === HOME ? ['In die Stadt <b>Talstadt</b> fliegen und im Hangar landen', false, false] : P.sector === HOME ? ['Auf <b>Heimstatt II</b> landen (Ziel: Talstadt)', false, false] : [`Springe nach <b>Heimstatt</b>, dort nach <b>Talstadt</b> auf Heimstatt II${P.route === HOME ? ' · Route steht, <b>J</b> springt' : ''}`, false, false];
       if (!d.krull) return [way, ['Aussteigen und zu <b>Gildemeisterin Krull</b> gehen', nearNpc('Krull'), false], ['Mit Krull sprechen · <b>E</b>', false, false]];
       if (!d.leser) return [[`<b>${FERRIT} Ferrit</b> im Frachtraum · ${n}/${FERRIT}`, n >= FERRIT, false], ['Schürfen: Kristallfelder in der <b>Grauzone</b> oder am <b>Nebeltor</b> (zu kaufen gibt es Ferrit nicht)', false, true], way, ['Krull das Ferrit bringen · <b>E</b>', false, false]];
       return [['Der Ferrit-Leser ist eingebaut', true, false], ['Ablegen', false, false]];

@@ -69,6 +69,7 @@ export interface Deck {
   prime: () => void;        // beim Betreten, hinter der Blende: alle Raumspiegelungen aufnehmen
   primeStep: () => boolean; // beim Anflug: eine Raumspiegelung aufnehmen (false = alle fertig)
   quartier?: DeckQuartier;  // Bastion: das Quartier (Anbau) mit Aufzug auf Deck 3
+  route?: (x: number, z: number, tx: number, tz: number) => { x: number; z: number; d: number } | null;   // Wegweiser: nächster Wegpunkt zum Ziel und Weglänge (m)
   stale: () => boolean;     // ohne Lichträume gebaut, die inzwischen geladen sind: Der Innenraum baut das Deck dann neu      // ist dieser Ort bzw. der Hangar vom Standort aus zu sehen?
 }
 
@@ -938,7 +939,42 @@ export function buildDeck(id: string, hz0: number): Deck | null {
     }
   };
   const cellCh = (x: number, z: number) => { const [r, c] = cellOf(x, z); return at(r, c); };
+  // Wegweiser (seit 2026-11-26): kürzester Weg durch das Zellraster (Breitensuche vom Ziel aus). Von Zelle zu Zelle geht es, wenn beide zum selben
+  // Raum oder Gang gehören oder eine Tür dazwischen liegt. Der Hangar hängt am Tor (Zelle H). Zurück kommt der weiteste Punkt des Wegs, der
+  // noch in gerader Linie (gleiche Zeile oder Spalte) vor dem Spieler liegt; so zeigt der Pfeil um Ecken herum.
+  const cellXZ = (r: number, c: number) => ({ x: gx(-r * C), z: gz(c * C) });
+  const pass = (r: number, c: number, nr: number, nc2: number) => { const a = at(r, c), b = at(nr, nc2); return b !== '.' && (up(a) === up(b) || doors.has(`${r},${c},${nr},${nc2}`)); };
+  let bfsKey = '', bfs: Map<number, number> | null = null;
+  const distFrom = (gr: number, gc: number) => {
+    const key = gr + ',' + gc; if (key === bfsKey && bfs) return bfs;
+    const m = new Map<number, number>([[gr * 1000 + gc, 0]]), q: [number, number][] = [[gr, gc]];
+    for (let i = 0; i < q.length; i++) { const [r, c] = q[i], d = m.get(r * 1000 + c)!; for (const [dr, dc] of [[-1, 0], [0, 1], [1, 0], [0, -1]]) { const nr = r + dr, nc2 = c + dc, k = nr * 1000 + nc2; if (!m.has(k) && pass(r, c, nr, nc2)) { m.set(k, d + 1); q.push([nr, nc2]); } } }
+    bfsKey = key; bfs = m; return m;
+  };
+  const onDeck = (x: number, z: number) => { if (z > hz0 - 0.2) return false; const [r, c] = cellOf(x, z); return at(r, c) !== '.'; };
+  const route = (x: number, z: number, tx: number, tz: number) => {
+    const meIn = onDeck(x, z), tgIn = onDeck(tx, tz), gate = { x: gx(-hr * C), z: hz0 + 1.5 };
+    if (!meIn && !tgIn) return null;                                       // beide im Hangar: gerade Linie
+    const [gr, gc] = tgIn ? cellOf(tx, tz) : [hr, hc], [r0, c0] = meIn ? cellOf(x, z) : [hr, hc];
+    const m = distFrom(gr, gc), d0 = m.get(r0 * 1000 + c0);
+    if (d0 === undefined) return null;
+    const tail = (tgIn ? 0 : Math.hypot(tx - gate.x, tz - gate.z)) + (meIn ? 0 : Math.hypot(x - gate.x, z - gate.z));
+    if (!meIn) return { x: gate.x, z: gate.z - 1, d: d0 * C + tail };     // im Hangar, Ziel auf dem Deck: erst zum Tor
+    // Weg ablaufen, solange er geradeaus führt
+    let r = r0, c = c0, dir = '', last = { r, c };
+    for (let n = 0; n < 40 && m.get(r * 1000 + c)! > 0; n++) {
+      const dc = m.get(r * 1000 + c)!; let step: [number, number] | null = null;
+      for (const [dr, dc2] of [[-1, 0], [0, 1], [1, 0], [0, -1]]) { const k = (r + dr) * 1000 + c + dc2; if (m.get(k) === dc - 1 && pass(r, c, r + dr, c + dc2)) { step = [dr, dc2]; if (dir === `${dr},${dc2}`) break; } }
+      if (!step) break;
+      const sd = `${step[0]},${step[1]}`; if (dir && sd !== dir) break;
+      dir = sd; r += step[0]; c += step[1]; last = { r, c };
+    }
+    const done = m.get(last.r * 1000 + last.c) === 0;
+    const p = done ? (tgIn ? { x: tx, z: tz } : gate) : cellXZ(last.r, last.c);
+    return { x: p.x, z: p.z, d: Math.max(d0 * C, Math.hypot(tx - x, tz - z) * (tgIn ? 1 : 0)) + tail };
+  };
   return {
+    route,
     group, rects, blocks, spots, routes, chats, tris, map: { x: gx(D.karte_xy[1]), z: gz(D.karte_xy[0]) }, name: D.ort.G,
     inside: (z: number) => z < hz0 - 0.2 && z > zMin,
     area: (x, z) => D.ort[up(cellCh(x, z))] || D.ort.G,
@@ -1120,7 +1156,31 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
       drin: (x, z) => { const [px, py] = toPlan(x, z); return inQ(px, py); },
     };
   }
+  // Wegweiser (seit 2026-11-26): Die Rundhalle ist offen, Umwege gibt es nur aus Buchten und Flügeln heraus (erst zur Halle) und zwischen Halle
+  // und Hangar (durch den Korridor). Plan: Hallenmitte (0, 0), Korridor auf −x bis zum Tor bei kx0.
+  const MUND = (D.mund?.[0] ?? -16) + 2;
+  const zone = (px: number, py: number) => (px < K0 + 0.2 ? 'h' : px < MUND && Math.abs(py) < 4.5 ? 'k' : Math.hypot(px, py) < 14.5 ? 'm' : 'o');
+  const route = (x: number, z: number, tx: number, tz: number) => {
+    const [ax, ay] = toPlan(x, z), [bx, by] = toPlan(tx, tz);
+    if (inQ(ax, ay) || inQ(bx, by)) return null;
+    const za = zone(ax, ay), zb = zone(bx, by), aw = Math.atan2(ay, ax), bw = Math.atan2(by, bx);
+    const sameBay = za === 'o' && zb === 'o' && Math.abs(Math.atan2(Math.sin(aw - bw), Math.cos(aw - bw))) < 0.45;
+    if (za === zb && (za !== 'o' || sameBay)) return null;
+    const pts: [number, number][] = [], ring = (w: number): [number, number] => [Math.cos(w) * 12, Math.sin(w) * 12];
+    const outer = (q: string) => q === 'k' || q === 'h', A = outer(za), B = outer(zb);
+    if (za === 'o' && !sameBay) pts.push(ring(aw));
+    if (!A && B) { pts.push([MUND - 2, 0]); if (zb === 'h') pts.push([K0 - 1.5, 0]); }
+    if (A && !B) { if (za === 'h') pts.push([K0 + 1, 0]); pts.push([MUND - 2, 0]); }
+    if (A && B && za !== zb) pts.push(za === 'h' ? [K0 + 1, 0] : [K0 - 1.5, 0]);
+    if (zb === 'o' && !sameBay) pts.push(ring(bw));
+    pts.push([bx, by]);
+    let d = 0, cx = ax, cy = ay, next: [number, number] | null = null;
+    for (const p of pts) { const l = Math.hypot(p[0] - cx, p[1] - cy); if (!next && l > 1.5) next = p; d += l; cx = p[0]; cy = p[1]; }
+    const n = next || [bx, by];
+    return { x: gx(n[1]), z: gz(n[0]), d };
+  };
   return {
+    route,
     quartier,
     group, rects, blocks, spots, routes, chats, tris, map: { x: gx(D.karte_xy[1]), z: gz(D.karte_xy[0]) }, name: D.name,
     inside: (z: number) => z < hz0 - 0.2 && z > hz0 - 90,

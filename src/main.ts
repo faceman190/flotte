@@ -610,9 +610,8 @@ function toggleJumpDrive() {
   const to = nextHop();
   if (!to) radio('SYSTEM', 'Kein Sprungziel. Setze auf der Galaxiekarte (M) eine Route.');
   else if (world.surface) radio('SYSTEM', 'Der Sprungantrieb arbeitet nur im All. Steig erst in den Orbit auf.');
-  else if (!G.cruise) radio('SYSTEM', 'Der Sprungantrieb lädt nur im Reiseflug (Umschalt).');
   else if (world.stations.some(s => d3(P.x, P.y, P.z, s.x, s.y, s.z) < s.R + 500)) radio('SYSTEM', 'Zu nah an einer Station für einen Sprung. Flieg ein Stück hinaus.');
-  else { G.jd = JD_TIME; G.jdTo = to; radio('SYSTEM', `Sprungantrieb lädt. Ziel: ${SECTOR[to]?.name || to}. Kurs und Reiseflug halten.`); jdSound = sfxHeld('jump_charge', 0.75); if (!jdSound) snd(180, 0.5, 'sine', 0.05, 240); }
+  else { G.cruise = true; G.jd = JD_TIME; G.jdTo = to; radio('SYSTEM', `Sprungantrieb lädt, Reiseflug ist an. Ziel: ${SECTOR[to]?.name || to}. Kurs halten.`); jdSound = sfxHeld('jump_charge', 0.75); if (!jdSound) snd(180, 0.5, 'sine', 0.05, 240); }
 }
 function updateJumpDrive(dt: number) {
   if (!G.jd) return;
