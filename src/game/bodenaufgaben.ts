@@ -10,6 +10,7 @@ import { addRep, type RepId } from './reputation';
 import { decoLaden, bojeGruppe } from '../models/bojen';
 import { radio } from '../ui/radio';
 import { puff } from './fx';
+import { bauKoerper } from './koerper';
 
 // =====================================================================================
 // Bodenaufgaben (seit 2026-11-24): Arbeit draußen auf den Planeten, für die man ein Bodenfahrzeug braucht. Aushänge am Schwarzen Brett
@@ -138,7 +139,7 @@ function bauen(id: string, a: BodenAkt) {
     const beacon = new THREE.Sprite(glowMat(0xff3020, 1)); beacon.position.set(-0.7, 9.3, 2.2); beacon.scale.setScalar(1.6); g.add(beacon);
     const lights: THREE.Sprite[] = [];
     for (const [x, y, z, s] of [[1.54, 2.67, -1.6, 0.8], [4.05, 4.78, -2.35, 1.4], [4.75, 4.78, -2.35, 1.4]]) { const l = new THREE.Sprite(glowMat(0xfff0d0, 0.8)); l.position.set(x, y, z); l.scale.setScalar(s); g.add(l); lights.push(l); }
-    scene.add(g); world.extras.push(g);
+    scene.add(g); world.extras.push(g); bauKoerper('as:' + id, g);      // Außenstelle fest zu Fuß (koerper.ts)
     OBJ.set(id, { g, lights, beacon, smoke: 0 });
   } else if (a.typ === 'suche' && roverBau) {
     const m = roverBau('dachs'), g = m.g;

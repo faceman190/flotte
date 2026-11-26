@@ -36,6 +36,7 @@ import { radio } from '../ui/radio';
 import { groundShade, GROUND_SHADE_PARS } from './groundShade';
 import { GELAENDE, TERRAIN_LOOK, makeHeightFn, noiseSet, smoothField, erode, buildMaps, bakeLight, type TerrainMaps, type ErodeOut } from './terrain';
 import { buildGrass } from './grass';
+import { bauKoerper } from './koerper';
 
 // =====================================================================================
 // Planetenoberflächen: Gelände, Atmosphäre, Lagerstätten, Bodenstation und Bergbau-Rover.
@@ -309,7 +310,7 @@ export function buildSurface(sector: string) {
     for (const [i, [x, z]] of rigs.entries()) {
       const o = buildDeco('Bohrturm'); if (!o) return;
       o.position.set(x, heightAt(x, z) - 0.35, z); o.rotation.y = i * 1.3; o.traverse((q: any) => { if (q.isMesh) q.castShadow = true; });
-      scene.add(o); world.extras.push(o);
+      scene.add(o); world.extras.push(o); bauKoerper('bt:' + i, o);      // Bohrturm fest zu Fuß (koerper.ts)
     }
   });
   world.ground = groundAt;

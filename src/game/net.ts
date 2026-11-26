@@ -20,6 +20,7 @@ import { DUN, syncMinePilots } from './dungeon';
 import { newRemoteFig, driveRemote, dropRemote, gearFromNet, readNetFlags, netFlags, lookToNet, type RemoteFig } from './avatar';
 import { coopNet, coopReceive, onCoop, coopSend, pack } from './coop';
 import { Fahrer } from './fahrer';
+import { koerper, koerperWeg } from './koerper';
 import { setFieldMates } from './fieldfight';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { SHIPS, hasInterior, type ShipId } from '../data/ships';
@@ -172,8 +173,8 @@ function onMsg(m: any) {
 quartierHooks.piloten = () => pilotsHere().map(r => ({ id: r.id, name: r.name }));
 quartierHooks.einladen = (id, deko) => { if (NET.status !== 'online') return false; sendMsg({ t: 'qi', to: id, deko }); return true; };
 function disposeObj(o: THREE.Object3D) { scene.remove(o); o.traverse((c: any) => { if (c.isMesh && !c.userData.shared) c.geometry?.dispose(); }); }
-function removeRemote(id: number) { const r = remotes.get(id); if (!r) return; r.leiter?.g?.removeFromParent(); r.fahrer?.frei(); if (r.fig) dropRemote(r.fig); if (r.ship) disposeObj(r.ship.g); if (r.rover) disposeObj(r.rover); remotes.delete(id); }
-function clearRemotes() { for (const id of [...remotes.keys()]) removeRemote(id); syncOtherPilots([]); }
+function removeRemote(id: number) { const r = remotes.get(id); if (!r) return; koerper('rs' + id, null); koerper('rv' + id, null); r.leiter?.g?.removeFromParent(); r.fahrer?.frei(); if (r.fig) dropRemote(r.fig); if (r.ship) disposeObj(r.ship.g); if (r.rover) disposeObj(r.rover); remotes.delete(id); }
+function clearRemotes() { for (const id of [...remotes.keys()]) removeRemote(id); syncOtherPilots([]); koerperWeg('rs'); koerperWeg('rv'); }
 
 // Was gerade sichtbar ist: Schiff, Rover oder nichts (zu Fuß in der Station, angedockt)
 // Station, an der man gerade ist (angedockt, zu Fuß oder im eigenen Schiff im Hangar)
@@ -243,6 +244,9 @@ export function netUpdate(dt: number) {
     else if (boden && r.ls) { ship.g.position.set(r.ls[0], r.ls[1], r.ls[2]); ship.g.rotation.set(0, r.ls[3], 0); }
     // bewegliche Teile: wie beim Piloten selbst (z), ältere Fassungen ohne z: am Boden Fahrwerk aus und Rampe offen
     const z = r.z ?? ((boden ? 3 : 0) | (r.m === 'eva' ? 2 : 0));
+    // fest zu Fuß (koerper.ts): gelandetes Schiff mit seiner Form, Fahrzeug als Kreis
+    koerper('rs' + r.id, world.surface && boden && r.ls ? { art: 'schiff', cls: r.cls, lage: { x: r.ls[0], y: r.ls[1], z: r.ls[2], yaw: r.ls[3] }, rampe: !!(z & 2) } : null);
+    koerper('rv' + r.id, world.surface && r.rover && r.rover.visible ? { art: 'kreis', x: r.rover.position.x, z: r.rover.position.z, r: 2.3 } : null);
     setGear(ship.g, !!(z & 1), dt); setDoors(ship.g, !!(z & 2), dt); setKanzel(ship.g, !!(z & 4), dt);
     leiterSetzen(r.leiter || (r.leiter = { g: null }), !!(z & 8) && boden && !!r.ls, r.ls ? { x: r.ls[0], y: r.ls[1], z: r.ls[2], yaw: r.ls[3] } : undefined, ship.g);
     for (const gl of ship.glows) { gl.visible = r.m === 'schiff'; gl.scale.setScalar((gl.userData.base || 1) * (0.5 + Math.min(1, r.s / 200) * 1.3)); }      // Triebwerke nur im Flug

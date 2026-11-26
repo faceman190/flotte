@@ -1458,7 +1458,7 @@ export function updateWalk(dt: number) {
     const air = IN.jy > 0.05, fy = mesh.floorAt(IN.x, IN.z, IN.fy + IN.jy, air);
     if (fy !== null) {
       if (air) { const a = IN.fy + IN.jy; IN.fy = fy; IN.jy = Math.max(0, a - fy); }
-      else IN.fy += (fy - IN.fy) * Math.min(1, dt * 14);
+      else IN.fy += (fy - IN.fy) * Math.min(1, dt * (fy > IN.fy ? 45 : 14));      // bergauf fast sofort (Wisent-Treppe zum Wohndeck: beim Laufen blieb man sonst hängen), bergab weich
     }
   }
   rampTransit();
