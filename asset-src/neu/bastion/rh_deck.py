@@ -328,5 +328,6 @@ def tris():
         total += cache[key]
     return {'gesetzt': total, 'einmalig': sum(cache.values())}
 
-assemble(); lights(); SHEETS = sheet(); cameras()
-result = {'bausteine': len(MOD), 'instanzen': len(C_DECK.objects) + len(C_CEIL.objects), 'objekte': len(bpy.data.objects)}
+if not globals().get('NUR_HELFER_RH'):      # pd_deck.py (neues Deck 3, 26.11.2026) lädt nur die Helfer
+    assemble(); lights(); SHEETS = sheet(); cameras()
+    result = {'bausteine': len(MOD), 'instanzen': len(C_DECK.objects) + len(C_CEIL.objects), 'objekte': len(bpy.data.objects)}

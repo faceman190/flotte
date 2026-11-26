@@ -42,3 +42,8 @@ Thumbs.db
 
 # Rohe Rundhalle der Bastion im Lichtraum 2 (80 MB); neu erzeugen: asset-src/neu/bastion/rh_back_lauf.py (docs/rundhalle.md)
 /asset-src/glb/base/Lichtraum2Rund.glb
+# Rohes Deck 3 der Bastion (Forum, seit 2026-11-26) im Lichtraum 2 (137 MB, über der Dateigrenze); neu erzeugen: asset-src/neu/bastion/pd_back_lauf.py (docs/deck3.md)
+/asset-src/glb/base/Lichtraum2Deck3.glb
+
+# Logiktest der Gegner-KI: gebündelte Fassung (scripts/kitest/build.mjs)
+/scripts/kitest/.out.mjs

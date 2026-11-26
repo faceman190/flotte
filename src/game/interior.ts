@@ -35,6 +35,7 @@ import { staffBark, isFem } from './barks';
 import { crewBesuch, crewSpruch, crewFetzen, crewDurchsage, crewEile, crewHooks } from './crewStimmen';
 import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, type Deck, type HangarBuild, type DeckQuartier } from './deck';
 import { QS, eigeneDeko, nrText, FUND_FARBE, ortKennung, type QDeko } from './quartier';
+import { puppenAufbau, puppenUpdate, puppenAbbau } from './schaupuppe';
 import { REP } from './reputation';
 import { stellLokal, fzImRaum, flaeche as laderaumFlaeche, bloecke as laderaumBloecke, rampenLokal } from './laderaum';
 import { FZ } from '../models/rover';
@@ -637,6 +638,9 @@ function build(st: Station) {
     });
     for (const [x, z, n] of dk.chats) mkChat(x, z, n);
     if (dk.quartier) quartierAufbau(dk.quartier, g);      // Aufzug auf Deck 3 und das Quartier (game/quartier.ts)
+    // eigener Aufzug zu den Hangarbuchten (seit 2026-11-26, vorher hing die Buchtenwahl am Aufzug „Quartiere“)
+    if (dk.bucht) inters.push({ x: dk.bucht.aufzug[0], z: dk.bucht.aufzug[1], r: 2.4, label: () => 'Aufzug · Hangarbuchten', act: () => { QS.mode = 'bucht'; interiorHooks.openTab('quartier', ''); } });
+    puppenAufbau(dk.puppen, g);      // Schaupuppen des Ausrüsters (schaupuppe.ts)
   }
 
   boxUV(S, 1 / 6);
@@ -967,6 +971,7 @@ export function leaveInterior() {
   if (document.pointerLockElement === gl && !keepLockForFlight()) document.exitPointerLock();
   disposeParked();
   clearOthers();
+  puppenAbbau();
   stationGroup = null;
   if (group) {
     scene.remove(group);
@@ -1635,6 +1640,7 @@ export function updateWalk(dt: number) {
     if (hangarBody) hangarBody.visible = hs;
     for (const q of persons) q.p.g.visible = deck.seen(q.x, q.z);
     for (const w of walkers) w.p.g.visible = deck.seen(w.x, w.z);
+    puppenUpdate(IN.x, IN.z, on, deck.seen);
   }
   // eigene Figur: Außensicht, oder Ich-Sicht mit ganzem Körper (avatar.ts bodyView, seit 2026-11-24)
   const tpOn = SEQ.t < 0 && (VIEW.tp || bodyView());

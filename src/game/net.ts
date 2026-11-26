@@ -402,7 +402,7 @@ buchtHooks.einladen = id => { if (NET.status !== 'online') return false; coopSen
 onCoop('hi', (m: any) => {
   if (+m.an !== NET.id) return;
   const name = String(m.n || remotes.get(m.from)?.name || 'Ein Pilot').slice(0, 24);
-  buchtEinladung(name, m.from); radio(name, 'Komm in meine Hangarbucht: über den Aufzug auf Deck 3 oder die Buchtenwahl an der Rückwand deines Hangars.', '#ffb35a');
+  buchtEinladung(name, m.from); radio(name, 'Komm in meine Hangarbucht: über den Aufzug „Hangarbuchten“ auf Deck 3 oder die Buchtenwahl an der Rückwand deines Hangars.', '#ffb35a');
 });
 buchtHooks.fahren = (owner, id) => {
   if (!owner || owner === P.name) { buchtFahrt(P.name, 0, '', ''); return ''; }
