@@ -28,7 +28,7 @@ in den Rucksack oder gleich angelegt, Fracht +20 oder leeren.
 - Clip-Vorführung: Suche im Bewegungssatz (alle geladenen Clips), „Vor mir abspielen“ stellt eine zweite Figur in der eigenen Tracht 3 m vor
   den Piloten, die den Clip in Schleife spielt (ohne Wurzelbewegung), Tempo 0,25× / 0,5× / 1. Nur zu Fuß auf Planeten.
 
-**Welt:** unverwundbar (Schiff, zu Fuß, Mine), Begegnung jetzt (Kapsel, Treibgut, Panne, Angriff; nur im Flug), Kapitel 1–5 abschließen
+**Welt:** Plündererlager mit Gegner-KI vor dem Piloten aufstellen oder entfernen, dazu eine Debug-Ansicht (nur zu Fuß auf Planeten, [ki-gegner.md](ki-gegner.md)), unverwundbar (Schiff, zu Fuß, Mine), Begegnung jetzt (Kapsel, Treibgut, Panne, Angriff; nur im Flug), Kapitel 1–5 abschließen
 (dann stören keine Szenen mehr, nicht rückgängig), Pause der Stationsaufgaben zurücksetzen.
 
 ## Erweitern
