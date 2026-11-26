@@ -79,15 +79,15 @@ export function hilfsduesen(g: THREE.Object3D, cls: string, dt: number, gier: nu
     s.kegel.visible = s.kern.visible = on;
     const fl = 1 + (Math.random() - 0.5) * (s.hub ? 0.12 : 0.35);
     // weich und durchscheinend (Nutzer: realistisch, nicht verspielt): blasser Schleier, kurzer heller Kern, Glühen an der Düse
-    (s.sp.material as THREE.SpriteMaterial).opacity = Math.min(1, k * (s.hub ? 0.6 : 0.8));
+    (s.sp.material as THREE.SpriteMaterial).opacity = Math.min(1, k * (s.hub ? 0.45 : 0.7));
     if (s.hub) {
       s.sp.scale.setScalar(s.r * (2.0 + 1.8 * k) * fl);
-      const L = (0.9 + 2.0 * k) * fl; s.kegel.scale.set(s.r * 1.05, s.r * 1.05, L); s.kern.scale.set(s.r * 0.5, s.r * 0.5, L * 0.45);
-      (s.kegel.material as THREE.MeshBasicMaterial).opacity = 0.1 * k; (s.kern.material as THREE.MeshBasicMaterial).opacity = 0.2 * k;
+      const L = (0.7 + 1.3 * k) * fl; s.kegel.scale.set(s.r * 1.1, s.r * 1.1, L); s.kern.scale.set(s.r * 0.55, s.r * 0.55, L * 0.4);      // der Glanzfilter bläht helle Kegel auf: wenig Deckkraft
+      (s.kegel.material as THREE.MeshBasicMaterial).opacity = 0.045 * k; (s.kern.material as THREE.MeshBasicMaterial).opacity = 0.09 * k;
     } else {
       const L = (0.25 + 0.9 * k) * fl * (0.85 + 0.15 * Math.sin(t * 47 + s.ph));
       s.sp.scale.setScalar((0.3 + 0.7 * k) * fl); s.kegel.scale.set(0.1, 0.1, L); s.kern.scale.set(0.05, 0.05, L * 0.5);
-      (s.kegel.material as THREE.MeshBasicMaterial).opacity = 0.16 * k; (s.kern.material as THREE.MeshBasicMaterial).opacity = 0.3 * k;
+      (s.kegel.material as THREE.MeshBasicMaterial).opacity = 0.08 * k; (s.kern.material as THREE.MeshBasicMaterial).opacity = 0.16 * k;
     }
   }
 }

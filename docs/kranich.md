@@ -34,6 +34,9 @@ Außen (`asset-src/neu/kranich/kra_kit.py`, Achsen wie Milan und Dohle: +X nach 
 - Zehn Steuerdüsenblöcke mit je drei Düsen (seitlich, senkrecht, längs): Nase oben und unten, Heck oben und unten, je beide Seiten, dazu je einer außen an den Gondelenden.
 - Im Spiel: `src/game/hilfsduesen.ts`. Die Hubdüsen arbeiten beim Steigen (Leertaste), schwach beim Sinken und auf Planeten in Bodennähe (stärker je tiefer: Starten, Landen, Schweben). Jede Steuerdüse feuert, wenn ihr Rückstoß zur gewünschten Bewegung passt: Drehmoment in Richtung der Drehung (Nicken, Gieren, Rollen) oder Kraft in Richtung des Schiebens (A/D, Leertaste/Strg, Bremsen mit S). Lage und Richtung kommen aus dem Export (`kra-gelenke.json` → `duesen`). Die Düsen sind nur sichtbar, solange die Haupttriebwerke es sind (am Boden, außenbords und angedockt aus).
 - Für weitere Schiffe: einen Eintrag in der Tabelle `D` in `hilfsduesen.ts` (Punkte und Richtungen in Schiffskoordinaten).
+- Strahlen mit wenig Deckkraft: Der Glanzfilter des Spiels bläht helle Kegel zu weißen Spitzen auf.
+
+![Hub- und Steuerdüsen beim Steigen und Schieben](bilder/kranich-duesen.jpg)
 
 ## Innenraum
 
