@@ -492,21 +492,26 @@ function altRockMat(id: string) {
     vertexColors: true, side: THREE.DoubleSide, envMapIntensity: 0.2 }));
 }
 function instPart(part: THREE.Object3D, list: THREE.Matrix4[]) {
+  const out: THREE.Object3D[] = [];
   part.updateMatrixWorld(true);
   part.traverse((o: any) => {
     if (!o.isMesh) return;
     const im = new THREE.InstancedMesh(o.geometry, o.material, list.length);
     list.forEach((m, i) => im.setMatrixAt(i, _m4.multiplyMatrices(m, o.matrixWorld)));
-    im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.userData.sh = false; group!.add(im);
+    im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.userData.sh = false; group!.add(im); out.push(im);
   });
+  return out;
 }
 function buildAltProps(plan: Plan, R: ReturnType<typeof rng>) {
   const ga = altBox('gang_a'), gb = altBox('gang_b'), ts = altBox('tuerstock');
   if (!ga || !gb || !ts) return false;
   lamps = [];
   const place: Record<string, THREE.Matrix4[]> = {}, _e2 = new THREE.Euler(), _q2 = new THREE.Quaternion();
-  const add = (name: string, x: number, y: number, z: number, ry: number, sx = 1, sy = 1, sz = 1, rx = 0, rz = 0) =>
-    (place[name] = place[name] || []).push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), _q2.setFromEuler(_e2.set(rx, ry, rz, 'YXZ')).clone(), new THREE.Vector3(sx, sy, sz)));
+  // Je Modul und Bereich von 4 × 4 Kacheln ein InstancedMesh (wie die Felsen): so blendet updateDungeon entfernte Bereiche aus.
+  const add = (name: string, x: number, y: number, z: number, ry: number, sx = 1, sy = 1, sz = 1, rx = 0, rz = 0) => {
+    const key = name + '|' + (Math.round(x / TS) >> 2) + '|' + (Math.round(z / TS) >> 2);
+    (place[key] = place[key] || []).push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), _q2.setFromEuler(_e2.set(rx, ry, rz, 'YXZ')), new THREE.Vector3(sx, sy, sz)));
+  };
   const gaS = ga.getSize(new THREE.Vector3()), gbS = gb.getSize(new THREE.Vector3()), tsS = ts.getSize(new THREE.Vector3());
   const rails: [number, number, number][] = [];
   const pick = <T,>(a: T[]) => a[Math.floor(R.next() * a.length)];
@@ -571,9 +576,14 @@ function buildAltProps(plan: Plan, R: ReturnType<typeof rng>) {
       n++; break;
     }
   }
-  for (const [name, list] of Object.entries(place)) {
-    const part = name[0] === '@' ? kitPart(name.slice(1)) : altPart(name);
-    if (part && list.length) instPart(part, list);
+  const byChunk = new Map<string, { x: number; z: number; meshes: THREE.Object3D[] }>();
+  for (const c of chunks) byChunk.set(c.x + ',' + c.z, c);
+  for (const [key, list] of Object.entries(place)) {
+    const [name, cx, cz] = key.split('|'), part = name[0] === '@' ? kitPart(name.slice(1)) : altPart(name);
+    if (!part || !list.length) continue;
+    const meshes = instPart(part, list), ck = cx + ',' + cz;
+    let c = byChunk.get(ck); if (!c) { byChunk.set(ck, c = { x: +cx, z: +cz, meshes: [] }); chunks.push(c); }
+    c.meshes.push(...meshes);
   }
   return true;
 }
