@@ -13,6 +13,7 @@ import { GEAR_IDS, RARITY, gearDef } from '../data/gear';
 import { addItem, canAdd, gearStat, gearFactor } from './inventory';
 import { SECTOR } from '../data/galaxy';
 import { PLANETS, PTYPE } from '../data/planets';
+import { preloadMineAlt, mineAltReady, mineAltLoading, altPart, altBox, altSurface } from './mineAlt';
 import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buildViewModel, viewModelId, poseViewModel, type DroneVis, type ViewModel } from './mineArt';
 import { droneBark } from './barks';
 import { kitMaterials } from '../models/kit';
@@ -346,8 +347,11 @@ function noise3(x: number, y: number, z: number, s: number) {
   return L(L(L(hash3(xi, yi, zi, s), hash3(xi + 1, yi, zi, s), u), L(hash3(xi, yi + 1, zi, s), hash3(xi + 1, yi + 1, zi, s), u), v),
     L(L(hash3(xi, yi, zi + 1, s), hash3(xi + 1, yi, zi + 1, s), u), L(hash3(xi, yi + 1, zi + 1, s), hash3(xi + 1, yi + 1, zi + 1, s), u), v), w);
 }
-function buildRock(seed: number, tint: THREE.Color) {
+function buildRock(seed: number, tint: THREE.Color, alt = false) {
   const pos: number[] = [], col: number[] = [], uv: number[] = [], SUB = 4, W = DUN.W, H = DUN.H;
+  // Altbau (mineAlt.ts): Wände ruhiger, damit der Fels nicht durch den Holzausbau sticht; Bilder 2 m statt 2,6 m
+  const AMP = alt ? 0.14 : 0.42, DY = alt ? 0.3 : 1, UVS = alt ? 2.0 : 2.6;
+  const ac = alt ? new THREE.Color(1, 1, 1).lerp(tint.clone().multiplyScalar(1 / 1.5), 0.25) : tint;
   // Nähe zum Fels (1 an der Wand, 0 ab gut einem Meter Abstand): wölbt die Decke und hebt den Boden an den Wänden an.
   // Sie hängt nur vom Ort ab, deshalb schließen Boden, Wände und Decke dicht aneinander.
   const edge = (x: number, z: number) => {
@@ -359,11 +363,11 @@ function buildRock(seed: number, tint: THREE.Color) {
     const k = clamp(1 - d / 1.25, 0, 1); return k * k * (3 - 2 * k);
   };
   const put = (x: number, y: number, z: number, shade: number, u: number, v: number) => {
-    const k = clamp(y / 1.0, 0.3, 1), a = 0.42 * k;
+    const k = clamp(y / 1.0, 0.3, 1), a = AMP * k;
     const dx = (noise3(x * 0.9, y * 0.9, z * 0.9, seed) - 0.5) * 2 * a, dz = (noise3(x * 0.9 + 31, y * 0.9 + 7, z * 0.9 + 13, seed) - 0.5) * 2 * a;
-    const dy = (noise3(x * 0.7 + 5, y * 0.7 + 19, z * 0.7 + 3, seed) - 0.5) * (y < 0.4 ? 0.16 : 0.7);
+    const dy = (noise3(x * 0.7 + 5, y * 0.7 + 19, z * 0.7 + 3, seed) - 0.5) * (y < 0.4 ? 0.16 : 0.7) * DY;
     const n = 0.75 + 0.5 * noise3(x * 0.3, y * 0.3, z * 0.3, seed + 3);
-    pos.push(x + dx, y + dy, z + dz); col.push(tint.r * shade * n, tint.g * shade * n, tint.b * shade * n); uv.push(u, v);
+    pos.push(x + dx, y + dy, z + dz); col.push(ac.r * shade * n, ac.g * shade * n, ac.b * shade * n); uv.push(u * 2.6 / UVS, v * 2.6 / UVS);
   };
   const quad = (pf: (a: number, b: number) => [number, number, number, number, number, number]) => {
     for (let j = 0; j < SUB; j++) for (let i = 0; i < SUB; i++) {
@@ -371,11 +375,17 @@ function buildRock(seed: number, tint: THREE.Color) {
       for (const k of [0, 1, 2, 0, 2, 3]) put(c[k][0], c[k][1], c[k][2], c[k][3], c[k][4], c[k][5]);
     }
   };
-  const FL = 0.18, CL = 0.85;      // Anhebung des Bodens und Absenkung der Decke an der Wand
+  const FL = 0.18, CL = alt ? 0.22 : 0.85;      // Anhebung des Bodens und Absenkung der Decke an der Wand
+  // Erst alle Böden (eigene Materialgruppe im Altbau), dann Decken und Wände
+  for (let z = 0; z < H; z++) for (let x = 0; x < W; x++) {
+    if (!DUN.t[z * W + x]) continue;
+    const x0 = (x - 0.5) * TS, z0 = (z - 0.5) * TS;
+    quad((a, b) => { const px = x0 + a * TS, pz = z0 + (1 - b) * TS, e = edge(px, pz); return [px, FL * e, pz, 0.9 - 0.3 * e, px / 2.6, pz / 2.6]; });                 // Boden
+  }
+  const nFloor = pos.length / 3;
   for (let z = 0; z < H; z++) for (let x = 0; x < W; x++) {
     if (!DUN.t[z * W + x]) continue;
     const x0 = (x - 0.5) * TS, z0 = (z - 0.5) * TS, h = DUN.ceil[z * W + x];
-    quad((a, b) => { const px = x0 + a * TS, pz = z0 + (1 - b) * TS, e = edge(px, pz); return [px, FL * e, pz, 0.9 - 0.3 * e, px / 2.6, pz / 2.6]; });                 // Boden
     quad((a, b) => { const px = x0 + a * TS, pz = z0 + b * TS, e = edge(px, pz); return [px, h - CL * e, pz, 0.5 - 0.15 * e, px / 2.6, pz / 2.6]; });                    // Decke
     // Wände zu Felskacheln; zu Nachbarn mit niedrigerer Decke entsteht ein Sturz
     const sides: [number, number, (a: number) => [number, number]][] = [
@@ -393,6 +403,14 @@ function buildRock(seed: number, tint: THREE.Color) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.computeVertexNormals();
   const m = texMat(0xffffff, 'rock', { roughness: 0.96, metalness: 0.02, vertexColors: true, side: THREE.DoubleSide }, 1.2);
+  if (alt) {
+    const wallM = altRockMat('uebmddyn'), floorM = altRockMat('shnnehua');
+    if (wallM && floorM) {
+      g.addGroup(0, nFloor, 0); g.addGroup(nFloor, pos.length / 3 - nFloor, 1);
+      const mesh = new THREE.Mesh(g, [floorM, wallM]); mesh.userData.sh = false; mesh.frustumCulled = false;
+      return mesh;
+    }
+  }
   const mesh = new THREE.Mesh(g, m); mesh.userData.sh = false; mesh.frustumCulled = false;
   return mesh;
 }
@@ -401,7 +419,7 @@ function buildRock(seed: number, tint: THREE.Color) {
 // Jede Wandkante bekommt unten zwei Felsen und oben einen, jede Bodenkachel einen Deckenfels und etwas Geröll. Die Felsen stecken zum größten
 // Teil im Gestein und ragen 0,1–0,4 m in den Gang (die Kollision hält deshalb 0,58 m Abstand zur Wandlinie). Gleiche Felsen eines 4 × 4-Kachel-
 // Bereichs werden zu einem InstancedMesh zusammengefasst; so bleibt die Zahl der Zeichenaufrufe klein und entfernte Bereiche fallen weg.
-function buildCaveRocks(seed: number, tint: THREE.Color) {
+function buildCaveRocks(seed: number, tint: THREE.Color, skip: (x: number, z: number) => boolean = () => false) {
   const set = rockSet(); if (!set) return false;
   const R = rng(seed + 31), mat = rockMaterial(tint);
   const WALL = [1, 2, 3, 4, 5, 6, 2, 3, 4], BIG = [0, 8, 9, 7], SMALL = [1, 2, 4], CEIL = [3, 5, 6, 4, 0];      // Indizes (F01 = 0)
@@ -422,7 +440,7 @@ function buildCaveRocks(seed: number, tint: THREE.Color) {
     put(k, wx + nx * (Dt / 2 - p), y, wz + nz * (Dt / 2 - p), ry, R.range(-0.12, 0.12), R.range(-0.12, 0.12), (even ? Wt : Dt) / r.w, Ht / r.h, (even ? Dt : Wt) / r.d);
   };
   for (let z = 0; z < DUN.H; z++) for (let x = 0; x < DUN.W; x++) {
-    const v = DUN.t[I(x, z)]; if (!v) continue;
+    const v = DUN.t[I(x, z)]; if (!v || skip(x, z)) continue;
     tx0 = x; tz0 = z;
     const cx = x * TS, cz = z * TS, h = DUN.ceil[I(x, z)], cave = h > 3.6;
     if (v === 1) for (const [nx, nz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) {
@@ -453,6 +471,109 @@ function buildCaveRocks(seed: number, tint: THREE.Color) {
     im.computeBoundingSphere(); im.userData.sh = false; group!.add(im);
     const ck = b.cx + ',' + b.cz; let c = byChunk.get(ck); if (!c) { byChunk.set(ck, c = { x: b.cx, z: b.cz, meshes: [] }); chunks.push(c); }
     c.meshes.push(im);
+  }
+  return true;
+}
+
+// ---------- Altbau aus den Megascans (mineAlt.ts, docs/minen-altbau.md) ----------
+// Gerade Gangstücke (Decke bis 3,6 m) bekommen durchgehend ein Holz-Stollenstück; an Kurven und Abzweigen steht ein Türstock in jeder Öffnung zu
+// einem ausgebauten Gang. Kavernen behalten die Felsen und bekommen Loren, Holz, Geröll und Werkzeug. Gleise kommen weiter aus Mine_Kit
+// (Schmalspur, passt zu den gescannten Loren; die gescannten Gleise sind Normalspur).
+function lined(x: number, z: number) {
+  if (DUN.t[I(x, z)] !== 1 || DUN.ceil[I(x, z)] > 3.6) return 0;
+  const e = tile(x + 1, z) > 0, w = tile(x - 1, z) > 0, s2 = tile(x, z + 1) > 0, n = tile(x, z - 1) > 0;
+  return e && w && !s2 && !n ? 1 : s2 && n && !e && !w ? 2 : 0;
+}
+const ALTM: Record<string, THREE.MeshStandardMaterial> = {};
+function altRockMat(id: string) {
+  if (ALTM[id]) return ALTM[id];
+  const src = altSurface(id); if (!src) return null;
+  return (ALTM[id] = new THREE.MeshStandardMaterial({ map: src.map, normalMap: src.normalMap, roughnessMap: src.roughnessMap, roughness: 1, metalness: 0,
+    vertexColors: true, side: THREE.DoubleSide, envMapIntensity: 0.2 }));
+}
+function instPart(part: THREE.Object3D, list: THREE.Matrix4[]) {
+  part.updateMatrixWorld(true);
+  part.traverse((o: any) => {
+    if (!o.isMesh) return;
+    const im = new THREE.InstancedMesh(o.geometry, o.material, list.length);
+    list.forEach((m, i) => im.setMatrixAt(i, _m4.multiplyMatrices(m, o.matrixWorld)));
+    im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.userData.sh = false; group!.add(im);
+  });
+}
+function buildAltProps(plan: Plan, R: ReturnType<typeof rng>) {
+  const ga = altBox('gang_a'), gb = altBox('gang_b'), ts = altBox('tuerstock');
+  if (!ga || !gb || !ts) return false;
+  lamps = [];
+  const place: Record<string, THREE.Matrix4[]> = {}, _e2 = new THREE.Euler(), _q2 = new THREE.Quaternion();
+  const add = (name: string, x: number, y: number, z: number, ry: number, sx = 1, sy = 1, sz = 1, rx = 0, rz = 0) =>
+    (place[name] = place[name] || []).push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), _q2.setFromEuler(_e2.set(rx, ry, rz, 'YXZ')).clone(), new THREE.Vector3(sx, sy, sz)));
+  const gaS = ga.getSize(new THREE.Vector3()), gbS = gb.getSize(new THREE.Vector3()), tsS = ts.getSize(new THREE.Vector3());
+  const rails: [number, number, number][] = [];
+  const pick = <T,>(a: T[]) => a[Math.floor(R.next() * a.length)];
+  const KLEIN = ['keil_1', 'keil_2', 'brett', 'nagel_a', 'nagel_b', 'eisenkeil', 'erz'];
+  for (let z = 1; z < DUN.H - 1; z++) for (let x = 1; x < DUN.W - 1; x++) {
+    if (DUN.t[I(x, z)] !== 1) continue;
+    const h = DUN.ceil[I(x, z)], wx = x * TS, wz = z * TS, L = lined(x, z);
+    const ht = Math.min(h - 0.2, 2.8);
+    if (L) {
+      const ry = L === 1 ? 0 : Math.PI / 2, flip = R.next() < 0.5 ? Math.PI : 0;
+      if (R.next() < 0.75) add('gang_a', wx, 0, wz, ry + flip, TS / gaS.x, ht / gaS.y, TS / gaS.z);
+      else add('gang_b', wx, 0, wz, ry + flip, TS / gbS.x, ht / gbS.y, TS / gbS.z);
+      if (hasMineKit()) { add('@gleis', wx, 0, wz, ry); rails.push([wx, wz, ry]); }
+      // Kleinkram am Rand und ab und zu ein Geröllhaufen an der Wand
+      const side = R.next() < 0.5 ? -1 : 1, ax = L === 1 ? 1 : 0, az = L === 1 ? 0 : 1;
+      if (R.next() < 0.35) { const u = R.range(-1.2, 1.2), q = R.range(0.75, 1.0) * side; add(pick(KLEIN), wx + ax * u + az * q, 0.02, wz + az * u + ax * q, R.next() * 6.28, 1, 1, 1, 0, R.next() < 0.5 ? Math.PI / 2 : 0); }
+      if (R.next() < 0.18) { const q = 0.95 * side, sc = R.range(0.45, 0.65); add(R.next() < 0.6 ? 'geroell_b' : 'kohlegrus', wx + az * q, 0, wz + ax * q, R.next() * 6.28, sc, 1, sc); }
+      continue;
+    }
+    if (h > 3.6) continue;
+    // Kurve, Abzweig, Kreuzung: Türstock in jeder Öffnung zu einem ausgebauten Gang
+    for (const [nx, nz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) {
+      if (!lined(x + nx, z + nz)) continue;
+      add('tuerstock', wx + nx * (TS / 2 - 0.25), 0, wz + nz * (TS / 2 - 0.25), nx !== 0 ? 0 : Math.PI / 2, 1, ht / tsS.y, TS / tsS.z);
+    }
+  }
+  // Grubenlampen an der Wand (Rückseite der Lampe = −Z im Modell)
+  for (const [x, z] of plan.lampsAt) {
+    const wx = x * TS, wz = z * TS;
+    let n: Vec2 | null = null;
+    for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) if (tile(x + d[0], z + d[1]) === 0) { n = d; break; }
+    if (!n) { lamps.push(new THREE.Vector3(wx, DUN.ceil[I(x, z)] - 0.8, wz)); continue; }
+    const off = TS / 2 - 0.42, lx = wx + n[0] * off, lz = wz + n[1] * off;
+    add('lampe', lx, 1.95, lz, Math.atan2(-n[0], -n[1]), 1.4, 1.4, 1.4);
+    lamps.push(new THREE.Vector3(lx - n[0] * 0.3, 2.1, lz - n[1] * 0.3));
+  }
+  // Loren auf Gleisstücken, weit weg vom Eingang
+  const far = rails.filter(r => Math.hypot(r[0] - TS, r[1] - TS) > 4 * TS);
+  for (const name of ['lore_kohle', 'lore_leer', R.next() < 0.5 ? 'lore_kohle' : 'lore_saecke']) {
+    if (!far.length) break;
+    const r = far.splice(Math.floor(R.next() * far.length), 1)[0]; add(name, r[0], 0.155, r[1], r[2] + (R.next() < 0.5 ? 0 : Math.PI));
+  }
+  // Kavernen: Wagen, Holzstapel, Geröll und Werkzeug an den Wänden
+  const DEKO = ['wagen_holz', 'wagen_leer', 'lore_saecke', 'geroell_a', 'holzstapel', 'holzstapel', 'werkzeug', 'werkzeug', 'radsatz', 'stempel_kurz', 'kohlegrus'];
+  let n = 0;
+  for (let z = 1; z < DUN.H - 1; z++) for (let x = 1; x < DUN.W - 1; x++) {
+    if (DUN.t[I(x, z)] !== 1 || DUN.ceil[I(x, z)] < 3.6 || R.next() > 0.3 || n > 26) continue;
+    for (const [nx, nz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) {
+      if (tile(x + nx, z + nz) !== 0) continue;
+      const kind = pick(DEKO), cx = x * TS + nx * 0.85 + (nz ? R.range(-0.8, 0.8) : 0), cz = z * TS + nz * 0.85 + (nx ? R.range(-0.8, 0.8) : 0), face = Math.atan2(-nx, -nz);
+      if (kind === 'holzstapel') {
+        const k = pick(['holz_1', 'holz_2', 'holz_3']);
+        for (let i = 0; i < 6; i++) add(k, cx + nz * R.range(-0.1, 0.1), 0.07 + Math.floor(i / 3) * 0.16, cz + nx * R.range(-0.1, 0.1) + (i % 3 - 1) * 0.2 * (nx ? 1 : 0), face + Math.PI / 2 + R.range(-0.06, 0.06));
+      } else if (kind === 'werkzeug') {
+        const k = pick(['spaten', 'schaufel', 'spitzhacke', 'faeustel']);
+        if (k === 'faeustel') add(k, cx, 0.03, cz, R.next() * 6.28);
+        else add(k, x * TS + nx * 1.15, 0.02, z * TS + nz * 1.15, face + Math.PI / 2, 1, 1, 1, 0, 1.3);      // an die Wand gelehnt
+        if (R.next() < 0.3) add('helm', cx - nx * 0.5, 0.0, cz - nz * 0.5, R.next() * 6.28);
+      } else if (kind === 'stempel_kurz') add(kind, x * TS + nx * 1.1, 0.05, z * TS + nz * 1.1, face, 1, 1, 1, nx ? 0 : 0.25, nx ? 0.25 * -nx : 0);
+      else if (kind === 'geroell_a' || kind === 'kohlegrus') add(kind, cx, 0, cz, face + R.range(-0.4, 0.4), R.range(0.6, 0.9), 1, R.range(0.6, 0.9));
+      else add(kind, cx, 0, cz, face + Math.PI / 2 + R.range(-0.25, 0.25));
+      n++; break;
+    }
+  }
+  for (const [name, list] of Object.entries(place)) {
+    const part = name[0] === '@' ? kitPart(name.slice(1)) : altPart(name);
+    if (part && list.length) instPart(part, list);
   }
   return true;
 }
@@ -660,7 +781,7 @@ export function buildDungeonEntrances(sector: string, heightAt: (x: number, z: n
 }
 // Eingang in Reichweite des Rovers (für die Taste E)
 export function nearEntrance(px: number, pz: number): Entrance | null {
-  for (const e of ENTR) if (Math.hypot(e.x - px, e.z - pz) < 18) return e;
+  for (const e of ENTR) { const d = Math.hypot(e.x - px, e.z - pz); if (d < 700) preloadMineAlt(); if (d < 18) return e; }
   return null;
 }
 export const dungeonEntrances = () => ENTR;
@@ -852,13 +973,16 @@ export function enterDungeon(e: Entrance) {
   group = new THREE.Group(); group.position.copy(BASE); scene.add(group);
   const tint = new THREE.Color(T ? T.ground[1] : 0x8a8270).lerp(new THREE.Color(0x777777), 0.45).multiplyScalar(1.5);
   const calm = e.kind === 'schiff', wr = e.kind === 'wrack' || e.kind === 'archiv' || calm, thKey = e.kind === 'archiv' ? 'archiv' : calm ? 'schiff' : wr ? 'wrack' : pl?.type || 'fels';
-  const rock: THREE.Object3D = wr ? buildHull(seed % 1000) : buildRock(seed % 1000, tint);
-  const rocksOn = !wr && buildCaveRocks(seed, new THREE.Color(0.7, 0.67, 0.62).lerp(tint.clone().multiplyScalar(1 / 1.5), 0.4));
-  if (rocksOn) ((rock as THREE.Mesh).material as THREE.MeshStandardMaterial).color.setScalar(0.85);     // Hintergrund hinter den Felsen
+  const alt = !wr && mineAltReady();         // Altbau aus den Megascans (mineAlt.ts), sonst die bisherige Mine
+  if (!wr && !alt && mineAltLoading()) say('Altbau wird noch geladen, diesmal die alte Mine.', '#9aa7b4');
+  const rock: THREE.Object3D = wr ? buildHull(seed % 1000) : buildRock(seed % 1000, tint, alt);
+  const rocksOn = !wr && buildCaveRocks(seed, new THREE.Color(0.7, 0.67, 0.62).lerp(tint.clone().multiplyScalar(1 / 1.5), 0.4), alt ? (x, z) => lined(x, z) > 0 : undefined);
+  const rm = (rock as THREE.Mesh).material;
+  if (rocksOn && !Array.isArray(rm)) (rm as THREE.MeshStandardMaterial).color.setScalar(0.85);     // Hintergrund hinter den Felsen
   group.add(rock); WALL_R = rocksOn ? 0.58 : 0.42;
   const ORE: Record<string, number> = { fels: 0x40c0ff, wueste: 0xffb040, eis: 0x9fe8ff, vulkan: 0xff6030, asche: 0xb070ff, kristall: 0xd080ff };
   mats(ORE[pl?.type || 'fels'] || 0x40c0ff);
-  if (wr) buildWreckProps(plan, R); else if (!buildKitProps(plan, R)) buildProps(plan, R);
+  if (wr) buildWreckProps(plan, R); else if (!(alt && buildAltProps(plan, R)) && !buildKitProps(plan, R)) buildProps(plan, R);
   buildTheme(thKey, R);
   // Kisten (schon geöffnete bleiben offen), dazu ein Verbandskasten auf halbem Weg
   DUN.crates = calm ? [] : plan.crates.map((c, i) => buildCrate(c[0], c[1], false, i, R.next() * 6.28, i === 1));

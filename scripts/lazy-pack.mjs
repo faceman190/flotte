@@ -17,8 +17,8 @@ import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
 
 export const LAZY_OPTS = {
 };
-// Einstellungen zu einem Dateinamen: Skelett, Körper und Ausrüstungsteile der Spielerfiguren behalten ihre Texturen
-export const lazyOpts = name => (/^(Skelett|Koerper\d|Teil_)/.test(name) ? { keepTex: true } : LAZY_OPTS[name]);
+// Einstellungen zu einem Dateinamen: Skelett, Körper und Ausrüstungsteile der Spielerfiguren sowie der Minen-Altbau (MineAlt_*, 2K/4K) behalten ihre Texturen
+export const lazyOpts = name => (/^(Skelett|Koerper\d|Teil_|MineAlt_)/.test(name) ? { keepTex: true } : LAZY_OPTS[name]);
 
 let io = null;
 export async function packLazy(src, o = {}) {
