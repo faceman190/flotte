@@ -66,10 +66,10 @@ export const SHIPS = {
     laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1500, charges: 0, drones: 0, radius: 15, camUp: 20, camBack: 70, upMul: 1.6, col: 0xd8d2c4, model: 'Moewe', len: 36.88,
   },
   // Eigenes Modell (asset-src/neu/harpyie, Blender-Skripte, docs/harpyie.md): 37,57 × 19,7 × 10,2 m, schweres Landungsschiff (seit 2026-11-26).
-  // Eigener Entwurf nach Bildern eines Landungsschiffs aus einem anderen Spiel (nicht kopiert): Truppenraum mit zwölf Sitzen und Heckrampe,
+  // Eigener Entwurf nach Bildern eines Landungsschiffs aus einem anderen Spiel (nicht kopiert): Truppenraum mit zwölf Sitzen und Heckrampe, Oberdeck (Kojen, Messe, Schützenplatz), Waffenkammer, Technikraum,
   // seitliche Panzerwülste mit Fahrwerk, Kanzelbuckel, Profilflügel, Rückenturm, vier schwenkbare Triebwerksgondeln.
   harpyie: {
-    n: 'Harpyie', role: 'Landungsschiff', price: 38000, desc: 'Schweres, gepanzertes Landungsschiff: Truppenraum mit zwölf Klappsitzen und Heckrampe, Stellplatz für einen Dachs, Rückenturm mit Doppelrohr und Kinnkanonen. Vier schwenkbare Triebwerksgondeln für senkrechte Starts, Kanzelbuckel mit Rundumsicht. Innen begehbar.',
+    n: 'Harpyie', role: 'Landungsschiff', price: 38000, desc: 'Schweres, gepanzertes Landungsschiff: Truppenraum mit zwölf Klappsitzen und Heckrampe, Stellplatz für einen Dachs. Darüber ein Mannschaftsdeck mit Kojen, Messe, Kombüse und Schützenplatz, darunter Waffenkammer und Technikraum. Rückenturm mit Doppelrohr, Kinnkanonen, Raketenbehälter. Vier schwenkbare Triebwerksgondeln für senkrechte Starts. Innen begehbar.',
     hull: 480, shield: 180, speed: 230, acc: 380, turn: 0.68, cargo: 140, ammo: 600, rockets: 8, dmg: 1.3,
     laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1600, charges: 0, drones: 0, radius: 14, camUp: 18, camBack: 64, upMul: 1.5, col: 0x3c3f44, model: 'Harpyie', len: 37.57,
   },

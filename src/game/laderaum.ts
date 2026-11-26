@@ -38,10 +38,10 @@ const RAEUME: Record<string, Raum> = {
   // den Wänden (backbord bis zum Fuß der Treppe, steuerbord unterbrochen am Systempult, vorn die Spinde)
   Moewe: { boden: -3.665, hw: 3.0, z0: -15.311, tuer: 11.839, rampe: { y0: -3.665, z1: 20.5, y1: -6.065, hw: 2.85 }, bug: { tuer: -17.56, z1: -25.1, y0: -3.665, y1: -6.065, hw: 2.8 }, gasse: 2.0, decke: 5.9, stell: [{ x: 0, z: 4.789 }, { x: 0, z: -3.211 }],
     reihen: [{ x: 2.5, z0: -12.211, z1: -2.411 }, { x: 2.5, z0: -1.211, z1: 11.189 }, { x: -2.5, z0: -5.311, z1: 10.489 }] },
-  // Harpyie (har-gelenke.json, Laufkarte): Truppenraum 22 m, vorn die Treppe zum Cockpit (x 8 … 10,4), Fahrgasse ±1,7 m, ein Dachs hinten
-  // an der Rampe; Kisten nur im vorderen Teil zwischen Sitzen und Spinden
-  Harpyie: { boden: -3.081, hw: 2.5, z0: -8.51, tuer: 13.397, rampe: { y0: -3.081, z1: 20.4, y1: -5.081, hw: 2.15 }, gasse: 1.7, decke: 4.2, stell: [{ x: 0, z: 7.69 }],
-    reihen: [{ x: 1.9, z0: -4.71, z1: -2.81 }, { x: -1.9, z0: -4.71, z1: -2.81 }] },
+  // Harpyie (har-gelenke.json, Laufkarte): hoher Truppenraum bis zur Treppe aufs Oberdeck (Fuß bei x −0,25), Fahrgasse ±1,7 m, ein Dachs hinten
+  // an der Rampe; Kisten in der Waffenkammer unter dem Oberdeck (beiderseits des Mittelgangs)
+  Harpyie: { boden: -3.081, hw: 2.5, z0: -0.31, tuer: 13.397, rampe: { y0: -3.081, z1: 20.4, y1: -5.081, hw: 2.15 }, gasse: 1.7, decke: 4.2, stell: [{ x: 0, z: 7.69 }],
+    reihen: [{ x: 1.5, z0: -5.31, z1: -3.11 }, { x: -1.5, z0: -4.31, z1: -3.11 }] },
   // Dohle (doh-gelenke.json): Laderaum 5,7 m lang, zwei Reihen für Paletten und Kisten, kein Fahrzeug
   Dohle: { boden: -1.21, hw: 1.53, z0: 1.6, tuer: 7.4, rampe: { y0: -1.226, z1: 9.42, y1: -2.746, hw: 1.48 }, gasse: 0.32, decke: 2.4, stell: [],
     reihen: [{ x: 0.92, z0: 1.75, z1: 7.25 }, { x: -0.92, z0: 1.75, z1: 7.25 }] },
