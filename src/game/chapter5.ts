@@ -53,7 +53,7 @@ const inSpace = (id: string) => !!world.def && world.def.id === id && !world.sur
 const docked = (id: string) => !!G.dockedAt && G.dockedAt.id === id;
 const fmtDist = (d: number) => (d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m');
 const route = (to: string) => { if (P.sector !== to) P.route = to; };
-const lineSpace = (id: string, name: string): Obj => [`Springe ${jumpTo(name)}${P.route === id ? ' · Route gesetzt (Karte: M)' : ''}`, false, false];
+const lineSpace = (id: string, name: string): Obj => [`Springe ${jumpTo(name)}${P.route === id ? ' · Route steht, <b>J</b> springt' : ''}`, false, false];
 const speed = () => Math.hypot(P.vx, P.vy, P.vz);
 const dist = (p: number[]) => d3(p[0], p[1], p[2], P.x, P.y, P.z);
 const dockMark = (id: string, label: string, col: string): Marker[] => { const s = world.stations.find(x => x.id === id); return s && !world.surface ? [{ x: s.dock.x, y: s.dock.y, z: s.dock.z, label, col, big: true }] : []; };
@@ -281,7 +281,7 @@ const STEPS: Step[] = [
     },
     lines: () => {
       const d = c5(), ne = Math.min(EIS, P.cargo.eis || 0), nh = Math.min(HE, P.cargo.helium || 0), here = IN.active && docked(TAL);
-      const way: Obj = here ? ['In <b>Talstadt</b> gelandet', true, false] : world.surface && P.sector === HOME ? ['In die Stadt <b>Talstadt</b> fliegen und im Hangar landen', false, false] : P.sector === HOME ? ['Auf <b>Heimstatt II</b> landen (Ziel: Talstadt)', false, false] : [`Springe nach <b>Heimstatt</b>, dort nach <b>Talstadt</b> auf Heimstatt II${P.route === HOME ? ' · Route gesetzt (Karte: M)' : ''}`, false, false];
+      const way: Obj = here ? ['In <b>Talstadt</b> gelandet', true, false] : world.surface && P.sector === HOME ? ['In die Stadt <b>Talstadt</b> fliegen und im Hangar landen', false, false] : P.sector === HOME ? ['Auf <b>Heimstatt II</b> landen (Ziel: Talstadt)', false, false] : [`Springe nach <b>Heimstatt</b>, dort nach <b>Talstadt</b> auf Heimstatt II${P.route === HOME ? ' · Route steht, <b>J</b> springt' : ''}`, false, false];
       if (!d.krull) return [way, ['Aussteigen und zu <b>Gildemeisterin Krull</b> gehen', nearNpc('Krull'), false], ['Mit Krull sprechen · <b>E</b>', false, false]];
       if (!d.wach) return [[`<b>${EIS} Wassereis</b> im Frachtraum · ${ne}/${EIS}`, ne >= EIS, false], [`<b>${HE} Helium-3</b> im Frachtraum · ${nh}/${HE}`, nh >= HE, false], ['Eis: jedes Eisfeld. Helium-3: Markt in Talstadt oder Eisplaneten', false, true], way, ['Krull beides bringen · <b>E</b>', false, false]];
       return [['Die Weckanlage läuft', true, false], ['Ablegen', false, false]];

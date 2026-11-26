@@ -9,7 +9,7 @@ import { TRADE } from '../game/trade';
 import { isOnline } from '../game/net';
 import { MINE } from '../game/mining';
 import { DUN } from '../game/dungeon';
-import { SF, navTarget } from '../game/schnellflug';
+import { SF, navTarget, goalNav, sfBlock, sfFar } from '../game/schnellflug';
 import { nextHop } from './hud';
 import { SECTOR } from '../data/galaxy';
 import { FOOT } from '../game/onfoot';
@@ -82,16 +82,22 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     // Reisen: Sprung entlang der Route, Kurzsprung zum Ziel; in großen Sektoren fern von allem auch Ziel wählen und Schnellflug
     if (G.jd) r.push(['J', 'Sprung abbrechen', true]);
     else if (!world.surface) { const hop = nextHop(); if (hop) r.push(['J', `Sprung → ${SECTOR[hop]?.name || hop}`]); }
+    // Seit 2026-11-26 (Spieltest: Reiseflug und Kurzsprung fand man nicht): Ist das Ziel des Auftrags weit weg, steht „N · Kurs auf …“ da;
+    // mit gesetztem Ziel der Kurzsprung, und wenn er gerade nicht geht, warum. Für nahe Ziele der Reiseflug.
+    let far = false;
     if (!world.surface) {
-      const nt = navTarget();
+      const nt = navTarget(), goal = nt ? null : goalNav();
       if (SF.phase === 'fly') r.push(['H', 'Schnellflug beenden', true]);
       else if (SF.phase === 'spool') r.push(['H', 'Schnellflug abbrechen', true]);
-      else if (nt) r.push(['H', `Kurzsprung → ${nt.name}`, true]);
+      else if (nt && sfFar(nt)) { const b = sfBlock(); r.push(['H', b ? `Kurzsprung → ${nt.name} · ${b}` : `Kurzsprung → ${nt.name}`, !b]); }
+      else if (goal && sfFar(goal) && !dock) r.push(['N', `Kurs auf ${goal.name} setzen`, true]);
       else if (world.def?.size && !world.stations.some(s => near(s.x, s.y, s.z, 5000)) && !foes) r.push(['N', 'Ziel im Fadenkreuz wählen'], ['H', 'Schnellflug']);
+      const t = nt || goal; far = !!t && !near(t.x, t.y, t.z, t.R + 1500);
     }
     if (!aufstehGrund()) r.push(['G', 'Aufstehen, Autopilot fliegt']);      // begehbare Schiffe im All (bordflug.ts)
     if (look.free) r.push(['V', 'Freie Kamera beenden', true]);
-    if (fresh()) r.push(['Umschalt', G.cruise ? 'Reiseflug aus' : 'Reiseflug'], ['B', 'Flottenband'], ['M', 'Karte']);
+    if (SF.phase === 'off' && !dock && !foes && (fresh() || G.cruise || (far && !inField))) r.push(['Umschalt', G.cruise ? 'Reiseflug aus' : 'Reiseflug (schneller)']);
+    if (fresh()) r.push(['B', 'Flottenband'], ['M', 'Karte']);
     return { title: 'Flug', rows: r.slice(0, 8) };
   }
   return null;

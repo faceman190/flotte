@@ -65,6 +65,17 @@ export function setNav(p: NavRef | null) {
   SF.nav = p ? { kind: p.kind, id: p.id } : null; SF.navDef = p ? world.def : null;
   snd(p ? 760 : 420, 0.07, 'sine', 0.035, p ? 260 : -120);
 }
+// Ziel des aktuellen Auftrags als Navigationsziel (seit 2026-11-26): Geschichte zuerst, dann Stationsaufgabe, dann Auftrag. Liegt die Marke an
+// einer Station, ist die Station das Ziel. Für N ohne Ort im Fadenkreuz und für die Steuerungsleiste („N · Kurs auf …“).
+export function goalNav(): NavPoint | null {
+  if (!world.def || world.surface) return null;
+  const ms: { x: number; y: number; z: number; label: string; big?: boolean }[] = [...storyMarkers(), ...aufgabenMarkers(), ...missionMarkers()], m = ms.find(q => q.big) || ms[0] || null;
+  if (!m) return null;
+  const pts = navPoints();
+  const st = world.stations.find(s => d3(m.x, m.y, m.z, s.x, s.y, s.z) < s.R + 1500);
+  if (st) return pts.find(p => p.kind === 'st' && p.id === st.id) || null;
+  return pts.find(p => p.kind === 'mark' && p.id === m.label) || null;
+}
 // N: der Ort, der dem Fadenkreuz am nächsten liegt (innerhalb 20°); derselbe noch einmal löscht das Ziel
 export function pickNav(dir: THREE.Vector3) {
   let best: NavPoint | null = null, bc = Math.cos(20 * Math.PI / 180);
@@ -77,10 +88,29 @@ export function pickNav(dir: THREE.Vector3) {
   }
   const cur = navTarget();
   if (best && cur && best.kind === cur.kind && best.id === cur.id) { setNav(null); return null; }
-  if (best) setNav(best);
+  if (!best && !cur) best = goalNav();      // nichts im Fadenkreuz: Kurs aufs Ziel des Auftrags (beim Spieltest suchte man die Marke vergeblich)
+  if (best) { setNav(best); navTip(best); }
+  else if (cur) setNav(null);
   else radio('SYSTEM', 'Kein Ort im Fadenkreuz. Richte die Nase auf eine Markierung oder wähle auf der Sektorkarte (M) ein Ziel.');
   return best;
 }
+
+// Nach dem Setzen sagen, wie es weitergeht (nur solange der Schnellflug noch nie benutzt wurde)
+function navTip(p: NavPoint) {
+  if (used) return;
+  const d = d3(P.x, P.y, P.z, p.x, p.y, p.z), near = world.stations.find(s => d3(P.x, P.y, P.z, s.x, s.y, s.z) < s.R + 500);
+  if (d < p.R + ARRIVE + 1500) radio('SYSTEM', `Kurs auf ${p.name} gesetzt. Das ist nah: Umschalt für den Reiseflug, dann der Marke folgen.`);
+  else radio('SYSTEM', `Kurs auf ${p.name} gesetzt. ${near ? 'Flieg ein Stück von der Station weg, dann' : 'Jetzt'} H drücken: Der Kurzsprung fliegt dich in Sekunden hin.`);
+}
+/** Steuerungsleiste: Warum ein Kurzsprung gerade nicht geht (leer = geht) */
+export function sfBlock(): string {
+  if (world.enemies.some(e => d3(e.x, e.y, e.z, P.x, P.y, P.z) < 2500)) return 'nicht im Gefecht';
+  if (world.fields.some(f => d3(P.x, P.y, P.z, f.x, f.y, f.z) < f.r)) return 'erst aus dem Feld';
+  if (ORTE.some(o => d3(P.x, P.y, P.z, o.x, o.y, o.z) < o.R)) return 'erst hinausfliegen';
+  if (world.stations.some(s => d3(P.x, P.y, P.z, s.x, s.y, s.z) < s.R + 500)) return 'erst weg von der Station';
+  return '';
+}
+export const sfFar = (p: NavPoint) => d3(P.x, P.y, P.z, p.x, p.y, p.z) > p.R + ARRIVE + 1500;
 
 // ---------- Abstand zum nächsten Hindernis ----------
 function clearance(x: number, y: number, z: number) {
@@ -196,6 +226,6 @@ let hinted = false, used = false;
 export function bigSectorHint() {
   if (hinted || used || !world.def?.size || world.surface || G.mode !== 'play') return;   // nur im Flug (nicht im Hangar, nicht im Prolog zu Fuß)
   hinted = true;
-  radio('SYSTEM', `${world.def.name} misst ${Math.round(world.def.size.r / 1000)} km. Ziel mit N wählen oder auf der Sektorkarte (M), H startet den Kurzsprung.`);
+  radio('SYSTEM', `${world.def.name} misst ${Math.round(world.def.size.r / 1000)} km. N setzt Kurs (auf den Ort im Fadenkreuz, sonst aufs Ziel deines Auftrags), H startet den Kurzsprung.`);
 }
 export const markSfUsed = () => { used = true; };
