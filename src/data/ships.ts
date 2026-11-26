@@ -65,6 +65,14 @@ export const SHIPS = {
     hull: 420, shield: 150, speed: 205, acc: 330, turn: 0.6, cargo: 260, ammo: 300, rockets: 0, dmg: 0.9,
     laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1500, charges: 0, drones: 0, radius: 15, camUp: 20, camBack: 70, upMul: 1.6, col: 0xd8d2c4, model: 'Moewe', len: 36.88,
   },
+  // Eigenes Modell (asset-src/neu/harpyie, Blender-Skripte, docs/harpyie.md): 37,57 × 19,7 × 10,2 m, schweres Landungsschiff (seit 2026-11-26).
+  // Eigener Entwurf nach Bildern eines Landungsschiffs aus einem anderen Spiel (nicht kopiert): Truppenraum mit zwölf Sitzen und Heckrampe,
+  // seitliche Panzerwülste mit Fahrwerk, Kanzelbuckel, Profilflügel, Rückenturm, vier schwenkbare Triebwerksgondeln.
+  harpyie: {
+    n: 'Harpyie', role: 'Landungsschiff', price: 38000, desc: 'Schweres, gepanzertes Landungsschiff: Truppenraum mit zwölf Klappsitzen und Heckrampe, Stellplatz für einen Dachs, Rückenturm mit Doppelrohr und Kinnkanonen. Vier schwenkbare Triebwerksgondeln für senkrechte Starts, Kanzelbuckel mit Rundumsicht. Innen begehbar.',
+    hull: 480, shield: 180, speed: 230, acc: 380, turn: 0.68, cargo: 140, ammo: 600, rockets: 8, dmg: 1.3,
+    laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1600, charges: 0, drones: 0, radius: 14, camUp: 18, camBack: 64, upMul: 1.5, col: 0x3c3f44, model: 'Harpyie', len: 37.57,
+  },
   // Eigenes Modell (asset-src/neu/wuerger, Blender-Skripte, docs/wuerger.md): 24,8 × 26,2 × 5 m, einsitzig, kein Innenraum
   wuerger: {
     n: 'Würger', role: 'Schwerer Jäger', price: 16000, desc: 'Einsitziger schwerer Jäger der Bastion: Schienenkanone unter dem Rumpf, zwei Flügelkanonen, vier Flugkörper, dicke Panzerung. Kaum Fracht, kein Bergbau.',
