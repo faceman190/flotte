@@ -21,8 +21,8 @@ export function ausArt(): AusArt {
 }
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(1, 1, 1);
 /** Schiffskoordinaten → Welt: am Boden aus der Landelage (x, y, z, Gierwinkel), sonst aus dem Schiffsmodell */
-export function schiffZuWelt(p: THREE.Vector3, lage?: { x: number; y: number; z: number; yaw: number }) {
-  if (lage) { _m.compose(new THREE.Vector3(lage.x, lage.y, lage.z), _q.setFromEuler(_e.set(0, lage.yaw, 0)), _s); return p.applyMatrix4(_m); }
+export function schiffZuWelt(p: THREE.Vector3, lage?: { x: number; y: number; z: number; yaw: number; pitch?: number; roll?: number }) {
+  if (lage) { _m.compose(new THREE.Vector3(lage.x, lage.y, lage.z), _q.setFromEuler(_e.set(lage.pitch || 0, lage.yaw, lage.roll || 0, 'YXZ')), _s); return p.applyMatrix4(_m); }      // mit Neigung (seit 2026-11-26)
   SHIP.g.updateMatrixWorld(true); return p.applyMatrix4(SHIP.g.matrixWorld);
 }
 /** Kanzel: Rand der Kanzel an der linken Seite (wo die Leiter hängt) und Punkt über der Kanzel (Außenbord) in Schiffskoordinaten */
@@ -34,13 +34,13 @@ export function kanzelPunkte(root: THREE.Object3D = SHIP.g) {
 /** Fuß der Bordleiter in der Welt (Boden), mit Blick vom Schiff weg */
 /** Schiffe mit Seitentür und Treppe (Dohle, doh-gelenke.json): Stehplatz vor dem Treppenfuß in Schiffskoordinaten (x, z) */
 const TREPPE: Record<string, [number, number]> = { Dohle: [-3.6, -0.1] };
-export function treppenFuss(lage: { x: number; y: number; z: number; yaw: number }) {
+export function treppenFuss(lage: { x: number; y: number; z: number; yaw: number; pitch?: number; roll?: number }) {
   let name = ''; SHIP.g.traverse(o => { if (!name && o.userData.model) name = o.userData.model; });
   const t = TREPPE[name]; if (!t) return null;
   const p = schiffZuWelt(new THREE.Vector3(t[0], 0, t[1]), lage), o = schiffZuWelt(new THREE.Vector3(t[0] - 1, 0, t[1]), lage).sub(p);
   return { x: p.x, z: p.z, yaw: Math.atan2(-o.x, -o.z) };      // Blick von der Tür weg
 }
-export function leiterFuss(lage: { x: number; y: number; z: number; yaw: number }, root: THREE.Object3D = SHIP.g) {
+export function leiterFuss(lage: { x: number; y: number; z: number; yaw: number; pitch?: number; roll?: number }, root: THREE.Object3D = SHIP.g) {
   const k = kanzelPunkte(root); if (!k) return null;
   const top = schiffZuWelt(k.rand.clone(), lage), out = schiffZuWelt(k.rand.clone().add(new THREE.Vector3(-1, 0, 0)), lage).sub(top).setY(0).normalize();
   const x = top.x + out.x * 0.75, z = top.z + out.z * 0.75;
@@ -52,9 +52,9 @@ const eigene = { g: null as THREE.Group | null };
 export const LEITER = { an: false };      // eigene Leiter steht (Mehrspieler: net.ts schickt es mit)
 const LM = new THREE.MeshStandardMaterial({ color: 0x9aa1a8, metalness: 0.85, roughness: 0.35 });
 const LG = new THREE.MeshStandardMaterial({ color: 0xd9a020, metalness: 0.2, roughness: 0.5 });
-export function leiterZeigen(on: boolean, lage?: { x: number; y: number; z: number; yaw: number }) { LEITER.an = on && !!lage; leiterSetzen(eigene, on, lage); }
+export function leiterZeigen(on: boolean, lage?: { x: number; y: number; z: number; yaw: number; pitch?: number; roll?: number }) { LEITER.an = on && !!lage; leiterSetzen(eigene, on, lage); }
 /** Leiter an einem beliebigen Schiff (ref hält die Leiter; Mitspieler: je Schiff eine eigene, net.ts) */
-export function leiterSetzen(ref: { g: THREE.Group | null }, on: boolean, lage?: { x: number; y: number; z: number; yaw: number }, root: THREE.Object3D = SHIP.g) {
+export function leiterSetzen(ref: { g: THREE.Group | null }, on: boolean, lage?: { x: number; y: number; z: number; yaw: number; pitch?: number; roll?: number }, root: THREE.Object3D = SHIP.g) {
   let leiter = ref.g;
   if (!on || !lage) { leiter?.removeFromParent(); return; }
   const f = leiterFuss(lage, root); if (!f) return;

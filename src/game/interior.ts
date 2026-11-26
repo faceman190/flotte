@@ -1154,7 +1154,9 @@ export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: num
   const b = measure(m);
   m.g.getWorldPosition(_sv);
   room.g.position.set(_sv.x, mesh ? _sv.y : _sv.y + b.min.y + (b.max.y - b.min.y) * 0.3, _sv.z);
-  room.g.rotation.set(0, m.g.rotation.y, 0);
+  room.g.rotation.order = 'YXZ';
+  if (planet) room.g.rotation.set(m.g.rotation.x, m.g.rotation.y, m.g.rotation.z);      // gelandet mit Neigung (seit 2026-11-26): der Raum kippt mit, die Kamera bleibt waagerecht
+  else room.g.rotation.set(0, m.g.rotation.y, 0);
   room.g.updateMatrixWorld(true);
   scene.add(room.g);
   roomModel = m.g; m.g.visible = !!mesh;   // Modell-Räume: das Schiffsmodell bleibt stehen, es enthält den Innenraum

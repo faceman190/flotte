@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SHIPS, type ShipId } from '../data/ships';
 import { hasModel, modelInstance, RAMP_ENTRY } from '../models/gltfShips';
+import { type Lage, gekippt, zuLokal, zuWelt } from './lage';
 
 // =====================================================================================
 // Feste Körper zu Fuß auf Planeten (seit 2026-11-26). Nutzer: „Man kann durch viele Objekte laufen, Schiffe anderer Spieler,
@@ -63,6 +64,16 @@ class TriGitter {
     }
     return false;
   }
+  /** Wand auf der Strecke a → b (beliebig im Raum, Koordinaten des Rasters), plus Körperradius */
+  strecke(ax: number, ay: number, az: number, bx: number, by: number, bz: number) {
+    const dx = bx - ax, dy = by - ay, dz = bz - az, L = Math.hypot(dx, dy, dz); if (L < 1e-5) return false;
+    const ux = dx / L, uy = dy / L, uz = dz / L, far = L + LEIB, seen = new Set<number>();
+    for (let s = 0; s <= far + 1e-6; s += CELL * 0.5) {
+      const b = this.grid.get(ck(Math.floor((ax + ux * s) / CELL), Math.floor((az + uz * s) / CELL))); if (!b) continue;
+      for (const t of b) { if (seen.has(t)) continue; seen.add(t); const d = this.hit(t, ax, ay, az, ux, uy, uz, false); if (d >= 0 && d < far) return true; }
+    }
+    return false;
+  }
 }
 
 function netze(root: THREE.Object3D) {
@@ -89,18 +100,106 @@ export function schiffGitter(cls: string): TriGitter | null {
   }
   return g;
 }
-export interface Lage { x: number; y: number; z: number; yaw: number }
-/** Weltpunkt → Schiffskoordinaten (Umkehrung von x + lx·cos + lz·sin, z − lx·sin + lz·cos) */
+export type { Lage };
+const _a = new THREE.Vector3(), _b = new THREE.Vector3();
+/** Weltpunkt → Schiffskoordinaten (Umkehrung von x + lx·cos + lz·sin, z − lx·sin + lz·cos; für den Kasten der Rampe genügt der Kurs) */
 function lokal(s: Lage, wx: number, wz: number) { const c = Math.cos(s.yaw), n = Math.sin(s.yaw), dx = wx - s.x, dz = wz - s.z; return { x: dx * c - dz * n, z: dx * n + dz * c }; }
 /** Weg von o nach n am gelandeten Schiff versperrt? rampeOffen: Heckrampe (Wisent) als Kasten */
 export function schiffSperrt(cls: string, s: Lage, ox: number, oz: number, nx: number, nz: number, fy: number, rampeOffen = false) {
   const g = schiffGitter(cls); if (!g) return null;      // null: kein Modell, der Aufrufer nimmt den alten Kreis
   const a = lokal(s, ox, oz), b = lokal(s, nx, nz);
   if (Math.hypot(b.x - g.cx, b.z - g.cz) > g.r + 3) return false;
-  if (g.wand(a.x, a.z, b.x, b.z, fy - s.y)) return true;
+  if (!gekippt(s)) { if (g.wand(a.x, a.z, b.x, b.z, fy - s.y)) return true; }
+  else for (const h of HOEHEN) {      // gekippt (seit 2026-11-26): Strahlen waagerecht in der Welt, im Schiff leicht schräg
+    const p = zuLokal(ox, fy + h, oz, s, _a), q = zuLokal(nx, fy + h, nz, s, _b);
+    if (g.strecke(p.x, p.y, p.z, q.x, q.y, q.z)) return true;
+  }
   const e = rampeOffen ? RAMP_ENTRY[SHIPS[cls as ShipId]?.model || ''] : null;
   if (e) { const drin = (p: { x: number; z: number }) => Math.abs(p.x) < e.hw + LEIB && p.z > e.door && p.z < e.foot + LEIB; if (drin(b) && !drin(a)) return true; }
   return false;
+}
+
+// ---------- Landen aufs Gelände (seit 2026-11-26): Landefüße aus dem Modell, Neigung nach den Bodenhöhen darunter ----------
+// Nutzer: „Kann man einstellen, dass das Schiff auf dem Fahrwerk landet, auf dem Terrain angepasst, und nicht immer exakt waagerecht steht?“
+// Füße: die tiefsten Punkte des Fahrwerks (Material „gear“ bzw. „… |fw“) in Ruhelage, zu Gruppen zusammengefasst; ohne Fahrwerk die tiefsten
+// Punkte des Rumpfs. Neigung: Ebene durch die Bodenhöhen unter den Füßen (kleinste Quadrate), höchstens MAX_KIPP; dann so hoch, dass kein
+// Fuß im Boden steckt. luft: größter Spalt unter einem Fuß (Kuppe, zu steil).
+export const MAX_KIPP = 10 * Math.PI / 180;
+type Fuss = { x: number; y: number; z: number };
+const fuesse = new Map<string, Fuss[] | null>();
+export function fussPunkte(cls: string): Fuss[] | null {
+  const c = SHIPS[cls as ShipId]; if (!c || !hasModel(c.model)) return null;
+  let F = fuesse.get(c.model);
+  if (F !== undefined) return F;
+  const inst = modelInstance(c.model, c.len).obj; inst.updateMatrixWorld(true);
+  const alle = netze(inst), fw = alle.filter(m => { const n = String((m.material as THREE.Material)?.name || ''); return n === 'gear' || /\|fw/.test(n); });
+  const v = new THREE.Vector3(), pts: number[] = [];
+  let minY = Infinity;
+  for (const m of fw.length ? fw : alle) {
+    const pos = (m.geometry as THREE.BufferGeometry).attributes.position; if (!pos) continue;
+    for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld); pts.push(v.x, v.y, v.z); if (v.y < minY) minY = v.y; }
+  }
+  const tief: Fuss[] = [];
+  for (let i = 0; i < pts.length; i += 3) if (pts[i + 1] < minY + 0.3) tief.push({ x: pts[i], y: pts[i + 1], z: pts[i + 2] });
+  // Gruppen: Punkte näher als 2 m gehören zu einem Fuß (Fußteller sind bis 2 m breit); Fuß = Mitte der Gruppe, Höhe = tiefster Punkt
+  const gr: { sx: number; sz: number; n: number; y: number }[] = [];
+  for (const p of tief) {
+    const g = gr.find(q => Math.hypot(q.sx / q.n - p.x, q.sz / q.n - p.z) < 2.0);
+    if (g) { g.sx += p.x; g.sz += p.z; g.n++; g.y = Math.min(g.y, p.y); } else gr.push({ sx: p.x, sz: p.z, n: 1, y: p.y });
+  }
+  // nahe Gruppen zusammenlegen (die laufende Mitte teilte einen Fußteller sonst in zwei)
+  for (let merged = true; merged;) {
+    merged = false;
+    for (let a = 0; a < gr.length && !merged; a++) for (let b = a + 1; b < gr.length; b++) {
+      const A = gr[a], B = gr[b];
+      if (Math.hypot(A.sx / A.n - B.sx / B.n, A.sz / A.n - B.sz / B.n) < 2.6) { A.sx += B.sx; A.sz += B.sz; A.n += B.n; A.y = Math.min(A.y, B.y); gr.splice(b, 1); merged = true; break; }
+    }
+  }
+  F = gr.map(g => ({ x: g.sx / g.n, y: g.y, z: g.sz / g.n }));
+  for (const f of [...F]) if (Math.abs(f.x) > 0.5 && !F.some(q => Math.hypot(q.x + f.x, q.z - f.z) < 1.5)) F.push({ x: -f.x, y: f.y, z: f.z });      // Schiffe sind symmetrisch: fehlendes Gegenstück ergänzen (Wisent: ein Hauptbein lag in einer anderen Netzgruppe)
+  if (!fw.length && F.length > 10) {      // flacher Rumpf ohne Fahrwerk: die vier äußersten Punkte
+    const by = (f: (p: Fuss) => number) => F!.reduce((a, b) => (f(b) > f(a) ? b : a));
+    F = [...new Set([by(p => p.x), by(p => -p.x), by(p => p.z), by(p => -p.z)])];
+  }
+  if (!F.length) F = null;
+  fuesse.set(c.model, F);
+  return F;
+}
+/** Lage des gelandeten Schiffs bei (x, z) mit Kurs yaw auf dem Gelände hAt; null: kein Modell (dann rechnet der Aufrufer wie früher) */
+export function kippLage(cls: string, x: number, z: number, yaw: number, hAt: (x: number, z: number) => number): (Lage & { luft: number; ebene: boolean }) | null {
+  const F = fussPunkte(cls); if (!F) return null;
+  const c = Math.cos(yaw), n = Math.sin(yaw), h = F.map(f => hAt(x + f.x * c + f.z * n, z - f.x * n + f.z * c));
+  // y(f) ≈ Y + f.y + f.x·sin(roll) − f.z·sin(pitch) = h  →  kleinste Quadrate in (Y, sr, sp)
+  let sr = 0, sp = 0;
+  if (F.length >= 3) {
+    const A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], B = [0, 0, 0];
+    F.forEach((f, i) => { const r = [1, f.x, -f.z], b = h[i] - f.y; for (let a = 0; a < 3; a++) { B[a] += r[a] * b; for (let k = 0; k < 3; k++) A[a][k] += r[a] * r[k]; } });
+    const det = (m: number[][]) => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    const D = det(A);
+    if (Math.abs(D) > 1e-6) {
+      const col = (j: number) => A.map((row, i) => row.map((v, k) => (k === j ? B[i] : v)));
+      sr = det(col(1)) / D; sp = det(col(2)) / D;
+    }
+  }
+  // Feinsuche um die Ausgleichsebene: die Neigung, bei der der größte Spalt unter einem Fuß am kleinsten ist (wie ein Tisch auf seinen Beinen)
+  const lim = Math.sin(MAX_KIPP), w = F.map(() => new THREE.Vector3()), s: Lage = { x, y: 0, z, yaw };
+  const pruefe = (pitch: number, roll: number) => {
+    s.pitch = pitch; s.roll = roll; let Y = -Infinity;
+    const hg = F.map((f, i) => { zuWelt(f.x, f.y, f.z, s, w[i]); const g = hAt(w[i].x, w[i].z); Y = Math.max(Y, g - w[i].y); return g; });
+    let luft = 0; w.forEach((p, i) => { luft = Math.max(luft, Y + p.y - hg[i]); });
+    return { Y, luft };
+  };
+  let pitch = Math.asin(Math.max(-lim, Math.min(lim, sp))), roll = Math.asin(Math.max(-lim, Math.min(lim, sr))), best = pruefe(pitch, roll);
+  if (F.length >= 3) for (const st of [1.5, 0.5, 0.15].map(d => d * Math.PI / 180)) {
+    const p0 = pitch, r0 = roll;
+    for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) {
+      const pp = Math.max(-MAX_KIPP, Math.min(MAX_KIPP, p0 + a * st)), rr = Math.max(-MAX_KIPP, Math.min(MAX_KIPP, r0 + b * st)), t = pruefe(pp, rr);
+      if (t.luft < best.luft - 1e-4) { best = t; pitch = pp; roll = rr; }
+    }
+  }
+  const SINK = 0.12;      // Federweg: die tragenden Füße drücken sich ein Stück ein, die übrigen kommen dem Boden näher
+  const Y = best.Y - SINK, luft = Math.max(0, best.luft - SINK);
+  return { x, y: Y, z, yaw, pitch, roll, luft, ebene: F.length >= 3 };
 }
 
 // ---------- weitere Körper: feste Bauten und fremde Schiffe/Fahrzeuge ----------

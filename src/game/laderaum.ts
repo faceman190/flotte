@@ -6,6 +6,7 @@ import { decoLaden, bojeTeile } from '../models/bojen';
 import { doorProgress } from '../models/gltfShips';
 import { buildFahrzeug, fzLaden, fzBereit, type FzId } from '../models/rover';
 import { anBord, FZ_MASS } from './fahrzeuge';
+import { type Lage, gekippt, zuWelt, lokalAufEbene } from './lage';
 
 // =====================================================================================
 // Laderaum (seit 2026-11-25, Konzept docs/konzept-schiffe-fracht.md, Schritt 3)
@@ -146,10 +147,12 @@ export function bloecke(): [number, number, number, number][] {
 }
 
 // ---------- befahrbarer Boden: Laderaum und Rampe ----------
-export interface Lage { x: number; y: number; z: number; yaw: number }
-/** Weltpunkt → Schiffskoordinaten (x, z) bei gelandetem Schiff */
-function lokal(x: number, z: number, s: Lage) { const dx = x - s.x, dz = z - s.z, c = Math.cos(s.yaw), n = Math.sin(s.yaw); return { lx: dx * c - dz * n, lz: dx * n + dz * c }; }
-export function weltVon(lx: number, lz: number, s: Lage) { const c = Math.cos(s.yaw), n = Math.sin(s.yaw); return { x: s.x + lx * c + lz * n, z: s.z - lx * n + lz * c }; }
+export type { Lage };
+const _v = new THREE.Vector3();
+/** Weltpunkt → Schiffskoordinaten (x, z) bei gelandetem Schiff; gekippt (seit 2026-11-26): auf die Ebene ly gelotet (Standard: Laderaumboden) */
+function lokal(x: number, z: number, s: Lage, ly?: number) { if (!gekippt(s)) { const dx = x - s.x, dz = z - s.z, c = Math.cos(s.yaw), n = Math.sin(s.yaw); return { lx: dx * c - dz * n, lz: dx * n + dz * c }; } const p = lokalAufEbene(x, z, s, ly ?? raum()?.boden ?? 0, _v); return { lx: p.x, lz: p.z }; }
+/** Schiffspunkt → Welt (x, z, y); ly: Höhe im Schiff (Standard: Laderaumboden) */
+export function weltVon(lx: number, lz: number, s: Lage, ly?: number) { if (!gekippt(s)) { const c = Math.cos(s.yaw), n = Math.sin(s.yaw); return { x: s.x + lx * c + lz * n, z: s.z - lx * n + lz * c, y: s.y + (ly ?? 0) }; } const p = zuWelt(lx, ly ?? raum()?.boden ?? 0, lz, s, _v); return { x: p.x, z: p.z, y: p.y }; }
 /** Lage im Laderaum oder auf der Rampe: 'raum' | 'rampe' | null (draußen). Nur bei offener Rampe. */
 export function imSchiff(x: number, z: number, s: Lage): { wo: 'raum' | 'rampe'; lx: number; lz: number; R: Raum } | null {
   const R = raum(); if (!R) return null;
@@ -162,9 +165,9 @@ export function imSchiff(x: number, z: number, s: Lage): { wo: 'raum' | 'rampe';
 /** Bodenhöhe (Welt) im Laderaum oder auf der Rampe, sonst null */
 export function schiffBoden(x: number, z: number, s: Lage): number | null {
   const i = imSchiff(x, z, s); if (!i) return null;
-  if (i.wo === 'raum') return s.y + i.R.boden;
-  const t = Math.min(1, (i.lz - i.R.tuer) / (i.R.rampe.z1 - i.R.tuer));
-  return s.y + i.R.rampe.y0 + (i.R.rampe.y1 - i.R.rampe.y0) * t;
+  if (i.wo === 'raum') return gekippt(s) ? zuWelt(i.lx, i.R.boden, i.lz, s, _v).y : s.y + i.R.boden;
+  const t = Math.min(1, (i.lz - i.R.tuer) / (i.R.rampe.z1 - i.R.tuer)), ly = i.R.rampe.y0 + (i.R.rampe.y1 - i.R.rampe.y0) * t;
+  return gekippt(s) ? zuWelt(i.lx, ly, i.lz, s, _v).y : s.y + ly;
 }
 /** Fahrzeug in der Gasse halten (Schiffskoordinaten begrenzen): Rand der Kistenreihen, Rampe, Stirnwand. halbB/halbL: halbe Fahrzeugmaße, selbst: das gefahrene (zählt nicht als abgestellt), gesperrt: passt nicht hinein (bleibt auf der Rampe) */
 export function gasse(x: number, z: number, s: Lage, halbB: number, halbL: number, selbst?: FzId, gesperrt = false): { x: number; z: number } | null {
@@ -186,8 +189,10 @@ export function aufsetzen(x: number, z: number, yaw: number, landeH: number, hAt
   const spalt = y + R.rampe.y1 - hSp, luft = y - (Math.min(...fw) + landeH);
   return { y, ok: spalt < 1.2 && luft < 3, spalt };
 }
+/** Rampenspitze (Schiffskoordinaten) für die Landung mit Neigung (surface.ts); null: Schiff ohne Laderaum */
+export function rampenSpitze() { const R = raum(); return R ? { x: 0, y: R.rampe.y1, z: R.rampe.z1 } : null; }
 /** Stellplatz in der Welt (für das Aussetzen beim Landen): Mitte, Boden, Blick zur Rampe */
-export function stellplatz(s: Lage, i = 0) { const R = raum(); if (!R) return null; const p = weltVon(R.stell[i].x, R.stell[i].z, s); return { x: p.x, z: p.z, y: s.y + R.boden, yaw: s.yaw + Math.PI }; }
+export function stellplatz(s: Lage, i = 0) { const R = raum(); if (!R) return null; const p = weltVon(R.stell[i].x, R.stell[i].z, s, R.boden); return { x: p.x, z: p.z, y: p.y, yaw: s.yaw + Math.PI }; }
 /** erster Stellplatz in Schiffskoordinaten (begehbarer Innenraum: dort steigt man ins Fahrzeug) */
 export function stellLokal(k?: FzId) { const R = raum(); if (!R) return null; const s = R.stell[k ? platzVon(k) : 0]; return { x: s.x, y: R.boden, z: s.z }; }
 /** Kamera im Laderaum begrenzen (Weltpunkt, wird verschoben), damit sie nicht durch Wände und Decke schaut */
@@ -197,5 +202,5 @@ export function kameraImRaum(p: THREE.Vector3, s: Lage, fahrzeug: { x: number; z
   if (lz > R.rampe.z1) return;      // hinter der Rampe: draußen
   const cx = Math.max(-R.hw + 0.4, Math.min(R.hw - 0.4, lx)), cz = Math.max(R.z0 + 0.4, lz);
   const w = weltVon(cx, cz, s); p.x = w.x; p.z = w.z;
-  if (lz <= R.tuer) p.y = Math.min(p.y, s.y + R.boden + R.decke - 0.3);
+  if (lz <= R.tuer) p.y = Math.min(p.y, weltVon(cx, cz, s, R.boden + R.decke - 0.3).y);
 }

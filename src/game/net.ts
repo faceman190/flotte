@@ -45,7 +45,7 @@ export interface Remote {
   id: number; name: string; cls: string; paint: string; m: string; s: number; w: any[] | null; d: string; g: string[] | null;   // g: Aussehen zu Fuß [Helm, Anzug, Rucksack, Waffe]   // d: Station, an der er angedockt ist   // w: zu Fuß in einer Station [Station, x, z, Blick]
   ship: ShipModel | null; rover: THREE.Group | null;
   rv?: RoverNeu | null; rk?: string; vv?: (string | number)[] | null; fahrer?: Fahrer;      // fahrer: Sitzfigur im Wiesel (seit 2026-11-25)      // Bodenfahrzeug aus Blender (Art, Lage, Tempo, Lenkung; seit 2026-11-24)
-  ls?: number[] | null; dy?: number;      // gelandetes Schiff [x, y, z, Kurs] (seit 2026-11-25); dy: Unterschied der Bodenhöhe hier gegenüber dem Absender
+  ls?: number[] | null; dy?: number;      // gelandetes Schiff [x, y, z, Kurs, pitch, roll] (seit 2026-11-25, Neigung seit 2026-11-26); dy: Unterschied der Bodenhöhe hier gegenüber dem Absender
   z?: number | null; leiter?: { g: THREE.Group | null };      // bewegliche Teile (Bits 1 Fahrwerk, 2 Rampe, 4 Kanzel, 8 Leiter) und die Leiter dazu
   tp: THREE.Vector3; tq: THREE.Quaternion; seen: number; fig?: RemoteFig;   // fig: Figur zu Fuß auf dem Planeten
 }
@@ -132,8 +132,8 @@ function onMsg(m: any) {
     // Gelandetes Schiff; fünfter Wert (seit 2026-11-25): Bodenhöhe unter der Mitte beim Absender. Hat dieser ein anderes Gelände (altes Gelände
     // mit ?gelaende=alt gespeichert), steht das Schiff hier um den Unterschied verschoben auf dem eigenen Boden statt in der Luft oder darin.
     const ls = Array.isArray(m.ls) && m.ls.length >= 4 ? m.ls.map(Number) : null;
-    r.dy = ls && ls.length === 5 && world.surface && world.ground && Number.isFinite(ls[4]) ? world.ground(ls[0], ls[2]) - ls[4] : 0;
-    r.ls = ls ? [ls[0], ls[1] + r.dy, ls[2], ls[3]] : null;
+    r.dy = ls && ls.length >= 5 && world.surface && world.ground && Number.isFinite(ls[4]) ? world.ground(ls[0], ls[2]) - ls[4] : 0;
+    r.ls = ls ? [ls[0], ls[1] + r.dy, ls[2], ls[3], ls.length >= 7 ? ls[5] * Math.PI / 180 : 0, ls.length >= 7 ? ls[6] * Math.PI / 180 : 0] : null;      // [x, y, z, Kurs, pitch, roll]
     r.z = typeof m.z === 'number' ? m.z : null;
     if (r.m === 'rover' && !r.rover && !r.vv) { r.rover = buildRover('dachs').g; r.rover.position.copy(r.tp); scene.add(r.rover); }      // ältere Fassung ohne Fahrzeugdaten
     r.seen = performance.now();
@@ -214,7 +214,7 @@ function sendState() {
   const rm = world.surface && ROVER.active && ROVER.model ? ROVER.model.g : null;
   const v = rm ? [ROVER.kind, ROVER.speed, ROVER.steer, rm.position.x, rm.position.y, rm.position.z, rm.quaternion.x, rm.quaternion.y, rm.quaternion.z, rm.quaternion.w] : undefined;
   // Lage des gelandeten Schiffs: zu Fuß, im Fahrzeug, an Bord oder in der Mine auf dem Planeten
-  const ls = world.surface && (ROVER.active || DUN.active || s.m === 'bord' || s.m === 'fuss') ? [ROVER.ship.x, ROVER.ship.y, ROVER.ship.z, ROVER.ship.yaw, world.ground ? world.ground(ROVER.ship.x, ROVER.ship.z) : ROVER.ship.y] : undefined;
+  const ls = world.surface && (ROVER.active || DUN.active || s.m === 'bord' || s.m === 'fuss') ? [ROVER.ship.x, ROVER.ship.y, ROVER.ship.z, ROVER.ship.yaw, world.ground ? world.ground(ROVER.ship.x, ROVER.ship.z) : ROVER.ship.y, (ROVER.ship.pitch || 0) * 180 / Math.PI, (ROVER.ship.roll || 0) * 180 / Math.PI] : undefined;      // 6./7.: Neigung in Grad (seit 2026-11-26; der Server rundet auf 0,01)
   const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe), netFlags(), lookToNet(), String(P.figur ?? 1), gr.weste || '', gr.handschuh || '', gr.stiefel || ''];
   sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g, v, ls, z: schiffsTeile() });
 }
@@ -241,14 +241,14 @@ export function netUpdate(dt: number) {
     const ship = r.ship!, onShip = r.m === 'schiff' || r.m === 'eva', boden = r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord';
     ship.g.visible = onShip || boden;   // am Boden steht das Schiff gelandet da (Lage aus ls, ältere Fassungen: letzter Stand im Flug)
     if (onShip) { ship.g.position.lerp(r.tp, k); ship.g.quaternion.slerp(r.tq, k); }
-    else if (boden && r.ls) { ship.g.position.set(r.ls[0], r.ls[1], r.ls[2]); ship.g.rotation.set(0, r.ls[3], 0); }
+    else if (boden && r.ls) { ship.g.position.set(r.ls[0], r.ls[1], r.ls[2]); ship.g.rotation.order = 'YXZ'; ship.g.rotation.set(r.ls[4] || 0, r.ls[3], r.ls[5] || 0); }
     // bewegliche Teile: wie beim Piloten selbst (z), ältere Fassungen ohne z: am Boden Fahrwerk aus und Rampe offen
     const z = r.z ?? ((boden ? 3 : 0) | (r.m === 'eva' ? 2 : 0));
     // fest zu Fuß (koerper.ts): gelandetes Schiff mit seiner Form, Fahrzeug als Kreis
-    koerper('rs' + r.id, world.surface && boden && r.ls ? { art: 'schiff', cls: r.cls, lage: { x: r.ls[0], y: r.ls[1], z: r.ls[2], yaw: r.ls[3] }, rampe: !!(z & 2) } : null);
+    koerper('rs' + r.id, world.surface && boden && r.ls ? { art: 'schiff', cls: r.cls, lage: { x: r.ls[0], y: r.ls[1], z: r.ls[2], yaw: r.ls[3], pitch: r.ls[4] || 0, roll: r.ls[5] || 0 }, rampe: !!(z & 2) } : null);
     koerper('rv' + r.id, world.surface && r.rover && r.rover.visible ? { art: 'kreis', x: r.rover.position.x, z: r.rover.position.z, r: 2.3 } : null);
     setGear(ship.g, !!(z & 1), dt); setDoors(ship.g, !!(z & 2), dt); setKanzel(ship.g, !!(z & 4), dt);
-    leiterSetzen(r.leiter || (r.leiter = { g: null }), !!(z & 8) && boden && !!r.ls, r.ls ? { x: r.ls[0], y: r.ls[1], z: r.ls[2], yaw: r.ls[3] } : undefined, ship.g);
+    leiterSetzen(r.leiter || (r.leiter = { g: null }), !!(z & 8) && boden && !!r.ls, r.ls ? { x: r.ls[0], y: r.ls[1], z: r.ls[2], yaw: r.ls[3], pitch: r.ls[4] || 0, roll: r.ls[5] || 0 } : undefined, ship.g);
     for (const gl of ship.glows) { gl.visible = r.m === 'schiff'; gl.scale.setScalar((gl.userData.base || 1) * (0.5 + Math.min(1, r.s / 200) * 1.3)); }      // Triebwerke nur im Flug
     if (r.vv) driveRemoteRover(r, dt, k);
     else if (r.rover) { r.rover.visible = r.m === 'rover' || r.m === 'fuss'; if (r.m === 'rover') { r.rover.position.lerp(r.tp, k); r.rover.quaternion.slerp(r.tq, k); } }
