@@ -10,6 +10,8 @@ import { world } from './world';
 import { SHIP } from './player';
 import { navTarget, SF } from './schnellflug';
 import { radio } from '../ui/radio';
+import { pilotUpdate, pilotWeg, pilotNeu, type Sitz } from './fahrer';
+import { U2, schattenModell, schattenUpdate, shaderHaken2, musterVon } from './cockpitStil2';
 
 // =====================================================================================
 // Cockpit-Sicht im Flug (seit 2026-11-26). Nutzer: „Ich möchte auch im Schiff auf Firstperson-Cockpit-Sicht schalten. Dazu brauchen wir ein
@@ -26,8 +28,14 @@ import { radio } from '../ui/radio';
 //    HUD-Scheibe), reihum einige Male pro Sekunde neu gezeichnet.
 // Neue Schiffe: Eintrag in COCKPITS (Datei, Augpunkt aus mil-cockpit.json).
 // =====================================================================================
-const COCKPITS: Record<string, { datei: string; auge: [number, number, number]; laenge: number }> = {
-  milan: { datei: 'MilanCockpit', auge: [0, 1.08, -2.077], laenge: 15.82 },
+// stil 1: Milan (helle Tafel, Sonneneinfall gerechnet). stil 2: dunkle Formteile, gebackenes Licht, Sonnenschatten aus eigener Schattenkarte
+//   (asset-src/neu/cockpit, cockpitStil2.ts). aus: Materialien des Schiffsmodells, die in der Cockpit-Sicht verschwinden (altes Cockpit, Glas).
+// griff: Griffpunkte der Steuerknüppel links und rechts (cp-<schiff>.json), dort liegen die Hände des Piloten
+interface CockpitDef { datei: string; auge: [number, number, number]; laenge: number; stil: 1 | 2; aus: RegExp; fill?: [number, number]; griff?: [[number, number, number], [number, number, number]] }
+const COCKPITS: Record<string, CockpitDef> = {
+  milan: { datei: 'MilanCockpit', auge: [0, 1.08, -2.077], laenge: 15.82, stil: 1, aus: / ~cp|^Kuppelglas|^Kanzelglas|^Kanzelrahmen/ },
+  dohle: { datei: 'DohleCockpit', auge: [0, 0.42, -5.6], laenge: 16.7, stil: 2, aus: / ~i|^Kuppelglas|^Anzeige|^Bildschirm|^Polster|^Leuchte|^Licht |^LED |^Schwarzmetall|^Kanzelrahmen|^Gussgrau.001/, fill: [0.22, 0.16], griff: [[-0.4, 0.098, -5.9193], [0.4, 0.098, -5.9193]] },
+  kormoran: { datei: 'KormoranCockpit', auge: [-0.85, 1.75, -13.1], laenge: 46, stil: 2, aus: / ~i|^Schauglas|^Anzeige|^Bildschirm|^HUD|^Licht |^LED |^Ambientlicht|^Deckenlicht|^Lack ocker|^Warnschraffur/, fill: [0.22, 0.16], griff: [[-1.23, 1.428, -13.4193], [-0.47, 1.428, -13.4193]] },
 };
 export const COCKPIT = { an: false, sicht: false };      // an: gewünscht (Einstellung), sicht: gerade im Bild
 let grp: THREE.Group | null = null, grpCls = '', laedt = false, teileAus = false, teileVon: THREE.Object3D | null = null;
@@ -37,22 +45,33 @@ export const hatCockpit = (cls: string) => !!COCKPITS[cls];
 // ---------- Schirme ----------
 interface Schirm { c: HTMLCanvasElement; x: CanvasRenderingContext2D; t: THREE.CanvasTexture; w: number; h: number }
 const SCH: Record<string, Schirm> = {};
-function schirm(name: string, w: number, h: number): Schirm {
+function schirm(name: string, w: number, h: number, lh = 0): Schirm {
   if (SCH[name]) return SCH[name];
   const c = document.createElement('canvas'); c.width = w; c.height = h;
-  const t = new THREE.CanvasTexture(c); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-  return (SCH[name] = { c, x: c.getContext('2d')!, t, w, h });
+  const t = new THREE.CanvasTexture(c); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  const x = c.getContext('2d')!;
+  if (lh > 0) { const k = h / lh; x.setTransform(k, 0, 0, k, 0, 0); return (SCH[name] = { c, x, t, w: w / k, h: lh }); }      // gezeichnet wird in Einheiten mit fester Höhe lh
+  return (SCH[name] = { c, x, t, w, h });
 }
 const GROESSE: Record<string, [number, number]> = { 'Schirm L': [384, 384], 'Schirm M': [384, 384], 'Schirm R': [384, 384], 'Schirm UFC': [420, 80], 'Schirm Uhr': [256, 92], 'Schirm Funk': [256, 62], 'Schirm Daten': [256, 66], 'Schirm HUD': [540, 400] };
-const PET = '#5fe8dc', BERN = '#ffb347', ROT = '#ff5a48', GRUEN = '#6dff9a', DIM = 'rgba(95,232,220,.45)', FM = '"Share Tech Mono",Consolas,monospace';
-function grund(s: Schirm, col = '#031012') { const x = s.x; x.fillStyle = col; x.fillRect(0, 0, s.w, s.h); x.textBaseline = 'alphabetic'; x.textAlign = 'left'; x.lineWidth = 2; }
+// Stil 2 (Schirm 2 …): [Breite, Höhe] in Bildpunkten und die Höhe in Zeicheneinheiten
+const GROESSE2: Record<string, [number, number, number]> = { 'Schirm Lage': [816, 480, 340], 'Schirm Systeme': [654, 460, 336], 'Schirm Ziel': [654, 460, 336], 'Schirm Antrieb': [582, 460, 336],
+  'Schirm Fracht': [582, 460, 336], 'Schirm Band': [800, 200, 100], 'Schirm Funk': [432, 180, 100], 'Schirm Energie': [424, 240, 200], 'Schirm Funk2': [424, 240, 200], 'Schirm Holo': [1536, 500, 500],
+  'Schirm Karte': [720, 480, 340], 'Schirm Schiff': [654, 460, 336] };
+const FM = '"Share Tech Mono",Consolas,monospace';
+let PET = '#5fe8dc', BERN = '#ffb347', ROT = '#ff5a48', GRUEN = '#6dff9a', DIM = 'rgba(95,232,220,.45)', LIN = 'rgba(95,232,220,.35)', BG = '#031012', BG2 = '#021008', RAD = 'rgba(109,255,154,';
+function palette(stil: number) {
+  if (stil === 2) { PET = '#d6ecff'; BERN = '#ffc978'; ROT = '#ff6a58'; GRUEN = '#9fd4ff'; DIM = 'rgba(150,200,255,.55)'; LIN = 'rgba(140,195,255,.4)'; BG = '#06182b'; BG2 = '#051423'; RAD = 'rgba(150,205,255,'; }
+  else { PET = '#5fe8dc'; BERN = '#ffb347'; ROT = '#ff5a48'; GRUEN = '#6dff9a'; DIM = 'rgba(95,232,220,.45)'; LIN = 'rgba(95,232,220,.35)'; BG = '#031012'; BG2 = '#021008'; RAD = 'rgba(109,255,154,'; }
+}
+function grund(s: Schirm, col = BG) { const x = s.x; x.fillStyle = col; x.fillRect(0, 0, s.w, s.h); x.textBaseline = 'alphabetic'; x.textAlign = 'left'; x.lineWidth = 2; }
 function kopf(s: Schirm, t: string, col = PET) {
   const x = s.x; x.fillStyle = col; x.font = `700 20px ${FM}`; x.fillText(t, 14, 28); x.strokeStyle = col; x.globalAlpha = 0.5; x.beginPath(); x.moveTo(12, 38); x.lineTo(s.w - 12, 38); x.stroke(); x.globalAlpha = 1;
 }
 function balken(s: Schirm, y: number, name: string, f: number, wert: string, col: string) {
   const x = s.x; f = clamp(f, 0, 1);
   x.font = `16px ${FM}`; x.fillStyle = DIM; x.fillText(name, 14, y); x.textAlign = 'right'; x.fillStyle = col; x.fillText(wert, s.w - 14, y); x.textAlign = 'left';
-  x.strokeStyle = 'rgba(95,232,220,.35)'; x.strokeRect(14, y + 7, s.w - 28, 14); x.fillStyle = col; x.fillRect(16, y + 9, (s.w - 32) * f, 10);
+  x.strokeStyle = LIN; x.strokeRect(14, y + 7, s.w - 28, 14); x.fillStyle = col; x.fillRect(16, y + 9, (s.w - 32) * f, 10);
 }
 function zSysteme(s: Schirm) {
   const S = stats(), x = s.x; grund(s); kopf(s, 'SYSTEME');
@@ -64,18 +83,18 @@ function zSysteme(s: Schirm) {
   balken(s, 266, 'FRACHT', S.cargo ? cargoUsed() / S.cargo : 0, `${cargoUsed()} / ${S.cargo}`, PET);
   x.font = `16px ${FM}`; x.fillStyle = DIM; x.fillText('RAKETEN', 14, 318); x.fillStyle = PET;
   for (let i = 0; i < Math.min(8, S.maxRockets || 0); i++) { x.globalAlpha = i < P.rockets ? 1 : 0.2; x.fillRect(110 + i * 22, 304, 14, 16); } x.globalAlpha = 1;
-  x.fillStyle = DIM; x.fillText(`${(P.shipName || '').toUpperCase()} · ${(SHIPS[P.cls as ShipId]?.role || '').toUpperCase()}`, 14, 362);
+  if (s.h > 370) { x.fillStyle = DIM; x.fillText(`${(P.shipName || '').toUpperCase()} · ${(SHIPS[P.cls as ShipId]?.role || '').toUpperCase()}`, 14, 362); }
 }
 const kontakte: { x: number; z: number; col: string; art: number }[] = [];
 function zLage(s: Schirm) {
-  const x = s.x, W = s.w, cx = W / 2, cy = W / 2 + 10, R = W * 0.42, RW = 3000;
-  grund(s, '#021008');
-  x.strokeStyle = 'rgba(109,255,154,.35)'; x.lineWidth = 1.5;
+  const x = s.x, W = s.w, cx = W / 2, cy = s.h / 2 + 10, R = Math.min(W, s.h) * 0.42, RW = 3000;
+  grund(s, BG2);
+  x.strokeStyle = RAD + '.35)'; x.lineWidth = 1.5;
   for (const k of [1 / 3, 2 / 3, 1]) { x.beginPath(); x.arc(cx, cy, R * k, 0, Math.PI * 2); x.stroke(); }
   x.beginPath(); x.moveTo(cx - R, cy); x.lineTo(cx + R, cy); x.moveTo(cx, cy - R); x.lineTo(cx, cy + R); x.stroke();
   // Abtaststrahl
   const a = (performance.now() / 1000 * 1.6) % (Math.PI * 2);
-  const g = x.createConicGradient(a - Math.PI / 2, cx, cy); g.addColorStop(0, 'rgba(109,255,154,.28)'); g.addColorStop(0.12, 'rgba(109,255,154,0)'); g.addColorStop(1, 'rgba(109,255,154,0)');
+  const g = x.createConicGradient(a - Math.PI / 2, cx, cy); g.addColorStop(0, RAD + '.28)'); g.addColorStop(0.12, RAD + '0)'); g.addColorStop(1, RAD + '0)');
   x.save(); x.translate(cx, cy); x.scale(-1, 1); x.translate(-cx, -cy); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2); x.fill(); x.restore();
   // Kontakte: Lage relativ zum Kurs (vorn = oben)
   const cyaw = Math.cos(P.yaw), syaw = Math.sin(P.yaw); kontakte.length = 0;
@@ -99,9 +118,9 @@ function zLage(s: Schirm) {
     else { x.beginPath(); x.moveTo(px, py - (art === 5 ? 9 : 6)); x.lineTo(px + (art === 5 ? 9 : 6), py); x.lineTo(px, py + (art === 5 ? 9 : 6)); x.lineTo(px - (art === 5 ? 9 : 6), py); x.closePath(); x.fill(); }
   }
   x.fillStyle = GRUEN; x.beginPath(); x.moveTo(cx, cy - 9); x.lineTo(cx + 6, cy + 7); x.lineTo(cx, cy + 3); x.lineTo(cx - 6, cy + 7); x.closePath(); x.fill();
-  x.font = `15px ${FM}`; x.fillStyle = 'rgba(109,255,154,.8)'; x.fillText('LAGE', 12, 22); x.textAlign = 'right'; x.fillText('3,0 KM', W - 12, 22);
-  const feinde = world.enemies.length; x.fillStyle = feinde ? ROT : 'rgba(109,255,154,.8)'; x.fillText(feinde ? `FERROX ${feinde}` : 'KEIN FERROX', W - 12, s.h - 10); x.textAlign = 'left';
-  x.fillStyle = 'rgba(109,255,154,.8)'; x.fillText(`KURS ${String(Math.round(((-P.yaw * 180 / Math.PI) % 360 + 360) % 360)).padStart(3, '0')}`, 12, s.h - 10);
+  x.font = `15px ${FM}`; x.fillStyle = RAD + '.8)'; x.fillText('LAGE', 12, 22); x.textAlign = 'right'; x.fillText('3,0 KM', W - 12, 22);
+  const feinde = world.enemies.length; x.fillStyle = feinde ? ROT : RAD + '.8)'; x.fillText(feinde ? `FERROX ${feinde}` : 'KEIN FERROX', W - 12, s.h - 10); x.textAlign = 'left';
+  x.fillStyle = RAD + '.8)'; x.fillText(`KURS ${String(Math.round(((-P.yaw * 180 / Math.PI) % 360 + 360) % 360)).padStart(3, '0')}`, 12, s.h - 10);
 }
 function zZiel(s: Schirm) {
   const x = s.x; grund(s); kopf(s, 'ZIEL · NAV');
@@ -111,17 +130,18 @@ function zZiel(s: Schirm) {
   if (nt) { const d = d3(nt.x, nt.y, nt.z, P.x, P.y, P.z); zeile(104, 'ZIEL', nt.name.toUpperCase().slice(0, 22), BERN); zeile(134, 'ENTFERNUNG', fmtD(d), BERN); }
   else { zeile(104, 'ZIEL', 'KEINS · [N]', DIM); }
   if (P.route && P.route !== P.sector) zeile(168, 'ROUTE', (SECTOR[P.route]?.name || P.route).toUpperCase(), PET);
-  x.strokeStyle = 'rgba(95,232,220,.35)'; x.beginPath(); x.moveTo(12, 190); x.lineTo(s.w - 12, 190); x.stroke();
+  x.strokeStyle = LIN; x.beginPath(); x.moveTo(12, 190); x.lineTo(s.w - 12, 190); x.stroke();
   const lk: any = G.lockT;
   if (lk) {
     const d = d3(lk.x, lk.y, lk.z, P.x, P.y, P.z), n = lk.type === 'mother' ? 'BIENENSTOCK' : lk.type === 'bomber' ? 'FERROX-BOMBER' : lk.type === 'ziel' ? 'ÜBUNGSZIEL' : 'FERROX-JÄGER';
     zeile(222, 'ERFASST', n, ROT); zeile(252, 'ABSTAND', fmtD(d), ROT);
     if (lk.maxhp) { x.strokeStyle = ROT; x.strokeRect(14, 268, s.w - 28, 14); x.fillStyle = ROT; x.fillRect(16, 270, (s.w - 32) * clamp(lk.hp / lk.maxhp, 0, 1), 10); }
   } else zeile(222, 'ERFASST', '—', DIM);
-  zeile(318, 'FAHRT', `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} / ${flightMax()} M/S`);
-  zeile(350, 'ANTRIEB', SF.phase === 'fly' ? 'SCHNELLFLUG' : G.jd ? 'SPRUNG LÄDT' : G.cruise ? 'REISE' : 'NORMAL', G.cruise || SF.phase === 'fly' ? GRUEN : PET);
+  const eng = s.h < 370;
+  zeile(eng ? 294 : 318, 'FAHRT', `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} / ${flightMax()} M/S`);
+  zeile(eng ? 322 : 350, 'ANTRIEB', SF.phase === 'fly' ? 'SCHNELLFLUG' : G.jd ? 'SPRUNG LÄDT' : G.cruise ? 'REISE' : 'NORMAL', G.cruise || SF.phase === 'fly' ? GRUEN : PET);
 }
-function zKlein(s: Schirm, t: string, col = BERN, size = 30) { const x = s.x; grund(s, '#120a02'); x.fillStyle = col; x.font = `700 ${size}px ${FM}`; x.textAlign = 'center'; x.fillText(t, s.w / 2, s.h / 2 + size * 0.36); x.textAlign = 'left'; }
+function zKlein(s: Schirm, t: string, col = BERN, size = 30, bg = '#120a02') { const x = s.x; grund(s, bg); x.fillStyle = col; x.font = `700 ${size}px ${FM}`; x.textAlign = 'center'; x.fillText(t, s.w / 2, s.h / 2 + size * 0.36); x.textAlign = 'left'; }
 function zHud(s: Schirm) {
   const x = s.x, W = s.w, H = s.h, cx = W / 2, cy = H / 2;
   x.clearRect(0, 0, W, H); x.strokeStyle = GRUEN; x.fillStyle = GRUEN; x.lineWidth = 2.5; x.font = `700 22px ${FM}`; x.textBaseline = 'alphabetic';
@@ -148,8 +168,69 @@ function zHud(s: Schirm) {
   if (G.cruise) { x.font = `16px ${FM}`; x.fillText('REISE', cx, H - 16); }
   x.textAlign = 'left';
 }
-let reihe = 0, hudT = 0;
+// ----- Anzeigen im Stil 2 -----
+function zAntrieb(s: Schirm) {
+  const x = s.x, v = Math.hypot(P.vx, P.vy, P.vz), vm = flightMax(); grund(s); kopf(s, 'ANTRIEB');
+  x.font = `700 84px ${FM}`; x.fillStyle = PET; x.textAlign = 'right'; x.fillText(String(Math.round(v)), s.w - 70, 136); x.font = `18px ${FM}`; x.fillStyle = DIM; x.fillText('M/S', s.w - 16, 136); x.textAlign = 'left';
+  balken(s, 176, 'SCHUB', G.thrust, `${Math.round(G.thrust * 100)} %`, PET);
+  balken(s, 226, 'FAHRT', vm ? v / vm : 0, `${Math.round(vm)} MAX`, PET);
+  const art = SF.phase === 'fly' ? 'SCHNELLFLUG' : G.jd ? 'SPRUNG LÄDT' : G.cruise ? 'REISEFLUG' : 'MANÖVER';
+  x.strokeStyle = LIN; x.strokeRect(14, 280, s.w - 28, 46); x.font = `700 24px ${FM}`; x.fillStyle = G.cruise || SF.phase === 'fly' ? BERN : PET; x.textAlign = 'center'; x.fillText(art, s.w / 2, 312); x.textAlign = 'left';
+}
+function zFracht(s: Schirm) {
+  const x = s.x, S = stats(); grund(s); kopf(s, 'FRACHT');
+  balken(s, 66, 'LADERAUM', S.cargo ? cargoUsed() / S.cargo : 0, `${cargoUsed()} / ${S.cargo} E`, cargoUsed() >= S.cargo ? BERN : PET);
+  const zeilen = Object.entries(P.cargo as Record<string, number>).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 7);
+  x.font = `17px ${FM}`;
+  if (!zeilen.length) { x.fillStyle = DIM; x.fillText('LEER', 14, 130); }
+  zeilen.forEach(([k, n], i) => { const y = 126 + i * 30; x.fillStyle = DIM; x.fillText(k.toUpperCase().slice(0, 18), 14, y); x.textAlign = 'right'; x.fillStyle = PET; x.fillText(String(n), s.w - 14, y); x.textAlign = 'left'; });
+}
+function zEnergie(s: Schirm) {
+  const x = s.x, S = stats(), hf = P.hull / S.maxHull, sf = S.maxShield ? P.shield / S.maxShield : 0; grund(s);
+  const ring = (cx: number, f: number, t: string, col: string) => { x.lineWidth = 9; x.strokeStyle = LIN; x.beginPath(); x.arc(cx, 96, 58, 0.75 * Math.PI, 2.25 * Math.PI); x.stroke();
+    x.strokeStyle = col; x.beginPath(); x.arc(cx, 96, 58, 0.75 * Math.PI, (0.75 + 1.5 * clamp(f, 0, 1)) * Math.PI); x.stroke(); x.lineWidth = 2;
+    x.font = `700 34px ${FM}`; x.fillStyle = col; x.textAlign = 'center'; x.fillText(String(Math.round(f * 100)), cx, 108); x.font = `15px ${FM}`; x.fillStyle = DIM; x.fillText(t, cx, 178); x.textAlign = 'left'; };
+  ring(s.w * 0.27, hf, 'RUMPF', hf < 0.3 ? ROT : hf < 0.6 ? BERN : PET); ring(s.w * 0.73, sf, 'SCHILD', sf < 0.25 ? BERN : PET);
+}
+function zBand(s: Schirm) {      // Kursband
+  const x = s.x, W = s.w, kurs = ((-P.yaw * 180 / Math.PI) % 360 + 360) % 360; grund(s);
+  x.strokeStyle = PET; x.fillStyle = PET; x.lineWidth = 1.5; x.font = `16px ${FM}`; x.textAlign = 'center'; x.beginPath();
+  for (let d = -40; d <= 40; d += 5) { const k = Math.round((kurs + d) / 5) * 5, px = W / 2 + (k - kurs) * (W / 80); x.moveTo(px, 62); x.lineTo(px, k % 10 === 0 ? 44 : 52); if (k % 10 === 0) x.fillText(String(((k % 360) + 360) % 360).padStart(3, '0'), px, 84); }
+  x.stroke(); x.font = `700 28px ${FM}`; x.fillText(String(Math.round(kurs)).padStart(3, '0'), W / 2, 30); x.beginPath(); x.moveTo(W / 2 - 7, 34); x.lineTo(W / 2 + 7, 34); x.lineTo(W / 2, 43); x.closePath(); x.fill(); x.textAlign = 'left';
+}
+function zFunk(s: Schirm, t: string, u: string) {
+  const x = s.x; grund(s); x.fillStyle = DIM; x.font = `${Math.round(s.h * 0.16)}px ${FM}`; x.fillText(u, s.h * 0.1, s.h * 0.27); x.fillStyle = PET; x.font = `700 ${Math.round(s.h * 0.34)}px ${FM}`; x.fillText(t, s.h * 0.1, s.h * 0.74);
+}
+function zHolo(s: Schirm) {      // Sichtgerät Stil 2: schwebt vor dem Piloten. Mitte bleibt frei für Fadenkreuz und Ziele des HUD.
+  const x = s.x, W = s.w, H = s.h, cy = H * 0.5; x.clearRect(0, 0, W, H); x.strokeStyle = PET; x.fillStyle = PET; x.lineWidth = 2.5; x.textBaseline = 'alphabetic';
+  const leiter = (px: number, wert: number, schritt: number, t: string, links: boolean) => {
+    x.beginPath(); x.moveTo(px, cy - 170); x.lineTo(px, cy + 170); x.stroke(); x.font = `18px ${FM}`; x.textAlign = links ? 'right' : 'left';
+    for (let i = -3; i <= 3; i++) { const w = Math.round(wert / schritt) * schritt + i * schritt, y = cy - (w - wert) / schritt * 50; if (w < 0 || Math.abs(y - cy) > 168) continue;
+      x.beginPath(); x.moveTo(px, y); x.lineTo(px + (links ? -16 : 16), y); x.stroke(); x.globalAlpha = 0.75; x.fillText(String(w), px + (links ? -24 : 24), y + 6); x.globalAlpha = 1; }
+    x.fillStyle = '#040a12'; x.globalAlpha = 0.6; x.fillRect(px + (links ? 14 : -124), cy - 22, 110, 44); x.globalAlpha = 1; x.fillStyle = PET; x.strokeRect(px + (links ? 14 : -124), cy - 22, 110, 44);
+    x.font = `700 30px ${FM}`; x.textAlign = 'center'; x.fillText(String(Math.round(wert)), px + (links ? 69 : -69), cy + 11); x.font = `16px ${FM}`; x.globalAlpha = 0.75; x.fillText(t, px + (links ? 69 : -69), cy - 32); x.globalAlpha = 1;
+  };
+  const v = Math.hypot(P.vx, P.vy, P.vz), hoch = world.ground ? Math.max(0, P.y - world.ground(P.x, P.z)) : G.thrust * 100;
+  leiter(250, v, v > 400 ? 100 : 20, 'M/S', true); leiter(W - 250, hoch, world.ground ? (hoch > 500 ? 100 : 20) : 10, world.ground ? 'HÖHE' : 'SCHUB', false);
+  // Meldefelder unten
+  const feld = (px: number, t: string, an: boolean, warn = false) => { x.font = `700 18px ${FM}`; x.textAlign = 'center'; x.globalAlpha = an ? 1 : 0.3; x.strokeStyle = x.fillStyle = warn && an ? BERN : PET; x.strokeRect(px - 52, H - 62, 104, 34); x.fillText(t, px, H - 39); x.globalAlpha = 1; x.strokeStyle = x.fillStyle = PET; };
+  feld(110, 'REISE', !!G.cruise, true); feld(230, 'SPRUNG', !!G.jd || SF.phase === 'fly', true); feld(350, P.tool === 'laser' ? 'LASER' : 'KANONE', true);
+  feld(W - 350, 'SCHILD', P.shield > 1); feld(W - 230, 'ZIEL', !!G.lockT, true); feld(W - 110, 'FRACHT', cargoUsed() > 0);
+  x.textAlign = 'left';
+}
+let reihe = 0, hudT = 0, stilJetzt = 1;
+const REIHE2 = ['Schirm Lage', 'Schirm Systeme', 'Schirm Lage', 'Schirm Ziel', 'Schirm Lage', 'Schirm Antrieb', 'Schirm Lage', 'Schirm Fracht', 'Schirm Band', 'Schirm Lage', 'Schirm Energie', 'Schirm Funk', 'Schirm Band', 'Schirm Funk2', 'Schirm Schiff', 'Schirm Karte'];
+function schirmeZeichnen2(dt: number) {
+  hudT -= dt;
+  if (hudT <= 0 && SCH['Schirm Holo']) { hudT = 0.05; zHolo(SCH['Schirm Holo']); SCH['Schirm Holo'].t.needsUpdate = true; }
+  const n = REIHE2[reihe++ % REIHE2.length], s = SCH[n]; if (!s) return;
+  if (n === 'Schirm Lage' || n === 'Schirm Karte') zLage(s); else if (n === 'Schirm Systeme' || n === 'Schirm Schiff') zSysteme(s); else if (n === 'Schirm Ziel') zZiel(s); else if (n === 'Schirm Antrieb') zAntrieb(s);
+  else if (n === 'Schirm Fracht') zFracht(s); else if (n === 'Schirm Band') zBand(s); else if (n === 'Schirm Energie') zEnergie(s);
+  else if (n === 'Schirm Funk') zFunk(s, 'KANAL 07', 'FUNK · BASTION'); else zFunk(s, new Date().toLocaleTimeString('de-DE'), 'BORDZEIT');
+  s.t.needsUpdate = true;
+}
 function schirmeZeichnen(dt: number) {
+  if (stilJetzt === 2) { schirmeZeichnen2(dt); return; }
   hudT -= dt;
   if (hudT <= 0 && SCH['Schirm HUD']) { hudT = 0.045; zHud(SCH['Schirm HUD']); SCH['Schirm HUD'].t.needsUpdate = true; }
   const namen = ['Schirm M', 'Schirm L', 'Schirm M', 'Schirm R', 'Schirm M', 'Schirm UFC', 'Schirm M', 'Schirm Uhr', 'Schirm M', 'Schirm Funk', 'Schirm M', 'Schirm Daten'];
@@ -166,7 +247,7 @@ function schirmeZeichnen(dt: number) {
 const U = { fill: { value: 5 }, ldir: { value: new THREE.Vector3(0, 1, 0) }, inv: { value: new THREE.Matrix4() }, abrieb: { value: 1 }, ao: { value: 0.8 },
   sonne: { value: new THREE.Vector3(0, 1, 0) }, tafel: { value: new THREE.Vector3() }, schein: { value: 1 } };
 /** Stellwerte (auch für das Testlabor): Kabinenlicht im All und über Planeten, Stärke von Abrieb und Verdeckung */
-export const CP_TUNE = { fillAll: 1.0, fillPlanet: 0.6, abrieb: 1, ao: 1, schein: 1, blick: null as null | [number, number] };      // Kabinenlicht: Stärke und Richtung (im Blick der Kamera)
+export const CP_TUNE = { fillAll: 1.0, fillPlanet: 0.6, abrieb: 1, ao: 1, schein: 1, fill2: 1, kalt: 1, warm: 1, blick: null as null | [number, number] };      // Kabinenlicht: Stärke und Richtung (im Blick der Kamera)
 const KEIN_ABRIEB = /Blendschutz|Sitzbezug|Gurt|Plakette|Licht|Kabel|Gummi|rubber|Schrift|Zifferblatt|Kuehl/i;
 function shaderHaken(m: THREE.MeshStandardMaterial, abrieb: number) {
   m.onBeforeCompile = sh => {
@@ -210,6 +291,23 @@ float cpAO, cpEdge, cpDirt, cpWk;`)
   m.customProgramCacheKey = () => 'cockpit7';
 }
 const MATS = new Map<string, THREE.Material>();
+function material2(src: THREE.MeshStandardMaterial): THREE.Material {
+  const name = (src.name || '').replace(/^ext_cp_/, '').replace(/\.\d+$/, ''), key = '2:' + name;
+  const alt = MATS.get(key); if (alt) return alt;
+  let m: THREE.Material;
+  if (name === 'Schirm Holo') { const s = schirm(name, ...GROESSE2[name]); m = new THREE.MeshBasicMaterial({ map: s.t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide, opacity: 0.8 }); }
+  else if (/^Schirm /.test(name)) { const s = schirm(name, ...(GROESSE2[name] || [512, 384, 384])); m = new THREE.MeshBasicMaterial({ map: s.t, toneMapped: false }); (m as THREE.MeshBasicMaterial).color.setScalar(1.35); }
+  else if (name === 'Glas') m = new THREE.MeshStandardMaterial({ color: 0x9fb8c4, transparent: true, opacity: 0.04, roughness: 0.04, metalness: 0, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 0.5 });
+  else {
+    const c = src.clone(); c.vertexColors = false; c.envMapIntensity = name === 'Schirmglas' ? 0.9 : 0.5;
+    const licht = (c.emissive.r + c.emissive.g + c.emissive.b) > 0.01 && c.emissiveIntensity > 0;
+    if (licht) { c.emissiveIntensity = Math.min(c.emissiveIntensity * 2.2, 4); c.toneMapped = true; }
+    if (/^Schrift$/.test(name)) { c.emissive.set(0.55, 0.75, 1.0); c.emissiveIntensity = 0.5; }      // Beschriftung von hinten beleuchtet
+    shaderHaken2(c, musterVon(name), licht || /^Schrift|^Stoff|^Gummi|^Kabel|^Schirmglas|^Warn|^Licht/.test(name) ? 0 : 1, U);
+    m = c;
+  }
+  m.name = 'cp_' + name; MATS.set(key, m); return m;
+}
 function material(src: THREE.MeshStandardMaterial): THREE.Material {
   const name = (src.name || '').replace(/^ext_cp_/, '').replace(/\.\d+$/, '');
   const alt = MATS.get(name); if (alt) return alt;
@@ -230,8 +328,10 @@ function material(src: THREE.MeshStandardMaterial): THREE.Material {
 function bauen(cls: string) {
   const C = COCKPITS[cls], v = decoVorlage(C.datei); if (!v || !v.children[0]) return null;
   const g = new THREE.Group(), inner = v.children[0].clone(true); g.add(inner); g.name = 'Cockpit';
-  inner.traverse((o: any) => { o.layers.set(BODY_LAYER); if (o.isMesh) { o.frustumCulled = false; o.material = material(o.material); o.renderOrder = /Glas|HUD/.test(o.material.name) ? 5 : 0; o.castShadow = false; o.receiveShadow = false; } });
+  palette(C.stil);
+  inner.traverse((o: any) => { o.layers.set(BODY_LAYER); if (o.isMesh) { o.frustumCulled = false; o.material = C.stil === 2 ? material2(o.material) : material(o.material); o.renderOrder = /Holo|HUD/.test(o.material.name) ? 6 : /Glas$/.test(o.material.name) ? 5 : 0; o.castShadow = false; o.receiveShadow = false; } });
   g.layers.set(BODY_LAYER);
+  schattenModell(C.stil === 2 ? inner : null);
   g.scale.setScalar(SHIPS[cls as ShipId].len / C.laenge);
   return g;
 }
@@ -241,15 +341,27 @@ function schiffTeile(aus: boolean) {
   if (teileVon && teileVon !== SHIP.g) teileVon.traverse((o: any) => { if (o.userData.cpAus) { o.visible = true; o.userData.cpAus = false; } });
   SHIP.g.traverse((o: any) => {
     if (!o.isMesh) return; const n = String(o.material?.name || '');
-    if (!/ ~cp|^Kuppelglas|^Kanzelglas|^Kanzelrahmen/.test(n)) return;      // grobe Cockpitteile, Kanzelglas und Kanzelrahmen (die Kanzel kommt mit dem Cockpit-Modell)
+    if (!(COCKPITS[grpCls] || COCKPITS.milan).aus.test(n)) return;      // grobe Cockpitteile, Kanzelglas und Kanzelrahmen (die Kanzel kommt mit dem Cockpit-Modell)
     if (aus && o.visible) { o.visible = false; o.userData.cpAus = true; } else if (!aus && o.userData.cpAus) { o.visible = true; o.userData.cpAus = false; }
   });
   teileAus = aus; teileVon = SHIP.g;
 }
 
+// Pilot im Sitz (fahrer.ts): Becken unter dem Auge, Hände an den Griffen, Füße an den Pedalen. Alles in Cockpit-Koordinaten.
+let sitz: Sitz | null = null;
+export const PILOT_TUNE = { hand: [0.05, 0, 0.045], faust: -1.0, dreh: 1.57, lehne: 0.12, sitz: [0, -0.86, 0.04] };      // hand: Versatz des Handgelenks vom Griffpunkt (nach außen, oben, zum Piloten)
+function pilotSitz(C: CockpitDef, g: THREE.Group): Sitz | null {
+  if (!C.griff) return null;
+  if (sitz && sitz.body === g) return sitz;
+  const [ax, ay, az] = C.auge, T = PILOT_TUNE, h = (i: number) => new THREE.Vector3(C.griff![i][0] + (i ? 1 : -1) * T.hand[0], C.griff![i][1] + T.hand[1], C.griff![i][2] + T.hand[2]);
+  return (sitz = { body: g, neu: true, seat: new THREE.Vector3(ax + T.sitz[0], ay + T.sitz[1], az + T.sitz[2]), wheel: new THREE.Vector3(), haende: [h(0), h(1)],
+    fuesse: [new THREE.Vector3(ax - 0.15, ay - 0.98, az - 0.8), new THREE.Vector3(ax + 0.15, ay - 0.98, az - 0.8)], ebene: BODY_LAYER, ohneKopf: true, lehne: T.lehne, faust: T.faust, handDreh: T.dreh });
+}
+/** Haltung des Piloten neu rechnen (nach Ändern von PILOT_TUNE) */
+export function pilotNeuSetzen() { sitz = null; pilotNeu(); }
 /** Taste K im Flug */
 export function cockpitUmschalten() {
-  if (!hatCockpit(P.cls)) { radio('SYSTEM', `Die ${SHIPS[P.cls as ShipId]?.n || 'Maschine'} hat noch keine Cockpit-Sicht. Bisher gibt es sie im Milan.`); return; }
+  if (!hatCockpit(P.cls)) { radio('SYSTEM', `Die ${SHIPS[P.cls as ShipId]?.n || 'Maschine'} hat noch keine Cockpit-Sicht. Bisher gibt es sie in Milan, Dohle und Kormoran.`); return; }
   COCKPIT.an = !COCKPIT.an; (settings as any).cockpit = COCKPIT.an; saveSettings();
   if (COCKPIT.an && !decoVorlage(COCKPITS[P.cls].datei)) radio('SYSTEM', 'Cockpit wird geladen …');
 }
@@ -266,9 +378,11 @@ export function cockpitUpdate(dt: number, flug: boolean) {
   if (grp) { if (sicht && grp.parent !== SHIP.g) SHIP.g.add(grp); grp.visible = sicht; }
   if (sicht !== COCKPIT.sicht || (sicht && teileVon !== SHIP.g)) schiffTeile(sicht);
   COCKPIT.sicht = sicht;
-  if (!sicht) return;
+  if (!sicht) { if (sitz) { pilotWeg(); sitz = null; } return; }
+  { const ps = pilotSitz(C, grp!); if (ps) pilotUpdate(ps, dt); }
   bodyPass.on = true;
-  U.fill.value = world.surface ? CP_TUNE.fillPlanet : CP_TUNE.fillAll; U.abrieb.value = CP_TUNE.abrieb; U.ao.value = CP_TUNE.ao; U.schein.value = CP_TUNE.schein * (world.surface ? 0.6 : 1);      // im All mehr Kabinenlicht als am Tag über einem Planeten
+  stilJetzt = C.stil; palette(C.stil);
+  U.fill.value = C.fill ? C.fill[world.surface ? 1 : 0] * CP_TUNE.fill2 : world.surface ? CP_TUNE.fillPlanet : CP_TUNE.fillAll; U2.kaltK.value = CP_TUNE.kalt; U2.warmK.value = CP_TUNE.warm; U.abrieb.value = CP_TUNE.abrieb; U.ao.value = CP_TUNE.ao; U.schein.value = CP_TUNE.schein * (world.surface ? 0.6 : 1);      // im All mehr Kabinenlicht als am Tag über einem Planeten
   schirmeZeichnen(dt);
 }
 /** Kamera an den Augpunkt (main.ts updateCamera); yaw, pitch: Kopfdrehung aus der freien Umsicht. false: nicht in der Cockpit-Sicht */
@@ -283,6 +397,7 @@ export function cockpitKamera(yaw: number, pitch: number): boolean {
   camera.quaternion.copy(SHIP.g.quaternion).multiply(_q.setFromEuler(_e));
   camera.updateMatrixWorld(); grp.updateMatrixWorld(true); U.inv.value.copy(grp.matrixWorld).invert();      // Shader rechnet in Metern des Cockpit-Modells
   U.sonne.value.copy(sunDir).applyQuaternion(_q.copy(SHIP.g.quaternion).invert()).normalize();
+  if (C.stil === 2) schattenUpdate(U.sonne.value);
   U.tafel.value.set(0, 0.66, -2.98).applyMatrix4(grp.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
   U.ldir.value.set(0.12, 0.86, 0.5).normalize().applyQuaternion(SHIP.g.quaternion).transformDirection(camera.matrixWorldInverse);      // Kabinenlicht: fest im Schiff
   return true;

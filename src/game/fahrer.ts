@@ -13,7 +13,10 @@ import { figTracht } from './avatar';
 
 // Seit 2026-11-25 eine Klasse: dieselbe Sitzfigur auch für Mitspieler im Wiesel (net.ts), mit deren Tracht.
 type Tracht = ReturnType<typeof figTracht>;
-type Sitz = { body: THREE.Object3D; seat: THREE.Vector3 | null; wheel: THREE.Vector3 | null; neu: boolean };
+// Für den Piloten im Cockpit (cockpit.ts, seit 2026-11-26) zusätzlich: haende/fuesse = Ziele für Handgelenke und Füße (statt Lenkrad und Pedalen des
+// Buggys), ebene = Zeichenebene der Figur (Körperbild der Ich-Sicht), ohneKopf = Kopf weg (die Kamera sitzt dort), lehne = Neigung des Oberkörpers.
+export type Sitz = { body: THREE.Object3D; seat: THREE.Vector3 | null; wheel: THREE.Vector3 | null; neu: boolean;
+  haende?: [THREE.Vector3, THREE.Vector3]; fuesse?: [THREE.Vector3, THREE.Vector3]; ebene?: number; ohneKopf?: boolean; lehne?: number; faust?: number; handDreh?: number };
 export class Fahrer {
   sk: THREE.Object3D | null = null; fig: Figur | null = null; loading = false; holder: THREE.Group | null = null; host: object | null = null;
   posed = false; shown = true; dressT = 0; dead = false;
@@ -36,8 +39,12 @@ export class Fahrer {
     if (this.host !== m) {
       this.holder?.removeFromParent(); this.holder = new THREE.Group(); this.holder.add(this.sk); m.body.add(this.holder); this.host = m; this.posed = false;
     }
-    if ((this.dressT -= dt) <= 0) { this.dressT = 1; this.fig!.setzen(this.tracht()); }      // Ausrüstung gewechselt? (billig, wenn gleich)
-    if (!this.posed && this.fig!.bereit) this.posed = pose(this, m.body, m.seat, m.wheel);
+    if ((this.dressT -= dt) <= 0) {      // Ausrüstung gewechselt? (billig, wenn gleich)
+      this.dressT = 1; this.fig!.setzen(this.tracht());
+      if (m.ebene !== undefined) this.sk.traverse(o => o.layers.set(m.ebene!));
+      if (m.ohneKopf && this.fig!.bones.head) this.fig!.bones.head.scale.setScalar(0.001);
+    }
+    if (!this.posed && this.fig!.bereit) { this.posed = pose(this, m.body, m.seat, m.wheel, m); this.dressT = 0; }
     this.shown = true; this.holder!.visible = this.posed;
   }
   zeigen(on: boolean) { this.shown = on; if (this.holder) this.holder.visible = this.posed && on; }
@@ -69,7 +76,7 @@ function ik2(a: THREE.Object3D, b: THREE.Object3D, c: THREE.Object3D, target: TH
   aim(b, wp(c), target);
 }
 
-function pose(f: Fahrer, body: THREE.Object3D, seat: THREE.Vector3, wheel: THREE.Vector3) {
+function pose(f: Fahrer, body: THREE.Object3D, seat: THREE.Vector3, wheel: THREE.Vector3, m: Sitz) {
   const sk = f.sk, fig = f.fig;
   if (!sk || !fig) return false;
   const bn = fig.bones, need = ['pelvis', 'spine_01', 'neck_01', 'thigh_l', 'calf_l', 'foot_l', 'thigh_r', 'calf_r', 'foot_r', 'upperarm_l', 'lowerarm_l', 'hand_l', 'upperarm_r', 'lowerarm_r', 'hand_r', 'ball_l'];
@@ -88,20 +95,45 @@ function pose(f: Fahrer, body: THREE.Object3D, seat: THREE.Vector3, wheel: THREE
   sk.position.add(want.sub(pel)); sk.updateMatrixWorld(true);
   // 3. Oberkörper etwas zurückgelehnt (an die Lehne)
   const P0 = wp(bn.pelvis);
-  aim(bn.spine_01, wp(bn.neck_01), P0.clone().add(D(0, 1, 0.2).multiplyScalar(wp(bn.neck_01).distanceTo(P0))));
+  aim(bn.spine_01, wp(bn.neck_01), P0.clone().add(D(0, 1, m.lehne ?? 0.2).multiplyScalar(wp(bn.neck_01).distanceTo(P0))));
   // 4. Beine zu den Pedalen, Knie nach oben vorn
   for (const s of [-1, 1]) {
     const k = s < 0 ? 'l' : 'r';
-    ik2(bn['thigh_' + k], bn['calf_' + k], bn['foot_' + k], L(seat.x + s * 0.13, 0.5, -0.92), D(s * 0.15, 1, -0.6));
+    const fz = m.fuesse ? m.fuesse[s < 0 ? 0 : 1] : null;
+    ik2(bn['thigh_' + k], bn['calf_' + k], bn['foot_' + k], fz ? L(fz.x, fz.y, fz.z) : L(seat.x + s * 0.13, 0.5, -0.92), D(s * 0.15, 1, -0.6));
   }
   // 5. Hände an den Lenkradkranz (links und rechts, leicht oben), Ellbogen nach unten außen
   for (const s of [-1, 1]) {
     const k = s < 0 ? 'l' : 'r';
-    ik2(bn['upperarm_' + k], bn['lowerarm_' + k], bn['hand_' + k], L(wheel.x + s * 0.155, wheel.y + 0.04, wheel.z + 0.03), D(s * 0.8, -1, 0.4));
+    const hz = m.haende ? m.haende[s < 0 ? 0 : 1] : null;
+    if (!hz) { ik2(bn['upperarm_' + k], bn['lowerarm_' + k], bn['hand_' + k], L(wheel.x + s * 0.155, wheel.y + 0.04, wheel.z + 0.03), D(s * 0.8, -1, 0.4)); continue; }
+    // Cockpit: Handgelenk an den Griff, Ellbogen nach hinten außen unten; Hand nach vorn richten, um die Längsachse eindrehen, Finger um den Griff krümmen
+    const hand = bn['hand_' + k], mid = bn['middle_01_' + k];
+    ik2(bn['upperarm_' + k], bn['lowerarm_' + k], hand, L(hz.x, hz.y, hz.z), D(s * 0.9, -0.5, 0.6));
+    if (mid) {
+      aim(hand, wp(mid), wp(hand).add(D(-s * 0.35, 0.25, -0.9)));
+      const vor = wp(mid).sub(wp(hand)).normalize(); drehW(hand, vor, s * (m.handDreh ?? 0));
+      const idx = bn['index_01_' + k], pky = bn['pinky_01_' + k];
+      if (idx && pky) {
+        const achse = wp(pky).sub(wp(idx)).normalize(), w = (m.faust ?? 0.9) * s;
+        for (const fi of ['index', 'middle', 'ring', 'pinky']) for (const n of ['_01_', '_02_', '_03_']) { const b = bn[fi + n + k]; if (b) drehW(b, achse, w * (n === '_01_' ? 0.8 : 1)); }
+      }
+    }
   }
   return true;
 }
 
+// Knochen um eine Achse der Welt drehen
+function drehW(bone: THREE.Object3D, achse: THREE.Vector3, winkel: number) {
+  if (!winkel) return;
+  const q2 = Q().setFromAxisAngle(achse, winkel), bw = bone.getWorldQuaternion(Q()), pw = bone.parent ? bone.parent.getWorldQuaternion(Q()) : Q();
+  bone.quaternion.copy(pw.invert().multiply(q2.multiply(bw))); bone.updateMatrixWorld(true);
+}
+// Pilot im Cockpit (Ich-Sicht im Flug): eigene Kopie der Figur, sitzt am Augpunkt, Hände an den Steuerknüppeln
+const PILOT = new Fahrer(() => figTracht());
+export function pilotUpdate(m: Sitz, dt: number) { PILOT.update(m, dt); }
+export function pilotWeg() { PILOT.weg(); }
+export function pilotNeu() { PILOT.posed = false; }      // Haltung neu rechnen (Stellwerte geändert)
 /** im Buggy jedes Bild (surface.ts updateRover) */
 export function updateFahrer(m: Sitz, dt: number) { ICH.update(m, dt); }      // updateRover läuft nur, solange der Pilot fährt
 /** Pilot steigt aus (false) oder ein (true) */
