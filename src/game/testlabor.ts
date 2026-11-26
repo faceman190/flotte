@@ -24,6 +24,7 @@ import { quartierHooks, eigeneDeko, quartierNr } from './quartier';
 import { testAnBord } from './fahrzeuge';
 import { esc, fmtN } from '../core/util';
 import type { Paint } from '../models/gltfShips';
+import { KI, lagerVorMir, lagerWeg, lagerInfo } from './ki/pluenderer';
 
 // =====================================================================================
 // Testlabor (seit 2026-11-24): Menü auf F8, nur auf dem Testserver (test.letztecrew.de), im Entwicklungsserver und mit ?dev=1.
@@ -127,6 +128,10 @@ function html(): string {
       <div class="row">${[['uhr', 'Uhr'], ['0.3', 'Tag'], ['0.625', 'Dämmerung'], ['0.8', 'Nacht']].map(([k, n]) => `<button class="b${String(WETTER.force.zeit ?? 'uhr') === k ? ' p' : ''}" data-a="zeitT" data-k="${k}">${n}</button>`).join('')}</div>
       <div class="row">${[['uhr', 'Uhr'], ['1', 'Sturm'], ['0', 'Klar']].map(([k, n]) => `<button class="b${String(WETTER.force.sturm ?? 'uhr') === k ? ' p' : ''}" data-a="sturmT" data-k="${k}">${n}</button>`).join('')}</div>
       <p class="h">${WETTER.planet ? `Gerade: ${WETTER.tag > 0.99 ? 'Tag' : WETTER.tag < 0.01 ? 'Nacht' : 'Dämmerung'}${WETTER.sturm > 0 ? `, ${WETTER.art?.n} ${Math.round(WETTER.sturm * 100)} %` : ''}. ${WETTER.art ? (() => { const s = naechsterSturm(WETTER.planet, WETTER.typ); return s === null ? 'Kein Sturm in den nächsten Stunden.' : s === 0 ? 'Sturm läuft.' : `Nächster Sturm in ${Math.round(s / 60)} min.`; })() : 'Hier gibt es kein Wetter.'}` : 'Wirkt auf Planeten.'}</p>
+      <h3>Gegner-KI: Plünderer (zu Fuß auf Planeten)</h3>
+      <div class="row"><button class="b p" data-a="kiLager">Lager vor mir aufstellen</button><button class="b" data-a="kiWeg">Lager entfernen</button></div>
+      <label><input type="checkbox" id="tlKiDbg"${KI.debug ? ' checked' : ''}> Debug-Ansicht (Aktion, Werte, Wege, Deckungspunkte)</label>
+      <p class="h">${(() => { const i = lagerInfo(); return i ? `Lager steht: ${i.lebend} von ${i.gesamt} Plünderern leben, Navmesh ${i.navmesh ? 'gebaut' : 'fehlt (Gegner laufen geradeaus)'}, ${i.deckung} Deckungspunkte.` : 'Etwa 38 m vor dir entsteht ein Lager mit Deckungen und einem Trupp Plünderer (3 bis 6, je nach Gefahr des Sektors). Nur zu Fuß auf einem Planeten.'; })()}</p>
       <h3>Fahndung</h3><div class="row">${[0, 1, 2, 3].map(n => `<button class="b${(P.fahndung?.s || 0) === n ? ' p' : ''}" data-a="fahnd" data-k="${n}">${n ? '★'.repeat(n) : 'keine'}</button>`).join('')}</div>
       <p class="h">Ab zwei Sternen greifen Patrouillen an (nicht in Heimstatt), Andocken im Menschenraum nur gegen Bußgeld.</p>
       <h3>Begegnung unterwegs (im Flug)</h3><div class="row">${[['kapsel', 'Rettungskapsel'], ['treibgut', 'Treibgut'], ['panne', 'Panne'], ['angriff', 'Angriff']].map(([k, n]) => `<button class="b" data-a="beg" data-k="${k}">${n}</button>`).join('')}</div>
@@ -194,6 +199,8 @@ function act(a: string, k: string) {
   if (a === 'sturmT') WETTER.force.sturm = k === 'uhr' ? null : +k;
   if (a === 'beg') { const r = begegnungJetzt(k as any); say(r ? `Begegnung gestartet: ${r}. Marke im HUD.` : 'Begegnungen gibt es nur im Flug (Angriff nicht in Heimstatt).'); }
   if (a === 'story') { Object.assign(P.story, { prolog: 'done', ch1: 'done', ch2: 'done', ch3: 'done', ch4: 'done', ch5: 'done' }); say('Kapitel 1–5 als abgeschlossen markiert.'); }
+  if (a === 'kiLager') { const at = testHooks.fuss(); if (!at || !world.surface) { say('Das Lager geht nur zu Fuß auf einem Planeten.'); return; } lagerVorMir(at.x, at.z, at.yaw); say('Plündererlager aufgestellt. Vorsicht!'); zu(); }
+  if (a === 'kiWeg') { lagerWeg(); say('Lager entfernt.'); }
   if (a === 'aufg') { P.aufgabenZuletzt = {}; say('Pause der Stationsaufgaben zurückgesetzt.'); }
   saveGame(); render();
 }
@@ -218,6 +225,7 @@ function auf() {
     el.addEventListener('change', e => {
       const t = e.target as HTMLElement;
       if (t.id === 'tlKind') render();
+      if (t.id === 'tlKiDbg') KI.debug = (t as HTMLInputElement).checked;
       if (t.id === 'tlGott') { TESTF.gott = (t as HTMLInputElement).checked; say(TESTF.gott ? 'Unverwundbar.' : 'Wieder verwundbar.'); }
       if (t.id === 'tlDbg') { if ((t as HTMLInputElement).checked) { dbg = document.createElement('div'); dbg.id = 'tldbg'; document.body.appendChild(dbg); } else { dbg?.remove(); dbg = null; } }
     });

@@ -35,6 +35,25 @@ export const FIGHT = { hp: 100, max: 100, cool: 0, kick: 0, flash: 0, shots: 0, 
 let vm: ViewModel | null = null, tracer: THREE.Line | null = null, tracerT = 0, mflash: THREE.PointLight | null = null, sector = '';
 const danger = () => (SECTOR[P.sector] && SECTOR[P.sector].danger) || 1;
 const say = (t: string, c = '#dfe8f0') => { FIGHT.msg.unshift({ t, c, life: 5 }); if (FIGHT.msg.length > 4) FIGHT.msg.pop(); };
+export const feldSay = say;
+
+// Weitere Gegner auf dem Planetenboden (seit 26.11.2026: Plünderer der neuen KI, src/game/ki/pluenderer.ts). Sie hängen sich hier ein,
+// damit dieser Kampf nichts von ihnen wissen muss: wand = Hindernisse (Abstand des ersten Treffers), ziel = Treffer an einem Gegner,
+// blast = Granate, solid = fester Punkt (Granate prallt ab), laerm = eigener Schuss (Gegner hören ihn), kampf = jemand ist alarmiert,
+// ruhe = nach dem Zusammenbrechen alle beruhigen, weg = Planet verlassen, update / hud = je Bild.
+type Strahl = (ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, tMax: number) => number;
+export const FELD_EXTRA = {
+  wand: ((_ox, _oy, _oz, _dx, _dy, _dz, tMax) => tMax) as Strahl,
+  ziel: (_ox: number, _oy: number, _oz: number, _dx: number, _dy: number, _dz: number, _tMax: number): { t: number; treffer: (dmg: number) => void } | null => null,
+  blast: (_x: number, _y: number, _z: number, _r: number, _dmg: number) => {},
+  solid: (_x: number, _y: number, _z: number) => false,
+  laerm: (_x: number, _y: number, _z: number, _r: number) => {},
+  kampf: () => false,
+  ruhe: () => {},
+  weg: () => {},
+  update: (_dt: number, _me: { x: number; y: number; z: number; active: boolean; down: boolean; geduckt?: boolean; vx?: number; vz?: number }) => {},
+  hud: () => {},
+};
 
 function droneObj(): { vis: DroneVis | null; g: THREE.Object3D } {
   const vis = buildDrone(false);
@@ -76,6 +95,7 @@ export function clearFieldFoes() {
   guards = [];
   for (const b of FIGHT.bolts) scene.remove(b.m);                   // Bolzen teilen Geometrie und Material (footfx.ts)
   FIGHT.bolts = []; FIGHT.foes = []; FIGHT.msg = []; clearFootFx();
+  FELD_EXTRA.weg();
 }
 
 // ---------- Koop (src/game/coop.ts): Mitspieler zu Fuß auf demselben Planeten ----------
@@ -91,6 +111,8 @@ export function setFieldMates(l: FMate[]) {
 }
 const mateIds = () => mates.map(m => m.id);
 const isClient = () => mates.length > 0 && !grp.amHost(mateIds());
+/** für weitere Gegner (FELD_EXTRA): Mitspieler zu Fuß auf diesem Planeten und ob ein anderer Gastgeber ist */
+export const feldKoop = () => ({ mates, client: isClient() });
 onCoop('ffull', m => { if (m.s === P.sector && isFinite(+m.since)) grp.since.set(+m.from, +m.since); });
 const sameField = (m: any) => !!world.surface && m.s === P.sector && sector === P.sector;
 const byId = (id: number) => FIGHT.foes.find(f => f.id === id && id >= 0);
@@ -132,6 +154,7 @@ function los(ax: number, ay: number, az: number, bx: number, by: number, bz: num
   return true;
 }
 
+export const feldHurt = (d: number) => hurt(d);
 function hurt(d: number) {
   if (FIGHT.down > 0 || TESTF.gott) return;
   FIGHT.hp -= d * 100 / (100 + gearStat('schutz') * 3); FIGHT.hurt = 1; flinch();
@@ -153,6 +176,7 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
     const d = new THREE.Vector3(0, 0, -1).applyEuler(_e);
     let tw = 120;
     for (let t = 0.5; t < 120; t += 0.5) { if (terrainAt(px + d.x * t, pz + d.z * t) > py + d.y * t) { tw = t; break; } }
+    tw = FELD_EXTRA.wand(px, py, pz, d.x, d.y, d.z, tw);              // Hindernisse weiterer Gegner (Deckungen der Plünderer)
     let best: Foe | null = null, bt = tw;
     for (const f of FIGHT.foes) {
       if (f.dead) continue;
@@ -161,19 +185,24 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
       const qx = ox - d.x * t, qy = oy - d.y * t, qz = oz - d.z * t;
       if (qx * qx + qy * qy + qz * qz < 0.62 * 0.62) { bt = t; best = f; }
     }
+    const ex = FELD_EXTRA.ziel(px, py, pz, d.x, d.y, d.z, bt);
+    if (ex) { bt = ex.t; best = null; }
     end = new THREE.Vector3(px + d.x * bt, py + d.y * bt, pz + d.z * bt);
-    if (best && best.id >= 0 && isClient()) { best.hit = 0.12; coopSend('fh', { s: P.sector, i: best.id, d: w.dmg }); impact(end, d, 'metall'); }
+    if (ex) { ex.treffer(w.dmg * gunFalloff(bt)); impact(end, d, 'boden', '#a03020'); }
+    else if (best && best.id >= 0 && isClient()) { best.hit = 0.12; coopSend('fh', { s: P.sector, i: best.id, d: w.dmg }); impact(end, d, 'metall'); }
     else if (best) {
       if (!best.alert) droneBark('alarm', Math.hypot(best.x - px, best.z - pz)); best.hp -= w.dmg * gunFalloff(bt); best.hit = 0.12; best.alert = true; impact(end, d, 'metall'); G.hitMark = 0.12;
       if (best.hp <= 0) kill(best, coopNet.id);
     } else if (bt < tw + 0.01 && tw < 120) impact(end, d, 'boden', w.col);
     fxTracer(a, end, w.col, w.n > 1 ? 0.04 : 0.065);                 // Leuchtspur je Kugel
   }
+  FELD_EXTRA.laerm(px, py, pz, 70);
 }
 // Granate werfen (Taste G, onfoot.ts): trifft alle Drohnen im Umkreis, zur Mitte hin voll
 export function fieldGrenade(me: { x: number; y: number; z: number; yaw: number; pitch: number; eye: number }) {
   if (FIGHT.down > 0) return false;
-  return throwGrenade(me.x, me.y + me.eye, me.z, me.yaw, me.pitch, { ground: terrainAt, blast: (x, y, z, r, dmg) => {
+  return throwGrenade(me.x, me.y + me.eye, me.z, me.yaw, me.pitch, { ground: terrainAt, solid: (x, y, z) => FELD_EXTRA.solid(x, y, z), blast: (x, y, z, r, dmg) => {
+    FELD_EXTRA.blast(x, y, z, r, dmg); FELD_EXTRA.laerm(x, y, z, 80);
     for (const f of FIGHT.foes) {
       if (f.dead) continue;
       const d = Math.hypot(f.x - x, f.y - y, f.z - z); if (d > r) continue;
@@ -204,7 +233,7 @@ function kill(f: Foe, by = coopNet.id) {
 }
 
 // Ablauf je Bild (nur zu Fuß auf einem Planeten). me: Spielerposition, Blick; tp: Außensicht (Mündung der Figur)
-export function updateFieldFight(dt: number, me: { x: number; y: number; z: number; yaw: number; pitch: number; eye: number; active: boolean; tp: boolean; muzzle: THREE.Vector3 | null }) {
+export function updateFieldFight(dt: number, me: { x: number; y: number; z: number; yaw: number; pitch: number; eye: number; active: boolean; tp: boolean; muzzle: THREE.Vector3 | null; geduckt?: boolean; vx?: number; vz?: number }) {
   if (!world.surface || sector !== P.sector) return;
   if (!tracer) { tracer = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.9 })); tracer.frustumCulled = false; tracer.visible = false; scene.add(tracer); }
   // Kein Punktlicht fürs Mündungsfeuer mehr (seit 2026-11-18): Es kam beim ersten Schritt zu Fuß dazu und blieb danach für immer in der Szene –
@@ -219,7 +248,7 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
   if (me.active && FIGHT.down <= 0 && mouse.down && FIGHT.cool <= 0 && gunReady()) { shoot(px, py, pz, me.yaw, me.pitch, me.muzzle); gunFired(); if (!weapon().auto) mouse.down = false; }   // Magazin: footgun.ts
   if (mflash) { mflash.position.set(px, py, pz); mflash.intensity = FIGHT.flash > 0 ? 30 : 0; }
   // Erholung außerhalb des Kampfes
-  const fighting = FIGHT.foes.some(f => !f.dead && f.alert);
+  const fighting = FIGHT.foes.some(f => !f.dead && f.alert) || FELD_EXTRA.kampf();
   if (!fighting && FIGHT.down <= 0) FIGHT.hp = Math.min(FIGHT.max, FIGHT.hp + dt * 4);
   // Drohnen
   const dg = danger(), client = isClient();
@@ -276,6 +305,7 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
     coT = 0.1;
     coopSend('fst', { s: P.sector, f: FIGHT.foes.filter(f => f.id >= 0 && !f.dead).map(f => [f.id, ...pack(f.x, f.y, f.z), Math.round(f.hp), f.alert ? 1 : 0]), ev: coEv.splice(0) });
   } else if (!mates.length) coEv = [];
+  FELD_EXTRA.update(dt, { x: me.x, y: me.y, z: me.z, active: me.active, down: FIGHT.down > 0, geduckt: me.geduckt, vx: me.vx, vz: me.vz });
   updateGrenades(dt, px, me.y + 1.1, pz, hurt);
   // Geschosse
   for (let i = FIGHT.bolts.length - 1; i >= 0; i--) {
@@ -292,7 +322,7 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
 export function fieldDown(dt: number): boolean {
   if (FIGHT.down <= 0) return false;
   FIGHT.down -= dt;
-  if (FIGHT.down <= 0) { FIGHT.hp = FIGHT.max * 0.6; FIGHT.down = 0; for (const f of FIGHT.foes) f.alert = false; return true; }
+  if (FIGHT.down <= 0) { FIGHT.hp = FIGHT.max * 0.6; FIGHT.down = 0; for (const f of FIGHT.foes) f.alert = false; FELD_EXTRA.ruhe(); return true; }
   return false;
 }
 
@@ -332,6 +362,7 @@ export function drawFieldHUD() {
     const x = (_p.x + 1) / 2 * W, y = (1 - _p.y) / 2 * H;
     ux.fillStyle = 'rgba(6,16,26,.7)'; ux.fillRect(x - 21, y - 3, 42, 6); ux.fillStyle = '#ff6b5b'; ux.fillRect(x - 20, y - 2, 40 * f.hp / f.max, 4);
   }
+  FELD_EXTRA.hud();
   ux.textAlign = 'left'; ux.font = '600 15px Rajdhani, "IBM Plex Sans", sans-serif';
   FIGHT.msg.forEach((m, i) => { ux.globalAlpha = Math.min(1, m.life); ux.fillStyle = m.c; ux.fillText(m.t, 24, H * 0.62 + i * 20); });
   ux.restore();
