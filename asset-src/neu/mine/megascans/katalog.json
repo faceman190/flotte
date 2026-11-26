@@ -1,0 +1,850 @@
+[
+    {
+        "id":  "ricaS",
+        "was":  "Kurze Kanthölzer/Holzkeile mit Absatz (5 Varianten in einer Datei, übereinander)",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        0.071,
+                        0.806,
+                        0.052
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  2499980,
+        "objekte":  5,
+        "verwendung":  "Verkeilung zwischen Kappe und Verzug am Türstock, Streudeko am Stoßfuß",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ricaS"
+    },
+    {
+        "id":  "shnnehua",
+        "was":  "Kohleboden / dunkler Grubenboden (Kohlegrus, fein)",
+        "form":  "kachelbare Oberfläche",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Standard-Sohle (Boden) im Kohlegang",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/shnnehua"
+    },
+    {
+        "id":  "sinqgag",
+        "was":  "Splitt-/Kohlebrocken-Streuung in Häufchen (Opacity-Atlas, 4K)",
+        "form":  "Decal",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Schmutzinseln auf der Sohle, Fuß von Stempeln, Übergänge Boden/Wand",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/sinqgag"
+    },
+    {
+        "id":  "smnhxxh",
+        "was":  "Splitt locker und fein gestreut (Opacity, 4K)",
+        "form":  "Decal",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Dezente Bodenvariation über Kohleboden, gegen Kachelwiederholung",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/smnhxxh"
+    },
+    {
+        "id":  "smtinfh",
+        "was":  "Splitt dicht und gleichmäßig gestreut (Opacity, 4K)",
+        "form":  "Decal",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Großflächige Schuttschicht auf Sohle und Gleisbett",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/smtinfh"
+    },
+    {
+        "id":  "smtqzuh",
+        "was":  "Splitt in Bändern/Wolken (Opacity, 4K)",
+        "form":  "Decal",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Schuttspuren entlang der Stöße und der Gleise",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/smtqzuh"
+    },
+    {
+        "id":  "tezvbcuda",
+        "was":  "Brettstück, abgebrochen (32 cm)",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        0.32,
+                        0.083,
+                        0.028
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1999994,
+        "objekte":  1,
+        "verwendung":  "Streudeko, Bruchholz am Boden",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/tezvbcuda"
+    },
+    {
+        "id":  "tgmrafyfa",
+        "was":  "Kantholz-Stempel 2,56 m, rau",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.2,
+                        0.193,
+                        2.56
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999994,
+        "objekte":  1,
+        "verwendung":  "Türstock-Stempel (Pfosten); mit Kappe ~2,75 m – passt unter 3 m",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/tgmrafyfa"
+    },
+    {
+        "id":  "tgmsdc0fa",
+        "was":  "Kantholz-Stempel 2,50 m",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.241,
+                        0.231,
+                        2.504
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999992,
+        "objekte":  1,
+        "verwendung":  "Türstock-Stempel, Variante",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/tgmsdc0fa"
+    },
+    {
+        "id":  "tgnhcaafa",
+        "was":  "Kantholz-Stempel 2,43 m",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.232,
+                        0.235,
+                        2.428
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999992,
+        "objekte":  1,
+        "verwendung":  "Türstock-Stempel, Variante",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/tgnhcaafa"
+    },
+    {
+        "id":  "tgnhde0fa",
+        "was":  "Kantholz-Stempel 2,32 m, dunkel/glatter",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.264,
+                        0.266,
+                        2.322
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999994,
+        "objekte":  1,
+        "verwendung":  "Türstock-Stempel, Variante; auch als schräger Notstempel",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/tgnhde0fa"
+    },
+    {
+        "id":  "tgnidj2fa",
+        "was":  "Kantholz kurz 1,61 m, sehr verwittert mit Ästen",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.251,
+                        0.249,
+                        1.609
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999994,
+        "objekte":  1,
+        "verwendung":  "Kurzer Stempel, Holzstapel, umgekippter Pfosten",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/tgnidj2fa"
+    },
+    {
+        "id":  "tkpmbcnjw",
+        "was":  "Schienennagel 13 cm, rostig",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        0.131,
+                        0.021,
+                        0.025
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1076718,
+        "objekte":  1,
+        "verwendung":  "Streudeko am Gleis",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/tkpmbcnjw"
+    },
+    {
+        "id":  "tkqmdbnhw",
+        "was":  "Schienennagel 17 cm, rostig",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        0.17,
+                        0.026,
+                        0.033
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1077672,
+        "objekte":  1,
+        "verwendung":  "Streudeko am Gleis",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/tkqmdbnhw"
+    },
+    {
+        "id":  "tl2effiva",
+        "was":  "Eisenkeile/Spaltkeile rostig, ~18 cm (5 Varianten übereinander)",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        0.18,
+                        0.057,
+                        0.05
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  5388808,
+        "objekte":  5,
+        "verwendung":  "Werkzeugdeko, Kiste/Werkbank",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/tl2effiva"
+    },
+    {
+        "id":  "tlgmehog",
+        "was":  "Mörtel-/Betonfleck mit Rand (Opacity, 8K)",
+        "form":  "Decal",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Ausgebesserte Stellen auf Boden oder Wand, Fundamentfleck",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/tlgmehog"
+    },
+    {
+        "id":  "uc1mfe1fa",
+        "was":  "Fäustel / Schlägel, 0,49 m",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        0.492,
+                        0.128,
+                        0.044
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999996,
+        "objekte":  1,
+        "verwendung":  "Werkzeugdeko, Interaktionsobjekt",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/uc1mfe1fa"
+    },
+    {
+        "id":  "uckmaibfa",
+        "was":  "Stecheisen/Spaten mit langem Stiel und T-Griff, 1,68 m",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        1.683,
+                        0.253,
+                        0.104
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999992,
+        "objekte":  1,
+        "verwendung":  "Werkzeug an Wand gelehnt",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/uckmaibfa"
+    },
+    {
+        "id":  "ucylebxfa",
+        "was":  "Spitzhacke, 0,87 m",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        0.505,
+                        0.067,
+                        0.869
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999992,
+        "objekte":  1,
+        "verwendung":  "Werkzeugdeko, Interaktionsobjekt",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ucylebxfa"
+    },
+    {
+        "id":  "ud0nfezew",
+        "was":  "Glatter, dunkelbrauner Lehm-/Estrichboden",
+        "form":  "kachelbare Oberfläche",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Festgetretene Sohle, Kammern, Füllort",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ud0nfezew"
+    },
+    {
+        "id":  "ud4ofc0fw",
+        "was":  "Graue, verwitterte Bohlen mit Fugen (evtl. Bretterschalung)",
+        "form":  "kachelbare Oberfläche",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Bretterverschalung an Wand, Bohlenboden, Bühnen",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ud4ofc0fw"
+    },
+    {
+        "id":  "uddjeelqx",
+        "was":  "Schaufel mit D-Griff, 0,99 m",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        0.985,
+                        0.223,
+                        0.144
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1000004,
+        "objekte":  1,
+        "verwendung":  "Werkzeugdeko an Schutthaufen",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/uddjeelqx"
+    },
+    {
+        "id":  "uddmcgbia",
+        "was":  "Grasbüschel (11 Varianten, Opacity)",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.488,
+                        0.475,
+                        0.615
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  213960,
+        "objekte":  11,
+        "verwendung":  "Nur Stollenmundloch / Tagesoberfläche, nicht unter Tage",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/uddmcgbia"
+    },
+    {
+        "id":  "udklcbuiw",
+        "was":  "Bergmanns-Schutzhelm, olivgrün (gescannt zu klein: 18 cm statt ~30 cm)",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        0.181,
+                        0.146,
+                        0.09
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1086399,
+        "objekte":  1,
+        "verwendung":  "Deko-Fundstück; vorher ca. ×1,6 skalieren",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/udklcbuiw"
+    },
+    {
+        "id":  "udrffjjqx",
+        "was":  "Kantholz-Balken liegend 1,99 m, stark verwittert",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        1.987,
+                        0.296,
+                        0.175
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999996,
+        "objekte":  1,
+        "verwendung":  "Kappe (Querbalken) für schmale Türstöcke, Schwelle, Holzstapel",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/udrffjjqx"
+    },
+    {
+        "id":  "uebmddyn",
+        "was":  "Felswand / Bruchstein, grau mit Rostflecken",
+        "form":  "kachelbare Oberfläche",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Stoß (Seitenwand) und Firste in unausgebauten Abschnitten",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/uebmddyn"
+    },
+    {
+        "id":  "uebpbd3fa",
+        "was":  "Kantholz liegend 1,23 m",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        1.231,
+                        0.18,
+                        0.11
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999992,
+        "objekte":  1,
+        "verwendung":  "Schwelle, Verzugholz, Stapelware",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/uebpbd3fa"
+    },
+    {
+        "id":  "uebpbetfa",
+        "was":  "Kantholz/Latte 1,69 m",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        1.692,
+                        0.16,
+                        0.11
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999992,
+        "objekte":  1,
+        "verwendung":  "Verzug, Handlauf, Stapelware",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/uebpbetfa"
+    },
+    {
+        "id":  "uebpbhcfa",
+        "was":  "Rundholz geschält 1,56 m",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        1.556,
+                        0.228,
+                        0.144
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999992,
+        "objekte":  1,
+        "verwendung":  "Verzug/Spreize, Holzstapel",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/uebpbhcfa"
+    },
+    {
+        "id":  "ueihabqfa",
+        "was":  "Loren-Radsatz (Achse mit zwei Rädern), Spur ~0,53 m",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        0.728,
+                        0.327,
+                        0.326
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1021880,
+        "objekte":  1,
+        "verwendung":  "Ersatzteil-Deko, kaputte Lore",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ueihabqfa"
+    },
+    {
+        "id":  "ueijag3ew",
+        "was":  "Geschichteter Fels, braun-grau mit Rost",
+        "form":  "kachelbare Oberfläche",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Stoß und Firste, Variante zu uebmddyn",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ueijag3ew"
+    },
+    {
+        "id":  "ueknfaclw",
+        "was":  "Felsstoß mit Schichtung und Schräm-/Bohrspuren",
+        "form":  "kachelbare Oberfläche",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Ortsbrust (Stirnwand am Gangende), frisch aufgefahrene Stöße",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ueknfaclw"
+    },
+    {
+        "id":  "ueujednfa",
+        "was":  "Kastenlore beladen mit Kohle",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        2.058,
+                        0.951,
+                        1.558
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  2099598,
+        "objekte":  1,
+        "verwendung":  "Hauptprop auf dem Gleis; Kohleladung bis 1,56 m",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ueujednfa"
+    },
+    {
+        "id":  "ufekab3dw",
+        "was":  "Bretterrampe auf zwei Stahlträger-Stützen",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        1.611,
+                        2.595,
+                        1.332
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999996,
+        "objekte":  1,
+        "verwendung":  "Gleisende/Auffahrt, Rutsche an Verladestelle",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ufekab3dw"
+    },
+    {
+        "id":  "ufekadxdw",
+        "was":  "Bohlenboden mit eingelassenen Schienen, 5,0 × 3,21 m",
+        "form":  "Bodenplatte",
+        "masse_m":  [
+                        5.002,
+                        3.209,
+                        0.272
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1998255,
+        "objekte":  1,
+        "verwendung":  "Bodenmodul mit Gleis; Breite trifft das 3,2-m-Raster genau",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ufekadxdw"
+    },
+    {
+        "id":  "ufekaeedw",
+        "was":  "Gleisstück gerade 2,5 m auf 4 Holzschwellen (Normalspur, Schienenmitte 1,53 m)",
+        "form":  "Bodenplatte",
+        "masse_m":  [
+                        2.501,
+                        2.501,
+                        0.22
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1000010,
+        "objekte":  1,
+        "verwendung":  "Gleis; Spur zu breit für die Loren (siehe Hinweis)",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ufekaeedw"
+    },
+    {
+        "id":  "ufekaevdw",
+        "was":  "Gleisstück gerade 2,5 m mit Laschenstoß (Normalspur)",
+        "form":  "Bodenplatte",
+        "masse_m":  [
+                        2.502,
+                        2.438,
+                        0.224
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1000006,
+        "objekte":  1,
+        "verwendung":  "Gleis-Variante mit Schienenstoß",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ufekaevdw"
+    },
+    {
+        "id":  "ufekaffdw",
+        "was":  "Kombination: Bohlenboden mit Schienen + Rampe (4 Objekte)",
+        "form":  "Bodenplatte",
+        "masse_m":  [
+                        5.002,
+                        3.209,
+                        1.36
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  4998267,
+        "objekte":  4,
+        "verwendung":  "Fertige Verladestelle; zum Zerlegen in Einzelteile",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ufekaffdw"
+    },
+    {
+        "id":  "ufmodhpfa",
+        "was":  "Leere Muldenlore aus Blech, Spur ~0,44 m",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.768,
+                        1.098,
+                        1.056
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  2000146,
+        "objekte":  1,
+        "verwendung":  "Lore auf dem Gleis, leer",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ufmodhpfa"
+    },
+    {
+        "id":  "ugfmehgfa",
+        "was":  "Stahl-Grubenstempel (Reibungsstempel) mit Schloss, 2,55 m",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.313,
+                        0.254,
+                        2.553
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1000004,
+        "objekte":  1,
+        "verwendung":  "Stahlausbau-Stempel; Ersatz für Holzstempel",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ugfmehgfa"
+    },
+    {
+        "id":  "ugfndjqfa",
+        "was":  "Stahl-Grubenstempel kurz, 1,69 m",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.307,
+                        0.245,
+                        1.689
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1000004,
+        "objekte":  1,
+        "verwendung":  "Stempel in niedrigen Abschnitten, liegend als Deko",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ugfndjqfa"
+    },
+    {
+        "id":  "uh1nbhzlw",
+        "was":  "Rötlich-brauner Fels, stark geklüftet",
+        "form":  "kachelbare Oberfläche",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Stoß/Firste in eisenhaltigem Gestein, Erzgang",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/uh1nbhzlw"
+    },
+    {
+        "id":  "uhcgdblfa",
+        "was":  "Vierkant-Stahlstempel mit Klemmschloss, 1,60 m",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.314,
+                        0.221,
+                        1.599
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  2000008,
+        "objekte":  1,
+        "verwendung":  "Kurzer Stahlstempel, Variante",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/uhcgdblfa"
+    },
+    {
+        "id":  "ujzhahdfa",
+        "was":  "Rungenwagen beladen mit Rundholz",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.832,
+                        2.301,
+                        1.063
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  3233666,
+        "objekte":  1,
+        "verwendung":  "Holztransport auf dem Gleis",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ujzhahdfa"
+    },
+    {
+        "id":  "ujzlbgzfa",
+        "was":  "Holzkastenlore beladen mit blauen Säcken",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.77,
+                        1.254,
+                        1.079
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  2120398,
+        "objekte":  1,
+        "verwendung":  "Materiallore auf dem Gleis",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ujzlbgzfa"
+    },
+    {
+        "id":  "ul4lehiga",
+        "was":  "Flacher Geröll-/Erdhaufen, rötlich",
+        "form":  "Bodenplatte",
+        "masse_m":  [
+                        3.216,
+                        1.882,
+                        0.318
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  498820,
+        "objekte":  1,
+        "verwendung":  "Schuttkegel an der Wand, verschüttete Gangstelle",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/ul4lehiga"
+    },
+    {
+        "id":  "vcyjedsfa",
+        "was":  "Rungenwagen leer",
+        "form":  "frei stehend",
+        "masse_m":  [
+                        0.829,
+                        1.083,
+                        1.061
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  1680088,
+        "objekte":  1,
+        "verwendung":  "Leerer Holzwagen auf dem Gleis",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/vcyjedsfa"
+    },
+    {
+        "id":  "venoehv",
+        "was":  "Rötlich-brauner Erdboden",
+        "form":  "kachelbare Oberfläche",
+        "masse_m":  null,
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  0,
+        "objekte":  0,
+        "verwendung":  "Sohle in eisenhaltigem Abschnitt, Stollenmundloch",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/venoehv"
+    },
+    {
+        "id":  "vgyidfpaw",
+        "was":  "Wandleuchte (Ovalleuchte) mit Schutzgitter",
+        "form":  "Wandstück",
+        "masse_m":  [
+                        0.144,
+                        0.133,
+                        0.214
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  2000000,
+        "objekte":  1,
+        "verwendung":  "Grubenlampe an Stoß oder Kappe, alle ~6 m",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/vgyidfpaw"
+    },
+    {
+        "id":  "vmhdagb",
+        "was":  "Flache Geröllfläche (Schutt-Patch, Mesh)",
+        "form":  "Bodenplatte",
+        "masse_m":  [
+                        1.974,
+                        1.826,
+                        0.158
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999999,
+        "objekte":  1,
+        "verwendung":  "Schutt auf der Sohle, Fugen zwischen Modulen verdecken",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/vmhdagb"
+    },
+    {
+        "id":  "wcbpdfsdw",
+        "was":  "Stollensegment Türstock mit Rundholzverzug, schmal (innen ~2,45 m)",
+        "form":  "Wandstück",
+        "masse_m":  [
+                        3.053,
+                        3.21,
+                        2.369
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  3997587,
+        "objekte":  1,
+        "verwendung":  "Grundmodul Gang: L 3,0 m, außen 3,17 m breit ≈ Raster; Höhe nur 2,36 m",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/wcbpdfsdw"
+    },
+    {
+        "id":  "wcbpdgcdw",
+        "was":  "Stollensegment Türstock mit Rundholzverzug, breit (innen ~3,0 m)",
+        "form":  "Wandstück",
+        "masse_m":  [
+                        2.815,
+                        3.799,
+                        2.361
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  3998453,
+        "objekte":  1,
+        "verwendung":  "Breites Gangmodul, Kammer; L 2,8 m, außen 3,7 m – breiter als Raster",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/wcbpdgcdw"
+    },
+    {
+        "id":  "wcckeezdw",
+        "was":  "Kombination aus wcbpdgcdw + wcbpdfsdw (2 Objekte), Übergang breit→schmal",
+        "form":  "Wandstück",
+        "masse_m":  [
+                        5.648,
+                        3.799,
+                        2.369
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  7996040,
+        "objekte":  2,
+        "verwendung":  "Übergangsmodul breit/schmal, Länge 5,65 m",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/wcckeezdw"
+    },
+    {
+        "id":  "wcskfaidw",
+        "was":  "Gleisbett mit Kohleschutt und Schienen (3 Varianten übereinander)",
+        "form":  "Bodenplatte",
+        "masse_m":  [
+                        2.502,
+                        1.503,
+                        0.32
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  5997543,
+        "objekte":  3,
+        "verwendung":  "Gleisboden-Modul 2,5 × 1,5 m; Spur nicht gemessen",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/wcskfaidw"
+    },
+    {
+        "id":  "wd3efb0",
+        "was":  "Gesteins-/Erzbrocken, 9 cm",
+        "form":  "Kleinteil",
+        "masse_m":  [
+                        0.085,
+                        0.088,
+                        0.07
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  500000,
+        "objekte":  1,
+        "verwendung":  "Streudeko, aufsammelbares Erz",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/wd3efb0"
+    },
+    {
+        "id":  "wdpncgrdw",
+        "was":  "Stahlbogen-Ausbau mit Bretterverzug",
+        "form":  "Wandstück",
+        "masse_m":  [
+                        4.898,
+                        5.946,
+                        3.69
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  3998181,
+        "objekte":  1,
+        "verwendung":  "Großer Gang/Hauptstrecke; Spannweite ~5,9 m, Höhe 3,69 m – zu groß fürs Raster",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/wdpncgrdw"
+    },
+    {
+        "id":  "wdpnchedw",
+        "was":  "Stahlbogen-Ausbau, Bretterverzug mit Gesteinsbrocken",
+        "form":  "Wandstück",
+        "masse_m":  [
+                        3.523,
+                        5.946,
+                        3.769
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  3998163,
+        "objekte":  1,
+        "verwendung":  "Wie wdpncgrdw, beschädigt/ausgebrochen",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/wdpnchedw"
+    },
+    {
+        "id":  "wdpnchtdw",
+        "was":  "Stahlbogen-Ausbau, Steinschüttung hinter Verzug",
+        "form":  "Wandstück",
+        "masse_m":  [
+                        4.546,
+                        5.877,
+                        3.619
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  2000000,
+        "objekte":  1,
+        "verwendung":  "Wie wdpncgrdw, mit Gesteinshinterfüllung",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/wdpnchtdw"
+    },
+    {
+        "id":  "wdpncihdw",
+        "was":  "Stahlbogen-Ausbau mit Rundholzverzug und Fußschwellen",
+        "form":  "Wandstück",
+        "masse_m":  [
+                        4.471,
+                        5.956,
+                        3.651
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  999999,
+        "objekte":  1,
+        "verwendung":  "Wie wdpncgrdw, Holz-Variante",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/wdpncihdw"
+    },
+    {
+        "id":  "wjfidjgdb",
+        "was":  "Flache Kohlegrus-Fläche (Mesh-Patch)",
+        "form":  "Bodenplatte",
+        "masse_m":  [
+                        2.767,
+                        2.348,
+                        0.064
+                    ],
+        "masse_achsen":  "X × Y × Z, Z = Höhe (Blender, Z oben)",
+        "dreiecke":  2000000,
+        "objekte":  1,
+        "verwendung":  "Kohlehaufen/-teppich auf der Sohle, Ladestelle",
+        "quelle":  "Old Mine-dc4dc139/mine_raw/wjfidjgdb"
+    }
+]
