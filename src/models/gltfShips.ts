@@ -184,6 +184,37 @@ const DOORS: Record<string, DoorCfg> = {
       { tag: 'fwhk_r1', grp: 'fw', t0: 0.72, t1: 1, hinge: [-6.59, 2.207, -5.625], axis: 'z', angle: 1.48353 },
     ],
   },
+  // Möwe (asset-src/neu/moewe, moe-gelenke.json): „rampe“ öffnet Bug und Heck: Haube schwenkt um −92° nach oben, Bugrampe nach vorn unten
+  // mit Verlängerung, Heckrampe aus der Schräge nach unten mit Verlängerung. „fw“: vier Beine klappen in die Kästen, die Füße gegenläufig
+  // (verschachtelt unter dem Bein), Schachtklappen zuletzt; die Mantelrotoren schwenken im Flug nach vorn.
+  Moewe: {
+    dur: { rampe: 6.0, fw: 4.2 },
+    parts: [
+      { tag: 'bug', grp: 'rampe', t0: 0, t1: 0.45, hinge: [0, 8, 15], axis: 'x', angle: -1.606 },
+      { tag: 'bugrampe', grp: 'rampe', t0: 0.35, t1: 0.8, hinge: [0, 2.4, 15.15], axis: 'x', angle: 2.247 },
+      { tag: 'bugrampe2', grp: 'rampe', t0: 0.75, t1: 1, slide: [0, 3.425, -1.346], under: 'bugrampe' },
+      { tag: 'rampe', grp: 'rampe', t0: 0.1, t1: 0.72, hinge: [0, 2.4, -14.25], axis: 'x', angle: -0.931 },
+      { tag: 'rampe2', grp: 'rampe', t0: 0.67, t1: 0.96, slide: [0, 1.227, -1.554], under: 'rampe' },
+      { tag: 'fwv_l', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [4.4, 3.5, 11], axis: 'x', angle: 1.571 },
+      { tag: 'fpv_l', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [4.6, 0.62, 11], axis: 'x', angle: -1.571, under: 'fwv_l' },
+      { tag: 'fwh_l', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [4.4, 3.5, -9.6], axis: 'x', angle: -1.571 },
+      { tag: 'fph_l', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [4.6, 0.62, -9.6], axis: 'x', angle: 1.571, under: 'fwh_l' },
+      { tag: 'fwvk_l0', grp: 'fw', t0: 0.72, t1: 1, hinge: [3.6, 2.85, 10.6], axis: 'z', angle: 1.536 },
+      { tag: 'fwvk_l1', grp: 'fw', t0: 0.72, t1: 1, hinge: [5.25, 2.85, 10.6], axis: 'z', angle: -1.536 },
+      { tag: 'fwhk_l0', grp: 'fw', t0: 0.72, t1: 1, hinge: [3.6, 2.85, -8.25], axis: 'z', angle: 1.536 },
+      { tag: 'fwhk_l1', grp: 'fw', t0: 0.72, t1: 1, hinge: [5.25, 2.85, -8.25], axis: 'z', angle: -1.536 },
+      { tag: 'fwv_r', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [-4.4, 3.5, 11], axis: 'x', angle: 1.571 },
+      { tag: 'fpv_r', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [-4.6, 0.62, 11], axis: 'x', angle: -1.571, under: 'fwv_r' },
+      { tag: 'fwh_r', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [-4.4, 3.5, -9.6], axis: 'x', angle: -1.571 },
+      { tag: 'fph_r', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [-4.6, 0.62, -9.6], axis: 'x', angle: 1.571, under: 'fwh_r' },
+      { tag: 'fwvk_r0', grp: 'fw', t0: 0.72, t1: 1, hinge: [-3.6, 2.85, 10.6], axis: 'z', angle: -1.536 },
+      { tag: 'fwvk_r1', grp: 'fw', t0: 0.72, t1: 1, hinge: [-5.25, 2.85, 10.6], axis: 'z', angle: 1.536 },
+      { tag: 'fwhk_r0', grp: 'fw', t0: 0.72, t1: 1, hinge: [-3.6, 2.85, -8.25], axis: 'z', angle: -1.536 },
+      { tag: 'fwhk_r1', grp: 'fw', t0: 0.72, t1: 1, hinge: [-5.25, 2.85, -8.25], axis: 'z', angle: 1.536 },
+      { tag: 'rot_l', grp: 'fw', t0: 0.1, t1: 0.9, hinge: [10.5, 9.95, 2.4], axis: 'x', angle: 1.571 },
+      { tag: 'rot_r', grp: 'fw', t0: 0.1, t1: 0.9, hinge: [-10.5, 9.95, 2.4], axis: 'x', angle: 1.571 },
+    ],
+  },
   // Dohle (asset-src/neu/dohle, doh-gelenke.json): Heckrampe bis zum Boden, Tür mit Treppe (nur bei ausgefahrenem Fahrwerk), Fahrwerk
   Dohle: {
     dur: { rampe: 3.5, tuer: 2.4, fw: 3.6 }, boden: ['tuer'],
@@ -238,7 +269,10 @@ function rigParts(root: THREE.Object3D, parts: DoorPart[]) {
     for (const d of parts) {
       const list = meshes[d.tag]; if (!list?.length) continue;
       const base = d.under ? pivots[d.under] : null, pivot = new THREE.Object3D(); pivot.name = 'Gelenk ' + d.tag;
-      if (base) base.add(pivot); else { gr.add(pivot); pivot.position.set(...((d.hinge || [0, 0, 0]) as [number, number, number])); }
+      if (base) {      // unter einem Gelenk: Verschiebung im Rahmen des Elterngelenks; ein eigenes Drehgelenk (Fuß am Bein) sitzt um den Abstand der Achsen versetzt
+        base.add(pivot); const bh = parts.find(p => p.tag === d.under)?.hinge;
+        if (d.hinge && bh) pivot.position.set(d.hinge[0] - bh[0], d.hinge[1] - bh[1], d.hinge[2] - bh[2]);
+      } else { gr.add(pivot); pivot.position.set(...((d.hinge || [0, 0, 0]) as [number, number, number])); }
       pivot.updateMatrixWorld(true);
       for (const m of list) pivot.attach(m);
       pivots[d.tag] = pivot; out.push({ d, pivot });
@@ -287,7 +321,7 @@ export function doorProgress(root: THREE.Object3D, grp: string) { const rig = ro
 // Heckrampe zum Betreten ohne Taste (Schiffskoordinaten wie die Laufkarte: Nase −Z): Türebene, Fuß der offenen Rampe, halbe Breite.
 // RAMP.want schaltet der Rampenschalter (innen am Laderaum, außen am Rampenfuß); im Hangar öffnet die Rampe, solange want gilt.
 // Heckrampen, über die man zu Fuß hinein- und hinausgeht (Hangar und gelandet auf Planeten, interior.ts rampTransit): door Innenkante, foot Rampenspitze (z, Schiffskoordinaten), hw halbe Breite
-export const RAMP_ENTRY: Record<string, { door: number; foot: number; hw: number }> = { Wisent: { door: 41.39, foot: 49.9, hw: 3.7 }, Kormoran: { door: 21.4, foot: 27.6, hw: 2.1 }, Kranich: { door: 15.37, foot: 19.96, hw: 1.5 } };      // Dohle: kein begehbarer Innenraum (hasInterior ab 30 m)
+export const RAMP_ENTRY: Record<string, { door: number; foot: number; hw: number }> = { Wisent: { door: 41.39, foot: 49.9, hw: 3.7 }, Kormoran: { door: 21.4, foot: 27.6, hw: 2.1 }, Kranich: { door: 15.37, foot: 19.96, hw: 1.5 }, Moewe: { door: 11.839, foot: 20.5, hw: 2.85 } };      // Dohle: kein begehbarer Innenraum (hasInterior ab 30 m)
 export const RAMP = { want: true };
 // Öffnen oder schließen (jedes Bild aufrufen, dt = Spielzeit des Bildes): beim ersten Aufruf sofort im Zielzustand, danach mit der Dauer aus DOORS.
 // Gruppen in boden (Bordleiter) öffnen nur bei ausgefahrenem Fahrwerk.
