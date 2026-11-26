@@ -12,7 +12,8 @@ import type { ItemId, RockKind } from '../data/items';
 import { SHIP } from './player';
 import { ROVER, buildRover } from './surface';
 import { buildFahrzeug, fzLaden, fzBereit, normFz, FZ, type FzId, type RoverNeu } from '../models/rover';
-import { IN, syncOtherPilots, bordWelt, enterShip, interiorHooks, walkFree } from './interior';
+import { IN, syncOtherPilots, bordWelt, enterShip, interiorHooks, walkFree, folgeGast } from './interior';
+import { turmFremd, GUN, schuetzeAus } from './turm';
 import { hasMeshRoom, meshRoomReady, loadMeshRoom } from './meshRoom';
 import { viewModelId } from './mineArt';
 import { FOOT, footTargets, footOff } from './onfoot';
@@ -24,7 +25,7 @@ import { koerper, koerperWeg } from './koerper';
 import { setFieldMates } from './fieldfight';
 import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { SHIPS, hasInterior, type ShipId } from '../data/ships';
-import { setGear, setDoors, setKanzel, RAMP_ENTRY, type Paint } from '../models/gltfShips';
+import { setGear, setDoors, setKanzel, setTurm, RAMP_ENTRY, type Paint } from '../models/gltfShips';
 import { LEITER, leiterSetzen } from './ausstieg';
 import { radio, radioVerlauf } from '../ui/radio';
 import { kistenAnNeue } from './kisten';
@@ -47,6 +48,7 @@ export interface Remote {
   rv?: RoverNeu | null; rk?: string; vv?: (string | number)[] | null; fahrer?: Fahrer;      // fahrer: Sitzfigur im Wiesel (seit 2026-11-25)      // Bodenfahrzeug aus Blender (Art, Lage, Tempo, Lenkung; seit 2026-11-24)
   ls?: number[] | null; dy?: number;      // gelandetes Schiff [x, y, z, Kurs, pitch, roll] (seit 2026-11-25, Neigung seit 2026-11-26); dy: Unterschied der Bodenhöhe hier gegenüber dem Absender
   z?: number | null; leiter?: { g: THREE.Group | null };      // bewegliche Teile (Bits 1 Fahrwerk, 2 Rampe, 4 Kanzel, 8 Leiter) und die Leiter dazu
+  tv?: THREE.Vector3; tt?: number;      // geschätzte Fahrt und Zeit des letzten Stands (seit 2026-11-26: Flug zwischen den Meldungen weiterrechnen)
   tp: THREE.Vector3; tq: THREE.Quaternion; seen: number; fig?: RemoteFig;   // fig: Figur zu Fuß auf dem Planeten
 }
 export const remotes = new Map<number, Remote>();
@@ -117,7 +119,11 @@ function onMsg(m: any) {
     let r = remotes.get(m.id);
     if (!r) { r = { id: m.id, name: m.name, cls: '', paint: '', m: '', s: 0, w: null, d: '', g: null, ship: null, rover: null, tp: new THREE.Vector3(), tq: new THREE.Quaternion(), seen: 0 }; remotes.set(m.id, r); kistenAnNeue(); }      // Neuer im Raum: ihm die treibenden Kisten zeigen
     r.name = m.name; r.s = m.s || 0; r.m = m.m; r.w = Array.isArray(m.w) ? m.w : null; r.d = m.d || ''; r.g = Array.isArray(m.g) ? m.g.map(String) : null;
-    if (m.p?.length === 3) r.tp.set(m.p[0], m.p[1], m.p[2]);
+    if (m.p?.length === 3) {
+      const jetzt = performance.now(), dtm = r.tt ? (jetzt - r.tt) / 1000 : 0, tv = r.tv || (r.tv = new THREE.Vector3());
+      if (dtm > 0.03 && dtm < 0.5 && m.m === 'schiff') { tv.set((m.p[0] - r.tp.x) / dtm, (m.p[1] - r.tp.y) / dtm, (m.p[2] - r.tp.z) / dtm); if (tv.length() > 450) tv.set(0, 0, 0); } else tv.set(0, 0, 0);
+      r.tt = jetzt; r.tp.set(m.p[0], m.p[1], m.p[2]);
+    }
     if (m.q?.length === 4) r.tq.set(m.q[0], m.q[1], m.q[2], m.q[3]).normalize();
     const cls = SHIPS[m.cls as ShipId] ? m.cls : 'milan';      // ältere Fassungen (Venom) und Unbekanntes: das Startschiff
     if (!r.ship || r.cls !== cls || r.paint !== m.paint) {
@@ -181,7 +187,7 @@ function clearRemotes() { for (const id of [...remotes.keys()]) removeRemote(id)
 export function myStation(): string { return (G.dockedAt && G.dockedAt.id) || (IN.active && IN.station ? IN.station.id : '') || ''; }
 // andere Piloten in derselben Station
 export function pilotsHere() { const st = myStation(); return st ? [...remotes.values()].filter(r => r.d === st) : []; }
-const footObj = new THREE.Object3D();
+const footObj = new THREE.Object3D(), _vor = new THREE.Vector3();
 function myState() {
   if (EVA.active && !world.surface) return { o: SHIP.g, m: 'eva' };      // Außenbord: Schiff steht, die Figur schwebt (Lage im Feld w)
   if (DUN.active) { footObj.position.set(DUN.x, 0, DUN.z); footObj.rotation.set(0, DUN.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'mine' }; }
@@ -208,7 +214,7 @@ function sendState() {
   // im Flug die Flugposition (das Modell wird nur beim Zeichnen nachgeführt), sonst die Lage des Modells
   const s = myState(), p = s.m === 'schiff' || s.m === 'eva' ? P : s.o.position, q = s.o.quaternion;
   // zu Fuß in einer Station (nicht im eigenen Schiff): Position im Stationsraum mitschicken
-  const bw = s.m === 'bord' ? bordWelt() : null;      // an Bord eines gelandeten Schiffs (eigenes oder als Gast): Lage in der Welt
+  const bw = s.m === 'bord' && !IN.mitflug ? bordWelt() : null;      // an Bord eines gelandeten Schiffs (eigenes oder als Gast): Lage in der Welt
   const w = bw ? ['bw', ...pack(bw.x, bw.y, bw.z, bw.yaw)] : s.m === 'eva' ? ['eva', EVA.x, EVA.y, EVA.z, EVA.yaw] : DUN.active && DUN.e ? [DUN.e.id, DUN.x, DUN.z, DUN.yaw] : IN.active && IN.station && !IN.ship ? [ortKennung(IN.station.id), IN.x, IN.z, IN.yaw, IN.fy + IN.jy] : null;      // Station: fünfter Eintrag = Höhe (Rampen, Sprung)
   // Bodenfahrzeug: Art, Tempo, Lenkung, Lage und Drehung des Modells (auch wenn der Pilot daneben zu Fuß ist)
   const rm = world.surface && ROVER.active && ROVER.model ? ROVER.model.g : null;
@@ -240,7 +246,8 @@ export function netUpdate(dt: number) {
     if (now - r.seen > 6000) { removeRemote(r.id); continue; }   // lange nichts gehört
     const ship = r.ship!, onShip = r.m === 'schiff' || r.m === 'eva', boden = r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord';
     ship.g.visible = onShip || boden;   // am Boden steht das Schiff gelandet da (Lage aus ls, ältere Fassungen: letzter Stand im Flug)
-    if (onShip) { ship.g.position.lerp(r.tp, k); ship.g.quaternion.slerp(r.tq, k); }
+    if (onShip) { ship.g.position.lerp(r.tv && r.tt ? _vor.copy(r.tp).addScaledVector(r.tv, Math.min(0.25, (now - r.tt) / 1000)) : r.tp, k); ship.g.quaternion.slerp(r.tq, k); }
+    const tf = turmFremd.get(r.id); if (tf && GUN.gast !== r.id) { if (now - tf.t > 4000) turmFremd.delete(r.id); setTurm(ship.g, tf.y, tf.p); }      // Rückenturm der Mitspieler (turm.ts)
     else if (boden && r.ls) { ship.g.position.set(r.ls[0], r.ls[1], r.ls[2]); ship.g.rotation.order = 'YXZ'; ship.g.rotation.set(r.ls[4] || 0, r.ls[3], r.ls[5] || 0); }
     // bewegliche Teile: wie beim Piloten selbst (z), ältere Fassungen ohne z: am Boden Fahrwerk aus und Rampe offen
     const z = r.z ?? ((boden ? 3 : 0) | (r.m === 'eva' ? 2 : 0));
@@ -278,9 +285,19 @@ function gastEingang(cls: string, ls: number[]) {      // Fuß der Heckrampe (Wi
 }
 function gastZiele() {
   for (let i = footTargets.length - 1; i >= 0; i--) if ((footTargets[i] as any).gast) footTargets.splice(i, 1);
-  if (IN.active && IN.ship?.gast) {      // Besitzer weg oder abgehoben: hinaus
-    const r = remotes.get(IN.ship.gast), boden = r && (r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord');
-    if (!r || !boden || !r.ls) { interiorHooks.gastRaus(); radio('SYSTEM', r ? 'Das Schiff hebt ab. Du stehst wieder draußen.' : 'Der Besitzer ist fort. Du stehst wieder draußen.'); }
+  if (IN.active && IN.ship?.gast) {
+    // Mitflug (seit 2026-11-26): Hebt der Besitzer ab, bleibt der Gast an Bord und fliegt mit; der Innenraum folgt dem fliegenden Schiff.
+    // Hinaus geht es erst, wenn das Schiff aus diesem Raum verschwindet (Orbit, Sprung, offline) oder andockt.
+    const r = remotes.get(IN.ship.gast), boden = !!r && (r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord'), flug = !!r && (r.m === 'schiff' || r.m === 'eva');
+    if (!r || !r.ship || !(flug || (boden && r.ls))) {
+      if (GUN.aktiv) schuetzeAus();
+      IN.mitflug = false; interiorHooks.gastRaus();
+      radio('SYSTEM', r ? 'Das Schiff hat angedockt. Du stehst wieder am letzten Landeplatz.' : 'Das Schiff ist fort (Orbit, Sprung oder offline). Du stehst wieder am letzten Landeplatz.');
+      return;
+    }
+    if (boden && r.ls) gastLs = [...r.ls];      // nach dem Mitflug woanders gelandet: dort steigt man aus
+    if (flug !== IN.mitflug) { IN.mitflug = flug; radio(r.name, flug ? 'Wir heben ab. Halt dich fest.' : 'Gelandet.', '#7fe0a0'); }
+    folgeGast();
     return;
   }
   if (!world.surface || !FOOT.active) return;
@@ -299,9 +316,29 @@ function gastRein(r: Remote, ls: number[]) {
   enterShip({ cls: r.cls, uid: -r.id, name: `${SHIPS[r.cls as ShipId].n} von ${r.name}`, ctx: 'planet', gast: r.id }, r.ship);
   if (IN.ship?.gast) for (const d of [1.6, -1.6, 2.4, -2.4]) if (walkFree(IN.x + d, IN.z)) { IN.x += d; break; }      // nicht im Besitzer (gleicher Startpunkt) beginnen
   radio(r.name, 'Willkommen an Bord.', '#7fe0a0');
+  IN.mitflug = false; coopSend('gb', { s: r.id, an: 1, n: P.name });
+}
+/** Modell und Fahrt des Schiffs, auf dem man zu Gast ist (main.ts: Schützenplatz) */
+export const gastSchiff = (id: number) => remotes.get(id)?.ship || null;
+export const gastFahrt = (id: number) => remotes.get(id)?.tv || null;
+// Gäste an Bord des eigenen Schiffs (Meldung der Gäste beim Ein- und Aussteigen): Hinweis für den Piloten
+export const GAESTE = new Map<number, string>();
+onCoop('gb', (m: any) => {
+  if (+m.s !== NET.id) return;
+  if (m.an) { GAESTE.set(m.from, String(m.n || 'Ein Pilot')); radio('BORDRECHNER', `${GAESTE.get(m.from)} ist an Bord gekommen.`, '#7fe0a0'); }
+  else if (GAESTE.delete(m.from)) radio('BORDRECHNER', `${String(m.n || 'Der Gast')} ist von Bord.`, '#8fd3ff');
+});
+let gastWarnT = 0;
+/** jedes Bild im Flug über dem Planeten (main.ts): mit Gästen an Bord vor der Wolkendecke warnen (dort endet der Raum, der Gast stiege aus) */
+export function gastWarnung(dt: number, hoehe: number, decke: number) {
+  for (const id of [...GAESTE.keys()]) if (!remotes.has(id)) GAESTE.delete(id);
+  gastWarnT -= dt;
+  if (GAESTE.size && hoehe > decke * 0.8 && gastWarnT <= 0) { gastWarnT = 20; radio('BORDRECHNER', `${[...GAESTE.values()].join(', ')} an Bord: Über der Wolkendecke endet der Mitflug, dein Gast steht dann wieder am letzten Landeplatz.`, '#ffb347'); }
 }
 /** wohin man als Gast hinausgeht (main.ts, interiorHooks.gastRaus): ans Ende der Rampe, Blick vom Schiff weg */
 export function gastAusstieg() {
+  if (IN.ship?.gast) coopSend('gb', { s: IN.ship.gast, an: 0, n: P.name });
+  IN.mitflug = false;
   const ls = gastLs; gastLs = null; if (!ls) return null;
   const e = gastEingang(gastCls, ls), p = zuWelt(ls, 0, e.aus);
   return { x: p.x, z: p.z, yaw: ls[3] + Math.PI };
