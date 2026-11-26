@@ -72,14 +72,22 @@ Seit dem 26.11.2026 (`src/game/turm.ts`). Der Nutzer: „Fliegt man alleine, sol
 
 ### Mitflug
 
-Ein Mitspieler kann wie bisher über die offene Heckrampe an Bord gehen. Neu: Hebt der Besitzer ab, bleibt der Gast an Bord und fliegt mit (`net.ts gastZiele`, `interior.ts folgeGast`). Der Innenraum folgt dem fliegenden Schiff mit voller Lage, der Gast kann herumlaufen und sich an den Schützenplatz setzen. Er schießt eigene Geschosse und meldet die Stellung des Turms (`tu`); solange Meldungen kommen, ruht beim Besitzer das Aufschalten. Landet das Schiff woanders, steigt der Gast dort aus.
+Ein Mitspieler geht über die offene Heckrampe eines gelandeten Schiffs an Bord. Der Nutzer (26.11.2026): „Mitflug soll überall funktionieren. Orbit, Sprung, Andocken.“ So läuft es (`net.ts` Abschnitt Mitreise, `main.ts` `interiorHooks.mit…`):
 
-Grenzen der ersten Stufe:
+- **Abheben:** Der Gast bleibt an Bord. Der Innenraum folgt dem fliegenden Schiff mit voller Lage (`interior.ts folgeGast`), der Gast kann herumlaufen und sich an den Schützenplatz setzen. Er schießt eigene Geschosse und meldet die Stellung des Turms (`tu`); solange Meldungen kommen, ruht beim Besitzer das Aufschalten.
+- **Orbit, Landeanflug, Sprung:** Der Besitzer kündigt den Übergang an (`mw`, mit der Dauer). Der Gast baut dieselbe Welt auf, wartet dort auf das Schiff und steht danach an derselben Stelle wieder an Bord, auch am Schützenplatz.
+- **Andocken:** Dockt das Schiff an, dockt der Gast an derselben Station an. Sein eigenes Schiff ist ihm per Autopilot gefolgt und steht dort im Hangar.
+- **Aussteigen nach der Reise:** Steigt der Gast auf einem anderen Planeten aus, oder mehr als 300 m von seinem Schiff entfernt, landet sein Schiff per Autopilot neben dem Schiff, aus dem er steigt.
+- **Verbindung weg** (Besitzer offline, Schiff kommt in der neuen Welt nicht an): Der Gast steht wieder bei seinem Schiff, dort, wo er eingestiegen ist.
+- **Spielstand:** Solange der Gast unterwegs ist, wird sein Stand nicht geschrieben (`saveHooks.block`). Wer mittendrin das Spiel schließt, beginnt beim eigenen Schiff.
 
-- Der Mitflug gilt innerhalb eines Raums, also über dem Planeten, auf dem der Gast eingestiegen ist. Verlässt das Schiff ihn (Orbit, Sprung, Andocken) oder geht der Besitzer offline, steht der Gast wieder am letzten Landeplatz des Schiffs. Der Besitzer bekommt vor der Wolkendecke eine Warnung.
-- Das eigene Schiff des Gastes bleibt stehen, wo er es gelandet hat.
-- Andere sehen den Gast während des Flugs nicht als Figur.
+Grenzen:
+
+- Einsteigen geht nur an einem gelandeten Schiff auf einem Planeten. In Stationen sieht man das Schiff eines Mitspielers noch nicht (jeder sieht im Hangar nur seine eigenen Schiffe).
+- Andere sehen den Gast während des Flugs nicht als Figur, sein eigenes Schiff ist für sie in dieser Zeit ausgeblendet (Zustand `gast`).
 - Als Gast verbraucht der Schütze keine Munition des Besitzers.
+
+Falle aus dem Bau: In Koop-Meldungen (`coopSend`) darf kein Feld `t` heißen, es überschreibt die Art der Nachricht.
 
 ## Modulplätze im Technikraum
 
@@ -99,5 +107,5 @@ Ansichten: `KOR_SAMPLES=24 blender -b --python har_lauf.py -- bild bug flug heck
 ## Offen
 
 - Kinnkanonen sind die Bordkanonen des Piloten; sie schwenken nicht.
-- Mitflug über den Raum hinaus (Orbit, Sprung, Andocken mit Gast an Bord).
+- Im Hangar einer Station an Bord eines fremden Schiffs gehen (eigene Hangarbucht je Pilot, Vorschlag vom 26.11.2026).
 - Seitentür ist nur Optik; Gäste im Mehrspieler kommen über die Heckrampe.

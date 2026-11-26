@@ -123,12 +123,13 @@ export const cargoUsed = () => ITEM_IDS.reduce((a, k) => a + P.cargo[k], 0);
 const SAVE_KEY = 'lf_save_v2';
 let saveKey = SAVE_KEY;
 // where: Standort zu Fuß im Augenblick des Speicherns (main.ts); null = im Schiff, undefined = unverändert lassen (Hauptmenü)
-export const saveHooks = { saved: (_p: Player) => {}, where: (): PlayerAt | null | undefined => undefined };
+// block: solange true, wird nicht gespeichert (als Gast auf dem Schiff eines Mitspielers unterwegs, net.ts MIT: der Stand bleibt beim eigenen Schiff)
+export const saveHooks = { saved: (_p: Player) => {}, where: (): PlayerAt | null | undefined => undefined, block: () => false };
 export function setSaveSlot(account: string | null) { saveKey = account ? SAVE_KEY + '@' + account.toLowerCase() : SAVE_KEY; }
 export const onAccountSlot = () => saveKey !== SAVE_KEY;
 export function hasSave() { try { return !!localStorage.getItem(saveKey); } catch (e) { return false; } }
 export function saveGame() {
-  if (!P.name) return;
+  if (!P.name || saveHooks.block()) return;
   P.savedAt = Date.now();
   try { const at = saveHooks.where(); if (at) P.at = at; else if (at === null) delete P.at; } catch (e) { /* Standort bleibt, wie er war */ }
   try { localStorage.setItem(saveKey, JSON.stringify(P)); } catch (e) { /* ignorieren */ }

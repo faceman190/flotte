@@ -189,6 +189,7 @@ export function myStation(): string { return (G.dockedAt && G.dockedAt.id) || (I
 export function pilotsHere() { const st = myStation(); return st ? [...remotes.values()].filter(r => r.d === st) : []; }
 const footObj = new THREE.Object3D(), _vor = new THREE.Vector3();
 function myState() {
+  if (MIT.unterwegs || MIT.warte > 0) return { o: SHIP.g, m: 'gast' };      // als Gast unterwegs: das eigene Schiff steht woanders, hier ist nichts zu zeigen
   if (EVA.active && !world.surface) return { o: SHIP.g, m: 'eva' };      // Außenbord: Schiff steht, die Figur schwebt (Lage im Feld w)
   if (DUN.active) { footObj.position.set(DUN.x, 0, DUN.z); footObj.rotation.set(0, DUN.yaw, 0); footObj.updateMatrix(); return { o: footObj, m: 'mine' }; }
   if (FOOT.active && !IN.active) { footObj.position.set(FOOT.x, FOOT.y, FOOT.z);   // zu Fuß (aus dem Rover oder direkt aus dem Schiff)
@@ -270,7 +271,7 @@ export function netUpdate(dt: number) {
       driveRemote(scene, f, dt);
     } else if (r.fig) dropRemote(r.fig);
   }
-  gastZiele();
+  gastZiele(dt);
 }
 // =====================================================================================
 // Zu Gast an Bord (seit 2026-11-25): An der offenen Rampe eines gelandeten Kormoran oder Wisent eines Mitspielers steht ein Ziel [E].
@@ -283,16 +284,52 @@ function gastEingang(cls: string, ls: number[]) {      // Fuß der Heckrampe (Wi
   const e = RAMP_ENTRY[SHIPS[cls as ShipId]?.model || ''], len = SHIPS[cls as ShipId]?.len || 30;
   return e ? { ...zuWelt(ls, 0, e.foot + 1.2), r: e.hw + 2.5, aus: e.foot + 3.5 } : { ...zuWelt(ls, 0, len * 0.5 + 2), r: 6, aus: len * 0.5 + 4 };
 }
-function gastZiele() {
+// Mitreise (seit 2026-11-26, Nutzer: „Mitflug soll überall funktionieren. Orbit, Sprung, Andocken“):
+//  - Hebt der Besitzer ab, bleibt der Gast an Bord; der Innenraum folgt dem fliegenden Schiff (interior.ts folgeGast).
+//  - Wechselt das Schiff die Welt (Aufstieg in den Orbit, Landeanflug, Sprung), meldet der Besitzer das vorher (mw). Der Gast baut dieselbe
+//    Welt auf (main.ts mitWechsel), wartet dort auf das Schiff und steht wieder an derselben Stelle an Bord.
+//  - Dockt das Schiff an, dockt der Gast an derselben Station an: Sein eigenes Schiff folgt per Autopilot und steht dort im Hangar.
+//  - Steigt der Gast nach der Reise auf einem Planeten aus, landet sein Schiff per Autopilot daneben (main.ts gastRaus).
+//  - Reißt die Verbindung ab, steht der Gast wieder bei seinem Schiff, wo er eingestiegen ist (main.ts mitHeim).
+// Solange der Gast unterwegs ist, wird sein Spielstand nicht geschrieben: er bleibt beim eigenen Schiff.
+export const MIT = { host: 0, name: '', cls: '', unterwegs: false, warte: 0, t: 0, pingT: 0, ziel: null as null | { art: string; nach: string; von: string }, lokal: null as null | { x: number; z: number; fy: number; yaw: number; pitch: number; gun: boolean } };
+const mitAus = () => { MIT.host = 0; MIT.unterwegs = false; MIT.warte = 0; MIT.ziel = null; MIT.lokal = null; IN.mitflug = false; };
+saveHooks.block = () => MIT.unterwegs;
+const amBoden = (r: Remote) => r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord';
+const imFlug = (r: Remote) => r.m === 'schiff' || r.m === 'eva';
+function gastZiele(dt: number) {
   for (let i = footTargets.length - 1; i >= 0; i--) if ((footTargets[i] as any).gast) footTargets.splice(i, 1);
+  // Übergang angekündigt: nach der Zeit des Besitzers die Welt wechseln
+  if (MIT.ziel) {
+    MIT.t -= dt;
+    if (MIT.t <= 0) {
+      const z = MIT.ziel; MIT.ziel = null;
+      if (GUN.aktiv) schuetzeAus();
+      MIT.unterwegs = true; MIT.warte = 18;
+      interiorHooks.mitWechsel(z.art, z.nach, z.von);
+      sendState();      // sofort den Raum wechseln: Die Mitspieler des alten Raums verschwinden jetzt (sonst ginge es an Bord des alten Schiffsmodells, das gleich darauf entfernt wird)
+    } else if (IN.active && IN.ship?.gast) folgeGast();
+    return;
+  }
+  // die neue Welt steht: auf das Schiff des Besitzers warten und wieder an Bord gehen
+  if (MIT.warte > 0) {
+    MIT.warte -= dt;
+    const r = remotes.get(MIT.host);
+    if (r && r.m === 'innen' && r.d) { const d = r.d, n = r.name, c = r.cls; mitAus(); interiorHooks.mitDock(d, n, c); return; }
+    if (r && r.ship && (imFlug(r) || (amBoden(r) && r.ls)) && meshRoomReady(r.cls)) { MIT.warte = 0; wiederRein(r); }
+    else if (MIT.warte <= 0) { mitAus(); interiorHooks.mitHeim('Das Schiff ist nicht angekommen.'); }
+    return;
+  }
   if (IN.active && IN.ship?.gast) {
-    // Mitflug (seit 2026-11-26): Hebt der Besitzer ab, bleibt der Gast an Bord und fliegt mit; der Innenraum folgt dem fliegenden Schiff.
-    // Hinaus geht es erst, wenn das Schiff aus diesem Raum verschwindet (Orbit, Sprung, offline) oder andockt.
-    const r = remotes.get(IN.ship.gast), boden = !!r && (r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord'), flug = !!r && (r.m === 'schiff' || r.m === 'eva');
+    const r = remotes.get(IN.ship.gast), boden = !!r && amBoden(r), flug = !!r && imFlug(r);
+    if ((MIT.pingT -= dt) <= 0) { MIT.pingT = 4; coopSend('gb', { s: IN.ship.gast, an: 1, n: P.name }); }      // Lebenszeichen an den Besitzer
+    if (r && r.m === 'innen' && r.d) {      // angedockt: an derselben Station andocken
+      if (GUN.aktiv) schuetzeAus();
+      const d = r.d, n = r.name, c = r.cls; mitAus(); interiorHooks.mitDock(d, n, c); return;
+    }
     if (!r || !r.ship || !(flug || (boden && r.ls))) {
       if (GUN.aktiv) schuetzeAus();
-      IN.mitflug = false; interiorHooks.gastRaus();
-      radio('SYSTEM', r ? 'Das Schiff hat angedockt. Du stehst wieder am letzten Landeplatz.' : 'Das Schiff ist fort (Orbit, Sprung oder offline). Du stehst wieder am letzten Landeplatz.');
+      mitAus(); interiorHooks.mitHeim(r ? 'Das Schiff ist nicht mehr erreichbar.' : 'Die Verbindung zum Schiff ist abgerissen.');
       return;
     }
     if (boden && r.ls) gastLs = [...r.ls];      // nach dem Mitflug woanders gelandet: dort steigt man aus
@@ -302,7 +339,7 @@ function gastZiele() {
   }
   if (!world.surface || !FOOT.active) return;
   for (const r of remotes.values()) {
-    if (!r.ls || !r.ship || !(r.m === 'fuss' || r.m === 'rover' || r.m === 'mine' || r.m === 'bord')) continue;
+    if (!r.ls || !r.ship || !amBoden(r)) continue;
     if (!hasInterior(r.cls) || !hasMeshRoom(r.cls) || !((r.z ?? 2) & 2)) continue;      // Innenraum aus dem Modell, Rampe offen
     const e = gastEingang(r.cls, r.ls), ls = r.ls, rr = r;
     footTargets.push(Object.assign({ x: e.x, z: e.z, r: e.r, label: `An Bord der ${SHIPS[r.cls as ShipId].n} von ${r.name} gehen`, act: () => gastRein(rr, ls) }, { gast: true }));
@@ -312,36 +349,57 @@ function gastRein(r: Remote, ls: number[]) {
   if (!r.ship) return;
   if (!meshRoomReady(r.cls)) { radio('SYSTEM', 'Der Innenraum wird geladen …'); void loadMeshRoom(r.cls); return; }
   gastLs = [...ls]; gastCls = r.cls;
+  mitAus(); MIT.host = r.id; MIT.name = r.name; MIT.cls = r.cls; MIT.pingT = 4;
+  interiorHooks.mitStart();      // Standort beim eigenen Schiff merken (dorthin geht es zurück, wenn die Verbindung abreißt)
   footOff(); ROVER.active = false; document.getElementById('hud')?.classList.add('hidden');
   enterShip({ cls: r.cls, uid: -r.id, name: `${SHIPS[r.cls as ShipId].n} von ${r.name}`, ctx: 'planet', gast: r.id }, r.ship);
   if (IN.ship?.gast) for (const d of [1.6, -1.6, 2.4, -2.4]) if (walkFree(IN.x + d, IN.z)) { IN.x += d; break; }      // nicht im Besitzer (gleicher Startpunkt) beginnen
   radio(r.name, 'Willkommen an Bord.', '#7fe0a0');
   IN.mitflug = false; coopSend('gb', { s: r.id, an: 1, n: P.name });
 }
+// nach einem Weltwechsel: wieder an Bord, an derselben Stelle im Schiff
+function wiederRein(r: Remote) {
+  gastLs = r.ls ? [...r.ls] : null; gastCls = r.cls;
+  enterShip({ cls: r.cls, uid: -r.id, name: `${SHIPS[r.cls as ShipId].n} von ${r.name}`, ctx: 'planet', gast: r.id }, r.ship!);
+  const l = MIT.lokal;
+  if (!IN.active) { mitAus(); interiorHooks.mitHeim('Der Innenraum ließ sich nicht laden.'); return; }
+  if (l) { IN.x = l.x; IN.z = l.z; IN.fy = l.fy; IN.yaw = l.yaw; IN.pitch = l.pitch; }
+  IN.mitflug = imFlug(r); MIT.pingT = 0; MIT.lokal = null;
+  folgeGast(); interiorHooks.mitDa(!!l?.gun);
+}
+// Ankündigung des Besitzers: Übergang in t Sekunden (art: orbit = Aufstieg, surface = Landeanflug, sprung)
+onCoop('mw', (m: any) => {
+  if (!IN.active || !IN.ship?.gast || IN.ship.gast !== m.from || MIT.ziel) return;
+  const art = String(m.art); if (!['orbit', 'surface', 'sprung'].includes(art) || typeof m.nach !== 'string') return;
+  MIT.host = m.from; MIT.ziel = { art, nach: m.nach, von: String(m.von || '') }; MIT.t = Math.max(0.2, Math.min(4, +m.dauer || 1.3));
+  MIT.lokal = { x: IN.x, z: IN.z, fy: IN.fy, yaw: IN.yaw, pitch: IN.pitch, gun: GUN.aktiv };
+  interiorHooks.mitBlende(art, MIT.t);
+});
 /** Modell und Fahrt des Schiffs, auf dem man zu Gast ist (main.ts: Schützenplatz) */
 export const gastSchiff = (id: number) => remotes.get(id)?.ship || null;
 export const gastFahrt = (id: number) => remotes.get(id)?.tv || null;
-// Gäste an Bord des eigenen Schiffs (Meldung der Gäste beim Ein- und Aussteigen): Hinweis für den Piloten
-export const GAESTE = new Map<number, string>();
+// Gäste an Bord des eigenen Schiffs: Sie melden sich beim Einsteigen und danach alle paar Sekunden; wer lange schweigt, gilt als fort
+export const GAESTE = new Map<number, { n: string; t: number }>();
 onCoop('gb', (m: any) => {
   if (+m.s !== NET.id) return;
-  if (m.an) { GAESTE.set(m.from, String(m.n || 'Ein Pilot')); radio('BORDRECHNER', `${GAESTE.get(m.from)} ist an Bord gekommen.`, '#7fe0a0'); }
+  if (m.an) { const neu = !GAESTE.has(m.from); GAESTE.set(m.from, { n: String(m.n || 'Ein Pilot'), t: performance.now() }); if (neu) radio('BORDRECHNER', `${GAESTE.get(m.from)!.n} ist an Bord gekommen.`, '#7fe0a0'); }
   else if (GAESTE.delete(m.from)) radio('BORDRECHNER', `${String(m.n || 'Der Gast')} ist von Bord.`, '#8fd3ff');
 });
-let gastWarnT = 0;
-/** jedes Bild im Flug über dem Planeten (main.ts): mit Gästen an Bord vor der Wolkendecke warnen (dort endet der Raum, der Gast stiege aus) */
-export function gastWarnung(dt: number, hoehe: number, decke: number) {
-  for (const id of [...GAESTE.keys()]) if (!remotes.has(id)) GAESTE.delete(id);
-  gastWarnT -= dt;
-  if (GAESTE.size && hoehe > decke * 0.8 && gastWarnT <= 0) { gastWarnT = 20; radio('BORDRECHNER', `${[...GAESTE.values()].join(', ')} an Bord: Über der Wolkendecke endet der Mitflug, dein Gast steht dann wieder am letzten Landeplatz.`, '#ffb347'); }
+export function gaestePflege() { const now = performance.now(); for (const [id, g] of GAESTE) if (now - g.t > 30000) GAESTE.delete(id); }
+/** Besitzer (main.ts startEntry, startJump): den Gästen an Bord den Übergang ankündigen, solange alle noch im selben Raum sind */
+export function mitMelden(art: 'orbit' | 'surface' | 'sprung', nach: string, von: string, t: number) {
+  gaestePflege(); if (!GAESTE.size) return;
+  coopSend('mw', { art, nach, von, dauer: t });      // nicht „t“: das Feld trägt die Art der Nachricht
+  radio('BORDRECHNER', `${[...GAESTE.values()].map(g => g.n).join(', ')} ${GAESTE.size > 1 ? 'fliegen' : 'fliegt'} mit.`, '#7fe0a0');
 }
-/** wohin man als Gast hinausgeht (main.ts, interiorHooks.gastRaus): ans Ende der Rampe, Blick vom Schiff weg */
+/** wohin man als Gast hinausgeht (main.ts, interiorHooks.gastRaus): ans Ende der Rampe, Blick vom Schiff weg. unterwegs: nach einem Weltwechsel
+ *  (das eigene Schiff steht woanders und folgt per Autopilot); sx/sz: Standort des Schiffs, aus dem man steigt */
 export function gastAusstieg() {
   if (IN.ship?.gast) coopSend('gb', { s: IN.ship.gast, an: 0, n: P.name });
-  IN.mitflug = false;
+  const unterwegs = MIT.unterwegs; mitAus();
   const ls = gastLs; gastLs = null; if (!ls) return null;
   const e = gastEingang(gastCls, ls), p = zuWelt(ls, 0, e.aus);
-  return { x: p.x, z: p.z, yaw: ls[3] + Math.PI };
+  return { x: p.x, z: p.z, yaw: ls[3] + Math.PI, unterwegs, sx: ls[0], sz: ls[2], syaw: ls[3] };
 }
 // Bodenfahrzeug eines Mitspielers: das richtige Modell (Dachs oder Wiesel), weich nachgeführt, Räder drehen und lenken, Sensor dreht.
 // Solange das Modell lädt, steht nichts da (es kommt mit dem Hintergrund-Paket).
