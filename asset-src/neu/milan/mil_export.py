@@ -15,9 +15,9 @@ PAN = {'Rumpf Taubengrau': 'ext_pan_hell', 'Rumpf Graphit': 'ext_pan_graphit', '
 anker = json.load(open(os.path.join(B, 'mil-anker.json')))
 TAGS = [g['tag'] for g in anker['gelenke']]
 CACHE = {}
-def exp_mat(m, tag=None):
+def exp_mat(m, tag=None, cp=False):
     if m is None: return None
-    key = (m.name, tag)
+    key = (m.name, tag, cp)
     if key in CACHE: return CACHE[key]
     bk = json.loads(m['bk']) if 'bk' in m.keys() else {}
     if bk.get('stripes'): col = [(a + c) / 2 for a, c in zip(bk['a'], bk['c'])]
@@ -26,7 +26,8 @@ def exp_mat(m, tag=None):
     emit, es = bk.get('emit'), float(bk.get('es', 0.0))
     if bk.get('stripes') and es: emit = col
     if tag: rough = min(1.0, rough + 0.0013 * (1 + TAGS.index(tag)))
-    name = PAN.get(m.name, m.name + ' (Spiel)') + (' |' + tag if tag else '')
+    if cp: rough = min(1.0, rough + 0.0007)      # eigenes Material, damit simplify-hard es nicht mit gleichen außerhalb des Cockpits zusammenlegt
+    name = PAN.get(m.name, m.name + ' (Spiel)') + (' ~cp' if cp else '') + (' |' + tag if tag else '')
     e = bpy.data.materials.new(name); e.use_nodes = True
     b = next(n for n in e.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
     b.inputs['Base Color'].default_value = (*col[:3], 1); b.inputs['Metallic'].default_value = metal; b.inputs['Roughness'].default_value = rough
@@ -57,7 +58,13 @@ for o in list(bpy.data.objects):
     for v in me.vertices:
         for k in range(3): lo[k] = min(lo[k], v.co[k]); hi[k] = max(hi[k], v.co[k])
     tag = tag_of(o)
-    for i, m in enumerate(me.materials): me.materials[i] = exp_mat(m, tag)
+    # Cockpit (Sammlung „Cockpit“, mil_cockpit.py): im Schiffsmodell nur die groben Teile (ab 14 cm), ohne Schrift; Kennung „ ~cp“ am Material –
+    # in der Ich-Sicht blendet das Spiel sie aus und zeigt MilanCockpit.glb (mil_export_cockpit.py). Die Kanzel bleibt (Kennung |kanzel).
+    cp = any(c.name == 'Cockpit' for c in o.users_collection)
+    if cp:
+        xs = [v.co for v in me.vertices]; ext = max(max(c[k] for c in xs) - min(c[k] for c in xs) for k in range(3))
+        if o.type == 'FONT' or ext < 0.14: bpy.data.meshes.remove(me); continue
+    for i, m in enumerate(me.materials): me.materials[i] = exp_mat(m, tag, cp and tag is None)
     ob = bpy.data.objects.new(o.name, me); out.objects.link(ob)
     n_obj += 1; n_tri += sum(len(p.vertices) - 2 for p in me.polygons)
 for o in SC.objects: o.select_set(False)

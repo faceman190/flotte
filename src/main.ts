@@ -53,6 +53,7 @@ import { d3 } from './core/util';
 import { openBand, closeBand, drawBand, bandHooks } from './ui/band';
 import { updateControls } from './ui/controls';
 import { netUpdate, NET, isOnline, gastAusstieg, meldeFehler } from './game/net';
+import { cockpitUpdate, cockpitKamera, cockpitUmschalten, cockpitLaden } from './game/cockpit';
 import { TRADE, requestTrade } from './game/trade';
 import { openChat } from './ui/mp';
 // Die Galaxiekarte ist eine App im Flottenband
@@ -100,7 +101,7 @@ import { basePad, nearDoor } from './game/basewalk';
 import { nearCrate, openCrate as openSalvage, updateSalvage, drawSalvageHUD, legendRumor } from './game/salvage';
 import { toggleView, toggleCrouch } from './game/avatar';
 
-loadSettings();
+loadSettings(); cockpitLaden();
 applySettings();
 
 const yawFromDir = (dx: number, dz: number) => Math.atan2(-dx, -dz);
@@ -550,6 +551,7 @@ onKey(code => {
   if (G.mode === 'eva') { if (code === 'KeyF') evaF(); else if (code === 'KeyE') evaE(); return; }
   // F: aus dem Rover aussteigen / wieder einsteigen
   if (code === 'KeyF' && G.mode === 'rover' && !G.dead) { if (FOOT.active) { if (footNearRover()) enterRover(); } else leaveRover(); return; }
+  if (code === 'KeyK' && G.mode === 'play' && !G.dead) { cockpitUmschalten(); return; }      // Cockpit-Sicht ↔ Verfolgersicht
   if (code === 'KeyV' && G.mode === 'play') { CAM.lock = !CAM.lock; if (CAM.lock) radio('SYSTEM', 'Freie Kamera: Maus schaut um das Schiff, Pfeiltasten lenken. V beendet sie.'); return; }
   if (G.mode === 'walk' && code === 'Space') { jump(); return; }
   if (code === 'KeyE') {
@@ -775,6 +777,7 @@ function updateCamera(dt: number) {
     setFov(55);
     return;
   }
+  if (cockpitKamera(CAM.yaw, CAM.pitch)) { setFov(Math.max(settings.fov, 76)); return; }      // Cockpit-Sicht (Taste K, game/cockpit.ts): Kamera am Augpunkt, starr im Schiff
   _e.set(clamp(P.pitch + CAM.pitch, -1.5, 1.5), P.yaw + CAM.yaw, 0);
   const cs = stats(), cm = cs.camBack / 24;
   _o.set(0, cs.camUp * CAM.zoom, cs.camBack * CAM.zoom).applyEuler(_e);
@@ -950,7 +953,8 @@ function loop(now: number, manual = false) {
     }
     setDustVisible(!IN.active);
     INNEN.amb.value = IN.active ? 1 : 0.45;      // Schiffsinnenräume von draußen: weniger Umgebungslicht (innenFlaeche.ts)
-    schiffslicht(IN.active || !world.surface ? 1 : 0.6);      // Leuchten der Schiffe auf Planeten draußen gedämpft (gltfShips.ts)
+    schiffslicht(IN.active || !world.surface ? 1 : 0.6);
+    cockpitUpdate(dt, (G.mode === 'play' || G.mode === 'jump' || (G.mode === 'pause' && !EVA.active)) && !G.dead && !IN.active && !ROVER.active && !DUN.active && SHIP.g.visible);      // Leuchten der Schiffe auf Planeten draußen gedämpft (gltfShips.ts)
     updateCamera(dt);
     shadowSweep -= dt;
     if (shadowSweep <= 0) { shadowSweep = 0.4; markShadows(scene, sky); }

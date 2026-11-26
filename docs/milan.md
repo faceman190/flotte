@@ -78,11 +78,33 @@ Neu in `gltfShips.ts` dafür:
   - `Milan.glb`: 205.000 → 116.000 Dreiecke
   - `MilanFern.glb`: 33.000 Dreiecke
 
+## Cockpit und Ich-Sicht im Flug
+
+Taste K schaltet im Flug in die Cockpit-Sicht (Einstellung `cockpit`, bleibt gespeichert). V mit der Maus dreht den Kopf. Radar und Schiffsanzeige des HUD sind dann aus, sie stehen auf den Anzeigen der Tafel. Andere Schiffe haben noch kein Cockpit, dort meldet der Funk das.
+
+- **Modell:** `mil_cockpit.py` (wird von `mil_kit.py` ausgeführt, Sammlung „Cockpit“).
+  - Wanne mit Spanten, Stringern und Wandfeldern, Schleudersitz, Tafel mit drei Anzeigen, Mittelkonsole, Blendschutz mit Sichtgerät, Seitenkonsolen (links Schub, rechts Steuerknüppel), Kanzel innen.
+  - Helfer im Tafel-Raster: `platte`, `schild`, `kipp`, `knopf`, `taste`, `leuchte`, `anzeige`, `rund`, `leuchtfeld`, `plakette`, `duese`, `sicherung`.
+  - Augpunkt `AUGE` (2,36 / 0 / 3,22), im Spiel 0 / 1,08 / −2,077. Die Tafel steht 1,0 m vor dem Auge.
+  - Prüfbilder: `mil_lauf.py -- cp_pilot cp_links cp_rechts cp_tafel cp_konsole cp_oben`.
+- **Zwei Dateien:**
+  - `Milan.glb` trägt vom Cockpit nur Teile ab 14 cm (Materialname mit ` ~cp`), für den Blick von außen.
+  - `MilanCockpit.glb` (`mil_export_cockpit.py`, Ordner `deco`) trägt alles in voller Auflösung: 108.000 Dreiecke, 1,7 MB im Spiel. Dazu Kanzel und Dichtung.
+  - Eckfarben sind Daten: R = Verdeckung (Cycles), G = Kantenabrieb (1 auf Fasen an scharfen Kanten).
+- **Im Spiel:** `src/game/cockpit.ts`.
+  - Das Cockpit hängt am Schiff und wird im zweiten Durchgang gezeichnet (wie der eigene Körper zu Fuß, eigene Tiefe, nah 3 cm). Die groben Cockpitteile und die Kanzel des Schiffsmodells sind solange aus.
+  - Anzeigen sind Zeichenflächen: Systeme, Lage (Radar 3 km), Ziel, Bordrechner, Sichtgerät.
+  - Shader: Verdeckung, Kantenabrieb, Kabinenlicht, Schein der Anzeigen, beleuchtete Beschriftung.
+  - Sonne fällt nur durch die Kanzelöffnung: Die Öffnung ist als Ebene mit Umriss beschrieben, der Shader prüft je Bildpunkt, ob der Weg zur Sonne hindurchführt. So wandern Lichtflecken durch die Wanne, wenn das Schiff dreht.
+  - Stellwerte `CP_TUNE` (Kabinenlicht im All und über Planeten, Abrieb, Verdeckung, Schein).
+- **Neues Cockpit für ein anderes Schiff:** Eintrag in `COCKPITS` (Datei, Augpunkt, Länge) und die Maße der Kanzelöffnung im Shader (bisher fest für den Milan).
+
 ## Dateien
 
 `asset-src/neu/milan/`:
 - `mil_kit.py` (Bau; Helfer aus `../elster/els_kit.py`)
 - `mil_lauf.py` (ohne Fenster bauen und rendern)
+- `mil_cockpit.py` (Cockpit), `mil_export_cockpit.py` (Cockpit-Datei fürs Spiel)
 - `mil_export.py`, `mil_spiel.sh`
 - Bilder `mil-*.jpg`
 
@@ -97,11 +119,16 @@ Ansichten: schraeg, draufsicht, seite, front, heck, hangar, cockpit, detail, wel
 
 - Beim Umhängen an ein Gelenk die Lage über `matrix_parent_inverse` halten. `matrix_world` gleich nach dem Setzen der Eltern rechnet noch mit der alten Lage des Gelenks, und alles war doppelt verschoben.
 - Die Haupträder fuhren zuerst nach innen und hätten sich in der Mitte berührt. Nach vorn eingefahren bleiben sie nebeneinander.
+- Cockpit: Abrieb aus Eckpunkten lief über ganze Flächen und fleckte Griffe schwarz-weiß. Jetzt zählt nur die Fase an einer scharfen Kante.
+- Cockpit: GLTFLoader schaltet bei Eckfarben `vertexColors` ein. Trägt die Farbe Daten, muss das aus, und der Shader liest das Attribut selbst.
+- Cockpit: Ohne Schatten wirkte die Wanne flach und hell. Der Sonneneinfall durch die Öffnung (Rechnung im Shader) macht das meiste aus.
 - Der Mitteldecker schnitt mit der Wurzelleiste in die Einlaufmündung. Als Schulterflügel liegt die Leiste über den Einläufen.
 - Schrift auf Wölbungen (Einlauf, Grat, Flügelunterseite) taucht ein und wirft einen Schatten. Abhilfe: in ein Netz wandeln und per Shrinkwrap auflegen (`wrap_text`).
 
 ## Offen
 
+- Cockpit: Pilot (Arme, Beine) ist in der Ich-Sicht nicht zu sehen. Steuerknüppel und Schubhebel bewegen sich nicht mit.
+- Cockpit: Teile im Inneren (Sitz, Tafel) werfen keinen Schatten.
 - Rückmeldung des Nutzers.
 - Lackierungen aus der Werft greifen nicht (eigene Materialien wie bei allen eigenen Modellen).
 - Die Fracht von 10 E ist knapp für Stationsaufgaben mit 15 bis 25 Einheiten (Ausbau oder größeres Schiff nötig).

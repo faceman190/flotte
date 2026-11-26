@@ -21,6 +21,7 @@ import { floats } from '../game/fx';
 import { PLANETS } from '../data/planets';
 import { SF, SF_MAX, navTarget, sfEta } from '../game/schnellflug';
 import { ORTE, orteHud, ortePrompt } from '../game/orte';
+import { COCKPIT } from '../game/cockpit';
 
 const TAU = Math.PI * 2;
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
@@ -315,9 +316,9 @@ export function drawHUD() {
   if (booting) bootCut(1);
   drawCompass();
   if (booting) bootCut(2);
-  drawRadar();
+  if (!COCKPIT.sicht) drawRadar();      // Cockpit-Sicht (game/cockpit.ts): Radar und Schiffsanzeige stehen dort auf den Schirmen der Tafel
   if (booting) bootCut(3);
-  drawShipPanel();
+  if (!COCKPIT.sicht) drawShipPanel();
   if (booting) bootCut(4);
   if (G.dead > 0) {
     ux.fillStyle = 'rgba(0,0,0,.35)'; ux.fillRect(0, 0, W, H);

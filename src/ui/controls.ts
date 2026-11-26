@@ -92,6 +92,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (!aufstehGrund()) r.push(['G', 'Aufstehen, Autopilot fliegt']);      // begehbare Schiffe im All (bordflug.ts)
     if (look.free) r.push(['V', 'Freie Kamera beenden', true]);
     if (fresh()) r.push(['Umschalt', G.cruise ? 'Reiseflug aus' : 'Reiseflug'], ['B', 'Flottenband'], ['M', 'Karte']);
+    if (fresh()) r.push(['K', 'Cockpit-Sicht']);
     if (!world.surface) r.push(['Alt', 'halten: alle Namen']);      // Beschriftungen im All (hud.ts, seit 2026-11-26)
     return { title: 'Flug', rows: r.slice(0, 8) };
   }

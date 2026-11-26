@@ -333,6 +333,9 @@ def cockpit():
     area('Cockpitlicht', (2.9, 0, 3.5), (0, 0, 0), 0.7, 0.5, 60, (0.85, 0.9, 1.0))
     ANCH['sitz'] = Vector((xs, 0, FL + 0.9))
 
+# Cockpit in Feinausführung (26.11.2026): ersetzt cockpit() oben (bleibt als Vergleich stehen)
+exec(compile(open(os.path.join(HIER, 'mil_cockpit.py'), encoding='utf-8').read(), 'mil_cockpit.py', 'exec'))
+
 # =====================================================================================
 # 4. Rückengrat mit Frachtfach und Heckklappe
 # =====================================================================================
@@ -907,7 +910,7 @@ def view(name, path, res=(1600, 900)):
     st = ZUST.get(name, {})
     zustand(st.get('fw', 0.0), st.get('fracht', 0.0), st.get('leiter', 1.0), st.get('kanzel', 0.0))
     for o in bpy.data.objects:
-        if o.name.startswith('Kanzelglas'): o.hide_render = name == 'cockpit'
+        if o.name.startswith('Kanzelglas'): o.hide_render = name == 'cockpit' or name.startswith('cp_')
     for o in [STAGE['kiste']] + list(STAGE['kiste'].children_recursive): o.hide_render = not st.get('kiste', False)
     boden = bpy.data.objects.get('Boden grau'); bz = boden.location.z if boden else 0
     if boden and name == 'unten': boden.location.z = -60      # Blick von unten: Studioboden weg
@@ -936,6 +939,9 @@ def build():
     cam('Fahrwerk', (6.8, 2.9, 0.8), (4.9, 0.0, 0.95), 30); cam('Fahrwerk hinten', (-0.2, 4.6, 0.7), (-2.0, 1.4, 1.0), 30)
     cam('Fracht', (-10.6, -3.4, 4.6), (-6.8, 0, 3.15), 32); cam('Leiter', (5.6, 5.6, 1.6), (2.9, 1.2, 1.4), 30)
     cam('Unten', (6.5, 7.0, -4.0), (-0.6, 0, 1.8), 38); cam('Einstieg', (6.4, 6.8, 4.8), (2.6, 0.4, 2.6), 32)
+    # Cockpit in Feinausführung: Blick des Piloten (Sichtfeld wie im Spiel), nach links und rechts unten, Tafel aus der Nähe, von oben
+    A = AUGE; cam('Pilot', tuple(A), (A.x + 3.0, 0, A.z - 0.42), 14); cam('Pilot links', tuple(A), (A.x + 0.55, 0.75, A.z - 0.75), 16); cam('Pilot rechts', tuple(A), (A.x + 0.55, -0.75, A.z - 0.75), 16)
+    cam('Tafel', (A.x + 0.1, 0.0, A.z - 0.2), (XP, 0, ZP - 0.06), 22); cam('Konsole', (2.3, 0.05, 3.25), (2.62, 0.52, 2.6), 24); cam('Oben', (2.9, 0.0, 4.75), (2.92, 0.0, 2.6), 22)
     global VIEWS
     V6 = {      # Kamera, Bühne, Fahrwerk sichtbar, Belichtung, Glut, Zustand
         'schraeg': ('Schraeg', 'grau', True, 0.0, 0.0, {}), 'draufsicht': ('Draufsicht', 'grau', True, 0.2, 0.0, {}), 'seite': ('Seite', 'grau', True, 0.9, 0.0, {}),
@@ -944,13 +950,15 @@ def build():
         'weltraum': ('Weltraum', 'weltraum', True, 0.0, 6.0, {'fw': 1.0, 'leiter': 0.0}), 'unten': ('Unten', 'grau', True, 0.6, 0.0, {'fw': 1.0, 'leiter': 0.0}),
         'fahrwerk': ('Fahrwerk', 'grau', True, 0.3, 0.0, {}), 'fahrwerk2': ('Fahrwerk hinten', 'grau', True, 0.3, 0.0, {}),
         'fracht': ('Fracht', 'hangar', True, 0.6, 0.0, {'fracht': 1.0, 'kiste': True}), 'leiter': ('Leiter', 'grau', True, 0.3, 0.0, {'kanzel': 1.0}),
-        'einstieg': ('Einstieg', 'grau', True, 0.1, 0.0, {'kanzel': 1.0}), 'halb': ('Schraeg', 'grau', True, 0.0, 0.0, {'fw': 0.55, 'leiter': 0.0}),
+        'einstieg': ('Einstieg', 'grau', True, 0.1, 0.0, {'kanzel': 1.0}),
+        'cp_pilot': ('Pilot', 'grau', True, 0.9, 0.0, {'fw': 1.0, 'leiter': 0.0}), 'cp_links': ('Pilot links', 'grau', True, 0.9, 0.0, {}), 'cp_rechts': ('Pilot rechts', 'grau', True, 0.9, 0.0, {}),
+        'cp_tafel': ('Tafel', 'grau', True, 0.9, 0.0, {}), 'cp_konsole': ('Konsole', 'grau', True, 0.9, 0.0, {}), 'cp_oben': ('Oben', 'grau', True, 0.6, 0.0, {}), 'halb': ('Schraeg', 'grau', True, 0.0, 0.0, {'fw': 0.55, 'leiter': 0.0}),
     }
     VIEWS = {k: v[:5] for k, v in V6.items()}; ZUST.update({k: v[5] for k, v in V6.items()})
     anchors = {'duese': list(ANCH['duese1']), 'kanone': list(ANCH['kanone1']), 'fracht': list(ANCH['fracht']), 'laser': list(ANCH['laser']),
                'umriss': [[round(x, 2), round(max(params(x)[0], 0.0), 3)] for x in [XT, 7.3, 6.6, 5.4, 4.2, 2.8, 1.4, 0.0, -1.6, -3.4, -5.0, -6.1, XE]],
                'fluegel': [[round(le_x(y), 2), round(te_x(y), 2), round(y, 2)] for y in (0.85, 1.18, 1.62, 3.0, 5.55)],
-               'gelenke': GELENKE, 'kanzel_gelenk': list(ANCH['kanzel_gelenk'])}
+               'gelenke': GELENKE, 'kanzel_gelenk': list(ANCH['kanzel_gelenk']), 'auge': list(ANCH['auge'])}
     open(os.path.join(HIER, 'mil-anker.json'), 'w').write(json.dumps(anchors, indent=1))
     zustand(0, 0, 1, 0)
     return {'ringe': len(XS), 'gelenke': len(GELENKE)}
