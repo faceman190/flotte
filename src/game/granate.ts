@@ -32,6 +32,8 @@ function model(): THREE.Object3D {
   m.userData.sh = false; return m;
 }
 export const grenadeCount = () => invCount(GRENADE.id);
+/** fliegende Granaten in Weltkoordinaten mit Restzeit bis zur Zündung (Gegner weichen aus, src/game/ki/pluenderer.ts) */
+export const granatenListe = () => nades.map(n => ({ x: (n.env.ox || 0) + n.p.x, y: (n.env.oy || 0) + n.p.y, z: (n.env.oz || 0) + n.p.z, t: n.t }));
 /** zählt mit jedem Wurf hoch (Wurfbewegung der Figur) */
 export const grenadeTosses = () => tossN;
 export function warmGrenade() { if (grenadeCount() > 0) model(); }

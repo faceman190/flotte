@@ -20,6 +20,7 @@ import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extension
 import { dedup, prune, textureCompress, meshopt, reorder, quantize, getBounds } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
 import { packLazy, lazyOpts } from './lazy-pack.mjs';
+import { packRecast } from './recast-pack.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'asset-src', 'legacy'), OUT = path.join(ROOT, 'public', 'assets');
@@ -144,6 +145,8 @@ if (fs.existsSync(LAZY)) for (const n of fs.readdirSync(LAZY).filter(x => x.toLo
 // geschrieben von scripts/build-clips.mjs
 const LCA = path.join(ROOT, 'asset-src', 'lazy');
 if (fs.existsSync(LCA)) for (const n of fs.readdirSync(LCA).filter(x => x.endsWith('.lca'))) { const b = fs.readFileSync(path.join(LCA, n)); put('lazy/' + path.basename(n, '.lca'), 'bin', b, 'lazy', b.length); }
+// Wegfindung der Gegner (recast-navigation-js, src/game/ki/navi.ts): ein ES-Modul, erst bei Bedarf geladen. Einzeln: node scripts/build-recast.mjs
+{ const b = await packRecast(); put('lazy/Recast', 'js', b, 'lazy', b.length); }
 // ---- Begehbare Schiffsinnenräume: Innenmodell (asset-src/glb/interior/<Name>.glb) und Laufkarte (asset-src/walk/<Name>.json) ----
 // Beides im Hintergrund-Paket: wird erst beim Betreten des Schiffs gebraucht.
 const INT = path.join(ROOT, 'asset-src', 'glb', 'interior'), WALK = path.join(ROOT, 'asset-src', 'walk');
