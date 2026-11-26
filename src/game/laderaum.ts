@@ -190,6 +190,8 @@ export function aufsetzen(x: number, z: number, yaw: number, landeH: number, hAt
   return { y, ok: spalt < 1.2 && luft < 3, spalt };
 }
 /** Rampenspitze (Schiffskoordinaten) für die Landung mit Neigung (surface.ts); null: Schiff ohne Laderaum */
+/** Heckrampe des eigenen Schiffs in Schiffskoordinaten (zum Begehen, meshRoom.ts): Innenkante z0/y0, Spitze z1/y1, halbe Breite hw */
+export function rampeLokal() { const R = raum(); return R ? { hw: R.rampe.hw, z0: R.tuer, z1: R.rampe.z1, y0: R.rampe.y0, y1: R.rampe.y1 } : null; }
 export function rampenSpitze() { const R = raum(); return R ? { x: 0, y: R.rampe.y1, z: R.rampe.z1 } : null; }
 /** Stellplatz in der Welt (für das Aussetzen beim Landen): Mitte, Boden, Blick zur Rampe */
 export function stellplatz(s: Lage, i = 0) { const R = raum(); if (!R) return null; const p = weltVon(R.stell[i].x, R.stell[i].z, s, R.boden); return { x: p.x, z: p.z, y: p.y, yaw: s.yaw + Math.PI }; }

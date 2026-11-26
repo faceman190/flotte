@@ -34,7 +34,8 @@ import { START, leaveToBlack, startBusy, bootLog, bootReady, openCover, settled,
 import type { IntroEnd } from './game/intro';
 import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
-import { quartierFahrt, inKojeAufwachen, startLaunch, updateHangarSequence, hangarGearDown, IN, folgeSchiff, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther } from './game/interior';
+import { quartierFahrt, inKojeAufwachen, startLaunch, updateHangarSequence, hangarGearDown, IN, folgeSchiff, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther, rampeHinein } from './game/interior';
+import { hasMeshRoom, meshRoomReady } from './game/meshRoom';
 import { quartierHooks } from './game/quartier';
 import { fzOrdnen } from './game/fahrzeuge';
 import { setDustVisible } from './core/ambience';
@@ -483,6 +484,28 @@ interiorHooks.toFahrzeug = (kind: string) => { leaveInterior(); ROVER.active = t
 interiorHooks.zumSteuer = () => zumSteuer();
 interiorHooks.ausBord = ausBord;
 interiorHooks.gastRaus = () => { const o = gastAusstieg(); leaveInterior(); ROVER.active = true; if (o) footAt(o.x, o.z, o.yaw); else leaveShipOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); };      // als Gast aus dem Schiff eines Mitspielers (net.ts)
+// Nach dem Landen auf einem Planeten (seit 2026-11-26, Nutzer: „E zum Landen, ob man das Fahrzeug rausfährt, macht man selber“): Begehbare Schiffe
+// lassen den Piloten hinter dem Sitz aufstehen, hinaus geht es über die Rampe zu Fuß oder im Fahrzeug aus dem Laderaum. Kleine Flieger: zu Fuß an der
+// Leiter. Ist der Innenraum noch nicht geladen, steht man draußen (sonst hinge man bis zum Ende des Ladens zwischen Cockpit und Boden).
+function nachLanden() {
+  G.mode = 'rover'; resetRoverCamera(); releaseAll();
+  if (settings.walk && hasInterior(P.cls) && (!hasMeshRoom(P.cls) || meshRoomReady(P.cls))) {
+    footOff(); syncLandedShip(); ROVER.active = false; laserSound(false); $('hud').classList.add('hidden');
+    enterShip({ cls: P.cls, uid: P.uid, name: P.shipName, ctx: 'planet' }, SHIP, undefined, true);
+  } else leaveShipOnFoot();
+}
+// zu Fuß die Heckrampe hinauf: an Bord, an derselben Stelle (interior.ts rampeHinein)
+footHooks.rampe = (nx, nz, ox, oz) => {
+  if (!settings.walk || !FOOT.active) return false;
+  const at = rampeHinein(nx, nz, ox, oz, FOOT.y, FOOT.yaw, FOOT.pitch); if (!at) return false;
+  footOff(); syncLandedShip(); ROVER.active = false; laserSound(false);
+  const u = unloadRover(); if (u.moved) radio('SYSTEM', `${u.moved} Einheiten aus dem Rover in den Frachtraum verladen.`);
+  $('hud').classList.add('hidden');
+  enterShip({ cls: P.cls, uid: P.uid, name: P.shipName, ctx: 'planet' }, SHIP, at);
+  return true;
+};
+// innen die Rampe hinunter: draußen zu Fuß weiter
+interiorHooks.zuFuss = (x, z, yaw, pitch) => { leaveInterior(); ROVER.active = true; footAt(x, z, yaw); FOOT.pitch = pitch; G.mode = 'rover'; $('hud').classList.remove('hidden'); };      // Tasten bleiben gedrückt: man läuft einfach weiter
 interiorHooks.toRover = () => { leaveInterior(); ROVER.active = true; leaveShipOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); };
 bandHooks.closed = m => {
   if (m === 'pause') showPause();
@@ -585,7 +608,7 @@ onKey(code => {
       const st = nearDock();
       if (st && world.surface && settings.walk && basePad(st)) { if (landAtBase(st)) { G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); } }   // Planetenbasis: aufs Landefeld, zu Fuß hinein
       else if (st) { const rd = rechtDock(st.name, stationFaction(st.id, P.sector)); if (!rd.ok) radio(st.name.toUpperCase(), rd.text + '.', '#ff6b5b'); else { if (rd.text) rechtZahlen(rd.zahlen, st.name); openDock(st); } }      // Recht und Ordnung: Bußgeld
-      else if (world.surface && landShip()) { if (ROVER.ohne) leaveShipOnFoot(); else footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); saveGame(); }      // ohne Fahrzeug an Bord: zu Fuß (game/fahrzeuge.ts)
+      else if (world.surface && landShip()) { nachLanden(); saveGame(); }      // gelandet: an Bord hinter dem Pilotensitz aufstehen bzw. zu Fuß hinaus; das Fahrzeug nimmt man selbst
       else if (!world.surface && !G.dead) { for (const k of orteKey) if (k()) break; }   // Orte im Sektor (z. B. Bergung in der Alten Werft)
     }
   }

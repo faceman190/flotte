@@ -42,7 +42,9 @@ export const FOOT = {
   locked: false, act: '' as '' | 'rover' | 'ship' | 'mine' | 'base' | 'crate' | 'story', prompt: '', warn: 0,
 };
 export const footHooks = {
-  enterCity: () => {}, unlock: () => {} };
+  enterCity: () => {}, unlock: () => {},
+  rampe: (_nx: number, _nz: number, _ox: number, _oz: number) => false,      // Schritt auf die offene Heckrampe: an Bord (main.ts, interior.ts rampeHinein)
+};
 // Ziele zu Fuß, die die Geschichte setzt (z. B. Kristall bergen): [E] in Reichweite r
 export const footTargets: { x: number; z: number; r: number; label: string; act: () => void }[] = [];
 export const nearFootTarget = () => footTargets.find(t => Math.hypot(t.x - FOOT.x, t.z - FOOT.z) < t.r)
@@ -171,6 +173,7 @@ export function updateFoot(dt: number) {
   FOOT.vx += ((-sy * f + cy * s) * sp - FOOT.vx) * k; FOOT.vz += ((-cy * f - sy * s) * sp - FOOT.vz) * k;
   const ox = FOOT.x, oz = FOOT.z, dx = FOOT.vx * dt, dzz = FOOT.vz * dt;
   let why = '';
+  if ((dx || dzz) && footHooks.rampe(ox + dx, oz + dzz, ox, oz)) return;      // über die Rampe an Bord gegangen
   if (dx || dzz) {
     if (!(why = blocked(ox + dx, oz + dzz, ox, oz))) { FOOT.x += dx; FOOT.z += dzz; }
     else if (!blocked(ox + dx, oz, ox, oz)) { FOOT.x += dx; FOOT.vz = 0; }

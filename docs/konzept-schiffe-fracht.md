@@ -155,3 +155,13 @@ Jedes Schiff hat seine Ausstiege als Punkte im Modell. Danach richten sich Ausst
     einem Aufstehpunkt am Sitz. `folgeSchiff()` setzt den Innenraum jedes Bild auf Lage und Kurs des Schiffs. In `main.ts` fliegt das Schiff
     im Modus walk weiter (`updateBordflug`, `syncShip`), Fahrwerk und Rampe bleiben zu.
   - **Speichern:** Wer im Flug an Bord speichert, wird als „im Schiff“ gesichert (`P.at` leer) und setzt beim Weiterspielen im Flug fort.
+
+### Zu Fuß über die Rampe, Landen ohne Aussetzen (26.11.2026)
+
+Nutzer: „Das Rein- und Rausfahren mit dem Bodenfahrzeug funktioniert so gut. Warum geht das nicht mit Rein- und Rausgehen? … E zum Landen, ob man das Fahrzeug rausfährt, macht man selber.“
+
+- **Landen:** Der Hinweis heißt nur noch „[E] Landen“. In begehbaren Schiffen (Kormoran, Wisent) steht der Pilot danach hinter dem Sitz auf, die Rampe öffnet. Das eigene Fahrzeug bleibt im Laderaum stehen, dort steigt man mit [E] ein und fährt hinaus. Kleine Flieger: zu Fuß an der Leiter bzw. Treppe. Leihrover und draußen abgestellte Fahrzeuge stehen neben dem Schiff (`main.ts` `nachLanden`, `surface.ts` `landShip`).
+- **Rampe zu Fuß:** Wer draußen auf die Spitze der offenen Heckrampe läuft, ist an Bord, an derselben Stelle und mit derselben Blickrichtung. Wer innen die Rampe hinuntergeht, steht draußen und läuft weiter, ohne Taste und ohne Blende (`interior.ts` `rampeHinein`, `rampTransit`; `onfoot.ts` `footHooks.rampe`). Gilt auch im Hangar für die Kormoran.
+- Die Laufkarten von Kormoran (und Dohle) enden an der Rampenkante. Die Rampe ist deshalb als eigene schiefe Bodenfläche angehängt, mit den Maßen, die auch das Fahrzeug nutzt (`meshRoom.ts` `rampe`, `laderaum.ts` `rampeLokal`).
+- Gelände: Endet die Rampe über dem Boden (bis 1,2 m erlaubt), führt eine unsichtbare Trittfläche 2,2 m davor auf den Boden (`vorfeldLokal`). Steckt die Spitze im Boden, steigt man dort aus, wo die Rampe im Gelände verschwindet.
+- Die Dohle bleibt bei der Treppe: Sie hat im Spiel keinen begehbaren Innenraum (begehbar sind Schiffe ab 30 m, `hasInterior`).

@@ -626,7 +626,7 @@ export function landInfo() {
   if (Math.hypot(dx, dz) / (2 * s) > 0.6) return { ok: false, text: 'Gelände zu steil: flachere Stelle suchen' };
   const lp = landePose(P.x, P.z, P.yaw);      // Füße aufs Gelände, Rampe muss aufsetzen (Kormoran, Wisent, Dohle)
   if (!lp.ok) return { ok: false, text: lp.text };
-  return { ok: true, text: '[E] Landen und Rover aussetzen' };
+  return { ok: true, text: '[E] Landen' };
 }
 
 // ---------------- Rover ----------------
@@ -744,6 +744,16 @@ export function landShip(quiet = false, basis = false) {
     return true;
   }
   const kind = aus.kind;
+  // Eigenes Fahrzeug im Laderaum (Kormoran, Wisent): Es bleibt dort stehen. Ob es hinausfährt, entscheidet der Pilot (seit 2026-11-26; vorher saß man
+  // nach dem Landen gleich im Fahrzeug). Im Laderaum zeigt laderaum.ts das abgestellte Fahrzeug, an Bord bietet der Innenraum das Einsteigen an.
+  if (!quiet && !aus.leih && anBord().includes(kind) && hatLaderaum()) {
+    if (ROVER.model) { scene.remove(ROVER.model.g); ROVER.model = null; }
+    fahrerWeg(); roverStill(); ROVER.kind = kind; ROVER.cap = FZ[kind].cap; ROVER.x = P.x; ROVER.z = P.z; ROVER.y = heightAt(P.x, P.z); ROVER.yaw = P.yaw; ROVER.speed = 0;
+    ROVER.vx = ROVER.vz = ROVER.vy = 0; ROVER.air = false; ROVER.active = true;
+    burst(P.x, heightAt(P.x, P.z) + 1, P.z, '#4a4238', 24, 12, 0.9); snd(180, 0.6, 'sawtooth', 0.04, -80);
+    radio('SYSTEM', `Gelandet, die Rampe öffnet. Der ${FZ[kind].kurz} steht im Laderaum: dort einsteigen [E] und über die Rampe hinausfahren.`);
+    return true;
+  }
   if (ROVER.model && ROVER.model.kind !== kind && ROVER.model.neu) { scene.remove(ROVER.model.g); ROVER.model = null; }
   const m = ROVER.model || buildRover(kind);
   ROVER.model = m; ROVER.kind = kind; ROVER.cap = FZ[kind].cap;
@@ -766,9 +776,8 @@ export function landShip(quiet = false, basis = false) {
   }
   if (pk) { radio('SYSTEM', `Gelandet. Dein ${FZ[kind].kurz} steht noch, wo du ihn abgestellt hast: ${Math.round(Math.hypot(pk.x - P.x, pk.z - P.z))} m entfernt.`); return true; }
   const mehr = wahl(basis || anBasis(P.x, P.z), basisId(), nahe).length > 1 ? ' [X] am Schiff: anderes Fahrzeug.' : '';
-  radio('SYSTEM', aus.leih ? `Die Fahrzeughalle der Basis stellt dir einen Leihrover „Dachs“ bereit: WASD fahren, Klick halten zum Bohren. Er bleibt auf dem Planeten.${mehr}`
-    : kind === 'wiesel' ? `Gelandet. Buggy aus dem Laderaum: WASD fahren, [R] Umgebung abtasten, [E] am Schiff einsteigen.${mehr}`
-    : `Gelandet. Rover aus dem Laderaum: WASD fahren, Klick halten zum Bohren, [E] am Schiff einsteigen.${mehr}`);
+  radio('SYSTEM', aus.leih ? `Gelandet. Die Fahrzeughalle der Basis stellt dir einen Leihrover „Dachs“ neben das Schiff: [E] einsteigen. Er bleibt auf dem Planeten.${mehr}`
+    : `Gelandet. Dein ${FZ[kind].kurz} steht neben dem Schiff: [E] einsteigen.${mehr}`);
   return true;
 }
 

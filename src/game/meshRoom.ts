@@ -91,14 +91,20 @@ export function buildMeshRoom(cls: string) {
   // Boden an (x, z) in Schrittweite zur aktuellen Höhe y (Schiffskoordinaten); null = nicht begehbar.
   // air (im Sprung): der höchste Boden unter den Füßen, höchstens 1,3 m tiefer (kein Sturz auf ein anderes Deck).
   let lastHead = 2.4;   // Kopfhöhe über dem zuletzt gefundenen Boden
+  // Heckrampe als eigene schiefe Bodenfläche (seit 2026-11-26): Die Laufkarten von Kormoran und Dohle enden an der Rampenkante, die Spitze liegt sogar
+  // außerhalb ihres Rasters. Maße wie für das Fahrzeug (laderaum.ts): von der Innenkante z0 (Höhe y0) bis zur Spitze z1 (Höhe y1), halbe Breite hw.
+  // dazu auf Planeten die Trittfläche vor einer Rampenspitze, die über dem Gelände endet (interior.ts vorfeldLokal)
+  const rampen: { hw: number; z0: number; z1: number; y0: number; y1: number; offen: () => boolean }[] = [];
   const floorAt = (x: number, z: number, y: number, air = false): number | null => {
-    const ix = Math.floor((x / k - W.x0) / W.cell), iz = Math.floor((z / k - W.z0) / W.cell);
-    if (ix < 0 || iz < 0 || ix >= W.nx || iz >= W.nz) return null;
-    const fl = W.floors.get(ix * W.nz + iz); if (!fl) return null;
     let best: number | null = null;
-    for (let i = 0; i < fl.length; i += 2) {
-      const fy = fl[i] * k;
-      if (air ? fy <= y + 0.05 && y - fy <= 1.3 && (best === null || fy > best) : Math.abs(fy - y) <= W.step * k + 0.05 && (best === null || Math.abs(fy - y) < Math.abs(best - y))) { best = fy; lastHead = fl[i + 1] * k; }
+    const nimm = (fy: number, head: number) => {
+      if (air ? fy <= y + 0.05 && y - fy <= 1.3 && (best === null || fy > best) : Math.abs(fy - y) <= W.step * k + 0.05 && (best === null || Math.abs(fy - y) < Math.abs(best - y))) { best = fy; lastHead = head; }
+    };
+    const ix = Math.floor((x / k - W.x0) / W.cell), iz = Math.floor((z / k - W.z0) / W.cell);
+    const fl = ix < 0 || iz < 0 || ix >= W.nx || iz >= W.nz ? null : W.floors.get(ix * W.nz + iz);
+    if (fl) for (let i = 0; i < fl.length; i += 2) nimm(fl[i] * k, fl[i + 1] * k);
+    for (const rampe of rampen) if (Math.abs(x) < rampe.hw && z >= rampe.z0 - 0.25 && z <= rampe.z1 && rampe.offen()) {
+      const t = Math.max(0, Math.min(1, (z - rampe.z0) / (rampe.z1 - rampe.z0))); nimm(rampe.y0 + (rampe.y1 - rampe.y0) * t, 2.4);
     }
     return best;
   };
@@ -108,6 +114,8 @@ export function buildMeshRoom(cls: string) {
     spawn: { x: W.spawn.x * k, y: W.spawn.y * k, z: W.spawn.z * k, yaw: W.spawn.yaw },
     spots: W.spots.map(s => ({ kind: s.kind, x: s.x * k, y: s.y * k, z: s.z * k, r: s.r, label: '' })),
     lamps: W.lamps.map(l => [l[0] * k, l[1] * k, l[2] * k, l[3]] as [number, number, number, number]),
+    /** Heckrampe begehbar machen (Schiffskoordinaten, siehe floorAt); offen: nur bei ganz geöffneter Rampe */
+    rampe(r: { hw: number; z0: number; z1: number; y0: number; y1: number }, offen: () => boolean) { rampen.push({ ...r, offen }); },
     /** Boden in einem Rechteck (Schiffskoordinaten) begehbar machen, wo die Laufkarte keinen in dieser Höhe hat (z. B. unter ausgeblendeten Frachtstücken) */
     fuellen(x0: number, x1: number, z0: number, z1: number, y: number, head: number) {
       for (let x = x0; x <= x1; x += W.cell * k * 0.5) for (let z = z0; z <= z1; z += W.cell * k * 0.5) {

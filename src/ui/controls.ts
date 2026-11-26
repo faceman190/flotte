@@ -70,7 +70,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (tradeAsk()) r.push(['T', `Handelsanfrage von ${tradeAsk()}`, true]);
     const dock = nearDock(), li = !dock ? landInfo() : null;
     if (dock) r.push(['E', world.surface && settings.walk ? `Landen · ${dock.name}` : `Andocken · ${dock.name}`, true]);
-    else if (li && li.ok) r.push(['E', 'Landen, Rover aussetzen', true]);
+    else if (li && li.ok) r.push(['E', 'Landen', true]);
     if (G.lockT && P.rockets > 0) r.push(['Rechtsklick', 'Rakete abfeuern', true]);
     // Werkzeug passend zur Lage: im Feld der Laser, bei Ferrox in der Nähe die Kanonen
     const inField = world.fields.some(f => near(f.x, f.y, f.z, f.r + 400)), foes = world.enemies.some(e => near(e.x, e.y, e.z, 1600));

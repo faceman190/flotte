@@ -265,7 +265,8 @@ export const eigeneLeiter = (root: THREE.Object3D) => !!DOORS[modelOf(root)]?.bo
 export function doorProgress(root: THREE.Object3D, grp: string) { const rig = root.userData.doors as DoorRig | null | undefined; return rig ? rig.p[grp] ?? 0 : 0; }
 // Heckrampe zum Betreten ohne Taste (Schiffskoordinaten wie die Laufkarte: Nase −Z): Türebene, Fuß der offenen Rampe, halbe Breite.
 // RAMP.want schaltet der Rampenschalter (innen am Laderaum, außen am Rampenfuß); im Hangar öffnet die Rampe, solange want gilt.
-export const RAMP_ENTRY: Record<string, { door: number; foot: number; hw: number }> = { Wisent: { door: 41.39, foot: 49.9, hw: 3.7 } };
+// Heckrampen, über die man zu Fuß hinein- und hinausgeht (Hangar und gelandet auf Planeten, interior.ts rampTransit): door Innenkante, foot Rampenspitze (z, Schiffskoordinaten), hw halbe Breite
+export const RAMP_ENTRY: Record<string, { door: number; foot: number; hw: number }> = { Wisent: { door: 41.39, foot: 49.9, hw: 3.7 }, Kormoran: { door: 21.4, foot: 27.6, hw: 2.1 } };      // Dohle: kein begehbarer Innenraum (hasInterior ab 30 m)
 export const RAMP = { want: true };
 // Öffnen oder schließen (jedes Bild aufrufen, dt = Spielzeit des Bildes): beim ersten Aufruf sofort im Zielzustand, danach mit der Dauer aus DOORS.
 // Gruppen in boden (Bordleiter) öffnen nur bei ausgefahrenem Fahrwerk.
