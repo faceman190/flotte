@@ -33,6 +33,10 @@ const RAEUME: Record<string, Raum> = {
   // Kranich (kra-gelenke.json, Laufkarte): Laderaum 12,4 m, Fahrgasse ±1,25 m zwischen den Rollenbahnen, Stellplatz für einen Wiesel in der Mitte
   Kranich: { boden: -1.62, hw: 2.95, z0: 2.94, tuer: 15.37, rampe: { y0: -1.635, z1: 19.96, y1: -3.985, hw: 1.5 }, gasse: 1.25, decke: 3.6, stell: [{ x: 0, z: 8.3 }],
     reihen: [{ x: 2.2, z0: 3.9, z1: 15.0 }, { x: -2.2, z0: 3.9, z1: 15.0 }] },
+  // Möwe (moe-gelenke.json, Laufkarte): Laderaum 27 m zum Durchfahren, Fahrgasse ±2,0 m, zwei Stellplätze für je einen Dachs, Kistenreihen an
+  // den Wänden (backbord bis zum Fuß der Treppe, steuerbord unterbrochen am Systempult, vorn die Spinde)
+  Moewe: { boden: -3.665, hw: 3.0, z0: -15.311, tuer: 11.839, rampe: { y0: -3.665, z1: 20.5, y1: -6.065, hw: 2.85 }, gasse: 2.0, decke: 5.9, stell: [{ x: 0, z: 4.789 }, { x: 0, z: -3.211 }],
+    reihen: [{ x: 2.5, z0: -12.211, z1: -2.411 }, { x: 2.5, z0: -1.211, z1: 11.189 }, { x: -2.5, z0: -5.311, z1: 10.489 }] },
   // Dohle (doh-gelenke.json): Laderaum 5,7 m lang, zwei Reihen für Paletten und Kisten, kein Fahrzeug
   Dohle: { boden: -1.21, hw: 1.53, z0: 1.6, tuer: 7.4, rampe: { y0: -1.226, z1: 9.42, y1: -2.746, hw: 1.48 }, gasse: 0.32, decke: 2.4, stell: [],
     reihen: [{ x: 0.92, z0: 1.75, z1: 7.25 }, { x: -0.92, z0: 1.75, z1: 7.25 }] },

@@ -57,6 +57,14 @@ export const SHIPS = {
     hull: 240, shield: 105, speed: 262, acc: 470, turn: 0.86, cargo: 110, ammo: 400, rockets: 4, dmg: 1.15,
     laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 2100, charges: 0, drones: 0, radius: 11, camUp: 14, camBack: 52, upMul: 1.4, col: 0x8fc0d8, model: 'Kranich', len: 32.12,
   },
+  // Eigenes Modell (asset-src/neu/moewe, Blender-Skripte, docs/moewe.md): 36,88 × 26,8 × 12,2 m, Fahrzeugtransporter (seit 2026-11-26).
+  // Durchfahrt-Laderaum für zwei Dachs (Bugtor mit Haube und Bugrampe, Heckrampe in der Schräge), Treppe hinauf in die Kabine mit sechs Sitzen,
+  // Cockpit im Aufbau mit großer Frontscheibe; vier schwere Landebeine, zwei Mantelrotoren an den Flügelspitzen, zwei Heckrotoren, Hubdüsen.
+  moewe: {
+    n: 'Möwe', role: 'Fahrzeugtransporter', price: 30500, desc: 'Schwerer Fahrzeugtransporter: Laderaum zum Durchfahren für zwei Dachs, Bugtor mit Haube und Rampe, Heckrampe, Kistenbahnen an den Wänden. Eine Treppe führt in die Kabine mit sechs Sitzen und ins Cockpit mit großer Frontscheibe. Mantelrotoren und Hubdüsen für senkrechte Starts, vier schwere Landebeine. Innen begehbar.',
+    hull: 420, shield: 150, speed: 205, acc: 330, turn: 0.6, cargo: 260, ammo: 300, rockets: 0, dmg: 0.9,
+    laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1500, charges: 0, drones: 0, radius: 15, camUp: 20, camBack: 70, upMul: 1.6, col: 0xd8d2c4, model: 'Moewe', len: 36.88,
+  },
   // Eigenes Modell (asset-src/neu/wuerger, Blender-Skripte, docs/wuerger.md): 24,8 × 26,2 × 5 m, einsitzig, kein Innenraum
   wuerger: {
     n: 'Würger', role: 'Schwerer Jäger', price: 16000, desc: 'Einsitziger schwerer Jäger der Bastion: Schienenkanone unter dem Rumpf, zwei Flügelkanonen, vier Flugkörper, dicke Panzerung. Kaum Fracht, kein Bergbau.',
