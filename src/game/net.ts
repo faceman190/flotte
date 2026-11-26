@@ -12,7 +12,8 @@ import type { ItemId, RockKind } from '../data/items';
 import { SHIP } from './player';
 import { ROVER, buildRover } from './surface';
 import { buildFahrzeug, fzLaden, fzBereit, normFz, FZ, type FzId, type RoverNeu } from '../models/rover';
-import { IN, syncOtherPilots, bordWelt, enterShip, interiorHooks, walkFree, folgeGast } from './interior';
+import { IN, syncOtherPilots, bordWelt, enterShip, leaveShip, interiorHooks, walkFree, folgeGast, buchtFahrt, buchtSchiff } from './interior';
+import { HB, buchtFremd, buchtHooks, buchtEinladung } from './hangarbucht';
 import { turmFremd, GUN, schuetzeAus } from './turm';
 import { hasMeshRoom, meshRoomReady, loadMeshRoom } from './meshRoom';
 import { viewModelId } from './mineArt';
@@ -320,6 +321,19 @@ function gastZiele(dt: number) {
     else if (MIT.warte <= 0) { mitAus(); interiorHooks.mitHeim('Das Schiff ist nicht angekommen.'); }
     return;
   }
+  if (IN.active && IN.ship?.gast && IN.ship.ctx === 'hangar') {
+    // an Bord in der Hangarbucht des Besitzers: Legt er ab, geht es mit hinaus (aus der Station, an Bord des fliegenden Schiffs)
+    const r = remotes.get(IN.ship.gast);
+    if ((MIT.pingT -= dt) <= 0) { MIT.pingT = 4; coopSend('gb', { s: IN.ship.gast, an: 1, n: P.name }); }
+    if (r && r.ship && imFlug(r) && meshRoomReady(r.cls)) {
+      MIT.lokal = { x: IN.x, z: IN.z, fy: IN.fy, yaw: IN.yaw, pitch: IN.pitch, gun: false };
+      MIT.unterwegs = true; interiorHooks.mitAblegen(); wiederRein(r);
+      radio(r.name, 'Wir haben abgelegt.', '#7fe0a0');
+    } else if (!r || (r.m === 'innen' && r.d !== myStation())) {
+      interiorHooks.gastVonBord(); leaveShip(); radio('SYSTEM', 'Der Besitzer ist fort. Du stehst wieder in der Bucht.');
+    }
+    return;
+  }
   if (IN.active && IN.ship?.gast) {
     const r = remotes.get(IN.ship.gast), boden = !!r && amBoden(r), flug = !!r && imFlug(r);
     if ((MIT.pingT -= dt) <= 0) { MIT.pingT = 4; coopSend('gb', { s: IN.ship.gast, an: 1, n: P.name }); }      // Lebenszeichen an den Besitzer
@@ -336,6 +350,11 @@ function gastZiele(dt: number) {
     if (flug !== IN.mitflug) { IN.mitflug = flug; radio(r.name, flug ? 'Wir heben ab. Halt dich fest.' : 'Gelandet.', '#7fe0a0'); }
     folgeGast();
     return;
+  }
+  if (IN.active && IN.station && !IN.ship && buchtFremd()) {      // zu Gast in einer Hangarbucht: steht das Schiff des Besitzers noch da?
+    const r = remotes.get(HB.id), da = !!r && r.m === 'innen' && r.d === myStation();
+    if (HB.cls && !da) { buchtSchiff('', ''); radio('SYSTEM', `${HB.owner} hat abgelegt. Die Bucht ist leer.`); }
+    else if (da && r && (r.cls !== HB.cls || r.paint !== HB.paint)) buchtSchiff(r.cls, r.paint);
   }
   if (!world.surface || !FOOT.active) return;
   for (const r of remotes.values()) {
@@ -375,6 +394,22 @@ onCoop('mw', (m: any) => {
   MIT.lokal = { x: IN.x, z: IN.z, fy: IN.fy, yaw: IN.yaw, pitch: IN.pitch, gun: GUN.aktiv };
   interiorHooks.mitBlende(art, MIT.t);
 });
+// Hangarbuchten (hangarbucht.ts): an Bord und von Bord in der Bucht des Besitzers, Einladung, Fahrt in die Bucht
+interiorHooks.gastAnBord = (id, name, cls) => { mitAus(); MIT.host = id; MIT.name = name; MIT.cls = cls; MIT.pingT = 4; gastCls = cls; gastLs = null; coopSend('gb', { s: id, an: 1, n: P.name }); };
+interiorHooks.gastVonBord = () => { if (IN.ship?.gast) coopSend('gb', { s: IN.ship.gast, an: 0, n: P.name }); mitAus(); };
+buchtHooks.piloten = () => pilotsHere().map(r => ({ id: r.id, name: r.name }));
+buchtHooks.einladen = id => { if (NET.status !== 'online') return false; coopSend('hi', { an: id, n: P.name }); return true; };
+onCoop('hi', (m: any) => {
+  if (+m.an !== NET.id) return;
+  const name = String(m.n || remotes.get(m.from)?.name || 'Ein Pilot').slice(0, 24);
+  buchtEinladung(name, m.from); radio(name, 'Komm in meine Hangarbucht: über den Aufzug auf Deck 3 oder die Buchtenwahl an der Rückwand deines Hangars.', '#ffb35a');
+});
+buchtHooks.fahren = (owner, id) => {
+  if (!owner || owner === P.name) { buchtFahrt(P.name, 0, '', ''); return ''; }
+  const r = remotes.get(id);
+  if (!r || r.m !== 'innen' || r.d !== myStation()) return `${owner} ist nicht mehr an dieser Station angedockt.`;
+  buchtFahrt(owner, id, r.cls, r.paint); return '';
+};
 /** Modell und Fahrt des Schiffs, auf dem man zu Gast ist (main.ts: Schützenplatz) */
 export const gastSchiff = (id: number) => remotes.get(id)?.ship || null;
 export const gastFahrt = (id: number) => remotes.get(id)?.tv || null;

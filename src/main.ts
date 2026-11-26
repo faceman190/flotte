@@ -521,9 +521,11 @@ interiorHooks.gastRaus = () => {
   if (weit) saveGame();
 };
 // ---------- Mitreise als Gast (net.ts MIT) ----------
-let mitHeimat: { sector: string; at: Extract<PlayerAt, { k: 'land' }> } | null = null;      // wo das eigene Schiff steht, seit man an Bord gegangen ist
+let mitHeimat: { sector: string; at: PlayerAt } | null = null;      // wo das eigene Schiff steht, seit man an Bord gegangen ist
 const blitzAus = () => { const fl = $('flash'); setTimeout(() => { fl.style.transition = 'opacity 1.2s'; fl.style.opacity = '0'; setTimeout(() => (fl.style.background = '#fff'), 1300); }, 40); };
-interiorHooks.mitStart = () => { const at = whereAmI(); mitHeimat = at && at.k === 'land' ? { sector: P.sector, at } : null; };
+interiorHooks.mitStart = () => { const at = whereAmI(); mitHeimat = at ? { sector: P.sector, at } : null; };
+// Der Besitzer der Hangarbucht legt ab, der Gast ist an Bord: aus der Station hinaus (das eigene Schiff bleibt dort angedockt)
+interiorHooks.mitAblegen = () => { if (IN.active) leaveInterior(); G.dockedAt = null; G.baseWalk = false; $('dock').classList.add('hidden'); SHIP.g.visible = false; G.mode = 'walk'; $('hud').classList.add('hidden'); releaseAll(); };
 interiorHooks.mitBlende = (art, t) => {
   const fl = $('flash'); fl.style.transition = `opacity ${Math.max(0.2, t)}s ease-in`; fl.style.background = art === 'surface' ? '#ff8a40' : art === 'orbit' ? '#d8ecff' : '#fff'; fl.style.opacity = '1';
   if (art === 'sprung') sfx('jump_out', 0.6, 1, () => snd(200, 1.2, 'sine', 0.04, 700)); else snd(art === 'surface' ? 120 : 200, t, 'sawtooth', 0.03, art === 'surface' ? -40 : 400);
@@ -550,9 +552,16 @@ interiorHooks.mitDock = (stId, name, cls) => {
 interiorHooks.mitHeim = text => {
   if (IN.active) leaveInterior();
   const h = mitHeimat; mitHeimat = null;
-  if (h && PLANETS[h.sector]) {
-    if (P.sector !== h.sector || !world.surface) { const fl = $('flash'); fl.style.transition = 'none'; fl.style.opacity = '1'; void enterSurface(h.sector, { x: h.at.ship.x, y: h.at.ship.y, z: h.at.ship.z, yaw: h.at.ship.yaw }).then(blitzAus); } else blitzAus();
-    ROVER.active = true; resumeLanded(h.at);
+  if (h && h.at.k === 'st') {      // das eigene Schiff steht angedockt an einer Station: dorthin zurück
+    const at = h.at, fl = $('flash');
+    if (P.sector !== h.sector || !!world.surface !== !!at.base) { fl.style.transition = 'none'; fl.style.opacity = '1'; if (at.base) void enterSurface(h.sector); else enterSector(h.sector, { station: at.id }); }
+    const st = stationById(at.id);
+    if (st && resumeStation(st, at)) { blitzAus(); radio('SYSTEM', `${text} Du bist zurück bei deinem Schiff an ${st.name}.`, '#ffb347'); saveGame(); return; }
+    blitzAus(); G.mode = 'play'; SHIP.g.visible = true;
+  } else if (h && h.at.k === 'land' && PLANETS[h.sector]) {
+    const sh = (h.at as Extract<PlayerAt, { k: 'land' }>).ship;
+    if (P.sector !== h.sector || !world.surface) { const fl = $('flash'); fl.style.transition = 'none'; fl.style.opacity = '1'; void enterSurface(h.sector, { x: sh.x, y: sh.y, z: sh.z, yaw: sh.yaw }).then(blitzAus); } else blitzAus();
+    ROVER.active = true; resumeLanded(h.at as Extract<PlayerAt, { k: 'land' }>);
   } else if (world.surface) { blitzAus(); ROVER.active = true; leaveShipOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); }
   else { blitzAus(); G.mode = 'play'; }
   $('hud').classList.remove('hidden');
