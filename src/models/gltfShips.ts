@@ -321,7 +321,18 @@ export function doorProgress(root: THREE.Object3D, grp: string) { const rig = ro
 // Heckrampe zum Betreten ohne Taste (Schiffskoordinaten wie die Laufkarte: Nase −Z): Türebene, Fuß der offenen Rampe, halbe Breite.
 // RAMP.want schaltet der Rampenschalter (innen am Laderaum, außen am Rampenfuß); im Hangar öffnet die Rampe, solange want gilt.
 // Heckrampen, über die man zu Fuß hinein- und hinausgeht (Hangar und gelandet auf Planeten, interior.ts rampTransit): door Innenkante, foot Rampenspitze (z, Schiffskoordinaten), hw halbe Breite
-export const RAMP_ENTRY: Record<string, { door: number; foot: number; hw: number }> = { Wisent: { door: 41.39, foot: 49.9, hw: 3.7 }, Kormoran: { door: 21.4, foot: 27.6, hw: 2.1 }, Kranich: { door: 15.37, foot: 19.96, hw: 1.5 }, Moewe: { door: 11.839, foot: 20.5, hw: 2.85 } };      // Dohle: kein begehbarer Innenraum (hasInterior ab 30 m)
+export interface RampeEintritt { door: number; foot: number; hw: number }
+export const RAMP_ENTRY: Record<string, RampeEintritt> = { Wisent: { door: 41.39, foot: 49.9, hw: 3.7 }, Kormoran: { door: 21.4, foot: 27.6, hw: 2.1 }, Kranich: { door: 15.37, foot: 19.96, hw: 1.5 }, Moewe: { door: 11.839, foot: 20.5, hw: 2.85 } };
+// Bugrampen (seit 2026-11-26, Möwe): zweite begehbare Rampe nach vorn. door (Scharnier) und foot (Spitze) liegen bei −Z, foot < door.
+// Die Möwe öffnet Haube, Bugrampe und Heckrampe zusammen (Gruppe „rampe“); hinein und hinaus geht es über beide.
+export const RAMP_BUG: Record<string, RampeEintritt> = { Moewe: { door: -17.56, foot: -25.1, hw: 2.8 } };
+/** alle begehbaren Rampen eines Modells; s: Richtung nach außen (+1 Heck, −1 Bug). Prüfungen rechnen mit s·z (wächst nach außen). */
+const _rampen = new Map<string, (RampeEintritt & { s: 1 | -1 })[]>();
+export function rampenVon(model: string) {
+  let r = _rampen.get(model);
+  if (!r) { r = []; if (RAMP_ENTRY[model]) r.push({ ...RAMP_ENTRY[model], s: 1 }); if (RAMP_BUG[model]) r.push({ ...RAMP_BUG[model], s: -1 }); _rampen.set(model, r); }
+  return r;
+}      // Dohle: kein begehbarer Innenraum (hasInterior ab 30 m)
 export const RAMP = { want: true };
 // Öffnen oder schließen (jedes Bild aufrufen, dt = Spielzeit des Bildes): beim ersten Aufruf sofort im Zielzustand, danach mit der Dauer aus DOORS.
 // Gruppen in boden (Bordleiter) öffnen nur bei ausgefahrenem Fahrwerk.

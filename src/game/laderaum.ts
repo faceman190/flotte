@@ -20,6 +20,7 @@ import { type Lage, gekippt, zuWelt, lokalAufEbene } from './lage';
 interface Raum {
   boden: number; hw: number; z0: number; tuer: number;          // Laderaumboden (y), halbe Breite, vorderes Ende, Türebene (z)
   rampe: { y0: number; z1: number; y1: number; hw: number };    // Rampe von der Tür (Boden) bis zur Spitze (z1, y1), halbe Breite
+  bug?: { tuer: number; z1: number; y0: number; y1: number; hw: number };      // Bugrampe (Möwe): Scharnier tuer, Spitze z1 (< tuer); offen mit der Heckrampe
   gasse: number;                                                 // halbe Breite der freien Fahrgasse zwischen den Kistenreihen
   decke: number;                                                 // lichte Höhe (für die Kamera)
   stell: { x: number; z: number }[];                             // Stellplätze, Fahrzeug blickt zur Rampe (+Z)
@@ -35,7 +36,7 @@ const RAEUME: Record<string, Raum> = {
     reihen: [{ x: 2.2, z0: 3.9, z1: 15.0 }, { x: -2.2, z0: 3.9, z1: 15.0 }] },
   // Möwe (moe-gelenke.json, Laufkarte): Laderaum 27 m zum Durchfahren, Fahrgasse ±2,0 m, zwei Stellplätze für je einen Dachs, Kistenreihen an
   // den Wänden (backbord bis zum Fuß der Treppe, steuerbord unterbrochen am Systempult, vorn die Spinde)
-  Moewe: { boden: -3.665, hw: 3.0, z0: -15.311, tuer: 11.839, rampe: { y0: -3.665, z1: 20.5, y1: -6.065, hw: 2.85 }, gasse: 2.0, decke: 5.9, stell: [{ x: 0, z: 4.789 }, { x: 0, z: -3.211 }],
+  Moewe: { boden: -3.665, hw: 3.0, z0: -15.311, tuer: 11.839, rampe: { y0: -3.665, z1: 20.5, y1: -6.065, hw: 2.85 }, bug: { tuer: -17.56, z1: -25.1, y0: -3.665, y1: -6.065, hw: 2.8 }, gasse: 2.0, decke: 5.9, stell: [{ x: 0, z: 4.789 }, { x: 0, z: -3.211 }],
     reihen: [{ x: 2.5, z0: -12.211, z1: -2.411 }, { x: 2.5, z0: -1.211, z1: 11.189 }, { x: -2.5, z0: -5.311, z1: 10.489 }] },
   // Dohle (doh-gelenke.json): Laderaum 5,7 m lang, zwei Reihen für Paletten und Kisten, kein Fahrzeug
   Dohle: { boden: -1.21, hw: 1.53, z0: 1.6, tuer: 7.4, rampe: { y0: -1.226, z1: 9.42, y1: -2.746, hw: 1.48 }, gasse: 0.32, decke: 2.4, stell: [],
@@ -161,27 +162,37 @@ function lokal(x: number, z: number, s: Lage, ly?: number) { if (!gekippt(s)) { 
 /** Schiffspunkt → Welt (x, z, y); ly: Höhe im Schiff (Standard: Laderaumboden) */
 export function weltVon(lx: number, lz: number, s: Lage, ly?: number) { if (!gekippt(s)) { const c = Math.cos(s.yaw), n = Math.sin(s.yaw); return { x: s.x + lx * c + lz * n, z: s.z - lx * n + lz * c, y: s.y + (ly ?? 0) }; } const p = zuWelt(lx, ly ?? raum()?.boden ?? 0, lz, s, _v); return { x: p.x, z: p.z, y: p.y }; }
 /** Lage im Laderaum oder auf der Rampe: 'raum' | 'rampe' | null (draußen). Nur bei offener Rampe. */
-export function imSchiff(x: number, z: number, s: Lage): { wo: 'raum' | 'rampe'; lx: number; lz: number; R: Raum } | null {
+type RampeL = { tuer: number; z1: number; y0: number; y1: number; hw: number };
+const heckRampe = (R: Raum): RampeL => ({ tuer: R.tuer, ...R.rampe });
+/** Bug offen (Möwe): der Laderaum reicht vorn bis ans Scharnier der Bugrampe */
+const bugOffen = (R: Raum) => !!R.bug && doorProgress(SHIP.g, 'rampe') >= 0.95;
+export function imSchiff(x: number, z: number, s: Lage): { wo: 'raum' | 'rampe'; lx: number; lz: number; R: Raum; r: RampeL } | null {
   const R = raum(); if (!R) return null;
-  const { lx, lz } = lokal(x, z, s);
-  if (lz >= R.z0 && lz <= R.tuer && Math.abs(lx) <= R.hw) return { wo: 'raum', lx, lz, R };
+  const { lx, lz } = lokal(x, z, s), vorn = bugOffen(R) ? R.bug!.tuer : R.z0;
+  if (lz >= vorn && lz <= R.tuer && Math.abs(lx) <= R.hw) return { wo: 'raum', lx, lz, R, r: heckRampe(R) };
   if (doorProgress(SHIP.g, 'rampe') < 0.95) return null;      // Rampe nur offen befahrbar
-  if (lz > R.tuer && lz <= R.rampe.z1 + 0.5 && Math.abs(lx) <= R.rampe.hw + 0.3) return { wo: 'rampe', lx, lz, R };
+  if (lz > R.tuer && lz <= R.rampe.z1 + 0.5 && Math.abs(lx) <= R.rampe.hw + 0.3) return { wo: 'rampe', lx, lz, R, r: heckRampe(R) };
+  if (R.bug && lz < R.bug.tuer && lz >= R.bug.z1 - 0.5 && Math.abs(lx) <= R.bug.hw + 0.3) return { wo: 'rampe', lx, lz, R, r: R.bug };
   return null;
 }
 /** Bodenhöhe (Welt) im Laderaum oder auf der Rampe, sonst null */
 export function schiffBoden(x: number, z: number, s: Lage): number | null {
   const i = imSchiff(x, z, s); if (!i) return null;
   if (i.wo === 'raum') return gekippt(s) ? zuWelt(i.lx, i.R.boden, i.lz, s, _v).y : s.y + i.R.boden;
-  const t = Math.min(1, (i.lz - i.R.tuer) / (i.R.rampe.z1 - i.R.tuer)), ly = i.R.rampe.y0 + (i.R.rampe.y1 - i.R.rampe.y0) * t;
+  const t = Math.min(1, (i.lz - i.r.tuer) / (i.r.z1 - i.r.tuer)), ly = i.r.y0 + (i.r.y1 - i.r.y0) * t;      // Heck- oder Bugrampe
   return gekippt(s) ? zuWelt(i.lx, ly, i.lz, s, _v).y : s.y + ly;
 }
 /** Fahrzeug in der Gasse halten (Schiffskoordinaten begrenzen): Rand der Kistenreihen, Rampe, Stirnwand. halbB/halbL: halbe Fahrzeugmaße, selbst: das gefahrene (zählt nicht als abgestellt), gesperrt: passt nicht hinein (bleibt auf der Rampe) */
 export function gasse(x: number, z: number, s: Lage, halbB: number, halbL: number, selbst?: FzId, gesperrt = false): { x: number; z: number } | null {
   const i = imSchiff(x, z, s); if (!i) return null;
-  const hw = Math.max(0.2, (i.wo === 'raum' ? i.R.gasse : i.R.rampe.hw) - halbB);
-  let z0 = gesperrt ? i.R.tuer : i.R.z0; for (const k of fzStatisch.keys()) if (k !== selbst) z0 = Math.max(z0, i.R.stell[platzVon(k)].z + FZ_MASS[k][0] / 2 + 0.3);      // nicht in ein abgestelltes Fahrzeug
-  const lx = Math.max(-hw, Math.min(hw, i.lx)), lz = Math.max(z0 + halbL, i.lz);
+  const hw = Math.max(0.2, (i.wo === 'raum' ? i.R.gasse : i.r.hw) - halbB), R = i.R, bugSeite = !!R.bug && i.lz < (R.z0 + R.tuer) / 2;
+  // vorn: Stirnwand, bei offenem Bug (Möwe) frei bis über die Bugrampe; passt das Fahrzeug nicht hinein, bleibt es auf der Rampe, über die es kam
+  let zmin = gesperrt && !bugSeite ? R.tuer : bugOffen(R) ? -Infinity : R.z0, zmax = gesperrt && bugSeite ? R.bug!.tuer : Infinity;
+  for (const k of fzStatisch.keys()) if (k !== selbst) {      // nicht in ein abgestelltes Fahrzeug (davor oder dahinter)
+    const sz = R.stell[platzVon(k)].z, l2 = FZ_MASS[k][0] / 2 + 0.3;
+    if (sz < i.lz) zmin = Math.max(zmin, sz + l2); else zmax = Math.min(zmax, sz - l2);
+  }
+  const lx = Math.max(-hw, Math.min(hw, i.lx)), lz = Math.min(zmax - halbL, Math.max(zmin + halbL, i.lz));
   if (lx === i.lx && lz === i.lz) return null;
   return weltVon(lx, lz, s);
 }
@@ -192,13 +203,21 @@ export function aufsetzen(x: number, z: number, yaw: number, landeH: number, hAt
   const s = { x, y: 0, z, yaw };
   const fw = [0, R.z0, -R.rampe.z1 * 0.8].map(lz => { const p = weltVon(0, lz, s); return hAt(p.x, p.z); });
   const sp = weltVon(0, R.rampe.z1, s), hSp = hAt(sp.x, sp.z);
-  const y = Math.max(Math.max(...fw) + landeH - 0.5, hSp - R.rampe.y1);
+  const bs = R.bug ? weltVon(0, R.bug.z1, s) : null, hBug = bs ? hAt(bs.x, bs.z) - R.bug!.y1 : -Infinity;      // Bugrampe (Möwe) sticht nicht ins Gelände
+  const y = Math.max(Math.max(...fw) + landeH - 0.5, hSp - R.rampe.y1, hBug);
   const spalt = y + R.rampe.y1 - hSp, luft = y - (Math.min(...fw) + landeH);
   return { y, ok: spalt < 1.2 && luft < 3, spalt };
 }
 /** Rampenspitze (Schiffskoordinaten) für die Landung mit Neigung (surface.ts); null: Schiff ohne Laderaum */
 /** Heckrampe des eigenen Schiffs in Schiffskoordinaten (zum Begehen, meshRoom.ts): Innenkante z0/y0, Spitze z1/y1, halbe Breite hw */
 export function rampeLokal() { const R = raum(); return R ? { hw: R.rampe.hw, z0: R.tuer, z1: R.rampe.z1, y0: R.rampe.y0, y1: R.rampe.y1 } : null; }
+/** alle Rampen (Heck s = +1, Bug s = −1) in Schiffskoordinaten: Innenkante z0/y0, Spitze z1/y1 */
+export function rampenLokal() {
+  const R = raum(); if (!R) return [];
+  const out: { hw: number; z0: number; z1: number; y0: number; y1: number; s: 1 | -1 }[] = [{ hw: R.rampe.hw, z0: R.tuer, z1: R.rampe.z1, y0: R.rampe.y0, y1: R.rampe.y1, s: 1 }];
+  if (R.bug) out.push({ hw: R.bug.hw, z0: R.bug.tuer, z1: R.bug.z1, y0: R.bug.y0, y1: R.bug.y1, s: -1 });
+  return out;
+}
 export function rampenSpitze() { const R = raum(); return R ? { x: 0, y: R.rampe.y1, z: R.rampe.z1 } : null; }
 /** Stellplatz in der Welt (für das Aussetzen beim Landen): Mitte, Boden, Blick zur Rampe */
 export function stellplatz(s: Lage, i = 0) { const R = raum(); if (!R) return null; const p = weltVon(R.stell[i].x, R.stell[i].z, s, R.boden); return { x: p.x, z: p.z, y: p.y, yaw: s.yaw + Math.PI }; }
@@ -208,8 +227,8 @@ export function stellLokal(k?: FzId) { const R = raum(); if (!R) return null; co
 export function kameraImRaum(p: THREE.Vector3, s: Lage, fahrzeug: { x: number; z: number }) {
   const R = raum(); if (!R || !imSchiff(fahrzeug.x, fahrzeug.z, s)) return;
   const { lx, lz } = lokal(p.x, p.z, s);
-  if (lz > R.rampe.z1) return;      // hinter der Rampe: draußen
-  const cx = Math.max(-R.hw + 0.4, Math.min(R.hw - 0.4, lx)), cz = Math.max(R.z0 + 0.4, lz);
+  if (lz > R.rampe.z1 || (R.bug && lz < R.bug.z1)) return;      // hinter einer Rampe: draußen
+  const cx = Math.max(-R.hw + 0.4, Math.min(R.hw - 0.4, lx)), cz = bugOffen(R) ? lz : Math.max(R.z0 + 0.4, lz);
   const w = weltVon(cx, cz, s); p.x = w.x; p.z = w.z;
   if (lz <= R.tuer) p.y = Math.min(p.y, weltVon(cx, cz, s, R.boden + R.decke - 0.3).y);
 }
