@@ -51,7 +51,7 @@ export const FELD_EXTRA = {
   kampf: () => false,
   ruhe: () => {},
   weg: () => {},
-  update: (_dt: number, _me: { x: number; y: number; z: number; active: boolean; down: boolean; geduckt?: boolean; vx?: number; vz?: number }) => {},
+  update: (_dt: number, _me: { x: number; y: number; z: number; active: boolean; down: boolean; geduckt?: boolean; vx?: number; vz?: number; lehnt?: boolean }) => {},
   hud: () => {},
 };
 
@@ -233,7 +233,7 @@ function kill(f: Foe, by = coopNet.id) {
 }
 
 // Ablauf je Bild (nur zu Fuß auf einem Planeten). me: Spielerposition, Blick; tp: Außensicht (Mündung der Figur)
-export function updateFieldFight(dt: number, me: { x: number; y: number; z: number; yaw: number; pitch: number; eye: number; active: boolean; tp: boolean; muzzle: THREE.Vector3 | null; geduckt?: boolean; vx?: number; vz?: number }) {
+export function updateFieldFight(dt: number, me: { x: number; y: number; z: number; yaw: number; pitch: number; eye: number; active: boolean; tp: boolean; muzzle: THREE.Vector3 | null; geduckt?: boolean; vx?: number; vz?: number; lehnt?: boolean }) {
   if (!world.surface || sector !== P.sector) return;
   if (!tracer) { tracer = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.9 })); tracer.frustumCulled = false; tracer.visible = false; scene.add(tracer); }
   // Kein Punktlicht fürs Mündungsfeuer mehr (seit 2026-11-18): Es kam beim ersten Schritt zu Fuß dazu und blieb danach für immer in der Szene –
@@ -305,7 +305,7 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
     coT = 0.1;
     coopSend('fst', { s: P.sector, f: FIGHT.foes.filter(f => f.id >= 0 && !f.dead).map(f => [f.id, ...pack(f.x, f.y, f.z), Math.round(f.hp), f.alert ? 1 : 0]), ev: coEv.splice(0) });
   } else if (!mates.length) coEv = [];
-  FELD_EXTRA.update(dt, { x: me.x, y: me.y, z: me.z, active: me.active, down: FIGHT.down > 0, geduckt: me.geduckt, vx: me.vx, vz: me.vz });
+  FELD_EXTRA.update(dt, { x: me.x, y: me.y, z: me.z, active: me.active, down: FIGHT.down > 0, geduckt: me.geduckt, vx: me.vx, vz: me.vz, lehnt: me.lehnt });
   updateGrenades(dt, px, me.y + 1.1, pz, hurt);
   // Geschosse
   for (let i = FIGHT.bolts.length - 1; i >= 0; i--) {

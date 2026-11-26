@@ -1,3 +1,5 @@
+import { schritt } from './schritte';
+import { updateLehnen, lehnKopf, lehnPunkt, lehnKamera, lehnFigur } from './lehnen';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { scene, camera, ambient, rim, sun, view, ux, gl, overlay, BODY_LAYER, bodyOnly } from '../core/engine';
@@ -1096,7 +1098,8 @@ export function updateDungeon(dt: number) {
   if (free(DUN.x + dx, DUN.z + dzz)) { DUN.x += dx; DUN.z += dzz; } else if (free(DUN.x + dx, DUN.z)) { DUN.x += dx; DUN.vz = 0; } else if (free(DUN.x, DUN.z + dzz)) { DUN.z += dzz; DUN.vx = 0; } else DUN.vx = DUN.vz = 0;
   const moved = Math.hypot(DUN.x - ox, DUN.z - oz), v = dt > 0 ? moved / dt : 0;
   DUN.walked += moved; stepT -= moved;
-  if (stepT <= 0 && moved > 0) { stepT = v > 5 ? 2.1 : 1.6; sfx('step' + Math.floor(Math.random() * 5), v > 5 ? 0.5 : 0.34, 0.8 + Math.random() * 0.2); }
+  if (stepT <= 0 && moved > 0) { stepT = v > 5 ? 2.1 : 1.6; schritt('fels', (v > 5 ? 0.5 : 0.34) * (STANCE.crouch ? 0.55 : 1)); }      // Felsboden (schritte.ts)
+  updateLehnen(dt, DUN.dead <= 0 && v < 5, (sd, an) => { const p = lehnPunkt(DUN.yaw, sd, an); return free(DUN.x + p.x, DUN.z + p.z, 0.18); }, !DUN.act);      // Q / E gehalten (lehnen.ts)
   DUN.bob += (Math.sin(DUN.walked * 4.2) * Math.min(1, v / 4) * 0.045 - DUN.bob) * Math.min(1, dt * 14);
   if (moved > 0) reveal();
   // Schießen
@@ -1159,7 +1162,7 @@ export function updateDungeon(dt: number) {
     }
   }
   const client = mates.size > 0 && !amHost(mates.keys());
-  const players: { x: number; z: number; eye: number }[] = [{ x: DUN.x, z: DUN.z, eye: EYE() }];
+  const lk = lehnKopf(DUN.yaw), players: { x: number; z: number; eye: number }[] = [{ x: DUN.x + lk.x, z: DUN.z + lk.z, eye: EYE() + lk.y }];      // gelehnt: die Drohnen sehen den Kopf
   if (!client) for (const f of mates.values()) if (f.init) players.push({ x: f.x, z: f.z, eye: f.crouch ? 1.12 : 1.6 });
   for (let i = DUN.foes.length - 1; i >= 0; i--) {
     const fo = DUN.foes[i];
@@ -1261,6 +1264,7 @@ export function updateDungeon(dt: number) {
     const body = VIEW.tp || bodyView();      // Figur zeigen: Außensicht, oder Ich-Sicht mit ganzem Körper
     me.s.g.visible = body && (VIEW.tp || DUN.dead <= 0);
     if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on });
+    if (body) lehnFigur(me.s.g, DUN.yaw);
   }
   for (const m of DUN.msg) m.life -= dt;
   DUN.msg = DUN.msg.filter(m => m.life > 0);
@@ -1275,6 +1279,7 @@ export function dungeonCamera() {
     tpCamPos(_v, DUN.x, 0, DUN.z, DUN.yaw, DUN.pitch, (x, y, z) => free(x, z, 0.28) && y > 0.25 && y < 2.6);
     camera.position.set(BASE.x + _v.x, BASE.y + _v.y, BASE.z + _v.z);
   }
+  lehnKamera(camera, DUN.yaw, VIEW.tp);      // seitlich lehnen (lehnen.ts)
   { const f = aimFov(74); if (Math.abs(camera.fov - f) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } }
   camera.updateMatrixWorld();
   if (head) {

@@ -190,11 +190,11 @@ function dreheZu(p: Pl, ziel: number, dt: number, rate = 5) {
 }
 
 // ---------- Ziele: ich und (beim Gastgeber) die Mitspieler zu Fuß ----------
-interface Ziel extends Kandidat { geduckt: boolean }
-let ME: { x: number; y: number; z: number; ok: boolean; geduckt: boolean; vx: number; vz: number } = { x: 0, y: 0, z: 0, ok: false, geduckt: false, vx: 0, vz: 0 };
+interface Ziel extends Kandidat { geduckt: boolean; lehnt?: boolean }
+let ME: { x: number; y: number; z: number; ok: boolean; geduckt: boolean; vx: number; vz: number; lehnt?: boolean } = { x: 0, y: 0, z: 0, ok: false, geduckt: false, vx: 0, vz: 0 };
 function ziele(): Ziel[] {
   const out: Ziel[] = [];
-  if (ME.ok) out.push({ id: coopNet.id || 0, x: ME.x, y: ME.y + 1.55, z: ME.z, geduckt: ME.geduckt, bewegt: Math.hypot(ME.vx, ME.vz) > 1 });
+  if (ME.ok) out.push({ id: coopNet.id || 0, x: ME.x, y: ME.y + 1.55, z: ME.z, geduckt: ME.geduckt, lehnt: ME.lehnt, bewegt: Math.hypot(ME.vx, ME.vz) > 1 });
   const k = feldKoop();
   if (!k.client) for (const m of k.mates) out.push({ id: m.id, x: m.x, y: m.y + 1.55, z: m.z, geduckt: false, bewegt: true });
   return out;
@@ -231,6 +231,7 @@ function trefferChance(p: Pl, z: Ziel, d: number) {
   let c = 0.62 * Math.max(0.12, 1 - d / 70);
   if (z.bewegt) c *= 0.7;
   if (z.geduckt) c *= 0.8;
+  if (z.lehnt) c *= 0.6;                    // um die Kante gelehnt: nur Kopf und Schulter schauen heraus
   if (Math.hypot(p.vx, p.vz) > 0.5) c *= 0.55;
   c *= 1 - 0.45 * p.unterFeuer;
   c *= 0.45 + 0.55 * p.warm;                // die ersten Schüsse auf ein neues Ziel gehen eher daneben
@@ -513,10 +514,10 @@ function zeichnen(p: Pl, dt: number) {
   void _hold;
 }
 
-function update(dt: number, me: { x: number; y: number; z: number; active: boolean; down: boolean; geduckt?: boolean; vx?: number; vz?: number }) {
+function update(dt: number, me: { x: number; y: number; z: number; active: boolean; down: boolean; geduckt?: boolean; vx?: number; vz?: number; lehnt?: boolean }) {
   if (!L) return;
   if (L.sector !== P.sector) { lagerWeg(); return; }
-  ME = { x: me.x, y: me.y, z: me.z, ok: me.active && !me.down, geduckt: !!me.geduckt, vx: me.vx || 0, vz: me.vz || 0 };
+  ME = { x: me.x, y: me.y, z: me.z, ok: me.active && !me.down, geduckt: !!me.geduckt, vx: me.vx || 0, vz: me.vz || 0, lehnt: !!me.lehnt };      // gelehnt: x, z sind schon die Kopfstelle (onfoot.ts)
   const k = feldKoop(), sim = !k.client;
   for (const p of L.pl) {
     if (p.tot) { p.totT += dt; zeichnen(p, dt); if (p.totT < dt * 1.5) koerper('ki-pl-' + p.id, null); if (p.totT > 25 && p.av) { freeAvatar(p.av); p.av = null; } continue; }

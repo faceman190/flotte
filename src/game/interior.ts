@@ -1,3 +1,4 @@
+import { schritt, sprungLaut, landeLaut, grundInnen } from './schritte';
 import { drawPrompt, drawPlaceLine, drawSpeechBubble } from '../ui/footHud';
 import * as THREE from 'three';
 import { scene, camera, view, ux, gl, setExposure, ambient, rim, sun, warmScene, compileFor, warm, uploadAll } from '../core/engine';
@@ -1454,7 +1455,8 @@ const walkV = { x: 0, z: 0 };   // Laufgeschwindigkeit (m/s) in Raumkoordinaten
 // Erst nach der Kopfhöhen-Abfrage des Bildes aufgerufen (floorAt merkt sich die Kopfhöhe der letzten Abfrage).
 const footGround = (x: number, z: number) => (mesh ? mesh.floorAt(x, z, IN.fy) : null);
 // Springen (Leertaste): nur vom Boden aus
-export function jump() { if (!IN.active || IN.jy > 0 || IN.jv !== 0) return; IN.jv = 4.6; snd(95, 0.05, 'triangle', 0.02, 40); }
+export function jump() { if (!IN.active || IN.jy > 0 || IN.jv !== 0) return; IN.jv = 4.6; sprungLaut(innenGrund()); }
+const innenGrund = () => (mesh && IN.area === 'Frachtraum' ? 'metall' : grundInnen(!!IN.ship, IN.area || ''));
 export function updateWalk(dt: number) {
   if (!IN.active || !group) return;
   zoneLight();
@@ -1493,7 +1495,7 @@ export function updateWalk(dt: number) {
     const moved = Math.hypot(IN.x - ox, IN.z - oz), v = dt > 0 ? moved / dt : 0;
     IN.dist += moved;
     stepT -= moved;
-    if (stepT <= 0 && moved > 0 && IN.jy === 0) { stepT = v > 6.4 ? 2.3 : 1.9; sfx(mesh && IN.area === 'Frachtraum' ? 'step_grate' + Math.floor(Math.random() * 4) : 'step' + Math.floor(Math.random() * 5), v > 6.4 ? 0.5 : 0.34, 0.9 + Math.random() * 0.2, () => snd(70 + Math.random() * 20, 0.06, 'triangle', v > 6.4 ? 0.026 : 0.018, -20)); }
+    if (stepT <= 0 && moved > 0 && IN.jy === 0) { stepT = v > 6.4 ? 2.3 : 1.9; if (mesh && IN.area === 'Frachtraum') sfx('step_grate' + Math.floor(Math.random() * 4), v > 6.4 ? 0.5 : 0.34, 0.9 + Math.random() * 0.2); else schritt(innenGrund(), (v > 6.4 ? 0.5 : 0.34) * (STANCE.crouch ? 0.55 : 1)); }      // Untergrund je Raum (schritte.ts)
     // Wippen: stärker beim Rennen, klingt aus, wenn man steht
     const amp = Math.min(1, v / 6) * (v > 6.4 ? 0.075 : 0.045);
     IN.bob += (Math.sin(IN.dist * 3.3) * amp - IN.bob) * Math.min(1, dt * 14);
@@ -1513,7 +1515,7 @@ export function updateWalk(dt: number) {
     IN.jy += IN.jv * dt; IN.jv -= 15 * dt;
     const top = mesh ? Math.max(0, mesh.head() - 1.9) : 0.9;
     if (IN.jy > top) { IN.jy = top; IN.jv = Math.min(IN.jv, 0); }
-    if (IN.jy <= 0) { IN.jy = 0; IN.jv = 0; stepT = 0; }   // kein eigener Ton beim Aufkommen: der nächste Schritt folgt sofort
+    if (IN.jy <= 0) { landeLaut(innenGrund(), Math.min(1, -IN.jv / 7)); IN.jy = 0; IN.jv = 0; stepT = 1.0; }   // Aufkommen hörbar (schritte.ts), der nächste Schritt etwas später
   }
   IN.area = room ? room.area(IN.x, IN.z) : IN.z > HZ0 ? 'Hangardeck' : deck ? deck.area(IN.x, IN.z) : IN.z > PZ1 ? 'Korridor' : PAL[kind].hall;
   // Hangar der Bastion: Ist die neue Art (Lichtraum 2) erst nach dem Betreten fertig geladen, den Hangar austauschen (hinter der Blende).

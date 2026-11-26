@@ -6,3 +6,9 @@ weapons_shotgun), am 23.11.2026 ausgewählt:
   n0…  = Noise-Exterior-Close (Gewehr, Flinte) bzw. Noise-Interior-Close (Pistole): der Nachhall
   out, in = ClipOut, ClipIn · end = Bolt (Gewehr) bzw. Slide (Pistole)
 LIZENZ: Epic-Inhalt, nach unserem Verständnis nur für Unreal-Engine-Produkte freigegeben (docs/lyra.md). Vor einer Veröffentlichung klären.
+
+fs_* = Schritte aus dem Fab-Paket „TFP Movement“ (C:\EXTRA\UnrealProjects\TFPMovementV1, Content\TFPMovement\Assets\Audio\Character\Footsteps\SoundWaves),
+am 26.11.2026 ausgewählt, mono, 32 kHz, auf gleiche Spitze (−3 dB) gebracht und vorn/hinten Stille entfernt. Untergründe: gras, sand, kies (Gravel), fels (Rock),
+erde (DirtyGround), matsch (Mud), schnee (HardSnow), pulver (SoftSnow), wasser, metall, beton (Concrete), holz (Wood), teppich (Carpet V1).
+fs_<grund><n> = Schritt · fs_<grund>_land<n> = Aufkommen nach dem Sprung (Jump_Land, beim Wasser Jump_Light) · fs_<grund>_jump<n> = Absprung (Jump_Start).
+Lizenz: Fab-Standardlizenz (laut Projektinhaber außerhalb der Unreal Engine in eigenen Projekten nutzbar).
