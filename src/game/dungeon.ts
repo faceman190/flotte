@@ -562,17 +562,18 @@ function buildAltProps(plan: Plan, R: ReturnType<typeof rng>) {
     for (const [nx, nz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Vec2[]) {
       if (tile(x + nx, z + nz) !== 0) continue;
       const kind = pick(DEKO), cx = x * TS + nx * 0.85 + (nz ? R.range(-0.8, 0.8) : 0), cz = z * TS + nz * 0.85 + (nx ? R.range(-0.8, 0.8) : 0), face = Math.atan2(-nx, -nz);
+      const ryT = nx !== 0 ? Math.PI / 2 : 0;          // Längsachse (X des Modells) entlang der Wand
       if (kind === 'holzstapel') {
         const k = pick(['holz_1', 'holz_2', 'holz_3']);
-        for (let i = 0; i < 6; i++) add(k, cx + nz * R.range(-0.1, 0.1), 0.07 + Math.floor(i / 3) * 0.16, cz + nx * R.range(-0.1, 0.1) + (i % 3 - 1) * 0.2 * (nx ? 1 : 0), face + Math.PI / 2 + R.range(-0.06, 0.06));
+        for (let i = 0; i < 5; i++) { const row = i < 3 ? i : i - 2.5, lay = i < 3 ? 0 : 1, d = 0.2 * row;
+          add(k, x * TS + nx * (1.05 - d), lay * 0.13, z * TS + nz * (1.05 - d), ryT + R.range(-0.05, 0.05)); }
       } else if (kind === 'werkzeug') {
         const k = pick(['spaten', 'schaufel', 'spitzhacke', 'faeustel']);
-        if (k === 'faeustel') add(k, cx, 0.03, cz, R.next() * 6.28);
-        else add(k, x * TS + nx * 1.15, 0.02, z * TS + nz * 1.15, face + Math.PI / 2, 1, 1, 1, 0, 1.3);      // an die Wand gelehnt
+        add(k, cx, 0.01, cz, k === 'spitzhacke' ? face : R.next() * 6.28);
         if (R.next() < 0.3) add('helm', cx - nx * 0.5, 0.0, cz - nz * 0.5, R.next() * 6.28);
-      } else if (kind === 'stempel_kurz') add(kind, x * TS + nx * 1.1, 0.05, z * TS + nz * 1.1, face, 1, 1, 1, nx ? 0 : 0.25, nx ? 0.25 * -nx : 0);
-      else if (kind === 'geroell_a' || kind === 'kohlegrus') add(kind, cx, 0, cz, face + R.range(-0.4, 0.4), R.range(0.6, 0.9), 1, R.range(0.6, 0.9));
-      else add(kind, cx, 0, cz, face + Math.PI / 2 + R.range(-0.25, 0.25));
+      } else if (kind === 'stempel_kurz') add(kind, x * TS + nx * 1.1, 0.0, z * TS + nz * 1.1, 0, 1, 1, 1, 0.18 * nz, -0.18 * nx);      // oben zur Wand geneigt
+      else if (kind === 'geroell_a' || kind === 'kohlegrus') add(kind, cx, 0, cz, ryT + R.range(-0.4, 0.4), R.range(0.6, 0.9), 1, R.range(0.6, 0.9));
+      else add(kind, x * TS + nx * 0.95, 0, z * TS + nz * 0.95, ryT + (R.next() < 0.5 ? 0 : Math.PI) + R.range(-0.15, 0.15));
       n++; break;
     }
   }
