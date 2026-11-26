@@ -1325,7 +1325,8 @@ document.addEventListener('pointerlockchange', () => {
 gl.addEventListener('click', () => { if (DUN.active && G.mode === 'dungeon' && document.pointerLockElement !== gl) { try { const r: any = gl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* nicht erlaubt */ } } });
 
 // ---------- Anzeige ----------
-export function drawDungeonHUD(roverX = 0, roverZ = 0, roverOn = false) {
+// zuFuss: Die Fußsteuerung zeigt die Aufforderung am Eingang selbst (onfoot.ts FOOT.prompt); hier nur im Fahrzeug (seit 2026-11-26, vorher doppelt)
+export function drawDungeonHUD(roverX = 0, roverZ = 0, roverOn = false, zuFuss = false) {
   const W = view.W, H = view.H;
   // Oberfläche: Wegweiser zu den Eingängen und Hinweis am Tor
   if (roverOn && G.mode === 'rover' && world.surface) {
@@ -1339,8 +1340,8 @@ export function drawDungeonHUD(roverX = 0, roverZ = 0, roverOn = false) {
       ux.fillStyle = 'rgba(6,16,26,.72)'; ux.fillRect(x - tw / 2, y - 14, tw, 20); ux.fillStyle = '#ffb347'; ux.fillText(t, x, y);
       ux.beginPath(); ux.moveTo(x, y + 8); ux.lineTo(x - 5, y + 14); ux.lineTo(x + 5, y + 14); ux.fill();
     }
-    const ne = nearEntrance(roverX, roverZ);
-    if (ne) { const t = `[E]  ${ne.name} betreten`; ux.font = '16px Rajdhani,"Segoe UI",sans-serif'; const tw = ux.measureText(t).width + 30; ux.fillStyle = 'rgba(6,16,26,.8)'; ux.fillRect(W / 2 - tw / 2, H * 0.7, tw, 32); ux.fillStyle = '#ffb347'; ux.fillText(t, W / 2, H * 0.7 + 21); }
+    const ne = zuFuss ? null : nearEntrance(roverX, roverZ);
+    if (ne) drawPrompt(`${ne.name} betreten`, '#e09030', H * 0.66);      // gleiche Aufforderung wie zu Fuß
     if (DUN.left > 0) { DUN.left -= 0.016; ux.fillStyle = '#ff6b5b'; ux.font = '16px Rajdhani,"Segoe UI",sans-serif'; ux.fillText('Du wurdest aus der Mine geborgen. Die Wächter sind wieder auf Posten.', W / 2, H * 0.3); }
     ux.restore();
   }

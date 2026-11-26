@@ -196,7 +196,8 @@ export function updateFoot(dt: number) {
   const mine = nearEntrance(FOOT.x, FOOT.z);
   const door = nearDoor(FOOT.x, FOOT.z);
   const crate = nearCrate(FOOT.x, FOOT.z), tgt = nearFootTarget();
-  FOOT.act = tgt ? 'story' : door ? 'base' : crate ? 'crate' : footNearShip() ? 'ship' : mine ? 'mine' : footNearRover() ? 'rover' : '';
+  // Fahrzeug vor Schiff und Mine: Es meldet sich erst aus 4,5 m, Mine (18 m) und Schiff riefen sonst immer dazwischen (seit 2026-11-26)
+  FOOT.act = tgt ? 'story' : door ? 'base' : crate ? 'crate' : footNearRover() ? 'rover' : footNearShip() ? 'ship' : mine ? 'mine' : '';
   FOOT.prompt = FOOT.act === 'story' ? tgt!.label : FOOT.act === 'crate' ? (crate!.big ? 'Tresorkiste öffnen' : 'Kiste öffnen') : FOOT.act === 'base' ? `${door!.st.name} betreten` : FOOT.act === 'ship' ? (settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`) : FOOT.act === 'mine' ? `${mine!.name} betreten` : FOOT.act === 'rover' ? 'In den Rover steigen' : '';
   // eigene Figur
   aimUpdate(dt, FIGHT.down <= 0, { still: Math.hypot(FOOT.vx, FOOT.vz) < 0.4, crouch: STANCE.crouch, air: FOOT.jy > 0.05 });

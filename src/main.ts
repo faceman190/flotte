@@ -594,6 +594,7 @@ onKey(code => {
       if (tgt) { tgt.act(); return; }
       const crate = FOOT.active ? nearCrate(FOOT.x, FOOT.z) : null;
       if (crate) { openSalvage(crate); return; }
+      if (FOOT.active && FOOT.act === 'rover') { enterRover(); return; }      // direkt am Fahrzeug (4,5 m): einsteigen, auch neben Mine oder Schiff (onfoot.ts FOOT.act)
       if (mine) { laserSound(false); enterDungeon(mine); }
       else if (!atShip) { if (FOOT.active && FOOT.act === 'rover') enterRover(); }
       else if (settings.walk && hasInterior(P.cls)) {
@@ -1006,7 +1007,7 @@ function loop(now: number, manual = false) {
   if (G.mode === 'eva') drawEva();      // Fahndung (recht.ts)
   if (!FOOT.active) { drawRoverHUD(); if (G.mode === 'rover' && ROVER.active) { drawSalvageHUD(ROVER.x, ROVER.z); drawGroundMarkers(); } } else drawFootHUD();
   if (G.mode === 'rover' && world.surface) drawBodenHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, !FOOT.active && ROVER.active);
-  drawDungeonHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, ROVER.active);
+  drawDungeonHUD(FOOT.active ? FOOT.x : ROVER.x, FOOT.active ? FOOT.z : ROVER.z, ROVER.active, FOOT.active);
   if (G.mode === 'rover') $('prompt').classList.add('hidden');
   if (G.mode === 'play' || G.mode === 'jump' || G.mode === 'entry') updatePanels(dt);
   if (G.mode === 'map') drawBand();
