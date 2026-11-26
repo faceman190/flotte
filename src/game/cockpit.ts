@@ -36,6 +36,9 @@ interface CockpitDef { datei: string; auge: [number, number, number]; laenge: nu
 const COCKPITS: Record<string, CockpitDef> = {
   milan: { datei: 'MilanCockpit', auge: [0, 1.08, -2.077], laenge: 15.82, stil: 1, aus: / ~cp|^Kuppelglas|^Kanzelglas|^Kanzelrahmen/ },
   dohle: { datei: 'DohleCockpit', auge: [0, 0.42, -5.6], laenge: 16.7, stil: 2, aus: / ~i|^Kuppelglas|^Anzeige|^Bildschirm|^Polster|^Leuchte|^Licht |^LED |^Schwarzmetall|^Kanzelrahmen|^Gussgrau.001/, fill: [0.22, 0.16], griff: [[-0.4, 0.098, -5.9193], [0.4, 0.098, -5.9193]] },
+  // Kranich: Cockpit steckt im Schiffsmodell (Kennung „ ~cp“, sichtbar von außen und beim Laufen); in der Ich-Sicht dieselben Teile mit gebackenem
+  // Licht aus KranichCockpit.glb (asset-src/neu/kranich/kra_export_cockpit.py). Der Innenraum hinter der Tür bleibt sichtbar.
+  kranich: { datei: 'KranichCockpit', auge: [-0.78, 0.085, -11.412], laenge: 32.12, stil: 2, aus: / ~cp|^Kanzelglas/, fill: [0.22, 0.16], griff: [[-1.16, -0.237, -11.731], [-0.4, -0.237, -11.731]] },
   kormoran: { datei: 'KormoranCockpit', auge: [-0.85, 1.75, -13.1], laenge: 46, stil: 2, aus: / ~i|^Schauglas|^Anzeige|^Bildschirm|^HUD|^Licht |^LED |^Ambientlicht|^Deckenlicht|^Lack ocker|^Warnschraffur/, fill: [0.22, 0.16], griff: [[-1.23, 1.428, -13.4193], [-0.47, 1.428, -13.4193]] },
 };
 export const COCKPIT = { an: false, sicht: false };      // an: gewünscht (Einstellung), sicht: gerade im Bild
@@ -414,7 +417,7 @@ function knueppel(C: CockpitDef, ps: Sitz | null, dt: number) {
 export function pilotNeuSetzen() { sitz = null; pilotNeu(); }
 /** Taste K im Flug */
 export function cockpitUmschalten() {
-  if (!hatCockpit(P.cls)) { radio('SYSTEM', `Die ${SHIPS[P.cls as ShipId]?.n || 'Maschine'} hat noch keine Cockpit-Sicht. Bisher gibt es sie in Milan, Dohle und Kormoran.`); return; }
+  if (!hatCockpit(P.cls)) { radio('SYSTEM', `Die ${SHIPS[P.cls as ShipId]?.n || 'Maschine'} hat noch keine Cockpit-Sicht. Bisher gibt es sie in Milan, Dohle, Kormoran und Kranich.`); return; }
   COCKPIT.an = !COCKPIT.an; (settings as any).cockpit = COCKPIT.an; saveSettings();
   if (COCKPIT.an && !decoVorlage(COCKPITS[P.cls].datei)) radio('SYSTEM', 'Cockpit wird geladen …');
 }

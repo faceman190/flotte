@@ -19,6 +19,7 @@ import { radio } from '../ui/radio';
 import { updateMining, throwCharge } from './mining';
 import { updateSchnellflug, SF, schnellflugHit } from './schnellflug';
 import { TESTF } from './testflags';
+import { hilfsduesen } from './hilfsduesen';
 
 // Das Modell des aktiven Schiffs (wird beim Umsteigen ausgetauscht)
 export let SHIP: ShipModel = buildShipModel('milan');
@@ -183,6 +184,9 @@ export function updatePlayer(dt: number) {
   }
   P.x += P.vx * dt; P.y += P.vy * dt; P.z += P.vz * dt;
   G.thrust += (th - G.thrust) * Math.min(1, dt * 6);
+  // Hub- und Steuerdüsen (Kranich): Drehwunsch und Schieben aus den Eingaben, Bodennähe auf Planeten (hilfsduesen.ts)
+  hilfsduesen(SHIP.g, P.cls, dt, yawRate, pitchRate, G.roll, { sx: (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), sv: (keys.Space ? 1 : 0) - (keys.ControlLeft || keys.ControlRight || keys.KeyX ? 1 : 0), brems: keys.KeyS ? 1 : 0 },
+    world.surface && world.ground ? P.y - st.radius * 0.6 - world.ground(P.x, P.z) : Infinity, SHIP.glows[0]);
   // ---- Sektorgrenze bzw. Boden und Rand auf Planeten ----
   const hd = world.surface ? 0 : Math.hypot(P.x, P.z);
   if (world.surface && world.ground) {

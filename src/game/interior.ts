@@ -870,7 +870,7 @@ let shipWarmKey = '';
 // Leuchtflächen im Schiffsinnenraum: Von außen sollen Fenster und Lichter leuchten, drinnen blendeten Deckenlichter und Lichtbänder
 // (Leuchtstärke 2,7 bis 3, dazu der Lichtschein). Solange man an Bord ist, leuchten sie schwächer (gleiches Material, nur ein Wert: kein neuer Shader).
 // Kormoran: Deckenlicht, Lichtband, Blitzlicht; Wisent: Leuchte (Deckenleisten), Bodenlicht (Felder im Boden), Portallicht. Zusätze wie „ |tor“ zählen mit.
-const ROOM_GLOW: Record<string, number> = { 'Deckenlicht (Spiel)': 0.2, 'Lichtband (Spiel)': 0.22, 'Blitzlicht (Spiel)': 0.25, 'Leuchte (Spiel)': 0.15, 'Bodenlicht (Spiel)': 0.32, 'Portallicht (Spiel)': 0.4, 'Licht Rot (Spiel)': 0.6, 'Licht bernstein (Spiel)': 0.5, 'Licht petrol (Spiel)': 0.6, 'Ambientlicht (Spiel)': 0.7, 'Energiekern (Spiel)': 0.6 };
+const ROOM_GLOW: Record<string, number> = { 'Deckenlicht (Spiel)': 0.2, 'Lichtband (Spiel)': 0.22, 'Blitzlicht (Spiel)': 0.25, 'Leuchte (Spiel)': 0.15, 'Bodenlicht (Spiel)': 0.32, 'Portallicht (Spiel)': 0.4, 'Licht Rot (Spiel)': 0.6, 'Licht bernstein (Spiel)': 0.5, 'Licht petrol (Spiel)': 0.6, 'Ambientlicht (Spiel)': 0.7, 'Energiekern (Spiel)': 0.6, 'Kernglut (Spiel)': 0.5 };
 let glowDim: [THREE.MeshStandardMaterial, number, number][] = [];
 // Leuchtenabdeckungen: an Bord nur Eigenleuchten, keine Grundfarbe (sonst strahlen die Lampen darunter sie zusätzlich an)
 const ROOM_GLOW_FLAT = new Set(['Deckenlicht (Spiel)', 'Lichtband (Spiel)', 'Blitzlicht (Spiel)', 'Leuchte (Spiel)', 'Bodenlicht (Spiel)']);

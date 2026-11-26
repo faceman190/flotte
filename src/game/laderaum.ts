@@ -30,6 +30,9 @@ const RAEUME: Record<string, Raum> = {
   // Kormoran seit dem 25.11.2026 ohne feste Frachtattrappen im Modell, Boden mit Platten 1 cm höher (asset-src/neu/kormoran/kor_raeume.py)
   Kormoran: { boden: -1.39, hw: 3.3, z0: 10.3, tuer: 21.4, rampe: { y0: -1.42, z1: 27.6, y1: -4.1, hw: 2.1 }, gasse: 2.0, decke: 3.3, stell: [{ x: 0, z: 15.6 }],
     reihen: [{ x: 2.65, z0: 10.8, z1: 21.0 }, { x: -2.65, z0: 10.8, z1: 21.0 }] },
+  // Kranich (kra-gelenke.json, Laufkarte): Laderaum 12,4 m, Fahrgasse ±1,25 m zwischen den Rollenbahnen, Stellplatz für einen Wiesel in der Mitte
+  Kranich: { boden: -1.62, hw: 2.95, z0: 2.94, tuer: 15.37, rampe: { y0: -1.635, z1: 19.96, y1: -3.985, hw: 1.5 }, gasse: 1.25, decke: 3.6, stell: [{ x: 0, z: 8.3 }],
+    reihen: [{ x: 2.2, z0: 3.9, z1: 15.0 }, { x: -2.2, z0: 3.9, z1: 15.0 }] },
   // Dohle (doh-gelenke.json): Laderaum 5,7 m lang, zwei Reihen für Paletten und Kisten, kein Fahrzeug
   Dohle: { boden: -1.21, hw: 1.53, z0: 1.6, tuer: 7.4, rampe: { y0: -1.226, z1: 9.42, y1: -2.746, hw: 1.48 }, gasse: 0.32, decke: 2.4, stell: [],
     reihen: [{ x: 0.92, z0: 1.75, z1: 7.25 }, { x: -0.92, z0: 1.75, z1: 7.25 }] },

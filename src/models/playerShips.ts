@@ -99,11 +99,12 @@ function gltfShip(cls: ShipId, paint: Paint): ShipModel {
   // Wisent: zwei ovale Düsen am Ende der Gondeln (Blender: y ±17, z 7,6, x −32,9; Mitte des Modells x 1,33, z 10,17)
   // Milan: zwei Schubdüsen im Heck (Blender: y ±0,8, z 2,3, Düsenende x −7,55; Mitte des Modells x 0,283, z 2,14; mil-gelenke.json)
   // Dohle: zwei Gondeln an Pylonen (Blender: y ±2,95, z 3,45, Düsenende x −7,15; Mitte des Modells x 1,0, z 2,746)
-  const enginePts = cls === 'dohle' ? [[-2.95, 0.7, 8.15], [2.95, 0.7, 8.15]] : cls === 'milan' ? [[-0.8, 0.16, 7.83], [0.8, 0.16, 7.83]] : cls === 'wisent' ? [[-17, -2.57, 34.2], [17, -2.57, 34.2]] : cls === 'elster' ? [[-3.15, -0.01, 11.25], [3.15, -0.01, 11.25]] : cls === 'wuerger' ? [[-3.05, -0.04, 12.35], [3.05, -0.04, 12.35]] : cls === 'kormoran' ? [[-4.8, 0.17, 22.4], [4.8, 0.17, 22.4], [-7.9, -0.43, 22.1], [7.9, -0.43, 22.1]] : cls === 'pfeil' ? [-0.164, -0.055, 0.055, 0.164].map(f => [l * f, -h * 0.02, rear * 0.97])   /* an der Länge bemessen: die Seitenflügel machen das Modell breiter als das Heck */ : [[-ex, 0, rear * 0.96], [ex, 0, rear * 0.96]];
+  // Kranich: zwei Gondeln an Stummelflügeln (Blender: y ±6,15, z 3,45, Düsenende x −16,0; Mitte des Modells x −0,062, z 3,985; kra-gelenke.json)
+  const enginePts = cls === 'kranich' ? [[-6.15, -0.535, 15.94], [6.15, -0.535, 15.94]] : cls === 'dohle' ? [[-2.95, 0.7, 8.15], [2.95, 0.7, 8.15]] : cls === 'milan' ? [[-0.8, 0.16, 7.83], [0.8, 0.16, 7.83]] : cls === 'wisent' ? [[-17, -2.57, 34.2], [17, -2.57, 34.2]] : cls === 'elster' ? [[-3.15, -0.01, 11.25], [3.15, -0.01, 11.25]] : cls === 'wuerger' ? [[-3.05, -0.04, 12.35], [3.05, -0.04, 12.35]] : cls === 'kormoran' ? [[-4.8, 0.17, 22.4], [4.8, 0.17, 22.4], [-7.9, -0.43, 22.1], [7.9, -0.43, 22.1]] : cls === 'pfeil' ? [-0.164, -0.055, 0.055, 0.164].map(f => [l * f, -h * 0.02, rear * 0.97])   /* an der Länge bemessen: die Seitenflügel machen das Modell breiter als das Heck */ : [[-ex, 0, rear * 0.96], [ex, 0, rear * 0.96]];
   for (const e of enginePts) {
     const sp = new THREE.Sprite(glowMat(0xbfe2ff, 0.8));
     sp.position.set(e[0], e[1], e[2] + 0.5);
-    const gk = cls === 'dohle' ? l / 30 : cls === 'milan' ? l / 26 : cls === 'pfeil' ? l / 36 : cls === 'wisent' ? l / 20 : cls === 'wuerger' ? l / 24 : cls === 'elster' ? l / 28 : cls === 'kormoran' ? (Math.abs(e[0]) > 6 ? l / 60 : l / 34) : l / 15;   // Pfeil: vier kleinere Leuchten statt zwei großer
+    const gk = cls === 'kranich' ? l / 30 : cls === 'dohle' ? l / 30 : cls === 'milan' ? l / 26 : cls === 'pfeil' ? l / 36 : cls === 'wisent' ? l / 20 : cls === 'wuerger' ? l / 24 : cls === 'elster' ? l / 28 : cls === 'kormoran' ? (Math.abs(e[0]) > 6 ? l / 60 : l / 34) : l / 15;   // Pfeil: vier kleinere Leuchten statt zwei großer
     sp.userData.base = gk;
     sp.scale.setScalar(3 * gk);
     addJet(sp);
@@ -120,7 +121,7 @@ function gltfShip(cls: ShipId, paint: Paint): ShipModel {
     g, glows, navs, shield, extraGuns: new THREE.Group(),
     // Würger: Flügelkanonen unter der Vorderkante, ab Stufe 2 dazu die Schienenkanone unter der Nase
     // Wisent: Flügeltürme, ab Stufe 2 dazu der große Turm oben vorn
-    gunPts: cls === 'dohle' ? [[1.0, -0.79, -6.81]] : cls === 'milan' ? [[1.04, 0.6, -2.6]] : cls === 'wisent' ? [[10.5, 3.8, -9.1]] : cls === 'kormoran' ? [[7.0, -2.54, -8.8]] : cls === 'elster' ? [[1.32, -0.74, -10.49]] : cls === 'wuerger' ? [[4.9, -0.52, -5.2]] : [[w * 0.16, -h * 0.05, front * 0.8]],
+    gunPts: cls === 'kranich' ? [[3.55, -0.94, 0.8]] : cls === 'dohle' ? [[1.0, -0.79, -6.81]] : cls === 'milan' ? [[1.04, 0.6, -2.6]] : cls === 'wisent' ? [[10.5, 3.8, -9.1]] : cls === 'kormoran' ? [[7.0, -2.54, -8.8]] : cls === 'elster' ? [[1.32, -0.74, -10.49]] : cls === 'wuerger' ? [[4.9, -0.52, -5.2]] : [[w * 0.16, -h * 0.05, front * 0.8]],
     extraGunPts: cls === 'wisent' ? [[0.6, 6.6, -16.1]] : cls === 'wuerger' ? [[0, -1.1, -12.3]] : [],
     laserPts, enginePts, drones,
   };

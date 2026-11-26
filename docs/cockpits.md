@@ -7,6 +7,7 @@ Taste K schaltet im Flug zwischen Verfolgersicht und Cockpit (bleibt gespeichert
 | Milan | 1 | `MilanCockpit.glb` | `asset-src/neu/milan/mil_cockpit.py` (siehe `docs/milan.md`) |
 | Dohle | 2 | `DohleCockpit.glb` | `asset-src/neu/cockpit/cp_dohle.py` |
 | Kormoran | 2 | `KormoranCockpit.glb` | `asset-src/neu/cockpit/cp_kormoran.py` |
+| Kranich | 2 | `KranichCockpit.glb` (Teile stecken auch im Schiffsmodell) | `asset-src/neu/kranich/kra_cockpit.py`, siehe `docs/kranich.md` |
 
 ## Stil 2
 

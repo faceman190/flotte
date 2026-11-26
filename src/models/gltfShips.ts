@@ -163,6 +163,27 @@ const DOORS: Record<string, DoorCfg> = {
       { tag: 'leiter', grp: 'leiter', t0: 0.27, t1: 0.93, slide: [0, 1.906, -0.411], retract: true },   // Leiter gleitet aus dem Schacht
     ],
   },
+  // Kranich (asset-src/neu/kranich, kra-gelenke.json): Heckrampe schwenkt auf 28,5° nach unten, Verlängerung fährt aus; vier Beine mit Füßen,
+  // vorn nach hinten in den Bug, hinten nach vorn in die Gondeln, je zwei Schachtklappen schließen zuletzt
+  Kranich: {
+    dur: { rampe: 3.8, fw: 3.6 },
+    parts: [
+      { tag: 'rampe', grp: 'rampe', t0: 0.1, t1: 0.72, hinge: [0, 2.35, -15.58], axis: 'x', angle: -2.06822 },
+      { tag: 'rampe2', grp: 'rampe', t0: 0.66, t1: 0.96, slide: [0, 2.25, 0], under: 'rampe' },
+      { tag: 'fwv_l', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [1.45, 2.6285, 11.25], axis: 'x', angle: 1.53589 },
+      { tag: 'fwvk_l0', grp: 'fw', t0: 0.72, t1: 1, hinge: [1, 2.162, 10.275], axis: 'z', angle: 1.53589 },
+      { tag: 'fwvk_l1', grp: 'fw', t0: 0.72, t1: 1, hinge: [1.9, 2.5612, 10.275], axis: 'z', angle: -1.53589 },
+      { tag: 'fwh_l', grp: 'fw', t0: 0, t1: 0.7, hinge: [6.15, 2.507, -6.9], axis: 'x', angle: -1.50098 },
+      { tag: 'fwhk_l0', grp: 'fw', t0: 0.72, t1: 1, hinge: [6.59, 2.207, -5.625], axis: 'z', angle: -1.48353 },
+      { tag: 'fwhk_l1', grp: 'fw', t0: 0.72, t1: 1, hinge: [5.71, 2.207, -5.625], axis: 'z', angle: 1.48353 },
+      { tag: 'fwv_r', grp: 'fw', t0: 0.05, t1: 0.72, hinge: [-1.45, 2.6285, 11.25], axis: 'x', angle: 1.53589 },
+      { tag: 'fwvk_r0', grp: 'fw', t0: 0.72, t1: 1, hinge: [-1, 2.162, 10.275], axis: 'z', angle: -1.53589 },
+      { tag: 'fwvk_r1', grp: 'fw', t0: 0.72, t1: 1, hinge: [-1.9, 2.5612, 10.275], axis: 'z', angle: 1.53589 },
+      { tag: 'fwh_r', grp: 'fw', t0: 0, t1: 0.7, hinge: [-6.15, 2.507, -6.9], axis: 'x', angle: -1.50098 },
+      { tag: 'fwhk_r0', grp: 'fw', t0: 0.72, t1: 1, hinge: [-5.71, 2.207, -5.625], axis: 'z', angle: -1.48353 },
+      { tag: 'fwhk_r1', grp: 'fw', t0: 0.72, t1: 1, hinge: [-6.59, 2.207, -5.625], axis: 'z', angle: 1.48353 },
+    ],
+  },
   // Dohle (asset-src/neu/dohle, doh-gelenke.json): Heckrampe bis zum Boden, Tür mit Treppe (nur bei ausgefahrenem Fahrwerk), Fahrwerk
   Dohle: {
     dur: { rampe: 3.5, tuer: 2.4, fw: 3.6 }, boden: ['tuer'],
@@ -266,7 +287,7 @@ export function doorProgress(root: THREE.Object3D, grp: string) { const rig = ro
 // Heckrampe zum Betreten ohne Taste (Schiffskoordinaten wie die Laufkarte: Nase −Z): Türebene, Fuß der offenen Rampe, halbe Breite.
 // RAMP.want schaltet der Rampenschalter (innen am Laderaum, außen am Rampenfuß); im Hangar öffnet die Rampe, solange want gilt.
 // Heckrampen, über die man zu Fuß hinein- und hinausgeht (Hangar und gelandet auf Planeten, interior.ts rampTransit): door Innenkante, foot Rampenspitze (z, Schiffskoordinaten), hw halbe Breite
-export const RAMP_ENTRY: Record<string, { door: number; foot: number; hw: number }> = { Wisent: { door: 41.39, foot: 49.9, hw: 3.7 }, Kormoran: { door: 21.4, foot: 27.6, hw: 2.1 } };      // Dohle: kein begehbarer Innenraum (hasInterior ab 30 m)
+export const RAMP_ENTRY: Record<string, { door: number; foot: number; hw: number }> = { Wisent: { door: 41.39, foot: 49.9, hw: 3.7 }, Kormoran: { door: 21.4, foot: 27.6, hw: 2.1 }, Kranich: { door: 15.37, foot: 19.96, hw: 1.5 } };      // Dohle: kein begehbarer Innenraum (hasInterior ab 30 m)
 export const RAMP = { want: true };
 // Öffnen oder schließen (jedes Bild aufrufen, dt = Spielzeit des Bildes): beim ersten Aufruf sofort im Zielzustand, danach mit der Dauer aus DOORS.
 // Gruppen in boden (Bordleiter) öffnen nur bei ausgefahrenem Fahrwerk.

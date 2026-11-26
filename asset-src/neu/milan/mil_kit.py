@@ -334,7 +334,7 @@ def cockpit():
     ANCH['sitz'] = Vector((xs, 0, FL + 0.9))
 
 # Cockpit in Feinausführung (26.11.2026): ersetzt cockpit() oben (bleibt als Vergleich stehen)
-exec(compile(open(os.path.join(HIER, 'mil_cockpit.py'), encoding='utf-8').read(), 'mil_cockpit.py', 'exec'))
+exec(compile(open(os.path.join(os.path.dirname(bpy.data.filepath), '..', 'milan', 'mil_cockpit.py'), encoding='utf-8').read(), 'mil_cockpit.py', 'exec'))
 
 # =====================================================================================
 # 4. Rückengrat mit Frachtfach und Heckklappe

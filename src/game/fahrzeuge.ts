@@ -16,6 +16,7 @@ export const FZ_MASS: Record<FzId, [number, number, number]> = { dachs: [6.6, 3.
 // Laderäume: Tor (Breite, Höhe) und Stellplätze (Länge, Breite, Höhe). Kormoran: Hecktor und Laderaum aus docs/kormoran.md
 export const STELL: Record<string, { tor: [number, number]; plaetze: [number, number, number][] }> = {
   kormoran: { tor: [4.8, 3.15], plaetze: [[10.7, 7.2, 3.3]] },
+  kranich: { tor: [3.1, 2.8], plaetze: [[11.0, 2.5, 3.6]] },      // Heckluke 3,1 × 2,8 m, Fahrgasse 2,5 m breit: ein Wiesel, kein Dachs (kra_kit.py RAMP)
   pfeil: { tor: [5.5, 4.0], plaetze: [[12, 8, 4.5]] },
   wisent: { tor: [9, 6], plaetze: [[14, 9, 6], [14, 9, 6]] },
 };

@@ -49,6 +49,14 @@ export const SHIPS = {
     hull: 330, shield: 130, speed: 250, acc: 400, turn: 0.75, cargo: 150, ammo: 450, rockets: 6, dmg: 1.35,
     laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1700, charges: 0, drones: 0, radius: 15, camUp: 24, camBack: 78, upMul: 1.7, col: 0x4a86d8, model: 'Kormoran', len: 46,
   },
+  // Eigenes Modell (asset-src/neu/kranich, Blender-Skripte, docs/kranich.md): 32,1 × 15,1 × 8 m, Mehrzweckschiff für zwei (seit 2026-11-26).
+  // Laderaum mit Heckrampe (ein Wiesel passt hinein), Technik mit Energiekern, Wohnteil mit Kojen, Kombüse und Waschzelle, volles Cockpit im Modell.
+  // Antrieb: zwei Haupttriebwerke, vier Hubdüsen unten (senkrechter Start), zehn Steuerdüsenblöcke; alles innen begehbar.
+  kranich: {
+    n: 'Kranich', role: 'Mehrzweckschiff', price: 14500, desc: 'Mehrzweckschiff für zwei: Laderaum mit Heckrampe für einen Wiesel und Kisten, Kabine mit Kojen, Kombüse, Technik mit Energiekern und ein Cockpit mit Rundumsicht. Hubdüsen für senkrechte Starts, Steuerdüsen für feines Manövrieren, starker Scanner auf dem Rücken. Innen begehbar.',
+    hull: 240, shield: 105, speed: 262, acc: 470, turn: 0.86, cargo: 110, ammo: 400, rockets: 4, dmg: 1.15,
+    laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 2100, charges: 0, drones: 0, radius: 11, camUp: 14, camBack: 52, upMul: 1.4, col: 0x8fc0d8, model: 'Kranich', len: 32.12,
+  },
   // Eigenes Modell (asset-src/neu/wuerger, Blender-Skripte, docs/wuerger.md): 24,8 × 26,2 × 5 m, einsitzig, kein Innenraum
   wuerger: {
     n: 'Würger', role: 'Schwerer Jäger', price: 16000, desc: 'Einsitziger schwerer Jäger der Bastion: Schienenkanone unter dem Rumpf, zwei Flügelkanonen, vier Flugkörper, dicke Panzerung. Kaum Fracht, kein Bergbau.',
