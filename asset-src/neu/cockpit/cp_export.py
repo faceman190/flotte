@@ -4,7 +4,8 @@
 # Netz: alles zu einem Objekt (Glas und Sichtgerät getrennt), Dreiecke, lange Kanten geteilt (bis 9 cm), damit die Eckfarben Licht tragen können.
 # Eckfarben (COLOR_0) sind Daten für den Cockpit-Shader (src/game/cockpit.ts):
 #   R = Umgebungsverdeckung (Cycles, 0,4 m)
-#   G = Kantenstreifen (1 auf Fasen an scharfen konvexen Kanten): Abrieb und Kantenlicht
+#   G = Kantenstreifen (1 auf Fasen an scharfen konvexen Kanten): Abrieb und Kantenlicht.
+#       Bewegliche Steuerknüppel (Flächenebene „teil“ aus cp_lib.Marke): links 0,3 (Fläche) / 0,4 (Kantenstreifen), rechts 0,6 / 0,7
 #   B = kaltes Licht der Anzeigen und Lichtleisten (gebacken, Wurzel aus der Beleuchtungsstärke)
 #   A = warmes Licht der Bodenleuchten (ebenso)
 # Materialien heißen „ext_cp_<Name>“ (ext_: build-assets.mjs behält Eckfarben und Texturkoordinaten). Schirme tragen UV 0…1.
@@ -55,6 +56,8 @@ for e in bm.edges:
         except Exception: e.smooth = True
 bm.to_mesh(me); bm.free(); me.update()
 streif = [0] * len(me.polygons); me.attributes['streif'].data.foreach_get('value', streif)
+teil = [0] * len(me.polygons)
+if 'teil' in me.attributes: me.attributes['teil'].data.foreach_get('value', teil)
 # ---- Backen ----
 SC.render.engine = 'CYCLES'; SC.cycles.device = 'GPU'
 try:
@@ -110,6 +113,7 @@ STAT = 'kalt 50/90/99 %%: %.3f %.3f %.3f · warm: %.3f %.3f %.3f' % (quant(ka, 0
 cols = [0.0] * (n * 4)
 for p in me.polygons:
     g = 1.0 if streif[p.index] else 0.0
+    if teil[p.index] in (1, 2): g = (0.3 if teil[p.index] == 1 else 0.6) + (0.1 if streif[p.index] else 0.0)
     for li in p.loop_indices:
         i = li * 4
         cols[i] = ao[i] if ok.get('ao') else 1.0; cols[i + 1] = g
@@ -118,8 +122,9 @@ for a in list(me.color_attributes): me.color_attributes.remove(a)
 ca = me.color_attributes.new('Col', 'FLOAT_COLOR', 'CORNER'); ca.data.foreach_set('color', cols); me.color_attributes.active_color = ca
 try: me.color_attributes.render_color_index = 0
 except Exception: pass
-try: me.attributes.remove(me.attributes['streif'])
-except Exception: pass
+for nm in ('streif', 'teil'):
+    try: me.attributes.remove(me.attributes[nm])
+    except Exception: pass
 me.update()
 # ---- Materialien fürs Spiel ----
 def exp_mat(m):

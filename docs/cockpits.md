@@ -45,6 +45,7 @@ cd ../../.. && npm run assets
 ```
 
 - Alles wird ein Netz aus Dreiecken, lange Kanten werden bis 9 cm geteilt, damit die Eckfarben Licht tragen.
+- Bewegliche Steuerknüppel: Flächen, die in `with Marke(1)` (links) oder `Marke(2)` (rechts) entstehen, kennzeichnet der Export in G (0,3/0,4 und 0,6/0,7).
 - Eckfarben sind Daten: R Verdeckung, G Kantenstreifen (Fasen), B kaltes Licht der Anzeigen und Lichtleisten, A warmes Licht der Bodenleuchten. Licht ist als Wurzel gespeichert.
 - Dohle: 171.000 Dreiecke (4,0 MB im Spiel), Kormoran: 286.000 (6,6 MB, Kantenlänge 14 cm). Außenhaut und Streben werden nicht geteilt. Alles in einem Schritt: `sh asset-src/neu/cockpit/cp_spiel.sh`. Die Ausgabe `cp-<schiff>-export.txt` nennt Dreiecke und die Verteilung des gebackenen Lichts.
 
@@ -55,6 +56,10 @@ cd ../../.. && npm run assets
   - Eigene Schattenkarte nur fürs Cockpit (2048², Tiefenbild aus Sonnenrichtung). Sie wird nur neu gezeichnet, wenn sich die Sonne gegenüber dem Schiff bewegt hat, und hängt nicht an den Lampen von three.
   - Muster aus der Lage im Cockpit: Waben (Stoff), Lochung (Bodenrost), Narbung (Gummi), Körnung (Formteile).
 - `src/game/fahrer.ts`: Der Pilot ist dieselbe Sitzfigur wie der Fahrer im Wiesel, mit eigener Tracht. Becken unter dem Auge, Hände per Zwei-Knochen-IK an den Griffpunkten, Finger gekrümmt, Kopf ausgeblendet. Stellwerte `PILOT_TUNE` in `cockpit.ts`.
+- Steuerknüppel: `knueppel()` in `cockpit.ts` rechnet je Bild die Neigung (rechts aus Nick- und Gierrate, links aus Schub und A/D). Der Vertex-Shader dreht die gekennzeichneten Flächen um den Fußpunkt, `pilotArme` führt die Hände per IK nach.
+- Die Figur des Piloten bekommt eigene Materialien (`pilotMaterial`): Sonne nur, wo die Schattenkarte es erlaubt, gedämpftes Umgebungslicht, etwas kaltes Licht der Anzeigen.
+- Anzeigen im Stil 2 werden in 250 Einheiten Höhe gezeichnet (Beschriftung 18, Werte 26 bis 72), damit man sie aus dem Sitz lesen kann.
+- HUD: `body.cockpit` (style.css) räumt Andock-Hinweis, Gesprächsfenster und Tastenhilfe nach oben, die Tempozeile entfällt.
 - Stellwerte `CP_TUNE`: `fill2` (Grundlicht), `kalt`, `warm` (gebackenes Licht), `blick` (fester Blick für Prüfbilder).
 
 ## Neues Cockpit für ein weiteres Schiff
@@ -78,5 +83,5 @@ cd ../../.. && npm run assets
 
 - Milan auf Stil 2 heben.
 - Cockpits für Wisent, Würger, Elster, Pfeil.
-- Steuerknüppel und Schubhebel bewegen sich nicht mit der Eingabe.
-- Texte des HUD liegen in der Cockpit-Sicht teils über dem Pult.
+- Schubhebel der Kormoran-Mittelkonsole und die Knüppel des Kopiloten bewegen sich nicht.
+- Der Schatten der Steuerknüppel wandert nicht mit (Schattenkarte zeichnet sie in Ruhelage).

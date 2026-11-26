@@ -54,7 +54,7 @@ class Sammler:
     def __init__(self): self.bm = {}; self.name = {}
     def get(self, m):
         k = m.name
-        if k not in self.bm: self.bm[k] = bmesh.new(); self.name[k] = m
+        if k not in self.bm: self.bm[k] = bmesh.new(); self.bm[k].faces.layers.int.new('teil'); self.name[k] = m
         return self.bm[k]
     def fertig(self, coll, prefix='cp'):
         out = []
@@ -63,6 +63,13 @@ class Sammler:
             o = bpy.data.objects.new(prefix + ' ' + k, me); coll.objects.link(o); out.append(o)
         self.bm = {}; return out
 SAM = Sammler()
+# Marke für bewegliche Teile: Flächen, die innerhalb von „with Marke(n)“ entstehen, tragen n in der Flächenebene „teil“.
+# cp_export.py schreibt sie in die Eckfarben, der Shader im Spiel bewegt sie (1 = Steuerknüppel links, 2 = rechts).
+MARKE = [0]
+class Marke:
+    def __init__(self, n): self.n = n
+    def __enter__(self): self.alt = MARKE[0]; MARKE[0] = self.n; return self
+    def __exit__(self, *a): MARKE[0] = self.alt
 
 # ---------- Rahmen (Lage der Bauteile) ----------
 STAPEL = [Matrix.Identity(4)]
@@ -80,7 +87,10 @@ def _ab(bm_teil, m):
     M = STAPEL[-1]; bmesh.ops.transform(bm_teil, matrix=M, verts=bm_teil.verts)
     if M.determinant() < 0: bmesh.ops.reverse_faces(bm_teil, faces=bm_teil.faces)
     me = bpy.data.meshes.new('t'); bm_teil.to_mesh(me); bm_teil.free()
-    SAM.get(MAT[m] if isinstance(m, str) else m).from_mesh(me); bpy.data.meshes.remove(me)
+    ziel = SAM.get(MAT[m] if isinstance(m, str) else m); n0 = len(ziel.faces); ziel.from_mesh(me); bpy.data.meshes.remove(me)
+    if MARKE[0]:
+        L = ziel.faces.layers.int['teil']; ziel.faces.ensure_lookup_table()
+        for i in range(n0, len(ziel.faces)): ziel.faces[i][L] = MARKE[0]
 
 def _fase(bm, f, seg=1):
     if f <= 0: return

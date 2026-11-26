@@ -603,3 +603,9 @@ td .gico{margin-right:8px}
 .tm .shBig{opacity:.95}
 .tm .shActs{display:flex;gap:8px;flex:none}
 .tm .shActs button{flex:1}
+
+/* Cockpit-Sicht (cockpit.ts setzt body.cockpit): Texte aus dem Pult nach oben räumen. Tempo steht auf den Anzeigen. */
+body.cockpit #speed{display:none}
+body.cockpit #prompt{top:27%}
+body.cockpit #dlg{bottom:auto;top:92px}
+body.cockpit #ctrlP{bottom:auto;top:64px;transform-origin:top left;opacity:.82}

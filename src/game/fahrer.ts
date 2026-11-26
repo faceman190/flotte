@@ -16,7 +16,9 @@ type Tracht = ReturnType<typeof figTracht>;
 // Für den Piloten im Cockpit (cockpit.ts, seit 2026-11-26) zusätzlich: haende/fuesse = Ziele für Handgelenke und Füße (statt Lenkrad und Pedalen des
 // Buggys), ebene = Zeichenebene der Figur (Körperbild der Ich-Sicht), ohneKopf = Kopf weg (die Kamera sitzt dort), lehne = Neigung des Oberkörpers.
 export type Sitz = { body: THREE.Object3D; seat: THREE.Vector3 | null; wheel: THREE.Vector3 | null; neu: boolean;
-  haende?: [THREE.Vector3, THREE.Vector3]; fuesse?: [THREE.Vector3, THREE.Vector3]; ebene?: number; ohneKopf?: boolean; lehne?: number; faust?: number; handDreh?: number };
+  haende?: [THREE.Vector3, THREE.Vector3]; fuesse?: [THREE.Vector3, THREE.Vector3]; ebene?: number; ohneKopf?: boolean; lehne?: number; faust?: number; handDreh?: number;
+  handQ?: [THREE.Quaternion, THREE.Quaternion];      // Neigung der Griffe (im Rahmen von body): die Hände kippen mit
+  material?: (m: THREE.Material) => THREE.Material };      // eigene Materialien für diese Figur (Schatten der Kabine)
 export class Fahrer {
   sk: THREE.Object3D | null = null; fig: Figur | null = null; loading = false; holder: THREE.Group | null = null; host: object | null = null;
   posed = false; shown = true; dressT = 0; dead = false;
@@ -43,12 +45,21 @@ export class Fahrer {
       this.dressT = 1; this.fig!.setzen(this.tracht());
       if (m.ebene !== undefined) this.sk.traverse(o => o.layers.set(m.ebene!));
       if (m.ohneKopf && this.fig!.bones.head) this.fig!.bones.head.scale.setScalar(0.001);
+      if (m.material) this.sk.traverse((o: any) => { if (o.isMesh && o.material) o.material = Array.isArray(o.material) ? o.material.map(m.material!) : m.material!(o.material); });
     }
     if (!this.posed && this.fig!.bereit) { this.posed = pose(this, m.body, m.seat, m.wheel, m); this.dressT = 0; }
     this.shown = true; this.holder!.visible = this.posed;
   }
   zeigen(on: boolean) { this.shown = on; if (this.holder) this.holder.visible = this.posed && on; }
   weg() { this.holder?.removeFromParent(); this.holder = null; this.host = null; this.posed = false; }
+  /** Arme neu an die Ziele in m.haende (jedes Bild, wenn sich die Steuerknüppel bewegen). Die Finger bleiben, wie sie sind. */
+  arme(m: Sitz) {
+    if (!this.posed || !this.fig || !m.wheel) return;
+    const bn = this.fig.bones;
+    for (const k of ['l', 'r']) for (const n of ['upperarm_', 'lowerarm_', 'hand_']) { const b = bn[n + k], q = b && this.rest.get(b); if (q) b.quaternion.copy(q); }
+    m.body.updateMatrixWorld(true);
+    for (const s of [-1, 1]) arm(this.fig.bones, m.body, m.wheel, m, s, false);
+  }
   /** ganz weg (Mitspieler hat den Raum verlassen) */
   frei() { this.weg(); this.dead = true; }
 }
@@ -102,27 +113,34 @@ function pose(f: Fahrer, body: THREE.Object3D, seat: THREE.Vector3, wheel: THREE
     const fz = m.fuesse ? m.fuesse[s < 0 ? 0 : 1] : null;
     ik2(bn['thigh_' + k], bn['calf_' + k], bn['foot_' + k], fz ? L(fz.x, fz.y, fz.z) : L(seat.x + s * 0.13, 0.5, -0.92), D(s * 0.15, 1, -0.6));
   }
-  // 5. Hände an den Lenkradkranz (links und rechts, leicht oben), Ellbogen nach unten außen
-  for (const s of [-1, 1]) {
-    const k = s < 0 ? 'l' : 'r';
-    const hz = m.haende ? m.haende[s < 0 ? 0 : 1] : null;
-    if (!hz) { ik2(bn['upperarm_' + k], bn['lowerarm_' + k], bn['hand_' + k], L(wheel.x + s * 0.155, wheel.y + 0.04, wheel.z + 0.03), D(s * 0.8, -1, 0.4)); continue; }
-    // Cockpit: Handgelenk an den Griff, Ellbogen nach hinten außen unten; Hand nach vorn richten, um die Längsachse eindrehen, Finger um den Griff krümmen
-    const hand = bn['hand_' + k], mid = bn['middle_01_' + k];
-    ik2(bn['upperarm_' + k], bn['lowerarm_' + k], hand, L(hz.x, hz.y, hz.z), D(s * 0.9, -0.5, 0.6));
-    if (mid) {
-      aim(hand, wp(mid), wp(hand).add(D(-s * 0.35, 0.25, -0.9)));
-      const vor = wp(mid).sub(wp(hand)).normalize(); drehW(hand, vor, s * (m.handDreh ?? 0));
-      const idx = bn['index_01_' + k], pky = bn['pinky_01_' + k];
-      if (idx && pky) {
-        const achse = wp(pky).sub(wp(idx)).normalize(), w = (m.faust ?? 0.9) * s;
-        for (const fi of ['index', 'middle', 'ring', 'pinky']) for (const n of ['_01_', '_02_', '_03_']) { const b = bn[fi + n + k]; if (b) drehW(b, achse, w * (n === '_01_' ? 0.8 : 1)); }
-      }
-    }
-  }
+  // 5. Hände an den Lenkradkranz (links und rechts, leicht oben) oder an die Griffe im Cockpit
+  for (const s of [-1, 1]) arm(bn, body, wheel, m, s, true);
   return true;
 }
 
+// Ein Arm: Zwei-Knochen-IK zum Ziel, im Cockpit dazu die Hand ausrichten und (finger) die Finger um den Griff krümmen
+function arm(bn: Record<string, THREE.Bone>, body: THREE.Object3D, wheel: THREE.Vector3, m: Sitz, s: number, finger: boolean) {
+  const L = (x: number, y: number, z: number) => body.localToWorld(new THREE.Vector3(x, y, z)), D = (x: number, y: number, z: number) => L(x, y, z).sub(L(0, 0, 0)).normalize();
+  const k = s < 0 ? 'l' : 'r', i = s < 0 ? 0 : 1, hz = m.haende ? m.haende[i] : null;
+  if (!hz) { ik2(bn['upperarm_' + k], bn['lowerarm_' + k], bn['hand_' + k], L(wheel.x + s * 0.155, wheel.y + 0.04, wheel.z + 0.03), D(s * 0.8, -1, 0.4)); return; }
+  // Cockpit: Handgelenk an den Griff, Ellbogen nach hinten außen unten; Hand nach vorn richten, um die Längsachse eindrehen
+  const hand = bn['hand_' + k], mid = bn['middle_01_' + k];
+  ik2(bn['upperarm_' + k], bn['lowerarm_' + k], hand, L(hz.x, hz.y, hz.z), D(s * 0.9, -0.5, 0.6));
+  if (!mid) return;
+  aim(hand, wp(mid), wp(hand).add(D(-s * 0.35, 0.25, -0.9)));
+  const vor = wp(mid).sub(wp(hand)).normalize(); drehW(hand, vor, s * (m.handDreh ?? 0));
+  if (m.handQ) {      // Griff geneigt: Hand kippt mit (Drehung aus dem Rahmen von body in die Welt)
+    const bq = body.getWorldQuaternion(Q()), qw = bq.clone().multiply(m.handQ[i]).multiply(bq.clone().invert());
+    const bw = hand.getWorldQuaternion(Q()), pw = hand.parent ? hand.parent.getWorldQuaternion(Q()) : Q();
+    hand.quaternion.copy(pw.invert().multiply(qw.multiply(bw))); hand.updateMatrixWorld(true);
+  }
+  if (!finger) return;
+  const idx = bn['index_01_' + k], pky = bn['pinky_01_' + k];
+  if (idx && pky) {
+    const achse = wp(pky).sub(wp(idx)).normalize(), w = (m.faust ?? 0.9) * s;
+    for (const fi of ['index', 'middle', 'ring', 'pinky']) for (const n of ['_01_', '_02_', '_03_']) { const b = bn[fi + n + k]; if (b) drehW(b, achse, w * (n === '_01_' ? 0.8 : 1)); }
+  }
+}
 // Knochen um eine Achse der Welt drehen
 function drehW(bone: THREE.Object3D, achse: THREE.Vector3, winkel: number) {
   if (!winkel) return;
@@ -133,6 +151,7 @@ function drehW(bone: THREE.Object3D, achse: THREE.Vector3, winkel: number) {
 const PILOT = new Fahrer(() => figTracht());
 export function pilotUpdate(m: Sitz, dt: number) { PILOT.update(m, dt); }
 export function pilotWeg() { PILOT.weg(); }
+export function pilotArme(m: Sitz) { PILOT.arme(m); }
 export function pilotNeu() { PILOT.posed = false; }      // Haltung neu rechnen (Stellwerte geändert)
 /** im Buggy jedes Bild (surface.ts updateRover) */
 export function updateFahrer(m: Sitz, dt: number) { ICH.update(m, dt); }      // updateRover läuft nur, solange der Pilot fährt

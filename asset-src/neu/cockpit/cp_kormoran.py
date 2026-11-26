@@ -115,8 +115,8 @@ def station(x0, links):
     """Pilotenplatz (x0: Sitzmitte in Bau-Koordinaten). links: Spielerplatz (linker Sitz) oder rechter Sitz."""
     with Platz((x0, AUGE.y, AUGE.z)):
         sitz((0, -0.02, -0.8), sockel=-BODEN - 0.82)
-        gr = armkonsole(1, -0.42, 0.56, 0.26, 0.56, -0.5, BODEN, 'Energie' if links else 'Funk2')
-        gl = armkonsole(-1, -0.42, 0.56, 0.26, 0.56, -0.5, BODEN, 'Funk2' if links else 'Energie')
+        gr = armkonsole(1, -0.42, 0.56, 0.26, 0.56, -0.5, BODEN, 'Energie' if links else 'Funk2', beweglich=links)
+        gl = armkonsole(-1, -0.42, 0.56, 0.26, 0.56, -0.5, BODEN, 'Funk2' if links else 'Energie', beweglich=links)
         pultmodul(BODEN, sockel=False, fluegel=(links, not links), aussen=('Antrieb' if links else None, None if links else 'Fracht'))
         pedale((0, 0.86, BODEN + 0.03), 0.15)
         prisma('Formteil', [(-0.5, 0.0), (0.5, 0.0), (0.5, 0.5), (-0.5, 0.5)], 0.06, (0, 1.0, BODEN), fase=0.01, achse='Y')      # Stirnwand im Fußraum

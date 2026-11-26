@@ -13,6 +13,7 @@ import { renderer } from '../core/engine';
 const N = 2048;
 export const U2 = {
   schM: { value: new THREE.Matrix4() }, schT: { value: null as THREE.Texture | null }, schAn: { value: 0 },
+  knP: { value: [new THREE.Vector3(), new THREE.Vector3()] }, knQ: { value: [new THREE.Vector4(0, 0, 0, 1), new THREE.Vector4(0, 0, 0, 1)] },      // Steuerknüppel links, rechts: Drehpunkt und Drehung
   kalt: { value: new THREE.Vector3(0.42, 0.72, 1.0) }, warm: { value: new THREE.Vector3(1.0, 0.52, 0.16) }, kaltK: { value: 1 }, warmK: { value: 1 },
 };
 let rt: THREE.WebGLRenderTarget | null = null, proxy: THREE.Object3D | null = null, radius = 3;
@@ -63,9 +64,14 @@ export interface Gemeinsam { fill: { value: number }; ldir: { value: THREE.Vecto
 export function shaderHaken2(m: THREE.MeshStandardMaterial, muster: number, abrieb: number, U: Gemeinsam) {
   m.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, { cpFill: U.fill, cpL: U.ldir, cpInv: U.inv, cpWearK: U.abrieb, cpAoK: U.ao, cpWear: { value: abrieb }, cpMuster: { value: muster },
-      cpSchM: U2.schM, cpSchT: U2.schT, cpSchAn: U2.schAn, cpKalt: U2.kalt, cpWarm: U2.warm, cpKaltK: U2.kaltK, cpWarmK: U2.warmK });
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 color;\nuniform mat4 cpInv;\nvarying vec4 vCp;\nvarying vec3 vCpPos;\nvarying vec3 vCpN;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCp = color; { mat4 cpM = cpInv * modelMatrix; vCpPos = (cpM * vec4(transformed, 1.0)).xyz; vCpN = normalize(mat3(cpM) * objectNormal); }');
+      cpSchM: U2.schM, cpSchT: U2.schT, cpSchAn: U2.schAn, cpKalt: U2.kalt, cpWarm: U2.warm, cpKaltK: U2.kaltK, cpWarmK: U2.warmK, cpKnP: U2.knP, cpKnQ: U2.knQ });
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 color;\nuniform mat4 cpInv;\nuniform vec3 cpKnP[2];\nuniform vec4 cpKnQ[2];\nvarying vec4 vCp;\nvarying vec3 vCpPos;\nvarying vec3 vCpN;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+vCp = color; { mat4 cpM = cpInv * modelMatrix; vec3 pl = (cpM * vec4(transformed, 1.0)).xyz; vec3 nl = normalize(mat3(cpM) * objectNormal);
+  // Steuerknüppel: Flächen mit G um 0,3/0,4 (links) oder 0,6/0,7 (rechts) drehen sich um ihren Fußpunkt (cp_export.py)
+  float kg = color.g; int ki = (kg > 0.25 && kg < 0.45) ? 0 : ((kg > 0.55 && kg < 0.75) ? 1 : -1);
+  if (ki >= 0) { vec4 q = cpKnQ[ki]; vec3 d = pl - cpKnP[ki]; d += 2.0 * cross(q.xyz, cross(q.xyz, d) + q.w * d); pl = cpKnP[ki] + d; nl += 2.0 * cross(q.xyz, cross(q.xyz, nl) + q.w * nl); transformed = (inverse(cpM) * vec4(pl, 1.0)).xyz; }
+  vCpPos = pl; vCpN = nl; }`);
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
 varying vec4 vCp; varying vec3 vCpPos; varying vec3 vCpN;
 uniform float cpFill, cpWear, cpWearK, cpAoK, cpMuster, cpSchAn, cpKaltK, cpWarmK; uniform vec3 cpL, cpKalt, cpWarm; uniform mat4 cpSchM; uniform sampler2D cpSchT;
@@ -86,7 +92,8 @@ float cpSchatten(vec3 p, vec3 n) {
 float cpAO, cpEdge, cpWk, cpRau, cpLoch;`)
       .replace('#include <color_fragment>', `#include <color_fragment>
   { float n1 = cpN(vCpPos * 160.0), n2 = cpN(vCpPos * 18.0), n3 = cpN(vCpPos * 520.0);
-    cpAO = mix(1.0, clamp(vCp.r * 1.35, 0.0, 1.0), cpAoK); cpEdge = vCp.g; cpRau = 0.0; cpLoch = 0.0;
+    cpAO = mix(1.0, clamp(vCp.r * 1.35, 0.0, 1.0), cpAoK); cpRau = 0.0; cpLoch = 0.0;
+    cpEdge = (vCp.g > 0.9 || abs(vCp.g - 0.4) < 0.04 || abs(vCp.g - 0.7) < 0.04) ? 1.0 : 0.0;      // 0,3 bis 0,7 kennzeichnet die Steuerknüppel
     vec2 uv = cpTri(vCpPos, vCpN);
     if (cpMuster > 0.5 && cpMuster < 1.5) {        // Wabenstoff
       float h = cpHex(uv * 62.0), rand = smoothstep(0.38, 0.5, h);
@@ -117,7 +124,35 @@ float cpAO, cpEdge, cpWk, cpRau, cpLoch;`)
     reflectedLight.indirectDiffuse *= a; reflectedLight.indirectSpecular *= a * a;
     reflectedLight.directDiffuse *= lit; reflectedLight.directSpecular *= lit; }`);
   };
-  m.customProgramCacheKey = () => 'cockpitS2c';
+  m.customProgramCacheKey = () => 'cockpitS2d';
+}
+// Pilot in der Kabine: eigene Fassung der Figurmaterialien. Die Sonne erreicht die Figur nur, wo die Schattenkarte es erlaubt, das Umgebungslicht
+// ist gedämpft (die Kabine ist dunkel), dazu etwas vom kalten Licht der Anzeigen. Sonst leuchteten die Hände hell aus dem dunklen Cockpit.
+const PILOT_MAT = new WeakMap<THREE.Material, THREE.Material>();
+export function pilotMaterial(m: THREE.Material, inv: { value: THREE.Matrix4 }): THREE.Material {
+  if (m.userData?.cpPilot) return m;
+  const da = PILOT_MAT.get(m); if (da) return da;
+  const k = m.clone(), alt = m.onBeforeCompile, altKey = m.customProgramCacheKey; k.userData = { ...m.userData, cpPilot: true };
+  k.onBeforeCompile = (sh, r) => {
+    alt.call(k, sh, r);
+    Object.assign(sh.uniforms, { cpInv: inv, cpSchM: U2.schM, cpSchT: U2.schT, cpSchAn: U2.schAn, cpKalt: U2.kalt, cpKaltK: U2.kaltK });
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform mat4 cpInv;\nvarying vec3 vCpPos;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvCpPos = (cpInv * modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+varying vec3 vCpPos; uniform float cpSchAn, cpKaltK; uniform vec3 cpKalt; uniform mat4 cpSchM; uniform sampler2D cpSchT;
+float cpSchattenP(vec3 p) {
+  if (cpSchAn < 0.5) return 1.0;
+  vec4 sc = cpSchM * vec4(p, 1.0); vec3 q = sc.xyz * 0.5 + 0.5;
+  if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0 || q.z > 1.0) return 1.0;
+  float s = 0.0;
+  for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) s += step(q.z - 0.004, texture2D(cpSchT, q.xy + vec2(float(i), float(j)) * (1.6 / ${N}.0)).r);
+  return s / 9.0;
+}`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * cpKalt * (0.22 * cpKaltK);')
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n  { float lit = cpSchattenP(vCpPos); reflectedLight.directDiffuse *= lit; reflectedLight.directSpecular *= lit; reflectedLight.indirectDiffuse *= 0.28; reflectedLight.indirectSpecular *= 0.28; }');
+  };
+  k.customProgramCacheKey = () => altKey.call(m) + '|cpPilot1';
+  PILOT_MAT.set(m, k); return k;
 }
 /** für Prüfungen: Schattenkarte, ihre Szene und Kamera */
 export const SCHATTEN_PRUEF = { get rt() { return rt; }, szene, cam, get proxy() { return proxy; } };

@@ -122,8 +122,8 @@ def pult():
 def platz_pilot():
     with Platz(AUGE):
         sitz((0, -0.02, -0.8), sockel=0.2)
-        gr = armkonsole(1, -0.42, 0.56, 0.26, 0.6, -0.5, BODEN, 'Energie')
-        gl = armkonsole(-1, -0.42, 0.56, 0.26, 0.6, -0.5, BODEN, 'Funk2')
+        gr = armkonsole(1, -0.42, 0.56, 0.26, 0.6, -0.5, BODEN, 'Energie', beweglich=True)
+        gl = armkonsole(-1, -0.42, 0.56, 0.26, 0.6, -0.5, BODEN, 'Funk2', beweglich=True)
         # Bordwand außen neben den Konsolen: Ablage mit Geräten
         for s in (-1, 1):
             quader('Formteil', (0.36, 1.2, 0.5), (s * 0.82, 0.15, BODEN + 0.25), 0.02)

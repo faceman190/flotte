@@ -48,7 +48,7 @@ def anzeige(art, b, h, ort=(0, 0, 0), rx=-25.0, rz=0.0, tief=0.07, haube=0.03, t
                 for sz in (-1, 1): schraube((sx * (gb / 2 - 0.008), -0.006, sz * (h / 2 + r - 0.008) ))
         if fuss > 0: keil('Formteil', (gb * 0.5, 0.05), (gb * 0.7, 0.07), fuss, (0, tief + fuss / 2, dz - gh * 0.2), fase=0.006)
 
-def knueppel(ort=(0, 0, 0), s=1, neig=8.0):
+def knueppel(ort=(0, 0, 0), s=1, neig=8.0, marke=0):
     """Steuerknüppel (Griff mit Kopf, Abzug, Daumenschalter, Faltenbalg, Sockel). ort = Mitte des Sockels auf der Konsole. s: +1 rechte Hand, −1 linke.
     Liefert den Griffpunkt (Mitte der Hand) in Koordinaten des umgebenden Rahmens."""
     with Platz(ort):
@@ -56,7 +56,7 @@ def knueppel(ort=(0, 0, 0), s=1, neig=8.0):
         zyl('Metall', 0.05, 0.006, (0, 0, 0.014), 'Z', 24, 0.002)
         for k in range(4): zyl('Gummi', 0.044 - k * 0.006, 0.011, (0, 0, 0.022 + k * 0.01), 'Z', 20, 0.003)      # Faltenbalg
         for a in range(6): zyl('Metall', 0.0035, 0.003, (0.054 * math.cos(a * PI / 3), 0.054 * math.sin(a * PI / 3), 0.0135), 'Z', 6)
-        with Platz((0, 0, 0.055), -neig, -s * 4.0, 0):
+        with Platz((0, 0, 0.055), -neig, -s * 4.0, 0), Marke(marke):      # ab hier beweglich (Drehpunkt knapp über dem Faltenbalg)
             zyl('Metall', 0.011, 0.05, (0, 0, 0.02), 'Z', 12)
             # Griff: unten Handauflage, Mitte gerippt, oben Kopf
             prisma('Gummi', [(-0.024, 0.04), (0.026, 0.04), (0.03, 0.058), (-0.03, 0.058)], 0.062, (0, 0.004, 0), fase=0.006, achse='Y')      # Handballenauflage
@@ -179,7 +179,7 @@ def griffleiste(p0, p1, r=0.014, n=(0, -1, 0)):
     rohr('Metall', [p0, p0 + n * 0.045, p1 + n * 0.045, p1], r * 0.8, 10, rund=0.03)
     rohr('Gummi', [p0 + n * 0.045 + d * 0.05, p1 + n * 0.045 - d * 0.05], r, 12)
 
-def armkonsole(s=1, y0=-0.42, y1=0.6, innen=0.25, aussen=0.56, oben=-0.5, boden=-1.08, schirm='Antrieb', hebel=False, ks=0.34):
+def armkonsole(s=1, y0=-0.42, y1=0.6, innen=0.25, aussen=0.56, oben=-0.5, boden=-1.08, schirm='Antrieb', hebel=False, ks=0.34, beweglich=False):
     """Seitenkonsole neben dem Sitz (s: +1 rechts, −1 links): Formteil-Körper mit Armauflage, Steuerknüppel (bei y = ks), Tastenblöcken, kleiner Anzeige und Lichtkante.
     Liefert den Griffpunkt des Knüppels (Koordinaten des umgebenden Rahmens)."""
     laenge = y1 - y0; xi, xa = s * innen, s * aussen; xm = (xi + xa) / 2; b = aussen - innen; xk = xm - s * 0.03
@@ -195,7 +195,7 @@ def armkonsole(s=1, y0=-0.42, y1=0.6, innen=0.25, aussen=0.56, oben=-0.5, boden=
     quader('Metall', (0.125, 0.04, 0.012), (xk, y0 + 0.045, oben + 0.012), 0.004)
     # Knüppel oder Schubhebel
     if hebel: schubhebel((xk, ks, oben + 0.008), s); g = welt((xk, ks + 0.01, oben + 0.1))
-    else: g = knueppel((xk, ks, oben + 0.008), s)
+    else: g = knueppel((xk, ks, oben + 0.008), s, marke=(1 if s < 0 else 2) if beweglich else 0)
     # Tastenblock außen neben dem Knüppel, liegend
     with Platz((xk + s * 0.115, ks - 0.01, oben + 0.008), 90, 0, 0): tastenfeld(2, 4, 0.05, 0.11, (0, 0, 0), licht=0.4)
     # vorn: flaches Pult mit kleiner Anzeige, zum Piloten geneigt
