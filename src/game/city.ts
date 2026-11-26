@@ -408,7 +408,7 @@ function updateNeon(dt: number, st: Station, visible: boolean, near: boolean) {
     }
   }
 }
-const NPC_CLS = (): ShipId[] => (['milan', 'dohle', 'elster', 'wuerger', 'kormoran', 'kranich', 'moewe', 'pfeil'] as string[]).filter(c => (SHIPS as any)[c]) as ShipId[];
+const NPC_CLS = (): ShipId[] => (['milan', 'dohle', 'elster', 'wuerger', 'kormoran', 'kranich', 'moewe', 'harpyie', 'pfeil'] as string[]).filter(c => (SHIPS as any)[c]) as ShipId[];
 function updateFlyers(dt: number, st: Station, visible: boolean) {
   const m = meta(CITY.name), tr = m.traffic || { far: [0, 140, 1400], in: [0, 14, 60] };
   if (visible && (flyT -= dt) <= 0 && flyers.length < 2) {
