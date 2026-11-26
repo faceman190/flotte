@@ -26,6 +26,8 @@ import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
 import { FIGHT, updateFieldFight, fieldDown, fieldViewModel, hideFieldViewModel, drawFieldHUD } from './fieldfight';
 import { storyMarkers } from './story';
 import { landShip } from './surface';
+import { schiffSperrt, koerperSperrt } from './koerper';
+import { SHIP } from './player';
 import { fahrerZeigen } from './fahrer';
 import type { Station } from './world';
 
@@ -129,7 +131,10 @@ function blocked(x: number, z: number, ox: number, oz: number) {
   const hit = (cx: number, cz: number, r: number) => { const d = Math.hypot(x - cx, z - cz); return d < r && d < Math.hypot(ox - cx, oz - cz); };
   for (const a of world.asteroids) if (hit(a.x, a.z, a.r * 0.85 + 0.45)) return 'fest';
   if (wallBetween(ox, oz, x, z, FOOT.y) || surfaceAt(x, z, FOOT.y) - FOOT.y > 1.7) return 'fest';
-  if (hit(ROVER.ship.x, ROVER.ship.z, shipR())) return 'fest';
+  // eigenes gelandetes Schiff: echte Form (unter hohen Rümpfen hindurch), ohne Modell der alte Kreis; dazu Bauten, fremde Schiffe und Fahrzeuge (koerper.ts)
+  const ss = schiffSperrt(P.cls, ROVER.ship, ox, oz, x, z, FOOT.y, !!SHIP.g.userData.zDoors);
+  if (ss === null ? hit(ROVER.ship.x, ROVER.ship.z, shipR()) : ss) return 'fest';
+  if (koerperSperrt(ox, oz, x, z, FOOT.y)) return 'fest';
   if (ROVER.model && hit(ROVER.x, ROVER.z, 2.3)) return 'fest';
   if (treeNear(x, z, 0.6) && !treeNear(ox, oz, 0.6)) return 'fest';
   if (salvageBlock(x, z, 0.4) && !salvageBlock(ox, oz, 0.4)) return 'fest';

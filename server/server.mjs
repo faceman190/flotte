@@ -142,7 +142,7 @@ wss.on('connection', ws => {
       c.st = { p: (m.p || []).slice(0, 3).map(n), q: (m.q || []).slice(0, 4).map(n), s: n(m.s), cls: clean(m.cls, 12), paint: clean(m.paint, 10), m: clean(m.m, 8), w: Array.isArray(m.w) && (m.w.length === 4 || m.w.length === 5) ? [clean(m.w[0], 40), n(m.w[1]), n(m.w[2]), n(m.w[3]), ...(m.w.length === 5 ? [n(m.w[4])] : [])] : null, d: clean(m.d, 40),
         g: Array.isArray(m.g) ? m.g.slice(0, 10).map(v => clean(v, 32)) : null,
         v: Array.isArray(m.v) && m.v.length === 10 ? [clean(m.v[0], 8), ...m.v.slice(1).map(n)] : null,
-        ls: Array.isArray(m.ls) && (m.ls.length === 4 || m.ls.length === 5) ? m.ls.map(n) : null,      // fünfter Wert: Bodenhöhe beim Absender (seit 2026-11-25)
+        ls: Array.isArray(m.ls) && m.ls.length >= 4 && m.ls.length <= 7 ? m.ls.map(n) : null,      // 5.: Bodenhöhe beim Absender, 6./7.: Neigung pitch/roll (seit 2026-11-26)
         z: typeof m.z === 'number' && isFinite(m.z) ? Math.max(0, Math.min(255, Math.floor(m.z))) : null };   // z: bewegliche Teile (Bits: 1 Fahrwerk, 2 Rampe, 4 Kanzel, 8 Leiter; seit 2026-11-25)   // ls: gelandetes Schiff [x, y, z, Kurs] (seit 2026-11-25)   // v: Bodenfahrzeug [Art, Tempo, Lenkung, x, y, z, qx, qy, qz, qw] (seit 2026-11-24)   // g: Aussehen zu Fuß [Helm, Anzug, Rucksack, Waffe, Haltung/Ereignisse, Kopf und Farbe, Figur, Weste, Handschuhe, Stiefel]
       // wer beim Handeln die Station verlässt, bricht den Handel ab
       if (c.trade && c.st.d !== c.trade.station) endTrade(c.trade, `${c.name} hat die Station verlassen.`);
@@ -174,6 +174,12 @@ wss.on('connection', ws => {
       const list = (a, n, len) => (Array.isArray(a) ? a.slice(0, n).map(v => clean(v, len)).filter(Boolean) : []);
       const ws2 = wsOf(o);
       if (ws2) send(ws2, { t: 'qi', from: c.id, name: c.name, deko: { nr: Math.floor(+d.nr) || 0, schiffe: list(d.schiffe, 4, 16), funde: list(d.funde, 5, 20), legenden: list(d.legenden, 8, 32) } });
+    } else if (m.t === 'err') {
+      // Fehler im Browser eines Spielers (seit 2026-11-26): ins Log, höchstens 10 je Verbindung und Minute
+      const now = Date.now(); c.errs = (c.errs || []).filter(t => now - t < 60000);
+      if (c.errs.length >= 10) return;
+      c.errs.push(now);
+      console.log(`! Fehler bei ${c.name || '?'} (#${c.id}) [${clean(m.ver, 40)} · ${clean(m.ort, 60)}]: ${clean(m.msg, 300)}${m.wo ? ' @ ' + clean(m.wo, 160) : ''}${m.n > 1 ? ` (${Math.min(999, +m.n || 0)}×)` : ''}`);
     } else if (m.t === 'chat') {
       const now = Date.now(), text = clean(m.text, 200);
       if (!text || now - c.chatT < 700) return;   // einfache Bremse gegen Spam

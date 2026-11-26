@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { KEEP } from './keep';
 import { ausgabe, wahl, anBordStellen, inHalleStellen, anBord, passtIn, parken, parkNahe, geparkt, ortVon, stellplaetze } from './fahrzeuge';
-import { platzVon, aufsetzen, hatLaderaum, schiffBoden, imSchiff, gasse, stellplatz, kameraImRaum } from './laderaum';
+import { platzVon, aufsetzen, hatLaderaum, schiffBoden, imSchiff, gasse, stellplatz, kameraImRaum, rampenSpitze } from './laderaum';
+import { type Lage, zuWelt } from './lage';
 import { fahrwerkTiefe } from '../models/gltfShips';
 import { FZ_MASS } from './fahrzeuge';
 import { scene, camera, view, ux, glowMat } from '../core/engine';
@@ -36,6 +37,7 @@ import { radio } from '../ui/radio';
 import { groundShade, GROUND_SHADE_PARS } from './groundShade';
 import { GELAENDE, TERRAIN_LOOK, makeHeightFn, noiseSet, smoothField, erode, buildMaps, bakeLight, type TerrainMaps, type ErodeOut } from './terrain';
 import { buildGrass } from './grass';
+import { bauKoerper, kippLage } from './koerper';
 
 // =====================================================================================
 // Planetenoberflächen: Gelände, Atmosphäre, Lagerstätten, Bodenstation und Bergbau-Rover.
@@ -309,7 +311,7 @@ export function buildSurface(sector: string) {
     for (const [i, [x, z]] of rigs.entries()) {
       const o = buildDeco('Bohrturm'); if (!o) return;
       o.position.set(x, heightAt(x, z) - 0.35, z); o.rotation.y = i * 1.3; o.traverse((q: any) => { if (q.isMesh) q.castShadow = true; });
-      scene.add(o); world.extras.push(o);
+      scene.add(o); world.extras.push(o); bauKoerper('bt:' + i, o);      // Bohrturm fest zu Fuß (koerper.ts)
     }
   });
   world.ground = groundAt;
@@ -622,8 +624,8 @@ export function landInfo() {
   // nicht zu steil
   const s = 10, dx = heightAt(P.x + s, P.z) - heightAt(P.x - s, P.z), dz = heightAt(P.x, P.z + s) - heightAt(P.x, P.z - s);
   if (Math.hypot(dx, dz) / (2 * s) > 0.6) return { ok: false, text: 'Gelände zu steil: flachere Stelle suchen' };
-  const au = aufsetzen(P.x, P.z, P.yaw, landeHoehe(), heightAt);      // Kormoran, Wisent: Rampe muss aufsetzen
-  if (au && !au.ok) return { ok: false, text: 'Gelände zu uneben, die Rampe setzt nicht auf: flachere Stelle suchen oder das Schiff drehen' };
+  const lp = landePose(P.x, P.z, P.yaw);      // Füße aufs Gelände, Rampe muss aufsetzen (Kormoran, Wisent, Dohle)
+  if (!lp.ok) return { ok: false, text: lp.text };
   return { ok: true, text: '[E] Landen und Rover aussetzen' };
 }
 
@@ -695,7 +697,7 @@ type RoverModel = ReturnType<typeof buildRoverAlt> | RoverNeu;
 // shift verbleibende Schaltpause (s), view Kamera (0 Verfolger, 1 Motorhaube bzw. Fahrersitz)
 export const ROVER = {
   active: false, x: 0, y: 0, z: 0, yaw: 0, speed: 0, model: null as RoverModel | null, kind: 'dachs' as FzId,
-  ship: { x: 0, y: 0, z: 0, yaw: 0 }, target: null as Asteroid | null, acc: 0, drilling: false, prompt: '',
+  ship: { x: 0, y: 0, z: 0, yaw: 0 } as Lage, target: null as Asteroid | null, acc: 0, drilling: false, prompt: '',
   cap: 40, warn: 0, leih: false, ohne: false,      // leih: Leihrover der Basis; ohne: kein Fahrzeug (zu Fuß, game/fahrzeuge.ts)
   vx: 0, vy: 0, vz: 0, yr: 0, steer: 0, pitch: 0, roll: 0, air: false, susp: [0, 0, 0, 0, 0, 0], slip: 0,
   thr: 0, st: 0, hb: false, rpm: 900, gear: 1, shift: 0, view: 0,
@@ -705,11 +707,30 @@ function roverStill() { const R = ROVER; R.thr = R.st = 0; R.hb = false; R.rpm =
 export const roverLoad = () => ITEM_IDS.reduce((a, k) => a + (P.rover?.[k] || 0), 0);
 
 // quiet: beim Laden eines Spielstands (main.ts, resumeAt) – ohne Prüfung der Fluglage, ohne Staub, Ton und Funk
+// Landen aufs Gelände (seit 2026-11-26): Das Schiff kippt mit dem Boden unter seinen Landefüßen (höchstens 10°, Restspalt unter einem Fuß bis 1,5 m; koerper.ts kippLage), statt immer
+// waagerecht zu stehen. Mit Laderaum muss die Rampenspitze aufsetzen: höchstens 1,2 m darüber; das Schiff sinkt dafür bis 0,3 m ein (Federweg).
+// Ohne Modell wie früher (waagerecht, aufsetzen).
+export function landePose(x: number, z: number, yaw: number): { lage: Lage; ok: boolean; text: string } {
+  const k = kippLage(P.cls, x, z, yaw, heightAt);
+  if (!k) {
+    const au = aufsetzen(x, z, yaw, landeHoehe(), heightAt);
+    return { lage: { x, y: au?.y ?? heightAt(x, z) + landeHoehe(), z, yaw }, ok: !au || au.ok, text: 'Gelände zu uneben, die Rampe setzt nicht auf: flachere Stelle suchen oder das Schiff drehen' };
+  }
+  const lage: Lage = { x, y: k.y, z, yaw, pitch: k.pitch, roll: k.roll };
+  if (k.luft > 1.5) return { lage, ok: false, text: 'Gelände zu uneben oder zu steil, das Fahrwerk steht nicht sicher: flachere Stelle suchen oder das Schiff drehen' };
+  const rs = rampenSpitze();
+  if (rs) {
+    const p = zuWelt(rs.x, rs.y, rs.z, lage); let spalt = p.y - heightAt(p.x, p.z);
+    if (spalt > 0.3) { const sink = Math.min(0.3, spalt - 0.3); lage.y -= sink; spalt -= sink; }
+    if (spalt > 1.2) return { lage, ok: false, text: 'Gelände zu uneben, die Rampe setzt nicht auf: flachere Stelle suchen oder das Schiff drehen' };
+  }
+  return { lage, ok: true, text: '' };
+}
 export function landShip(quiet = false, basis = false) {
   const li = quiet ? null : landInfo();
   if (!quiet && (!li || !li.ok)) { if (li) radio('SYSTEM', li.text + '.'); return false; }
   const r = stats().radius;
-  ROVER.ship = { x: P.x, y: aufsetzen(P.x, P.z, P.yaw, landeHoehe(), heightAt)?.y ?? heightAt(P.x, P.z) + landeHoehe(), z: P.z, yaw: P.yaw };
+  ROVER.ship = landePose(P.x, P.z, P.yaw).lage;      // mit Neigung aufs Gelände
   P.vx = P.vy = P.vz = 0; P.pitch = 0;
   if (!P.rover) P.rover = {};
   // Fahrzeug nur, wenn eins an Bord ist, an einer Basis sonst der Leihrover; sonst zu Fuß (game/fahrzeuge.ts)
@@ -755,8 +776,10 @@ export function landShip(quiet = false, basis = false) {
 export function relandShip(ship: { x: number; y: number; z: number; yaw: number }, rover: { x: number; z: number; yaw: number }) {
   P.x = ship.x; P.y = ship.y; P.z = ship.z; P.yaw = ship.yaw;
   landShip(true);
-  if (ROVER.ohne) { ROVER.ship = { ...ship }; return; }
-  ROVER.ship = { ...ship };
+  // neu aufs Gelände gesetzt (Neigung; ältere Spielstände hatten eine Höhe von vor dem Umbau des Fahrwerks); an einer Basis wie gespeichert
+  const auf = anBasis(ship.x, ship.z) ? { ...ship } : { ...ROVER.ship };
+  if (ROVER.ohne) { ROVER.ship = auf; return; }
+  ROVER.ship = auf;
   if (isFinite(rover.x) && isFinite(rover.z) && Math.abs(rover.x) < SURF.limit && Math.abs(rover.z) < SURF.limit && !liquidAt(rover.x, rover.z)) {
     ROVER.x = rover.x; ROVER.z = rover.z; ROVER.yaw = rover.yaw || 0; ROVER.y = heightAt(ROVER.x, ROVER.z);
   }
@@ -1042,7 +1065,7 @@ export const nearShip = () => ROVER.active && (ROVER.leih || !ROVER.model || !ha
 // Gelandetes Schiff an seinem Platz halten
 export function syncLandedShip() {
   SHIP.g.position.set(ROVER.ship.x, ROVER.ship.y, ROVER.ship.z);
-  SHIP.g.rotation.set(0, ROVER.ship.yaw, 0);
+  SHIP.g.rotation.order = 'YXZ'; SHIP.g.rotation.set(ROVER.ship.pitch || 0, ROVER.ship.yaw, ROVER.ship.roll || 0);      // mit Neigung (seit 2026-11-26)
   SHIP.g.visible = true;
   for (const g2 of SHIP.glows) g2.visible = false;      // Triebwerke aus, solange das Schiff steht (wie im Hangar; ihr Schein blendete am Boden)
 }

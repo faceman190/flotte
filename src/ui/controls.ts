@@ -98,6 +98,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (look.free) r.push(['V', 'Freie Kamera beenden', true]);
     if (SF.phase === 'off' && !dock && !foes && (fresh() || G.cruise || (far && !inField))) r.push(['Umschalt', G.cruise ? 'Reiseflug aus' : 'Reiseflug (schneller)']);
     if (fresh()) r.push(['B', 'Flottenband'], ['M', 'Karte']);
+    if (!world.surface) r.push(['Alt', 'halten: alle Namen']);      // Beschriftungen im All (hud.ts, seit 2026-11-26)
     return { title: 'Flug', rows: r.slice(0, 8) };
   }
   return null;

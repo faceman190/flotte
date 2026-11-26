@@ -1156,7 +1156,9 @@ export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: num
   const b = measure(m);
   m.g.getWorldPosition(_sv);
   room.g.position.set(_sv.x, mesh ? _sv.y : _sv.y + b.min.y + (b.max.y - b.min.y) * 0.3, _sv.z);
-  room.g.rotation.set(0, m.g.rotation.y, 0);
+  room.g.rotation.order = 'YXZ';
+  if (planet) room.g.rotation.set(m.g.rotation.x, m.g.rotation.y, m.g.rotation.z);      // gelandet mit Neigung (seit 2026-11-26): der Raum kippt mit, die Kamera bleibt waagerecht
+  else room.g.rotation.set(0, m.g.rotation.y, 0);
   room.g.updateMatrixWorld(true);
   scene.add(room.g);
   roomModel = m.g; m.g.visible = !!mesh;   // Modell-Räume: das Schiffsmodell bleibt stehen, es enthält den Innenraum
@@ -1460,7 +1462,7 @@ export function updateWalk(dt: number) {
     const air = IN.jy > 0.05, fy = mesh.floorAt(IN.x, IN.z, IN.fy + IN.jy, air);
     if (fy !== null) {
       if (air) { const a = IN.fy + IN.jy; IN.fy = fy; IN.jy = Math.max(0, a - fy); }
-      else IN.fy += (fy - IN.fy) * Math.min(1, dt * 14);
+      else IN.fy += (fy - IN.fy) * Math.min(1, dt * (fy > IN.fy ? 45 : 14));      // bergauf fast sofort (Wisent-Treppe zum Wohndeck: beim Laufen blieb man sonst hängen), bergab weich
     }
   }
   rampTransit();

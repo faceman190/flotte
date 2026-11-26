@@ -20,10 +20,11 @@ addEventListener('keydown', e => {
   if (e.code === 'Space' || e.code === 'Tab' || e.code === 'F1' || e.code === 'F3') e.preventDefault();
   // Strg ist im Flug „runter“: Browser-Kürzel wie Strg+S oder Strg+D abfangen (Strg+W lässt sich nicht abfangen)
   if (e.ctrlKey && !e.altKey && document.body.classList.contains('playing') && e.code.startsWith('Key')) e.preventDefault();
+  if ((e.code === 'AltLeft' || e.code === 'AltRight') && document.body.classList.contains('playing')) e.preventDefault();      // Alt halten: alle Namen im All (hud.ts); sonst holt der Browser sein Menü
   if (e.repeat) return;
   for (const h of handlers) h(e.code);
 });
-addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('keyup', e => { keys[e.code] = false; if ((e.code === 'AltLeft' || e.code === 'AltRight') && document.body.classList.contains('playing')) e.preventDefault(); });
 gl.addEventListener('mousemove', e => {
   // freie Kamera: der Zeiger fürs Lenken bleibt stehen, die Bewegung dreht nur die Kamera
   if (look.free) { look.dx += e.movementX || 0; look.dy += e.movementY || 0; return; }

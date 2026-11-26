@@ -29,6 +29,16 @@ async function loadOnce(m: string): Promise<Loaded> {
   const b64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0)).buffer;
   const cells = new Int32Array(b64(wj.cells)), ys = new Int16Array(b64(wj.ys)), hs = wj.hs ? new Uint8Array(b64(wj.hs)) : null, floors = new Map<number, number[]>();
   for (let i = 0; i < cells.length; i++) { const l = floors.get(cells[i]) || []; l.push(ys[i] / 100, hs ? hs[i] / 10 : 2.4); floors.set(cells[i], l); }
+  // Böden ohne Kopffreiheit weglassen (seit 2026-11-26): Unter der Wisent-Treppe stand der Laderaumboden in der Karte, weil die Treppe keine
+  // Unterseite hat. Wer schnell auf die Treppe lief, nahm den näheren unteren Boden und lief durch die Stufen. Liegt der nächste Boden weniger als
+  // 1,9 m darüber, kann dort niemand stehen; sonst gilt als Kopfhöhe höchstens der Abstand zum nächsten Boden (auch in Kormoran und Hangar-Schiffen).
+  for (const [k, l] of floors) {
+    const p: number[][] = []; for (let i = 0; i < l.length; i += 2) p.push([l[i], l[i + 1]]);
+    p.sort((a, b) => a[0] - b[0]);
+    const out: number[] = [];
+    for (let i = 0; i < p.length; i++) { const gap = i + 1 < p.length ? p[i + 1][0] - p[i][0] : Infinity; if (gap < 1.9) continue; out.push(p[i][0], Math.min(p[i][1], gap)); }
+    if (out.length) floors.set(k, out); else floors.delete(k);
+  }
   return { walk: { ...wj, floors } };
 }
 export function loadMeshRoom(cls: string, preload = false): Promise<Loaded | null> {
@@ -104,7 +114,7 @@ export function buildMeshRoom(cls: string) {
         const ix = Math.floor((x / k - W.x0) / W.cell), iz = Math.floor((z / k - W.z0) / W.cell);
         if (ix < 0 || iz < 0 || ix >= W.nx || iz >= W.nz) continue;
         const id = ix * W.nz + iz, fl = W.floors.get(id) || [];
-        let hat = false; for (let i = 0; i < fl.length; i += 2) if (Math.abs(fl[i] - y / k) < 0.3) hat = true;
+        let hat = false; for (let i = 0; i < fl.length; i += 2) { const d = fl[i] - y / k; if (Math.abs(d) < 0.3 || (d > 0 && d < 1.9 / k)) hat = true; }      // schon Boden da, oder kein Platz für den Kopf (unter der Wisent-Treppe)
         if (!hat) { fl.push(y / k, head / k); W.floors.set(id, fl); }
       }
     },

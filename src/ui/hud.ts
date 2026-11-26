@@ -33,6 +33,51 @@ function proj(x: number, y: number, z: number) {
 }
 const onScreen = (p: any, m = 0) => !p.behind && p.x > m && p.x < view.W - m && p.y > m && p.y < view.H - m;
 let labelSlots: number[][] = [];
+// ---------- Beschriftungen in der Welt (seit 2026-11-26) ----------
+// Nutzer: Namen von Stationen und Toren schlecht lesbar, zu viele, teils übereinander. Jetzt: Weit entfernte Orte zeigen nur ein Symbol
+// (Raute Station, Ring Tor/Anflug, Quadrat Ort); der Name erscheint in der Nähe, nahe am Fadenkreuz, für Ziel und nächstes Tor der Route
+// immer, mit gehaltener Alt-Taste für alle. Namen stehen auf einem dunklen Schild (Name groß, Entfernung klein darunter) und werden pro
+// Bild nach Wichtigkeit gesetzt: Was keinen freien Platz findet, bleibt beim Symbol (außer always).
+interface Tag { x: number; y: number; name: string; sub: string; col: string; prio: number; d: number; always?: boolean; icon?: '' | 'dia' | 'ring' | 'sq'; bold?: boolean }
+let tags: Tag[] = [];
+const NAH = 6000;      // Meter: bis hierher steht der Name immer da
+const alleNamen = () => !!(keys.AltLeft || keys.AltRight);
+const amKreuz = (p: { x: number; y: number }) => Math.hypot(p.x - view.W / 2, p.y - view.H / 2) < Math.min(view.W, view.H) * 0.13;
+const tag = (t: Tag) => { tags.push(t); };
+const FONT_M = '"Share Tech Mono",Consolas,monospace';
+function symbol(t: Tag, k: number) {
+  const r = 5 * k; ux.strokeStyle = t.col; ux.lineWidth = 1.5; ux.globalAlpha = 0.9; ux.beginPath();
+  if (t.icon === 'dia') { ux.moveTo(t.x, t.y - r); ux.lineTo(t.x + r, t.y); ux.lineTo(t.x, t.y + r); ux.lineTo(t.x - r, t.y); ux.closePath(); }
+  else if (t.icon === 'ring') ux.arc(t.x, t.y, r, 0, TAU);
+  else ux.rect(t.x - r * 0.8, t.y - r * 0.8, r * 1.6, r * 1.6);
+  ux.stroke(); ux.globalAlpha = 1;
+}
+function drawTags() {
+  const k = clamp(settings.hud, 0.7, 1.6), fN = Math.round(13 * k), fS = Math.round(11 * k), pad = Math.round(5 * k), W = view.W;
+  tags.sort((a, b) => b.prio - a.prio || a.d - b.d);
+  for (const t of tags) if (t.icon) symbol(t, k);
+  const H = view.H, kr = 30 * k, placed: number[][] = [[W / 2 - kr, H / 2 - kr, W / 2 + kr, H / 2 + kr]];      // Mitte frei: Schilder nicht über dem Fadenkreuz
+  const frei = (r: number[]) => !placed.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1]);
+  ux.textAlign = 'left'; ux.textBaseline = 'alphabetic';
+  for (const t of tags) {
+    if (!t.name) continue;
+    ux.font = `700 ${fN}px ${FONT_M}`; const wN = ux.measureText(t.name).width;
+    ux.font = `${fS}px ${FONT_M}`; const wS = t.sub ? ux.measureText(t.sub).width : 0;
+    const w = Math.max(wN, wS) + pad * 2 + 2, h = (t.sub ? fN + fS + 4 : fN) + pad * 1.4, off = (t.icon ? 7 * k : 0) + 3;
+    const x0 = clamp(t.x - w / 2, 4, W - w - 4);
+    let r: number[] | null = null;
+    const sx = 8 * k + off, xr = clamp(t.x + sx, 4, W - w - 4), xl = clamp(t.x - sx - w, 4, W - w - 4);      // über, unter, rechts, links, dann weiter oben/unten
+    for (const [cx, y0] of [[x0, t.y - off - h], [x0, t.y + off], [xr, t.y - h / 2], [xl, t.y - h / 2], [x0, t.y - off - 2 * h - 3], [x0, t.y + off + h + 3]]) { const c = [cx, y0, cx + w, y0 + h]; if (frei(c)) { r = c; break; } }
+    if (!r) { if (!t.always) continue; r = [x0, t.y - off - h, x0 + w, t.y - off]; }
+    placed.push(r);
+    ux.fillStyle = 'rgba(5,12,20,.66)'; ux.fillRect(r[0], r[1], w, h);
+    ux.fillStyle = t.col; ux.fillRect(r[0], r[1], 2, h);      // Farbstreifen links: Art und Fraktion
+    ux.fillStyle = t.col; ux.font = `${t.bold === false ? '' : '700 '}${fN}px ${FONT_M}`; ux.fillText(t.name, r[0] + pad + 2, r[1] + pad * 0.7 + fN * 0.9);
+    if (t.sub) { ux.fillStyle = 'rgba(205,220,230,.78)'; ux.font = `${fS}px ${FONT_M}`; ux.fillText(t.sub, r[0] + pad + 2, r[1] + pad * 0.7 + fN + 3 + fS * 0.9); }
+  }
+  tags = [];
+  ux.textAlign = 'center';
+}
 function radarSize() { return Math.round(clamp(view.W * 0.11, 92, 150) * settings.hud); }
 function edgeArrow(p: any, col: string, label: string) {
   const W = view.W, H = view.H;
@@ -88,11 +133,14 @@ export function drawHUD() {
   if (!world.def || (G.mode !== 'play' && G.mode !== 'jump')) return;
   ux.textAlign = 'center';
   const hop = nextHop();
-  // Stationen
+  // Stationen: Symbol immer, Name in der Nähe, am Fadenkreuz, als Ziel oder mit Alt; Randpfeil nur für Ziel und Heimathafen
+  const nt = navTarget(), alle = alleNamen();
   for (const s of world.stations) {
-    const p = proj(s.x, s.y + s.R * 0.9, s.z), d = d3(s.x, s.y, s.z, P.x, P.y, P.z);
-    if (onScreen(p, 20)) { ux.fillStyle = '#5fd0ff'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.fillText(`${s.name.toUpperCase()} · ${fmtD(d)}`, p.x, p.y); }
-    else edgeArrow(p, '#5fd0ff', `${s.name} · ${fmtD(d)}`);
+    const p = proj(s.x, s.y + s.R * 0.9, s.z), d = d3(s.x, s.y, s.z, P.x, P.y, P.z), ziel = nt?.kind === 'st' && nt.id === s.id;
+    if (onScreen(p, 20)) {
+      const name = alle || ziel || d < NAH || amKreuz(p);
+      tag({ x: p.x, y: p.y, name: name ? s.name.toUpperCase() : '', sub: fmtD(d), col: '#5fd0ff', prio: ziel ? 95 : d < NAH ? 60 : 40, d, always: ziel, icon: 'dia' });
+    } else if (!ziel && s.id === P.home.station) edgeArrow(p, '#5fd0ff', `⌂ ${s.name} · ${fmtD(d)}`);
     const dd = d3(s.dock.x, s.dock.y, s.dock.z, P.x, P.y, P.z);
     if (dd < 900 && !G.dead) {
       const q = proj(s.dock.x, s.dock.y, s.dock.z);
@@ -103,49 +151,45 @@ export function drawHUD() {
       }
     }
   }
-  // Orte im Sektor (Übungsgelände, Werft): Name und Entfernung, solange man nicht mitten drin ist; dann die Hinweise des Orts selbst
+  // Orte im Sektor (Übungsgelände, Werft, Torwachen): wie Stationen, solange man nicht mitten drin ist; dann die Hinweise des Orts selbst
   for (const o of ORTE) {
     const d = d3(o.x, o.y, o.z, P.x, P.y, P.z);
     if (d < o.R * 0.6) continue;
-    const p = proj(o.x, o.y + Math.min(o.R * 0.3, 400), o.z);
-    if (onScreen(p, 20)) { ux.fillStyle = '#a8c8d8'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.fillText(`${o.name.toUpperCase()} · ${fmtD(d)}`, p.x, p.y - 16); }   // etwas höher: liegt oft in Richtung eines Tors (Werft → Sonnenfeld)
+    const p = proj(o.x, o.y + Math.min(o.R * 0.3, 400), o.z), ziel = nt?.kind === 'ort' && nt.id === o.id;
+    if (onScreen(p, 20)) tag({ x: p.x, y: p.y, name: alle || ziel || d < NAH || amKreuz(p) ? o.name.toUpperCase() : '', sub: fmtD(d), col: '#a8c8d8', prio: ziel ? 95 : d < NAH ? 50 : 30, d, always: ziel, icon: 'sq' });
   }
   for (const h of orteHud) h({ proj, onScreen, edgeArrow, brackets });
   ux.textAlign = 'center';
   // Anflugzone zum Planeten
   if (world.orbit) {
-    const o = world.orbit, p = proj(o.x, o.y + 100, o.z), d = d3(o.x, o.y, o.z, P.x, P.y, P.z);
-    const label = `ANFLUG → ${o.name.toUpperCase()} · ${fmtD(d)}`;
-    if (onScreen(p, 20)) { ux.fillStyle = '#7cc4ff'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.fillText(label, p.x, p.y); }
-    else if (d < 2500) edgeArrow(p, '#7cc4ff', label);
+    const o = world.orbit, p = proj(o.x, o.y + 100, o.z), d = d3(o.x, o.y, o.z, P.x, P.y, P.z), ziel = nt?.kind === 'orbit';
+    if (onScreen(p, 20)) tag({ x: p.x, y: p.y, name: alle || ziel || d < NAH * 1.5 || amKreuz(p) ? `ANFLUG → ${o.name.toUpperCase()}` : '', sub: fmtD(d), col: '#7cc4ff', prio: ziel ? 95 : 55, d, always: ziel, icon: 'ring' });
+    else if (d < 2500) edgeArrow(p, '#7cc4ff', `Anflug → ${o.name} · ${fmtD(d)}`);
   }
-  // Sprungtore
+  // Sprungtore: nächstes Tor der Route immer beschriftet (fett, ▶, Klammern, Randpfeil)
   for (const g of world.gates) {
-    const p = proj(g.x, g.y + 100, g.z), d = d3(g.x, g.y, g.z, P.x, P.y, P.z), col = FACTION[g.faction].c, isHop = g.to === hop;
-    const label = `${isHop ? '▶ ' : ''}TOR → ${g.name.toUpperCase()} · ${fmtD(d)}`;
+    const p = proj(g.x, g.y + 100, g.z), d = d3(g.x, g.y, g.z, P.x, P.y, P.z), col = FACTION[g.faction].c, isHop = g.to === hop, ziel = nt?.kind === 'gate' && nt.id === g.to;
+    const label = `${isHop ? '▶ ' : ''}TOR → ${g.name.toUpperCase()}`;
     if (onScreen(p, 20)) {
-      ux.fillStyle = col; ux.font = (isHop ? '700 ' : '') + '12px "Share Tech Mono",Consolas,monospace'; ux.fillText(label, p.x, p.y);
+      tag({ x: p.x, y: p.y, name: alle || isHop || ziel || d < NAH || amKreuz(p) ? label : '', sub: fmtD(d), col, prio: ziel ? 95 : isHop ? 90 : d < NAH ? 65 : 45, d, always: isHop || ziel, icon: 'ring' });
       if (isHop) { const c = proj(g.x, g.y, g.z); if (onScreen(c)) brackets(c, clamp(9000 / Math.max(d, 1), 12, 90), col, 2); }
-    } else if (isHop) edgeArrow(p, col, label);
+    } else if (isHop && !ziel) edgeArrow(p, col, `${label} · ${fmtD(d)}`);
   }
   // Navigationsziel (N oder Sektorkarte): Klammern um den Ort, am Rand ein Pfeil
-  {
-    const nt = navTarget();
-    if (nt) {
-      const p = proj(nt.x, nt.y, nt.z), d = d3(nt.x, nt.y, nt.z, P.x, P.y, P.z), col = '#bfe6ff', label = `◇ ZIEL · ${nt.name.toUpperCase()} · ${fmtD(d)}`;
-      if (onScreen(p, 20)) {
-        const br = clamp(nt.R * 260 / Math.max(d, 1), 14, 80);
-        brackets(p, br, col, 1.5);
-        // Stationen, Tore und Anflugzone tragen schon ihren Namen: dann nur die Klammern (sonst doppelt am Fadenkreuz). Felder haben keine eigene Beschriftung.
-        if (nt.kind === 'field') { ux.fillStyle = col; ux.font = '700 11px "Share Tech Mono",Consolas,monospace'; ux.fillText(label, p.x, p.y + br + 16); }
-      } else edgeArrow(p, col, label);
-    }
+  if (nt) {
+    const p = proj(nt.x, nt.y, nt.z), d = d3(nt.x, nt.y, nt.z, P.x, P.y, P.z), col = '#bfe6ff';
+    if (onScreen(p, 20)) {
+      const br = clamp(nt.R * 260 / Math.max(d, 1), 14, 80);
+      brackets(p, br, col, 1.5);
+      // Stationen, Tore, Orte und Anflugzone tragen schon ihren Namen: dann nur die Klammern. Felder und Aufträge haben keine eigene Beschriftung.
+      if (nt.kind === 'field' || nt.kind === 'mark') tag({ x: p.x, y: p.y + br + 4, name: `◇ ZIEL · ${nt.name.toUpperCase()}`, sub: fmtD(d), col, prio: 96, d, always: true });
+    } else edgeArrow(p, col, `◇ ${nt.name} · ${fmtD(d)}`);
   }
   // Verkehr
   for (const s of world.traffic) {
     const d = d3(s.x, s.y, s.z, P.x, P.y, P.z), p = proj(s.x, s.y + 35, s.z), f = s.hp / s.maxhp, col = s.hitT > 0 ? '#ff6b5b' : '#d0c8f0';
     if (onScreen(p, 20) && d < 2600) {
-      ux.fillStyle = col; ux.font = '11px "Share Tech Mono",Consolas,monospace'; ux.fillText(s.name, p.x, p.y);
+      tag({ x: p.x, y: p.y - 8, name: s.name, sub: '', col, prio: s.hitT > 0 ? 70 : 20, d, bold: false });      // Verkehr: kleiner Rang, weicht aus oder entfällt
       if (f < 0.999) { ux.fillStyle = '#221f1a'; ux.fillRect(p.x - 30, p.y + 5, 60, 4); ux.fillStyle = hpCol(f); ux.fillRect(p.x - 30, p.y + 5, 60 * f, 4); }
     } else if (s.alertT > 8) edgeArrow(p, '#ff6b5b', `${s.name} ⚠ · ${fmtD(d)}`);
   }
@@ -176,13 +220,14 @@ export function drawHUD() {
   for (const r of remoteMarkers()) {
     const p = proj(r.x, r.y + 12, r.z), d = d3(r.x, r.y, r.z, P.x, P.y, P.z), label = `${r.name} · ${fmtD(d)}`;
     if (onScreen(p, 20)) {
-      ux.fillStyle = '#7fe0a0'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.fillText(label, p.x, p.y);
+      tag({ x: p.x, y: p.y, name: r.name, sub: fmtD(d), col: '#7fe0a0', prio: 85, d, always: true });
       const c = proj(r.x, r.y, r.z); if (onScreen(c)) brackets(c, clamp(2600 / Math.max(d, 1), 8, 40), 'rgba(127,224,160,.8)', 1.2);
     } else if (d < 4000) edgeArrow(p, '#7fe0a0', label);
   }
   for (const w of world.allies) if (w.alive) {
     const p = proj(w.x, w.y + 6, w.z);
-    if (onScreen(p) && d3(w.x, w.y, w.z, P.x, P.y, P.z) < 1500) { ux.fillStyle = w.col; ux.font = '10px "Share Tech Mono",Consolas,monospace'; ux.fillText(w.name, p.x, p.y); }
+    const dw = d3(w.x, w.y, w.z, P.x, P.y, P.z);
+    if (onScreen(p) && dw < 1500) tag({ x: p.x, y: p.y, name: w.name, sub: '', col: w.col, prio: 15, d: dw, bold: false });
   }
   // Missionsziele (Messpunkte, Wrackfeld, Kapseln)
   for (const mk of [...storyMarkers(), ...missionMarkers(), ...aufgabenMarkers(), ...begegnungMarkers(), ...parkMarkers(), ...kistenMarker()]) {
@@ -190,9 +235,10 @@ export function drawHUD() {
     if (onScreen(p, 20)) {
       const r = clamp((mk.big ? 9000 : 1600) / Math.max(d, 1), 8, mk.big ? 70 : 26);
       ux.strokeStyle = mk.col; ux.lineWidth = 1.6; ux.beginPath(); ux.moveTo(p.x, p.y - r); ux.lineTo(p.x + r, p.y); ux.lineTo(p.x, p.y + r); ux.lineTo(p.x - r, p.y); ux.closePath(); ux.stroke();
-      if (mk.big || d < 900) { ux.fillStyle = mk.col; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.fillText(label, p.x, p.y - r - 6); }
+      if (mk.big || d < 900 || alle || amKreuz(p)) tag({ x: p.x, y: p.y - r, name: '◆ ' + mk.label, sub: fmtD(d), col: mk.col, prio: mk.big ? 75 : 55, d, always: !!mk.big });
     } else if (mk.big || d < 700) edgeArrow(p, mk.col, label);
   }
+  drawTags();
   // Gescannte Asteroiden: Haupterz und Restertrag
   const scanned = world.asteroids.filter(a => a.scanT > 0).map(a => ({ a, d: d3(a.x, a.y, a.z, P.x, P.y, P.z) })).filter(o => o.d < 1800).sort((x, y) => x.d - y.d).slice(0, 28);
   for (const { a, d } of scanned) {
@@ -598,7 +644,7 @@ export function updatePanels(dt: number) {
   cp.style.transform = `scale(${settings.hud})`;
   // Netz: nur im Mehrspieler (im Einzelspiel steht dort nichts)
   const np = $('netP'), solo = NET.status !== 'online' && NET.status !== 'verbinde' && NET.status !== 'fehler';
-  np.classList.toggle('hidden', solo);
+  np.classList.add('hidden'); void solo;      // seit 2026-11-26 zeigt #netBar (ui/mp.ts) den Stand, auch außerhalb des HUD
   if (!solo) np.innerHTML = NET.status === 'online' ? `<span class="good">●</span> online · ${NET.roster.length}` : NET.status === 'verbinde' ? '<span class="acc">●</span> verbinde …' : '<span class="bad">●</span> getrennt';
   np.style.transform = `scale(${settings.hud})`;
   updateObjectives();

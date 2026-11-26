@@ -17,6 +17,7 @@ import { rockSet, rockMaterial, kitPart, hasMineKit, LID_HINGE, buildDrone, buil
 import { droneBark } from './barks';
 import { kitMaterials } from '../models/kit';
 import { onCoop, coopSend, coopNow, pack, CoopGroup, coopNet } from './coop';
+import { bauKoerper, koerperWeg } from './koerper';
 import { gunReady, gunFired, gunUpdate, GUN, AIM, aimUpdate, aimFov, aimShake, aimK, gunSpread, gunFalloff, camShake, hurtSound, noteKill, whiz } from './footgun';
 import { drawFootRing, drawPrompt, drawFootCross } from '../ui/footHud';
 import { throwGrenade, updateGrenades } from './granate';
@@ -633,7 +634,7 @@ function buildGun() {
 
 // ---------- Eingänge auf der Oberfläche ----------
 export function buildDungeonEntrances(sector: string, heightAt: (x: number, z: number) => number, liquidLevel: number) {
-  ENTR = [];
+  ENTR = []; koerperWeg('mine:');
   const pl = PLANETS[sector]; if (!pl) return;
   const R = rng(hashStr(sector + ':minen'));
   const names = ['Alte Sohle', 'Schacht Tiefe Ader', 'Stollen Nordwand', 'Grube Stillstand', 'Schacht Dreizehn', 'Verlassener Vortrieb'];
@@ -645,7 +646,7 @@ export function buildDungeonEntrances(sector: string, heightAt: (x: number, z: n
     ENTR.push({ id: sector + ':' + k, x, y: h, z, yaw, size: 7 + k * 2, name: names[Math.floor(R.next() * names.length)] });
     // Stolleneingang: Portal mit Förderturm aus dem Baukasten (Mine_Kit), sonst einfacher Betonrahmen
     const kp = kitPart('portal');
-    if (kp) { kp.position.set(x, h, z); kp.rotation.y = yaw; scene.add(kp); world.extras.push(kp); k++; continue; }
+    if (kp) { kp.position.set(x, h, z); kp.rotation.y = yaw; scene.add(kp); world.extras.push(kp); bauKoerper('mine:' + k, kp); k++; continue; }      // fest zu Fuß (koerper.ts)
     const g = new THREE.Group(), con = texMat(0x8a8c8e, 'hangar_wall', { roughness: 0.92, metalness: 0.05, flatShading: false }, 1), dk = texMat(0x3a3c40, 'hangar_metal', { roughness: 0.75, metalness: 0.4, flatShading: false }, 1), amb = std(0xb8862c, { roughness: 0.7, metalness: 0.2 });
     const add = (m: THREE.Material, sx: number, sy: number, sz: number, px: number, py: number, pz: number, rx = 0) => { const o = new THREE.Mesh(uvBox(new THREE.BoxGeometry(sx, sy, sz), sx, sy, sz, 3.2), m); o.position.set(px, py, pz); o.rotation.x = rx; g.add(o); return o; };
     add(con, 1.6, 6.5, 5, -4.2, 2.6, -1); add(con, 1.6, 6.5, 5, 4.2, 2.6, -1); add(con, 10, 1.6, 5.6, 0, 6.4, -1); add(con, 10, 7, 1.2, 0, 2.8, -3.6); add(con, 11, 0.5, 9, 0, -0.15, 1.5);
@@ -653,7 +654,7 @@ export function buildDungeonEntrances(sector: string, heightAt: (x: number, z: n
     add(dk, 0.3, 9, 0.3, 6.2, 4.5, 2); add(new THREE.MeshBasicMaterial({ color: 0xff5030 }), 0.5, 0.5, 0.5, 6.2, 9.2, 2);
     for (let i = 0; i < 5; i++) add(i % 2 ? dk : amb, 1.9, 0.5, 0.2, -3.8 + i * 1.9, 7.5, 1.72);
     g.position.set(x, h, z); g.rotation.y = yaw;
-    scene.add(g); world.extras.push(g);
+    scene.add(g); world.extras.push(g); bauKoerper('mine:' + k, g);
     k++;
   }
 }

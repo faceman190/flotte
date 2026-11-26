@@ -52,7 +52,7 @@ import { PLANETS, PTYPE, planetBaseId } from './data/planets';
 import { d3 } from './core/util';
 import { openBand, closeBand, drawBand, bandHooks } from './ui/band';
 import { updateControls } from './ui/controls';
-import { netUpdate, NET, isOnline, gastAusstieg } from './game/net';
+import { netUpdate, NET, isOnline, gastAusstieg, meldeFehler } from './game/net';
 import { TRADE, requestTrade } from './game/trade';
 import { openChat } from './ui/mp';
 // Die Galaxiekarte ist eine App im Flottenband
@@ -871,7 +871,7 @@ let last = performance.now(), shadowSweep = 0;
 // Zusatzabläufe (Geschichte, Stadt, Effekte) dürfen das Bild nie anhalten: Ein Fehler dort wird einmal gemeldet, der Rest des Bildes läuft weiter.
 // (Alpha 0.99 bis 0.99d: Ein Zugriff auf den fehlenden Spielstand im Hauptmenü warf hier in jedem Bild, die Schleife endete, der Schirm blieb leer.)
 const hookErr = new Set<string>();
-function hook(name: string, f: () => void) { try { f(); } catch (e) { if (!hookErr.has(name)) { hookErr.add(name); console.error('Fehler in ' + name + ':', e); } } }
+function hook(name: string, f: () => void) { try { f(); } catch (e) { if (!hookErr.has(name)) { hookErr.add(name); console.error('Fehler in ' + name + ':', e); meldeFehler('Fehler in ' + name + ': ' + String((e as any)?.message || e), (e as any)?.stack); } } }      // auch ans Serverlog (net.ts)
 let ekHail = false, ekOut = false;      // Funkgruß der Eisenkrone schon gesendet; Schiff war seit dem letzten Ablegen schon weiter draußen
 function loop(now: number, manual = false) {
   if (!manual) requestAnimationFrame(t => loop(t));      // zuerst das nächste Bild anmelden: Ein Fehler weiter unten beendet die Schleife nicht
@@ -911,7 +911,8 @@ function loop(now: number, manual = false) {
     const ground = !onFoot && !!world.surface && (G.mode === 'rover' || G.mode === 'play');
     const kind = ground ? JSON.stringify([(world.surface as any)?.kind, (world.surface as any)?.type, (world.surface as any)?.ground, (world.def as any)?.id]).toLowerCase() : '';
     const wind = /eis|ice|frost/.test(kind) ? 'amb_planet_ice' : /vulkan|lava|asche/.test(kind) ? 'amb_planet_lava' : 'amb_planet_wind';
-    ambience(DUN.active ? 'amb_hangar' : onFoot ? (IN.ship ? 'amb_ship' : IN.area === 'Hangardeck' || G.mode === 'launch' ? 'amb_hangar' : 'amb_station') : ground ? wind : null, onFoot ? (IN.ship ? 0.2 : 0.22) : 0.3);
+    // Mine (seit 2026-11-26): leiser Luftzug statt des Hangar-Brummens (Nutzer: „durchgehend nerviges Geräusch“ in den Minen)
+    ambience(DUN.active ? 'amb_planet_wind' : onFoot ? (IN.ship ? 'amb_ship' : IN.area === 'Hangardeck' || G.mode === 'launch' ? 'amb_hangar' : 'amb_station') : ground ? wind : null, DUN.active ? 0.09 : onFoot ? (IN.ship ? 0.2 : 0.22) : 0.3);
     // weitere Schleifen: Rover, Bohrer, Drohnen, Mutterschiff in der Nähe, anfliegender Torpedo
     const rv = ROVER.active && G.mode === 'rover' && !FOOT.active;
     // Rovermotor (seit 2026-11-25): Tonhöhe folgt der Drehzahl, Lautstärke Drehzahl und Gas (vorher nur Lautstärke nach Tempo, im Stand stumm)
