@@ -57,7 +57,7 @@ function ruinPos() {
   }
   return d.ruin || null;
 }
-const lineSpace = (id: string, name: string): Obj => [`Springe ${jumpTo(name)}${P.route === id ? ' · Route gesetzt (Karte: M)' : ''}`, false, false];
+const lineSpace = (id: string, name: string): Obj => [`Springe ${jumpTo(name)}${P.route === id ? ' · Route steht, <b>J</b> springt' : ''}`, false, false];
 
 const STEPS: Step[] = [
   { // 0: Krull funkt

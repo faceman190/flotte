@@ -6,6 +6,7 @@ import { P, G, saveGame, type Mode } from './state';
 import { world } from './world';
 import { spawnEnemy } from './combat';
 import { IN, storyNpc, npcSpeak, npcHush, hangarSpot, nearNpc, storyNpcsLeave } from './interior';
+import { walkGoal, type WalkGoal } from './wegweiser';
 import { addRep } from './reputation';
 import { closeMenu } from '../ui/dock';
 import { radio } from '../ui/radio';
@@ -109,7 +110,7 @@ function updateScene(dt: number) { if (scene) { scene.t -= dt; if (scene.t <= 0)
 export const st = () => P.story as StoryState;
 export type Obj = [string, boolean, boolean];
 export interface Marker { x: number; y: number; z: number; label: string; col: string; big?: boolean }
-export interface Step { title: string; enter: () => void; lines: () => Obj[]; done: () => boolean; markers?: () => Marker[]; tick?: (dt: number) => void }
+export interface Step { title: string; enter: () => void; lines: () => Obj[]; done: () => boolean; markers?: () => Marker[]; tick?: (dt: number) => void; walk?: () => WalkGoal | null }
 interface Chain { key: 'prolog' | 'ch1' | 'ch2' | 'ch3' | 'ch4' | 'ch5'; steps: Step[]; resume?: (n: number) => number }
 const CHAINS: Chain[] = [];
 const ORDER = ['prolog', 'ch1', 'ch2', 'ch3', 'ch4', 'ch5'];
@@ -221,8 +222,9 @@ const STEPS: Step[] = [
   { // 6: zurück, andocken, verkaufen
     title: 'Prolog · Heimkehr',
     enter: () => { S.docked = false; talk(['ACHTERBERG', 'Sauber. Ich hab schon Schlechtere vereidigt. Bring das Erz nach Hause: an der Bastion andocken und im Markt verkaufen.']); },
-    lines: () => [['An der Bastion andocken · <b>E</b>', S.docked, false], ['Eisenerz verkaufen · am Markt-Tresen auf Deck 3 (Raum Lager)', P.cargo.erz === 0, false]],
+    lines: () => [['An der Bastion andocken · <b>E</b>', S.docked, false], ['Eisenerz verkaufen · Markt-Tresen im Handelskontor auf Deck 3', P.cargo.erz === 0, false]],
     done: () => S.docked && P.cargo.erz === 0,
+    walk: () => (P.cargo.erz > 0 ? { tab: 'markt', label: 'MARKT · ERZ VERKAUFEN' } : null),      // Wegweiser zu Fuß zum Tresen (interior.ts)
     markers: () => { const b = bastion(); return b && !S.docked ? [{ x: b.dock.x, y: b.dock.y, z: b.dock.z, label: 'BASTION · ANDOCKEN', col: '#ffb347', big: true }] : []; },
   },
   { // 7: Vereidigung
@@ -345,6 +347,8 @@ export function storyObjective(): { title: string; lines: Obj[] } | null {
   const k = cur(), s = k && k.c.steps[k.n];
   return s ? { title: s.title, lines: s.lines() } : null;
 }
+// Wegweiser zu Fuß: Ziel des aktuellen Schritts (Figuren der Geschichte findet interior.ts selbst)
+walkGoal.src = () => { const k = cur(), s = k && k.c.steps[k.n]; return s && s.walk ? s.walk() : null; };
 export function storyMarkers(ground = false): Marker[] { const k = cur(), s = k && k.c.steps[k.n]; return s && s.markers && (ground ? G.mode === 'rover' : G.mode === 'play') ? s.markers() : []; }
 // Kapitel nach dem vorigen beginnen (kurz nach dessen Abschluss)
 export function startChain(key: 'ch1' | 'ch2' | 'ch3' | 'ch4' | 'ch5', ms: number) { setTimeout(() => { if (P.story && st()[key] === undefined) { st()[key] = 0; entered = ''; saveGame(); } }, ms); }

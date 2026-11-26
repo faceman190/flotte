@@ -46,7 +46,7 @@ const inSpace = (id: string) => !!world.def && world.def.id === id && !world.sur
 const docked = (id: string) => !!G.dockedAt && G.dockedAt.id === id;
 const fmtDist = (d: number) => (d >= 1000 ? (d / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(d) + ' m');
 const route = (to: string) => { if (P.sector !== to) P.route = to; };
-const lineSpace = (id: string, name: string): Obj => [`Springe ${jumpTo(name)}${P.route === id ? ' · Route gesetzt (Karte: M)' : ''}`, false, false];
+const lineSpace = (id: string, name: string): Obj => [`Springe ${jumpTo(name)}${P.route === id ? ' · Route steht, <b>J</b> springt' : ''}`, false, false];
 const pts = () => [...WRECKS.map(w => [FIELD[0] + w.off[0], FIELD[1] + w.off[1], FIELD[2] + w.off[2]]), FIELD];
 const breach = () => [FIELD[0] + BREACH[0], FIELD[1] + BREACH[1], FIELD[2] + BREACH[2]];
 const inCity = () => !!world.surface && CITY.name === 'Neonhafen' && !!CITY.st;
