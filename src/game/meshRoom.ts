@@ -103,7 +103,7 @@ export function buildMeshRoom(cls: string) {
     const ix = Math.floor((x / k - W.x0) / W.cell), iz = Math.floor((z / k - W.z0) / W.cell);
     const fl = ix < 0 || iz < 0 || ix >= W.nx || iz >= W.nz ? null : W.floors.get(ix * W.nz + iz);
     if (fl) for (let i = 0; i < fl.length; i += 2) nimm(fl[i] * k, fl[i + 1] * k);
-    for (const rampe of rampen) if (Math.abs(x) < rampe.hw && z >= rampe.z0 - 0.25 && z <= rampe.z1 && rampe.offen()) {
+    for (const rampe of rampen) if (Math.abs(x) < rampe.hw && (z - rampe.z0) * Math.sign(rampe.z1 - rampe.z0) >= -0.25 && (rampe.z1 - z) * Math.sign(rampe.z1 - rampe.z0) >= 0 && rampe.offen()) {      // Heckrampe (z1 > z0) oder Bugrampe (z1 < z0)
       const t = Math.max(0, Math.min(1, (z - rampe.z0) / (rampe.z1 - rampe.z0))); nimm(rampe.y0 + (rampe.y1 - rampe.y0) * t, 2.4);
     }
     return best;

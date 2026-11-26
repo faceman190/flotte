@@ -102,9 +102,16 @@ def export(fw, rampe, path, tagged):
         e1 = PIVOTS['rampe']; mw = e1.matrix_world; hw = TOR[0] - 0.12; L = HR_L1 + HR_L2 - 0.15
         H = Vector(anker['rampe_scharnier']); top = Vector((XE + 0.05, 0, 6.9)); kipp = math.atan2(top.x - H.x, top.z - H.z); Rk = Matrix.Rotation(kipp, 4, 'Y')
         bm = bmesh.new()
-        # Rampe im Rahmen des Gelenks: gebaut senkrecht, Lauffläche zum Laderaum (+X), dann um kipp in die Heckschräge gedreht
-        vs = [bm.verts.new(mw @ (Rk @ Vector(p))) for p in ((0.215, -hw, 0.0), (0.215, hw, 0.0), (0.215, hw, L), (0.215, -hw, L))]; bm.faces.new(vs)
+        # Rampe im Rahmen des Gelenks: gebaut senkrecht, Lauffläche zum Laderaum (+X), dann um kipp in die Heckschräge gedreht. 0,275 über dem Scharnier:
+        # knapp über den Gitterleisten (sonst traf die Laufkarte je nach Raster deren Fasen und sah ein Loch)
+        vs = [bm.verts.new(mw @ (Rk @ Vector(p))) for p in ((0.275, -hw, 0.0), (0.275, hw, 0.0), (0.275, hw, L), (0.275, -hw, L))]; bm.faces.new(vs)
         q = [bm.verts.new(Vector(p)) for p in ((H.x - 0.1, -hw, FL + 0.005), (H.x + 0.7, -hw, FL + 0.005), (H.x + 0.7, hw, FL + 0.005), (H.x - 0.1, hw, FL + 0.005))]; bm.faces.new(q)
+        # Bugrampe (Möwe): gebaut senkrecht, Lauffläche zum Laderaum (−X), um kipp nach hinten in die schräge Bugöffnung gedreht
+        eb = PIVOTS['bugrampe'].matrix_world; HB = Vector(anker['bugrampe_scharnier']); kb = math.atan2(MS['XB'] - (HB.x + 0.05), 8.0 - FL); Rb = Matrix.Rotation(kb, 4, 'Y')
+        hb = TOR[0] - 0.22; Lb = MS['RAMP_L1'] + MS['RAMP_L2'] - 0.15
+        vs = [bm.verts.new(eb @ (Rb @ Vector(p))) for p in ((-0.275, hb, 0.0), (-0.275, -hb, 0.0), (-0.275, -hb, Lb), (-0.275, hb, Lb))]; bm.faces.new(vs)
+        P0 = eb @ (Rb @ Vector((-0.275, 0, 0.05)))      # Anfang der Lauffläche (liegt 0,2 m über dem Boden): schräge Schwelle vom Laderaumboden hinauf, über das Blattende am Scharnier
+        q = [bm.verts.new(Vector(p)) for p in ((HB.x - 0.9, -hb, FL + 0.005), (P0.x, -hb, P0.z), (P0.x, hb, P0.z), (HB.x - 0.9, hb, FL + 0.005))]; bm.faces.new(q)
         me = bpy.data.meshes.new('Laufhilfe Rampe'); bm.to_mesh(me); bm.free(); me.materials.append(bpy.data.materials.new('Laufhilfe'))
         out.objects.link(bpy.data.objects.new('Laufhilfe Rampe', me))
     for o in SC.objects: o.select_set(False)

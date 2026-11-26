@@ -621,7 +621,7 @@ def steuerduesen():
 # =====================================================================================
 def details():
     CUR[0] = C_PART
-    for x in (-17.0, -12.0, -6.8, -1.6, 3.6, 8.8, 12.6):
+    for x in (-17.0, -12.0, -6.8, -1.6, 3.6, 9.7, 12.6):      # nicht über dem Treppenloch (x 7,0 … 9,3): die Fuge lag dort als Latte im Weg
         hull_band('Spantfuge', [(x, -PI + 2 * PI * i / 240) for i in range(241)], 0.035, 0.012, M['fuge'], False)
     for s in (1, -1):
         for z in (4.58, 5.27): hull_band('Bandkante', [(x, t_for_z(x, z, s)) for x in [-13.4 + (13.8 + 13.4) * i / 90 for i in range(91)]], 0.035, 0.01, M['fuge'], False)

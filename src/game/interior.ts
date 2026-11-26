@@ -12,7 +12,7 @@ import { buildShipModel, type ShipModel } from '../models/playerShips';
 import { shipsAt, board } from './fleet';
 import { SHIPS, hasInterior } from '../data/ships';
 import { SECTORS, FACTION } from '../data/galaxy';
-import { RAMP, RAMP_ENTRY, doorProgress, type Paint } from '../models/gltfShips';
+import { RAMP, rampenVon, doorProgress, type Paint } from '../models/gltfShips';
 import { hasChar, charInstance, animInit, animStep, animTalk, animTurn, animTurning, animHasTurn, type CharAnim } from '../models/charModels';
 import { buildShipRoom, type ShipRoom, type ShipSpot } from './shipInterior';
 import { computeStats, type ShipId, type Up } from '../data/ships';
@@ -33,7 +33,7 @@ import { crewBesuch, crewSpruch, crewFetzen, crewDurchsage, crewEile, crewHooks 
 import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, type Deck, type HangarBuild, type DeckQuartier } from './deck';
 import { QS, eigeneDeko, nrText, FUND_FARBE, ortKennung, type QDeko } from './quartier';
 import { REP } from './reputation';
-import { stellLokal, fzImRaum, flaeche as laderaumFlaeche, bloecke as laderaumBloecke, rampeLokal } from './laderaum';
+import { stellLokal, fzImRaum, flaeche as laderaumFlaeche, bloecke as laderaumBloecke, rampenLokal } from './laderaum';
 import { FZ } from '../models/rover';
 
 // =====================================================================================
@@ -683,9 +683,8 @@ export function refreshHangarShips() {
   const st = IN.station!;
   shipPad.z = PADZ;
   shipPad.y = park(SHIP, 0, shipPad.z, P.shipName, SHIPS[P.cls].role, { x: 0, z: 0, r: 0, label: () => hasInterior(P.cls) ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} steigen und ablegen`, act: () => hasInterior(P.cls) ? enterShip({ cls: P.cls, uid: P.uid, name: P.shipName, ctx: 'hangar' }, SHIP) : interiorHooks.undock() });
-  const re = activeRamp();
-  if (re) {      // Rampenschalter außen am Fuß der Heckrampe (Wisent)
-    SHIP.g.updateMatrixWorld(true); const p = group!.worldToLocal(SHIP.g.localToWorld(new THREE.Vector3(re.hw + 1.2, 0, re.foot - 0.6)));
+  for (const re of activeRamps()) {      // Rampenschalter außen am Fuß jeder Rampe (Wisent; Möwe auch am Bug)
+    SHIP.g.updateMatrixWorld(true); const p = group!.worldToLocal(SHIP.g.localToWorld(new THREE.Vector3(re.hw + 1.2, 0, re.foot - re.s * 0.6)));
     shipInters.push({ x: p.x, z: p.z, r: 1.8, label: () => RAMP.want ? 'Laderampe schließen' : 'Laderampe öffnen', act: () => { RAMP.want = !RAMP.want; sfx('gear', 0.6, 1, () => snd(140, 0.5, 'sawtooth', 0.03, RAMP.want ? -40 : 40)); say('SYSTEM', RAMP.want ? 'Laderampe fährt aus.' : 'Laderampe fährt ein.'); } } as Inter);
   }
   const others = shipsAt(st.id).slice(0, 2);
@@ -1171,10 +1170,10 @@ export function enterShip(info: ShipInfo, m: ShipModel, at?: { x: number; z: num
   inters = room.spots.filter(sp => !info.gast || sp.kind === 'hatch' || sp.kind === 'scanner').map(sp => Object.assign(shipInter(sp, info), { y: (sp as any).y }));      // Gast: nur ansehen und wieder hinaus
   const lf = mesh && active ? laderaumFlaeche() : null; if (lf) mesh!.fuellen(lf.x0, lf.x1, lf.z0, lf.z1, lf.y, lf.head);
   // Heckrampe begehbar, wo die Laufkarte sie nicht hat (Kormoran, Dohle; der Wisent hat sie in der Karte): über sie geht es zu Fuß hinein und hinaus
-  const rl = mesh && active ? rampeLokal() : null;
-  if (rl && RAMP_ENTRY[SHIPS[info.cls as ShipId]?.model || ''] && mesh!.floorAt(0, (rl.z0 + rl.z1) / 2, (rl.y0 + rl.y1) / 2) === null) mesh!.rampe(rl, () => doorProgress(m.g, 'rampe') >= 0.999);
-  vorf = rl && planet && RAMP_ENTRY[SHIPS[info.cls as ShipId]?.model || ''] ? vorfeldLokal() : null;
-  if (vorf) mesh!.rampe(vorf, () => doorProgress(m.g, 'rampe') >= 0.999);
+  const begehbar = rampenVon(SHIPS[info.cls as ShipId]?.model || ''), rls = mesh && active ? rampenLokal().filter(r => begehbar.some(e => e.s === r.s)) : [];      // Heck und (Möwe) Bug
+  for (const rl of rls) if (mesh!.floorAt(0, (rl.z0 + rl.z1) / 2, (rl.y0 + rl.y1) / 2) === null) mesh!.rampe(rl, () => doorProgress(m.g, 'rampe') >= 0.999);
+  vorf = planet ? rls.map(vorfeldLokal).filter(v => !!v) as Vorfeld[] : [];
+  for (const v of vorf) mesh!.rampe(v, () => doorProgress(m.g, 'rampe') >= 0.999);
   if (mesh && active) obstacles = [...obstacles, ...laderaumBloecke()];      // Kisten und abgestelltes Fahrzeug im Laderaum (laderaum.ts)
   // Kormoran und Wisent am Planeten: im Laderaum ins Fahrzeug steigen (Schiffskoordinaten = Raumkoordinaten)
   const fzs = mesh && planet && active ? fzImRaum() : [];
@@ -1367,7 +1366,7 @@ export function interact() {
 
 // ---------- Laufen ----------
 function free(x: number, z: number) {
-  if (mesh) { const e = rampOfRoom(); if (e && z > e.door - 0.3 && doorProgress(roomModel!, 'rampe') < 0.999) return false; if (mesh.floorAt(x, z, IN.fy + IN.jy, IN.jy > 0.05) === null) return false;   // Modell-Raum: Laufkarte (im Sprung: Boden unter den Füßen); Rampe nur offen begehbar
+  if (mesh) { if (roomRamps().some(e => e.s * (z - e.door) > -0.3) && doorProgress(roomModel!, 'rampe') < 0.999) return false; if (mesh.floorAt(x, z, IN.fy + IN.jy, IN.jy > 0.05) === null) return false;   // Modell-Raum: Laufkarte (im Sprung: Boden unter den Füßen); Rampe nur offen begehbar
     for (const o of obstacles) if (x > o[0] - 0.3 && x < o[1] + 0.3 && z > o[2] - 0.3 && z < o[3] + 0.3) return false;      // Kisten und Fahrzeug im Laderaum
     return true; }
   const R = 0.45;
@@ -1390,55 +1389,66 @@ function free(x: number, z: number) {
 // ---------- Heckrampe: ohne Taste an Bord und von Bord (Wisent) ----------
 // Das aktive Schiff steht im Hangar; sein Innenraum aus dem Modell liegt deckungsgleich darin. Wer am Fuß der offenen Rampe hineinläuft,
 // ist an Bord (gleiche Stelle, gleiche Blickrichtung); wer innen die Rampe ganz hinuntergeht, steht wieder im Hangar.
-const rampOfRoom = () => IN.ship && roomModel ? RAMP_ENTRY[SHIPS[IN.ship.cls as ShipId]?.model || ''] || null : null;
-const activeRamp = () => RAMP_ENTRY[SHIPS[P.cls]?.model || ''] || null;
+// Seit 2026-11-26 auch mehrere Rampen (Möwe: Heck und Bug); e.s ist die Richtung nach außen, s·z wächst nach außen.
+const roomRamps = () => IN.ship && roomModel ? rampenVon(SHIPS[IN.ship.cls as ShipId]?.model || '') : [];
+const activeRamps = () => rampenVon(SHIPS[P.cls]?.model || '');
 const _rv = new THREE.Vector3();
 function hangarToShip(x: number, z: number) { group!.localToWorld(_rv.set(x, 0, z)); return SHIP.g.worldToLocal(_rv); }
 function rampSideBlock(x: number, z: number) {      // offene Rampe im Hangar: nur vom Fuß her betreten, nicht seitlich hindurchlaufen
-  const e = activeRamp(); if (!e || !group || !SHIP.g.visible || !hangarBuild || doorProgress(SHIP.g, 'rampe') < 0.05) return false;
-  const p = hangarToShip(x, z); return Math.abs(p.x) < e.hw + 0.5 && p.z > e.door - 0.5 && p.z < e.foot - 1.1;
+  const es = activeRamps(); if (!es.length || !group || !SHIP.g.visible || !hangarBuild || doorProgress(SHIP.g, 'rampe') < 0.05) return false;
+  const p = hangarToShip(x, z); return es.some(e => Math.abs(p.x) < e.hw + 0.5 && e.s * p.z > e.s * e.door - 0.5 && e.s * p.z < e.s * e.foot - 1.1);
 }
 let rampPrev = 0;
 function rampTransit() {
   if (G.mode !== 'walk' || IN.panel) return;
   if (!room) {
-    const e = activeRamp(); if (!e || !hangarBuild || !SHIP.g.visible || doorProgress(SHIP.g, 'rampe') < 0.999 || !hasMeshRoom(P.cls) || !meshRoomReady(P.cls)) { rampPrev = 1e9; return; }
-    const p = hangarToShip(IN.x, IN.z), inward = p.z < rampPrev - 1e-4; rampPrev = p.z;
-    if (inward && Math.abs(p.x) < e.hw - 0.3 && p.z > e.foot - 1.0 && p.z < e.foot + 0.6) enterShip({ cls: P.cls, uid: P.uid, name: P.shipName, ctx: 'hangar' }, SHIP, { x: p.x, z: Math.min(p.z, e.foot - 0.35) });
+    const es = activeRamps(); if (!es.length || !hangarBuild || !SHIP.g.visible || doorProgress(SHIP.g, 'rampe') < 0.999 || !hasMeshRoom(P.cls) || !meshRoomReady(P.cls)) { rampPrev = NaN; return; }
+    const p = hangarToShip(IN.x, IN.z), dz = p.z - rampPrev; rampPrev = p.z;
+    for (const e of es) {
+      const u = e.s * p.z, F = e.s * e.foot;
+      if (e.s * dz < -1e-4 && Math.abs(p.x) < e.hw - 0.3 && u > F - 1.0 && u < F + 0.6) { enterShip({ cls: P.cls, uid: P.uid, name: P.shipName, ctx: 'hangar' }, SHIP, { x: p.x, z: e.s * Math.min(u, F - 0.35) }); return; }
+    }
   } else if (mesh && IN.ship && IN.ship.uid === P.uid && (saved?.group || IN.ship.ctx === 'planet')) {
-    const e = rampOfRoom(); if (!e) return;
-    const outward = IN.z > rampPrev + 1e-4; rampPrev = IN.z;
-    // Planet: Steckt die Rampe vor dir im Gelände, steigst du dort aus, wo sie im Boden verschwindet (sonst liefe man unter dem Gelände weiter)
-    let unter = false;
-    if (outward && IN.ship.ctx === 'planet' && !vorf && Math.abs(IN.x) < e.hw && IN.z > e.door && world.ground) { const wf = room.g.localToWorld(_rv.set(IN.x, IN.fy, IN.z + 0.3)); unter = wf.y < world.ground(wf.x, wf.z) - 0.1; }
-    const ende = IN.ship.ctx === 'planet' && vorf ? vorf.z1 - 0.3 : e.foot - 0.3;      // Trittfläche vor der Rampe: an ihrem Ende auf dem Gelände
-    if (outward && Math.abs(IN.x) < e.hw && (IN.z > ende || unter)) {
-      const w = room.g.localToWorld(new THREE.Vector3(IN.x, IN.fy, unter || (IN.ship.ctx === 'planet' && vorf) ? IN.z + 0.3 : e.foot + 0.9)); rampPrev = -1e9;      // auf Fußhöhe: im gekippten Raum verschiebt y = 0 die Stelle seitlich
-      if (saved?.group) leaveShip(w);
-      else interiorHooks.zuFuss(w.x, w.z, room.g.rotation.y + IN.yaw, IN.pitch);      // Planet: draußen zu Fuß weiter, gleiche Stelle und Blickrichtung
+    const es = roomRamps(); if (!es.length) return;
+    const dz = IN.z - rampPrev; rampPrev = IN.z;
+    for (const e of es) {
+      const outward = e.s * dz > 1e-4, u = e.s * IN.z, vf = IN.ship.ctx === 'planet' ? vorf.find(v => v.s === e.s) : undefined;
+      // Planet: Steckt die Rampe vor dir im Gelände, steigst du dort aus, wo sie im Boden verschwindet (sonst liefe man unter dem Gelände weiter)
+      let unter = false;
+      if (outward && IN.ship.ctx === 'planet' && !vf && Math.abs(IN.x) < e.hw && u > e.s * e.door && world.ground) { const wf = room.g.localToWorld(_rv.set(IN.x, IN.fy, IN.z + e.s * 0.3)); unter = wf.y < world.ground(wf.x, wf.z) - 0.1; }
+      const ende = vf ? e.s * vf.z1 - 0.3 : e.s * e.foot - 0.3;      // Trittfläche vor der Rampe: an ihrem Ende auf dem Gelände
+      if (outward && Math.abs(IN.x) < e.hw && (u > ende || unter)) {
+        const w = room.g.localToWorld(new THREE.Vector3(IN.x, IN.fy, unter || vf ? IN.z + e.s * 0.3 : e.foot + e.s * 0.9)); rampPrev = NaN;      // auf Fußhöhe: im gekippten Raum verschiebt y = 0 die Stelle seitlich
+        if (saved?.group) leaveShip(w);
+        else interiorHooks.zuFuss(w.x, w.z, room.g.rotation.y + IN.yaw, IN.pitch);      // Planet: draußen zu Fuß weiter, gleiche Stelle und Blickrichtung
+        return;
+      }
     }
   }
 }
 // Planet: Endet die Rampe über dem Gelände (landePose erlaubt bis 1,2 m), führt eine schräge Trittfläche von der Spitze bis zum Boden 2,2 m davor
 // (Schiffskoordinaten). Das Fahrzeug fährt einfach hinauf (laderaum.ts); zu Fuß stieß man sonst an die Kante der Rampe.
 const VORFELD = 2.2, _vf = new THREE.Vector3();
-let vorf: { hw: number; z0: number; z1: number; y0: number; y1: number } | null = null;
-function vorfeldLokal() {
-  const rl = rampeLokal(); if (!rl || !world.ground) return null;
+type Vorfeld = { hw: number; z0: number; z1: number; y0: number; y1: number; s: 1 | -1 };
+let vorf: Vorfeld[] = [];      // je Rampe (s: +1 Heck, −1 Bug)
+function vorfeldLokal(rl: { hw: number; z1: number; y1: number; s: 1 | -1 } | undefined): Vorfeld | null {
+  if (!rl || !world.ground) return null;
   SHIP.g.updateMatrixWorld(true);
-  const w = SHIP.g.localToWorld(_vf.set(0, rl.y1, rl.z1 + VORFELD)), gy = SHIP.g.worldToLocal(_vf.set(w.x, world.ground(w.x, w.z), w.z)).y;
-  return gy < rl.y1 - 0.08 ? { hw: rl.hw, z0: rl.z1, z1: rl.z1 + VORFELD, y0: rl.y1, y1: gy } : null;
+  const w = SHIP.g.localToWorld(_vf.set(0, rl.y1, rl.z1 + rl.s * VORFELD)), gy = SHIP.g.worldToLocal(_vf.set(w.x, world.ground(w.x, w.z), w.z)).y;
+  return gy < rl.y1 - 0.08 ? { hw: rl.hw, z0: rl.z1, z1: rl.z1 + rl.s * VORFELD, y0: rl.y1, y1: gy, s: rl.s } : null;
 }
 /** Planet, zu Fuß draußen (onfoot.ts über footHooks.rampe): Schritt von (ox, oz) nach (nx, nz) auf die Spitze der offenen Heckrampe des eigenen Schiffs?
  *  Dann an Bord an derselben Stelle (wie das Fahrzeug, das einfach hinauffährt). wy: Bodenhöhe der Figur, yaw/pitch: Blick in der Welt. */
 export function rampeHinein(nx: number, nz: number, ox: number, oz: number, wy: number, yaw: number, pitch: number) {
   if (G.mode !== 'rover' || room || !world.surface) return null;
-  const e = activeRamp(); if (!e || !SHIP.g.visible || doorProgress(SHIP.g, 'rampe') < 0.999 || !hasMeshRoom(P.cls) || !meshRoomReady(P.cls)) return null;
+  const es = activeRamps(); if (!es.length || !SHIP.g.visible || doorProgress(SHIP.g, 'rampe') < 0.999 || !hasMeshRoom(P.cls) || !meshRoomReady(P.cls)) return null;
   SHIP.g.updateMatrixWorld(true);
-  const a = SHIP.g.worldToLocal(_rv.set(ox, wy, oz)), az = a.z, b = SHIP.g.worldToLocal(_rv.set(nx, wy, nz));
-  const vf = vorfeldLokal(), zMax = vf ? vf.z1 - 0.1 : e.foot + 0.25;      // Rampe endet über dem Gelände: schon auf der Trittfläche davor an Bord
-  if (!(b.z < az - 1e-4 && Math.abs(b.x) < e.hw - 0.25 && b.z < zMax && b.z > e.foot - 2.5)) return null;
-  return { x: b.x, z: vf ? b.z : Math.min(b.z, e.foot - 0.35), y: b.y, yaw, pitch };
+  const az = SHIP.g.worldToLocal(_rv.set(ox, wy, oz)).z, b = SHIP.g.worldToLocal(_rv.set(nx, wy, nz)), rls = rampenLokal();
+  for (const e of es) {      // Heck- oder Bugrampe (Möwe)
+    const vf = vorfeldLokal(rls.find(r => r.s === e.s)), F = e.s * e.foot, ub = e.s * b.z, zMax = vf ? e.s * vf.z1 - 0.1 : F + 0.25;      // Rampe endet über dem Gelände: schon auf der Trittfläche davor an Bord
+    if (ub < e.s * az - 1e-4 && Math.abs(b.x) < e.hw - 0.25 && ub < zMax && ub > F - 2.5) return { x: b.x, z: vf ? b.z : e.s * Math.min(ub, F - 0.35), y: b.y, yaw, pitch };
+  }
+  return null;
 }
 /** an Bord eines gelandeten Schiffs (eigenes oder als Gast): Lage der Figur in der Welt, für die Mitspieler (net.ts) */
 export function bordWelt() {

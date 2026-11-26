@@ -32,7 +32,9 @@ Eigener Fahrzeugtransporter, gebaut am 26.11.2026 nach dem Konzeptbild aus der W
 - Vier schwere Beine (Panzerschenkel, Knie, Doppelkolben, Federbein, Fuß 2,4 × 1,5 m). Einfahren: Das Bein klappt um die Hüfte 90° in einen kantigen Fahrwerkskasten unten an der Flanke (vorn nach hinten, hinten nach vorn). Der Fuß hängt am Bein und klappt gegenläufig mit, er liegt eingefahren flach unter dem Bein und schließt den Kasten unten. Zwei Klappen schließen den Rest des Schlitzes zuletzt.
 - Im Spiel ist der Fuß ein verschachteltes Drehgelenk unter dem Bein: `rigParts` in `src/models/gltfShips.ts` setzt ein Drehgelenk unter einem Elterngelenk um den Abstand der Achsen versetzt (neu mit der Möwe).
 - Innen stehen die Kästen als Höcker an den Laderaumwänden (Verkleidung bis 4,75 m), die Fahrgasse bleibt frei.
-- Gruppe `rampe` öffnet Bug und Heck zusammen: Haube nach oben, Bugrampe (4,4 m + 3,8 m Verlängerung) nach vorn unten, Heckrampe (7,3 m + 2,1 m) aus der Schräge auf rund 15° nach unten. Zum Betreten zählt die Heckrampe (`RAMP_ENTRY.Moewe`).
+- Gruppe `rampe` öffnet Bug und Heck zusammen: Haube nach oben, Bugrampe (4,4 m + 3,8 m Verlängerung) nach vorn unten, Heckrampe (7,3 m + 2,1 m) aus der Schräge auf rund 15° nach unten.
+- Beide Rampen sind begehbar und befahrbar (seit 26.11.2026, Wunsch des Nutzers): `RAMP_ENTRY.Moewe` (Heck) und `RAMP_BUG.Moewe` (Bug) in `src/models/gltfShips.ts`; `rampenVon(model)` liefert alle Rampen mit Richtung s (+1 Heck, −1 Bug), interior.ts rechnet mit s·z. Im Laderaum (`laderaum.ts`, `RAEUME.Moewe.bug`) reicht der Boden bei offenem Bug bis zum Scharnier der Bugrampe; Fahrzeuge fahren durch (vorn hinein, hinten hinaus und umgekehrt). Die Laufkarte hat zwei offene Bereiche (`--offen` mit `;`, für den Bug mit Höhenbereich, damit die offene Haube nicht als Boden zählt). Die Laufhilfen der Rampen im Export liegen knapp über den Gitterleisten.
+- Andere Spieler (Gäste) kommen weiter nur über die Heckrampe an Bord (`net.ts gastEingang`).
 
 ![Heck offen](bilder/moewe-heck.jpg)
 
@@ -69,5 +71,5 @@ Ansichten rendern: `KOR_SAMPLES=24 blender -b --python moe_lauf.py -- bild zu he
 
 ## Offen
 
-- Bugrampe ist nur Optik: Die Laufkarte führt über die Heckrampe hinein und hinaus.
+- Im Hangar ist der Weg über die Bugrampe nicht geprüft (auf Planeten geprüft: zu Fuß hinaus und hinein über Bug und Heck, Dachs durch beide Rampen).
 - Ein Dachs an Bord steht im Laderaum (geprüft mit `testAnBord`); Hinein- und Hinausfahren über die Rampe und der Mehrspieler sind noch nicht geprüft.
