@@ -23,7 +23,7 @@ import { fieldGrenade } from './fieldfight';
 import { noteToss, noteFoot } from './avatar';
 import { basePad, padGround, baseBlocked, nearDoor, surfaceAt, wallBetween } from './basewalk';
 import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
-import { FIGHT, updateFieldFight, fieldDown, fieldViewModel, hideFieldViewModel, drawFieldHUD } from './fieldfight';
+import { FIGHT, updateFieldFight, fieldDown, fieldViewModel, hideFieldViewModel, drawFieldHUD, FELD_EXTRA } from './fieldfight';
 import { storyMarkers } from './story';
 import { landShip } from './surface';
 import { schiffSperrt, koerperSperrt } from './koerper';
@@ -205,11 +205,11 @@ export function updateFoot(dt: number) {
   if (body) me = syncAvatar(scene, me, figGear());
   if (me) {
     me.s.g.visible = body && (VIEW.tp || FIGHT.down <= 0);
-    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, ground: footGround, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on });
+    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, ground: footGround, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert) || FELD_EXTRA.kampf(), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on });
   }
   // Kampf: Schießen (Klick), Drohnen, Geschosse; in der Außensicht kommt der Leuchtstrich aus der Mündung der Figur
   const mz = body ? avatarMuzzle(me) : null;
-  updateFieldFight(dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH(), active: true, tp: VIEW.tp, muzzle: mz });
+  updateFieldFight(dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH(), active: true, tp: VIEW.tp, muzzle: mz, geduckt: STANCE.crouch, vx: FOOT.vx, vz: FOOT.vz });
 }
 
 /** Taste G zu Fuß: Granate in Blickrichtung werfen */

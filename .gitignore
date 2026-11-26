@@ -42,3 +42,6 @@ Thumbs.db
 
 # Rohe Rundhalle der Bastion im Lichtraum 2 (80 MB); neu erzeugen: asset-src/neu/bastion/rh_back_lauf.py (docs/rundhalle.md)
 /asset-src/glb/base/Lichtraum2Rund.glb
+
+# Logiktest der Gegner-KI: gebündelte Fassung (scripts/kitest/build.mjs)
+/scripts/kitest/.out.mjs
