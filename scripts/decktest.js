@@ -44,7 +44,7 @@ window.__walkRund = async (bild = false) => {
     const [i, j] = qu.pop();
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const a = i + di, b = j + dj, x = a * S, z = b * S;
-      if (z > -44 || z < -150 || Math.abs(x) > 60 || seen.has(key(a, b)) || !T.I.walkFree(x, z)) continue;
+      if (z > -44 || z < -190 || Math.abs(x) > 60 || seen.has(key(a, b)) || !T.I.walkFree(x, z)) continue;      // bis −190: Deck 3 seit 2026-11-26 reicht 128 m tief
       seen.add(key(a, b)); qu.push([a, b]);
     }
   }
@@ -54,7 +54,7 @@ window.__walkRund = async (bild = false) => {
   const wegOff = []; D.wege.forEach((w, i) => w.forEach((n, k) => { if (!near(gx(n[1]), gz(n[0]), 0.6)) wegOff.push(`${i}.${k}`); }));
   const out = { punkte: seen.size, flaeche: Math.round(seen.size * S * S), ansprechpunkteNichtErreichbar: spotsOff, wegpunkteNichtErreichbar: wegOff };
   if (bild) {
-    const W = 440, H = 520, sc = 7, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+    const W = 440, H = 960, sc = 7, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
     const px = (x, z) => [W / 2 + x * sc, (-46 - z) * sc];
     g.fillStyle = '#111'; g.fillRect(0, 0, W, H);
     for (const k of seen) { const i = Math.floor(k / 8192) - 2048, j = (k % 8192) - 4096, [u, v] = px(i * S, j * S); g.fillStyle = '#2a6'; g.fillRect(u, v, 2, 2); }

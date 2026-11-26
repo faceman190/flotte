@@ -18,7 +18,7 @@ Seit dem 26.11.2026. Der Nutzer: „wenn man zum Beispiel sich in der Bastion tr
 | Wo | Was |
 |---|---|
 | Buchtenwahl an der Rückwand jedes Hangars | Gäste in die eigene Bucht einladen, Einladungen annehmen, zurück in die eigene Bucht |
-| Aufzug „Quartiere“ auf Deck 3 der Bastion | dieselbe Auswahl, zusätzlich zu den Quartieren |
+| Aufzug „Hangarbuchten“ auf Deck 3 der Bastion (Südwand der Vorhalle, seit dem neuen Deck 3 vom 26.11.2026, `docs/deck3.md`) | dieselbe Auswahl; der Aufzug „Quartiere“ gegenüber führt nur noch zu den Quartieren |
 | Schiff des Gastgebers | [E] an Bord gehen, an der Luke [E] wieder von Bord |
 
 Der Wechsel in eine Bucht ist eine kurze Fahrt mit Blende (wie beim Quartier), man kommt an der Rückwand des Hangars an.
@@ -30,10 +30,9 @@ Der Wechsel in eine Bucht ist eine kurze Fahrt mit Blende (wie beim Quartier), m
 - `interior.ts refreshHangarShips`: in einer fremden Bucht steht statt der eigenen Schiffe das Schiff des Besitzers (Klasse und Lackierung aus seinem Netzstand); `syncParkedShip` blendet das eigene aus. `buchtFahrt` wechselt die Bucht.
 - `net.ts`: Einladung als Koop-Meldung `hi` (kein Eingriff am Server), `buchtHooks.fahren` prüft, dass der Besitzer noch hier angedockt ist. Legt er ab oder wechselt er das Schiff, wird die Bucht nachgeführt.
 - Ablegen mit Gast (`net.ts gastZiele`, Zweig Hangar): Sobald das Schiff des Besitzers fliegt, verlässt der Gast die Station (`main.ts mitAblegen`) und steht an derselben Stelle an Bord des fliegenden Schiffs. Sein Rückfallort ist die Station, an der sein Schiff steht.
-- Anzeige: `ui/dock.ts vQuartier`, Modus `bucht` (Buchtenwahl) und Block „Hangarbuchten“ im Aufzug.
+- Anzeige: `ui/dock.ts vQuartier`, Modus `bucht` (Buchtenwahl im Hangar und Aufzug „Hangarbuchten“ auf Deck 3: `interior.ts`, `deck.bucht`).
 
 ## Offen
 
 - Es steht nur das aktive Schiff des Gastgebers in seiner Bucht, nicht seine abgestellten weiteren Schiffe.
-- Der Aufzug auf Deck 3 trägt weiter nur das Schild „Quartiere“.
 - Wer in einer fremden Bucht steht, während der Besitzer zurückkommt und landet, sieht keine Landung, das Schiff steht einfach wieder da.

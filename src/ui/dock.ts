@@ -581,9 +581,9 @@ function vQuartier(): View {
   const buchten = () => {
     const inv = buchtEinladungen(), pl = buchtHooks.piloten();
     let b = `<h3>Hangarbuchten</h3><p>Jeder Pilot hat an dieser Station seine eigene Hangarbucht. In eine fremde Bucht kommt nur, wen der Besitzer einlädt. Dort steht sein Schiff, und über die Rampe geht es an Bord.</p>
-      <div class="act"><button class="${buchtFremd() || QS.in || QS.mode === 'aufzug' ? 'pri ' : ''}big" data-a="hfahrt"><span>${buchtFremd() ? 'Zurück in meine Hangarbucht' : 'In meine Hangarbucht'}</span><span class="mo">${esc(P.shipName)}</span></button></div>`;
+      <div class="act"><button class="${buchtFremd() || !HB.zone ? 'pri ' : ''}big" data-a="hfahrt"><span>${buchtFremd() ? 'Zurück in meine Hangarbucht' : 'In meine Hangarbucht'}</span><span class="mo">${esc(P.shipName)}</span></button></div>`;
     b += '<h3>Einladungen in Buchten</h3>' + (inv.length ? inv.map((e, i) => rowB(e.von, `gilt noch ${Math.max(1, Math.ceil((HB_MS - (Date.now() - e.t)) / 60000))} min`, `<button class="pri" data-a="hbesuch" data-n="${i}">${HB.owner === e.von ? 'Du bist dort' : 'Besuchen'}</button>`)).join('')
-      : '<p class="hint">Keine Einladungen. Ein anderer Pilot lädt dich an der Buchtenwahl in seinem Hangar ein.</p>');
+      : '<p class="hint">Keine Einladungen. Ein anderer Pilot lädt dich am Aufzug „Hangarbuchten“ auf Deck 3 oder an der Buchtenwahl in seinem Hangar ein.</p>');
     b += '<h3>In meine Bucht einladen</h3>' + (pl.length ? pl.map(p => rowB(p.name, 'an dieser Station', `<button class="pri" data-a="hinv" data-n="${p.id}">Einladen</button>`)).join('')
       : '<p class="hint">Gerade ist kein anderer Pilot an dieser Station. Einladen kannst du nur, wer mit dir online hier angedockt ist.</p>');
     return b;
@@ -601,7 +601,6 @@ function vQuartier(): View {
     const inv = gueltigeEinladungen();
     h += `<h3>Einladungen</h3>` + (inv.length ? inv.map((e, i) => rowB(e.von, `Quartier ${nrText(e.deko.nr)} · gilt noch ${Math.max(1, Math.ceil((QEINLADUNG_MS - (Date.now() - e.t)) / 60000))} min`, `<button class="pri" data-a="qbesuch" data-n="${i}">Besuchen</button>`)).join('')
       : '<p class="hint">Keine Einladungen. Andere Piloten laden dich an ihrem Bildschirm im Quartier ein.</p>');
-    h += buchten();
     h += `</section><aside class="pn"><p class="lb">Im Quartier</p><div>${line('Koje', 'ausruhen, Aufwachpunkt')}${line('Spind', 'einlagern, herausnehmen')}${line('Regal', 'Schiffe und Fundstücke')}${line('Bildschirm', 'Übersicht, Gäste')}</div>
       <div class="box"><p class="lb acc">Besuch</p><p>In ein fremdes Quartier kommt nur, wen der Besitzer einlädt. Wer zu Gast ist, sieht dessen Schiffe und Sammlung, aber Koje, Spind und Bildschirm bleiben zu.</p></div></aside>`;
     return { k, cols: 'minmax(0,1fr) 400px', h };

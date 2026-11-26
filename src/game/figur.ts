@@ -19,7 +19,9 @@ import { FIGUR_TEILE } from '../data/figurTeile';
 export type Platz = 'helm' | 'weste' | 'overall' | 'handschuh' | 'stiefel';
 export const PLAETZE: Platz[] = ['helm', 'weste', 'overall', 'handschuh', 'stiefel'];
 /** Was eine Figur trägt: Nummer der Figur und je Platz die Kennung eines Teils (helm_01, overall_02 …) */
-export interface Tracht { figur: number; teile: Partial<Record<Platz, string>> }
+export interface Tracht { figur: number; teile: Partial<Record<Platz, string>>; puppe?: boolean }      // puppe: Schaupuppe im Laden (Körper in Puppengrau, ohne Haare; schaupuppe.ts)
+let PUPPE_MAT: THREE.MeshStandardMaterial | null = null;
+const puppeMat = () => (PUPPE_MAT ||= Object.assign(new THREE.MeshStandardMaterial({ color: 0x777a7c, roughness: 0.52, metalness: 0 }), { name: 'Schaupuppe', envMapIntensity: 0.3 }));
 export const TEIL_PLATZ = FIGUR_TEILE.teile as Record<string, Platz>;
 const VERDECKT = FIGUR_TEILE.verdeckt as Partial<Record<Platz, string>>;
 const HAND = '^(hand|thumb|index|middle|ring|pinky|wrist)_';
@@ -148,11 +150,11 @@ export class Figur {
   setzen(t: Tracht) {
     const def = t.figur ? figurDef(t.figur) : { id: 0, teile: [] as KoerperTeil[] };      // 0: kein Körper, nur die Teile (Ansicht im Laden)
     const teile = PLAETZE.map(p => [p, t.teile[p]] as const).filter(x => x[1] && TEIL_PLATZ[x[1]!] === x[0]) as [Platz, string][];
-    const key = def.id + '|' + teile.map(x => x[1]).join(',');
+    const pu = !!t.puppe, key = def.id + '|' + teile.map(x => x[1]).join(',') + (pu ? '|p' : '');
     if (key === this.key) return;
     this.key = key; this.fertig = false;
     const gen = ++this.gen;
-    const want = [...def.teile.map(k => ({ f: k.f, weg: k.weg || null })), ...teile.map(x => ({ f: teilDatei(x[1]), weg: null as Record<string, string> | null }))].map(w => ({ ...w, wk: JSON.stringify(w.weg) }));
+    const want = [...def.teile.map(k => ({ f: k.f, weg: k.weg || null })), ...teile.map(x => ({ f: teilDatei(x[1]), weg: null as Record<string, string> | null }))].map(w => ({ ...w, wk: JSON.stringify(w.weg) + (pu ? 'P' : '') }));
     const got = want.map(w => holen(w.f));
     Promise.all(got.map(c => c.p)).then(ds => {
       if (gen !== this.gen) { for (const w of want) lassen(w.f); return; }      // inzwischen etwas anderes gewünscht
@@ -160,7 +162,7 @@ export class Figur {
       const keep = new Set(want.map(w => w.f + w.wk));
       this.inst = this.inst.filter(i => { if (keep.has(i.file + i.wk)) return true; this.drop(i); return false; });
       const have = new Set(this.inst.map(i => i.file));
-      want.forEach((w, k) => { const d = ds[k]; if (d && !have.has(w.f)) for (const n of d.netze) this.add(w.f, w.wk, n, w.weg?.[n.name] || null); });
+      want.forEach((w, k) => { const d = ds[k]; if (d && !have.has(w.f)) for (const n of d.netze) this.add(w.f, w.wk, n, w.weg?.[n.name] || null, pu); });
       for (const f of this.files) lassen(f);
       this.files = want.map(w => w.f);
       this.maskieren(new Set(teile.map(x => x[0])));
@@ -169,7 +171,8 @@ export class Figur {
       this.onChange?.();
     });
   }
-  private add(file: string, wk: string, n: Netz, weg: string | null) {
+  private add(file: string, wk: string, n: Netz, weg: string | null, puppe = false) {
+    if (puppe && n.name === 'haare') return;
     let geo = n.geo, base: Inst['base'] = null;
     if (n.koerper || n.name === 'haare') {
       // eigene Flächenliste über denselben Eckpunkten: so lassen sich Flächen je Figur ausblenden
@@ -179,7 +182,7 @@ export class Figur {
       geo.setIndex(new THREE.BufferAttribute(base.slice(), 1));
       geo.boundingBox = n.geo.boundingBox; geo.boundingSphere = n.geo.boundingSphere;
     }
-    const m = new THREE.SkinnedMesh(geo, n.mat);
+    const m = new THREE.SkinnedMesh(geo, puppe && n.koerper ? puppeMat() : n.mat);
     m.name = 'fig_' + n.name; m.frustumCulled = false; m.castShadow = true; m.userData.sh = false; m.userData.shared = true;
     // Jedes Netz bringt seine eigenen Bindematrizen mit (beim Packen steckt darin auch die Umrechnung seiner verdichteten Eckpunkte)
     const bones = n.bones.map(b => this.bones[b]);
