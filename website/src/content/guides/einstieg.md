@@ -43,6 +43,7 @@ was jetzt sofort geht. Gibt es nichts zu tun, verschwindet die Leiste. Alle Tast
 | <kbd>C</kbd> halten / <kbd>V</kbd> | freie Kamera: um das Schiff schauen |
 | <kbd>M</kbd> | Karte: Sektorkarte und Galaxie |
 | <kbd>B</kbd> | Flottenband: Aufträge, Ruf, Handel |
+| <kbd>K</kbd> | Cockpit-Sicht ein und aus (Milan, Dohle, Kormoran) |
 | <kbd>E</kbd> | Andocken oder Landen, wenn es angeboten wird |
 
 Unten rechts sitzt die Schiffsanzeige als Ring: außen der Schild, innen die Hülle, in der Mitte der Umriss deines Schiffs. Daneben
