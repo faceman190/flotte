@@ -1,0 +1,171 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gesichts-Editor (Test)</title>
+<style>
+html,body{margin:0;height:100%;background:#15191f;color:#d7e6f2;font:13px system-ui,Segoe UI,sans-serif;overflow:hidden}
+#cv{position:fixed;left:0;top:0;right:340px;bottom:0}
+#p{position:fixed;right:0;top:0;bottom:0;width:340px;overflow-y:auto;background:#1d232b;border-left:1px solid #2c3540;padding:10px 14px;box-sizing:border-box}
+h1{font-size:15px;margin:2px 0 8px}h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#8fb3cc;margin:14px 0 6px;border-bottom:1px solid #2c3540;padding-bottom:3px}
+.r{display:grid;grid-template-columns:110px 1fr 38px;align-items:center;gap:6px;margin:3px 0}
+.r input[type=range]{width:100%}.r span{text-align:right;color:#9db;font-variant-numeric:tabular-nums}
+button{background:#2b3a48;color:#d7e6f2;border:1px solid #3c4f61;border-radius:4px;padding:5px 9px;cursor:pointer;margin:2px 2px 2px 0}button:hover{background:#36495b}
+label.c{display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0}
+.sw{display:inline-block;width:22px;height:22px;border-radius:50%;border:2px solid #0000;cursor:pointer;margin:2px}.sw.on{border-color:#fff}
+#code{width:100%;box-sizing:border-box;background:#11161c;color:#cfe;border:1px solid #2c3540;font:12px Consolas,monospace;padding:5px}
+#st{position:fixed;left:10px;top:8px;color:#9ab;text-shadow:0 1px 2px #000}
+@media (max-width:760px){#cv{right:0;bottom:45%}#p{width:auto;left:0;top:55%;border-left:0;border-top:1px solid #2c3540}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+</head><body>
+<div id="cv"></div><div id="st">lade …</div>
+<div id="p">
+  <h1>Gesichts-Editor <small style="color:#789">Test, Stufe 1</small></h1>
+  <div><button id="zuf">Zufall</button><button id="rst">Zurücksetzen</button><button id="cam">Ganzer Kopf / Nah</button></div>
+  <div id="regler"></div>
+  <h2>Haut</h2>
+  <div class="r"><label>Hautton</label><input type="range" id="haut" min="0" max="100" value="0"><span id="hautv">0</span></div>
+  <h2>Haare</h2>
+  <div><label class="c"><input type="checkbox" data-teil="haar_haare" checked>Haare</label><label class="c"><input type="checkbox" data-teil="haar_bart" checked>Bart</label>
+  <label class="c"><input type="checkbox" data-teil="haar_schnurrbart" checked>Schnurrbart</label><label class="c"><input type="checkbox" data-teil="haar_brauen" checked>Brauen</label></div>
+  <div id="farben" style="margin-top:4px"></div>
+  <h2>Mimik</h2>
+  <label class="c"><input type="checkbox" id="blinz" checked>Blinzeln von selbst</label>
+  <div id="mimik"></div>
+  <h2>Gespeichert als</h2>
+  <input id="code" readonly><div style="color:#789;margin-top:4px">So kurz wird ein Gesicht im Spielstand und im Netz. Der Link merkt sich das Gesicht.</div>
+</div>
+<script type="module">
+// Testseite für den Gesichts-Editor (Plan: Claude Doc „Plan: Gesichts-Editor für die Spielerfigur“). Kopf aus dem MetaHuman,
+// 16 Kopfform-Regler (form_*) und 12 Mimik-Formen (mimik_*) als Morph Targets; Haare, Bart, Brauen folgen denselben Morphs.
+// Dateien: public/gesicht/*.glb (scripts/pack-gesicht.mjs). three kommt hier vom CDN, damit die Seite ohne Build läuft.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+const FORM = [
+  ['Kopf', [['kopf_breite', 'Kopfbreite'], ['stirn_hoehe', 'Stirnhöhe']]],
+  ['Augen', [['augen_abstand', 'Abstand'], ['augen_hoehe', 'Höhe'], ['augen_groesse', 'Größe']]],
+  ['Nase', [['nase_laenge', 'Länge'], ['nase_breite', 'Breite'], ['nasenruecken', 'Nasenrücken']]],
+  ['Wangen', [['wangenknochen', 'Wangenknochen'], ['wangen_fuelle', 'Fülle']]],
+  ['Mund', [['mund_breite', 'Breite'], ['lippen_volumen', 'Lippen']]],
+  ['Kinn und Kiefer', [['kiefer_breite', 'Kieferbreite'], ['kinn_laenge', 'Kinnlänge'], ['kinn_breite', 'Kinnbreite']]],
+  ['Ohren', [['ohr_groesse', 'Größe']]],
+];
+const MIMIK = [['blinzeln_L', 'Blinzeln links'], ['blinzeln_R', 'Blinzeln rechts'], ['kiefer_auf', 'Kiefer auf'], ['laecheln_L', 'Lächeln links'],
+  ['laecheln_R', 'Lächeln rechts'], ['brauen_hoch', 'Brauen hoch'], ['brauen_runter', 'Brauen runter'], ['mund_breit', 'Mund breit'],
+  ['mund_spitz', 'Mund spitz'], ['wangen_auf', 'Wangen auf'], ['augen_weit', 'Augen weit'], ['nase_ruempfen', 'Nase rümpfen']];
+const HAARFARBEN = [['#e8e2d6', 'Weißgrau'], ['#9a9c9f', 'Grau'], ['#d8b77a', 'Blond'], ['#8a5a32', 'Hellbraun'], ['#4a2e1c', 'Braun'], ['#1c1714', 'Schwarz'], ['#9c3a1e', 'Rot'], ['#3a6ea8', 'Blau']];
+const TEILE = ['kopf_mh', 'haar_haare', 'haar_bart', 'haar_schnurrbart', 'haar_brauen'];
+
+// ---------- Zustand und Speicherformat ----------
+const formKeys = FORM.flatMap(g => g[1].map(x => x[0]));
+const S = { v: 1, form: Object.fromEntries(formKeys.map(k => [k, 0])), haut: 0, haar: 1, teile: { haar_haare: 1, haar_bart: 1, haar_schnurrbart: 1, haar_brauen: 1 } };
+// Kodierung: Version, 16 Regler (je 1 Byte, -100..100 → 0..200), Hautton, Haarfarbe, Teile als Bits → Base64 (URL-sicher)
+function enc() {
+  const b = [S.v, ...formKeys.map(k => Math.round(S.form[k] * 100) + 100), S.haut, S.haar,
+    (S.teile.haar_haare ? 1 : 0) | (S.teile.haar_bart ? 2 : 0) | (S.teile.haar_schnurrbart ? 4 : 0) | (S.teile.haar_brauen ? 8 : 0)];
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function dec(s) {
+  try {
+    const b = [...atob(s.replace(/-/g, '+').replace(/_/g, '/'))].map(c => c.charCodeAt(0));
+    if (b[0] !== 1 || b.length < formKeys.length + 4) return;
+    formKeys.forEach((k, i) => S.form[k] = Math.max(-1, Math.min(1, (b[1 + i] - 100) / 100)));
+    let i = 1 + formKeys.length; S.haut = Math.min(100, b[i++]); S.haar = Math.min(HAARFARBEN.length - 1, b[i++]); const t = b[i];
+    S.teile = { haar_haare: t & 1, haar_bart: t & 2, haar_schnurrbart: t & 4, haar_brauen: t & 8 };
+  } catch { /* ungültiger Code: Standard bleibt */ }
+}
+const h = new URLSearchParams(location.hash.slice(1)).get('g'); if (h) dec(h);
+
+// ---------- Bühne ----------
+const host = document.getElementById('cv'), st = document.getElementById('st');
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setPixelRatio(Math.min(2, devicePixelRatio));
+r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace; host.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.background = new THREE.Color(0x15191f);
+sc.environment = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(), 0.04).texture; sc.environmentIntensity = 0.55;
+const key = new THREE.DirectionalLight(0xfff0e0, 2.4); key.position.set(1.2, 2.4, 1.6); sc.add(key);
+const rim = new THREE.DirectionalLight(0xbfd8ff, 1.4); rim.position.set(-1.5, 2, -1.2); sc.add(rim);
+const cam = new THREE.PerspectiveCamera(28, 1, 0.01, 50); const ctl = new OrbitControls(cam, r.domElement); ctl.enableDamping = true;
+let nah = true;
+function kamera() { const y = nah ? 1.65 : 1.58, d = nah ? 0.85 : 1.25; ctl.target.set(0, y, 0); cam.position.set(0.18 * d, y + 0.03, d); ctl.update(); }
+function groesse() { const w = host.clientWidth, hh = host.clientHeight; r.setSize(w, hh); cam.aspect = w / hh; cam.updateProjectionMatrix(); }
+addEventListener('resize', groesse); groesse(); kamera();
+
+// ---------- Laden ----------
+const netze = {}; // Teil → Liste von SkinnedMesh
+const haarMats = [];
+let hautMat = null; const hautBasis = new THREE.Color(1, 1, 1);
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+let fertig = 0;
+for (const t of TEILE) loader.load('gesicht/' + t + '.glb', g => {
+  netze[t] = [];
+  g.scene.traverse(o => {
+    if (!o.isMesh) return; netze[t].push(o); o.frustumCulled = false;
+    const m = o.material;
+    if (t.startsWith('haar_')) { m.transparent = false; m.alphaTest = 0.22; m.depthWrite = true; m.side = THREE.DoubleSide; haarMats.push(m); }
+    if (m.name === 'kopf_haut') { hautMat = m; hautBasis.copy(m.color); }
+  });
+  // Die Szene liegt in Mannys Koordinaten (Kopf bei ~1,63 m); Y-up kommt vom GLB
+  sc.add(g.scene);
+  st.textContent = `lade … ${++fertig}/${TEILE.length}`; if (fertig === TEILE.length) { st.textContent = ''; anwenden(); }
+}, undefined, e => { st.textContent = 'Fehler beim Laden von ' + t + ': ' + e.message; });
+
+// ---------- Morphs setzen ----------
+function morph(name, v) {
+  for (const t in netze) for (const m of netze[t]) {
+    const i = m.morphTargetDictionary?.[name]; if (i !== undefined) m.morphTargetInfluences[i] = v;
+  }
+}
+const mimik = Object.fromEntries(MIMIK.map(x => [x[0], 0]));
+function anwenden() {
+  for (const k of formKeys) morph('form_' + k, S.form[k]);
+  for (const k in mimik) morph('mimik_' + k, mimik[k]);
+  for (const t in S.teile) for (const m of netze[t] || []) m.visible = !!S.teile[t];
+  const c = new THREE.Color(HAARFARBEN[S.haar][0]); for (const m of haarMats) m.color.copy(c);
+  // Vorschau Hautton: Grundfarbe zu dunklerer Haut hin multiplizieren (in Stufe 2 ersetzt durch entsättigte Grundtextur + Farbleiste)
+  if (hautMat) hautMat.color.copy(hautBasis).lerp(new THREE.Color(0.36, 0.24, 0.17), S.haut / 100);
+  const code = enc(); document.getElementById('code').value = code; history.replaceState(null, '', '#g=' + code);
+}
+
+// ---------- Bedienung ----------
+const rg = document.getElementById('regler'), inputs = {};
+function regler(parent, id, label, min, max, get, set) {
+  const d = document.createElement('div'); d.className = 'r';
+  d.innerHTML = `<label>${label}</label><input type="range" min="${min}" max="${max}" step="1"><span></span>`;
+  const inp = d.querySelector('input'), sp = d.querySelector('span');
+  const show = () => { inp.value = get(); sp.textContent = inp.value; };
+  inp.addEventListener('input', () => { set(+inp.value); sp.textContent = inp.value; anwenden(); });
+  parent.appendChild(d); inputs[id] = show; show();
+}
+for (const [grp, list] of FORM) {
+  const hd = document.createElement('h2'); hd.textContent = grp; rg.appendChild(hd);
+  for (const [k, l] of list) regler(rg, k, l, -100, 100, () => Math.round(S.form[k] * 100), v => S.form[k] = v / 100);
+}
+const mk = document.getElementById('mimik');
+for (const [k, l] of MIMIK) regler(mk, 'm_' + k, l, 0, 100, () => Math.round(mimik[k] * 100), v => mimik[k] = v / 100);
+const haut = document.getElementById('haut'), hautv = document.getElementById('hautv');
+haut.value = S.haut; hautv.textContent = S.haut; haut.addEventListener('input', () => { S.haut = +haut.value; hautv.textContent = haut.value; anwenden(); });
+const fb = document.getElementById('farben');
+HAARFARBEN.forEach(([c, n], i) => { const s = document.createElement('span'); s.className = 'sw' + (i === S.haar ? ' on' : ''); s.style.background = c; s.title = n;
+  s.onclick = () => { S.haar = i; fb.querySelectorAll('.sw').forEach((x, j) => x.classList.toggle('on', j === i)); anwenden(); }; fb.appendChild(s); });
+document.querySelectorAll('[data-teil]').forEach(cb => { cb.checked = !!S.teile[cb.dataset.teil]; cb.onchange = () => { S.teile[cb.dataset.teil] = cb.checked ? 1 : 0; anwenden(); }; });
+const alle = () => { Object.values(inputs).forEach(f => f()); haut.value = S.haut; hautv.textContent = S.haut; fb.querySelectorAll('.sw').forEach((x, j) => x.classList.toggle('on', j === S.haar)); };
+document.getElementById('zuf').onclick = () => { for (const k of formKeys) S.form[k] = Math.round((Math.random() * 2 - 1) * 70) / 100; S.haut = Math.round(Math.random() * 70); S.haar = Math.floor(Math.random() * 6);
+  S.teile.haar_bart = Math.random() < 0.5 ? 1 : 0; S.teile.haar_schnurrbart = Math.random() < 0.5 ? 1 : 0;
+  document.querySelectorAll('[data-teil]').forEach(cb => cb.checked = !!S.teile[cb.dataset.teil]); alle(); anwenden(); };
+document.getElementById('rst').onclick = () => { for (const k of formKeys) S.form[k] = 0; for (const k in mimik) mimik[k] = 0; S.haut = 0; alle(); anwenden(); };
+document.getElementById('cam').onclick = () => { nah = !nah; kamera(); };
+
+// ---------- Schleife (mit Blinzeln alle paar Sekunden) ----------
+const blinz = document.getElementById('blinz'); let naechstes = 2, clock = new THREE.Clock();
+r.setAnimationLoop(() => {
+  const t = clock.getElapsedTime();
+  if (blinz.checked && fertig === TEILE.length) {
+    const p = t - naechstes; let v = 0; if (p > 0 && p < 0.16) v = Math.sin(p / 0.16 * Math.PI); else if (p >= 0.16) naechstes = t + 2 + Math.random() * 4;
+    const b = Math.max(v, mimik.blinzeln_L); morph('mimik_blinzeln_L', b); morph('mimik_blinzeln_R', Math.max(v, mimik.blinzeln_R));
+  }
+  ctl.update(); r.render(sc, cam);
+});
+</script>
+</body></html>
