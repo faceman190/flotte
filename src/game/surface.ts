@@ -232,7 +232,13 @@ export function buildSurface(sector: string) {
     const fp = fg.attributes.position as THREE.BufferAttribute;
     for (let k = 0; k < fp.count; k++) {
       const x = fp.getX(k), z = fp.getZ(k), e = Math.max(Math.abs(x), Math.abs(z));
-      fp.setY(k, hfunFar(x, z) - (e < half - 1 ? 70 : e < half + 1 ? 5 : 0));
+      if (e < half - 1) {
+        // Unter der Karte: unter den tiefsten Punkt der Umgebung legen. Bis 27.11.2026 lag es nur 70 m unter der Höhenformel – wo das Plateau der
+        // Bodenstation oder die Erosion den Boden tiefer gelegt hatte, ragte es durch die Karte (Stück Gelände vor der Talstadt, durch das man fuhr).
+        let lo = 1e9;
+        for (let dz = -150; dz <= 150; dz += 50) for (let dx = -150; dx <= 150; dx += 50) lo = Math.min(lo, heightAt(x + dx, z + dz));
+        fp.setY(k, Math.min(hfunFar(x, z) - 70, lo - 25));
+      } else fp.setY(k, hfunFar(x, z) - (e < half + 1 ? 5 : 0));
     }
     fg.computeVertexNormals();
     const fn = fg.attributes.normal as THREE.BufferAttribute, fc = new Float32Array(fp.count * 3), fsl = new Float32Array(fp.count), fuv = fg.attributes.uv as THREE.BufferAttribute;
