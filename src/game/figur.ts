@@ -41,11 +41,11 @@ export const FIGUREN: { id: number; n: string; d: string; teile: KoerperTeil[] }
   ] },
   { id: 3, n: 'Figur 3', d: 'Kräftig, kurzes Haar, glatt rasiert', teile: [{ f: 'lazy/Koerper3' }] },
 ];
-// Körper zum eigenen Gesicht: der hautenge Anzug von Figur 3 (koerper_01, auf den der Hals in Blender angepasst wird) ohne Kopf, Hals
-// und Hände; die Hände vom MetaHuman (Figur 2), damit sie den Hautton des Kopfes annehmen; dazu der Kopf aus dem Gesichts-Editor.
+// Körper zum eigenen Gesicht: der hautenge Anzug (koerper_01 von Figur 3) ohne den alten Hals (in Blender entfernt, gesicht_09), ohne
+// Hände; die Hände vom MetaHuman (Figur 2), damit sie den Hautton des Kopfes annehmen; dazu der Kopf aus dem Gesichts-Editor.
 // Die Haare kommen je nach Wahl dazu.
 const GESICHT_KOERPER: KoerperTeil[] = [
-  { f: 'lazy/Koerper3', nur: ['koerper'], weg: { koerper: '^(head$|neck_02$|' + HAND.slice(1) + ')' } },
+  { f: 'lazy/Gesicht_koerper', weg: { koerper: HAND } },
   { f: 'lazy/Koerper2', nur: ['koerper'], weg: { koerper: '^(?!(hand|thumb|index|middle|ring|pinky|wrist)_)' } },
   { f: KOPF_DATEI },
 ];
@@ -235,7 +235,7 @@ export class Figur {
     let mat = puppe && n.koerper ? puppeMat() : n.mat;
     const eigen: THREE.Material[] = [];
     const haende = file === 'lazy/Koerper2';      // MetaHuman-Hände: nehmen den Hautton an
-    if (gesicht && (istGesichtDatei(file) || haende)) {
+    if (gesicht && ((istGesichtDatei(file) && file !== 'lazy/Gesicht_koerper') || haende)) {
       const ein = (m0: THREE.Material) => {
         const m1 = m0.clone(); eigen.push(m1);
         if (m1.name === 'kopf_haut' || haende) hautShader(m1, this.uHaut);

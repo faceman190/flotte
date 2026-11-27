@@ -9,8 +9,8 @@ Stand 27.11.2026: im Spiel bei „Neuer Pilot“ (statt Figur 1–3), dazu die T
 - Nur dort wählbar (Wunsch des Spielers): Die Garderobe zeigt die Figur nur noch. Alte Spielstände ohne Gesicht wählen dort weiter
   Figur 1–3.
 - Spielstand `P.gesicht` (Code), Netz: 11. Feld von `g` (Server lässt bis 48 Zeichen durch). Ist es gesetzt, gilt es statt `P.figur`.
-- Figur (`src/game/figur.ts`, `Tracht.gesicht`): hautenger Anzug von Figur 3 (`lazy/Koerper3`, nur `koerper`) ohne Kopf, `neck_02` und
-  Hände, die MetaHuman-Hände aus `lazy/Koerper2` (nehmen den Hautton an), Kopf `lazy/Gesicht_kopf_mh`, je Haarplatz die gewählte Datei.
+- Figur (`src/game/figur.ts`, `Tracht.gesicht`): hautenger Anzug `lazy/Gesicht_koerper` (koerper_01 ohne alten Hals, Skript
+  `gesicht_09_koerper_ohne_hals.py`) ohne Hände, die MetaHuman-Hände aus `lazy/Koerper2` (nehmen den Hautton an), Kopf `lazy/Gesicht_kopf_mh`, je Haarplatz die gewählte Datei.
   Jede Figur bekommt eigene Kopien der Materialien (Bilder bleiben geteilt) für Hautton, Iris und Haarfarbe; die Regler sind Morphs.
   Frisur verschwindet unter dem Helm. Die Vorschau blinzelt alle paar Sekunden.
 - Dateien: gepackt in `asset-src/glb/gesicht/`, mit `node scripts/build-gesicht.mjs` als `lazy/Gesicht_<name>` in die Paketliste
@@ -56,9 +56,8 @@ Version 1 (frühe Testseite) wird noch gelesen.
 
 ## Offen
 
-- Halsansatz: Der Spieler passt den Hals in Blender an (`Charaktererstellung\03_Blender\hals_anpassung.blend`, Körper koerper_01,
-  Gruppen `hals_naht`, `hals_rand`, `alter_kopf`; Skript `gesicht_08_hals_datei.py`). Bis dahin sieht man am Kragen Reste des alten Halses.
-  Danach Kopf und Körper neu exportieren und packen.
+- Hals (27.11. angepasst in `Charaktererstellung\03_Blender\hals_anpassung.blend`): Kragenrand des Körpers nicht ganz glatt; hinten am
+  Rücken (z ≈ 1,48 m) sticht ein kleines Dreieck der Kopfhaut durch den Anzug.
 - Lidschlag und Mimik nur in der Vorschau, noch nicht an der Figur im Spiel.
 - Narben und Tattoos als Ebenen (Stufe 2); echte Hautvarianten (Sommersprossen, Alter) als gebackene MetaHuman-Hautvorlagen.
 - Haarkarten werden ausgestanzt (alphaTest 0,22), wirken dadurch strähnig; ggf. später sortiert durchscheinend.
