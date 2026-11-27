@@ -421,7 +421,7 @@ function resume() { hidePause(); G.mode = pausedFrom; duckMusic(1); document.bod
 $('pSkip').onclick = () => { skipPrologue(); resume(); };
 storyHooks.banner = (t, s, c) => showBanner(t, s, c);
 crewHooks.busy = () => dialogBusy() || sceneActive();   // Stimmen der Crew schweigen, solange die Geschichte spricht
-menuHooks.newGame = (name, figur) => { const p = newPlayer(NET.account || name); p.figur = figur; startGame(p, true); };   // mit Konto heißt der Pilot wie das Konto; Figur aus der Charaktererstellung
+menuHooks.newGame = (name, gesicht) => { const p = newPlayer(NET.account || name); p.figur = 1; p.gesicht = gesicht; startGame(p, true); };   // mit Konto heißt der Pilot wie das Konto; Gesicht aus der Charaktererstellung
 // ohne Übergänge (Prüfskripte, START.on = false): im selben Augenblick wie früher, nichts wird abgewartet
 menuHooks.continueGame = () => { if (!START.on) { const p = loadGame(); if (p) startGame(p, false); return; } void continueGame(); };
 menuHooks.resume = resume;

@@ -1,6 +1,20 @@
 # Gesichts-Editor
 
-Stand 27.11.2026: Stufe 1 als Testseite, noch nicht im Spiel. Plan: Claude Doc „Plan: Gesichts-Editor für die Spielerfigur“.
+Stand 27.11.2026: im Spiel bei „Neuer Pilot“ (statt Figur 1–3), dazu die Testseite. Plan: Claude Doc „Plan: Gesichts-Editor für die Spielerfigur“.
+
+## Im Spiel
+
+- Personalakte „Neuer Pilot“: Abschnitte Gesicht (Hautton, Augenfarbe, Zufall, Zurücksetzen), Kopfform (16 Regler in Gruppen) und
+  Haare (Frisur, Bart, Schnurrbart, Brauen, Haarfarbe); `src/ui/gesichtUi.ts`, Werte und Kodierung in `src/data/gesicht.ts`.
+- Nur dort wählbar (Wunsch des Spielers): Die Garderobe zeigt die Figur nur noch. Alte Spielstände ohne Gesicht wählen dort weiter
+  Figur 1–3.
+- Spielstand `P.gesicht` (Code), Netz: 11. Feld von `g` (Server lässt bis 48 Zeichen durch). Ist es gesetzt, gilt es statt `P.figur`.
+- Figur (`src/game/figur.ts`, `Tracht.gesicht`): hautenger Anzug von Figur 3 (`lazy/Koerper3`, nur `koerper`) ohne Kopf, `neck_02` und
+  Hände, die MetaHuman-Hände aus `lazy/Koerper2` (nehmen den Hautton an), Kopf `lazy/Gesicht_kopf_mh`, je Haarplatz die gewählte Datei.
+  Jede Figur bekommt eigene Kopien der Materialien (Bilder bleiben geteilt) für Hautton, Iris und Haarfarbe; die Regler sind Morphs.
+  Frisur verschwindet unter dem Helm. Die Vorschau blinzelt alle paar Sekunden.
+- Dateien: gepackt in `asset-src/glb/gesicht/`, mit `node scripts/build-gesicht.mjs` als `lazy/Gesicht_<name>` in die Paketliste
+  (Paket „lazy“, nur bei Bedarf geladen). Die Testseite lädt aus derselben Liste.
 
 ## Testseite
 
@@ -13,11 +27,12 @@ Stand 27.11.2026: Stufe 1 als Testseite, noch nicht im Spiel. Plan: Claude Doc �
   „Cinematic“ exportiert (`WebExport\metahuman_lod0`, Arbeitskopie `WebExport\_work`).
 - Web-Kopf per Blender-Skript (`Charaktererstellung\Skripte\gesicht_00` bis `gesicht_04`, Ausgabe `WebExport\gesicht_web`): Manny-Skelett
   (161 Knochen), alle Gesichtsknochen auf `head`, Kopf auf Mannys Kopfknochen verschoben (MetaHuman saß 47 mm höher).
-- `public/gesicht/kopf_mh.glb`: Haut, Augen, Zähne, Augenhülle, Wimpern, Tränenflüssigkeit; 16 Kopfform-Morphs `form_*` (Hals bleibt
+- `kopf_mh.glb`: Haut, Augen, Zähne, Augenhülle, Wimpern, Tränenflüssigkeit; 16 Kopfform-Morphs `form_*` (Hals bleibt
   unverändert) und 12 Mimik-Morphs `mimik_*` (Näherung aus Gelenkbewegung plus MetaHuman-Korrekturform).
-- `public/gesicht/haar_haare|bart|schnurrbart|brauen.glb`: Haarkarten an `head`, Atlas in Graustufen (Farbe aus dem Material), mit den
+- `haar_haare|bart|schnurrbart|brauen.glb`: Haarkarten an `head`, Atlas in Graustufen (Farbe aus dem Material), mit den
   vom Kopf übertragenen Morphs (nur die mit Wirkung).
-- Packen: `node scripts/pack-gesicht.mjs <Quellordner> public/gesicht` (Meshopt, WebP bis 2048): 56 MB → 7,7 MB.
+- Packen: `node scripts/pack-gesicht.mjs <Quellordner> asset-src/glb/gesicht` (Meshopt, WebP bis 2048): 56 MB → 7,7 MB, danach
+  `node scripts/build-gesicht.mjs`.
 
 ## Frisuren, Bärte, Brauen
 
@@ -34,15 +49,17 @@ MetaHuman selbst. Liste und Werte: [gesicht-frisuren.txt](gesicht-frisuren.txt),
 - Iris: In der Augentextur liegt die Iris grau als Ring um die UV-Mitte (Radius 0,044 bis 0,166). Der Shader färbt diesen Ring nach der
   Helligkeit um; 10 Vorgaben und ein Farbwähler.
 
-## Speicherformat (Entwurf)
+## Speicherformat
 
-Version, 16 Regler (je ein Byte, −100…100 als 0…200), Hautton, Haarfarbe, Irisfarbe (3 Byte), je Haarplatz die Nummer (Frisur, Bart, Schnurrbart, Brauen; 0 = ohne), als URL-sicheres Base64 (32 Zeichen, Version 2).
-Kommt später nach `P.gesicht` und ins Netzfeld `g`.
+Version, 16 Regler (je ein Byte, −100…100 als 0…200), Hautton, Haarfarbe, Irisfarbe (3 Byte), je Haarplatz die Nummer (Frisur, Bart, Schnurrbart, Brauen; 0 = ohne), als URL-sicheres Base64 (26 Byte = 35 Zeichen, Version 2).
+Version 1 (frühe Testseite) wird noch gelesen.
 
 ## Offen
 
-- Halsansatz: Der MetaHuman-Hals ragt an den Schultern aus Mannys Körper (spine_05 liegt 69 mm tiefer als bei Manny); kürzen oder an den
-  Körper anpassen, Kopf und Hals des Körpers ausblenden.
+- Halsansatz: Der Spieler passt den Hals in Blender an (`Charaktererstellung\03_Blender\hals_anpassung.blend`, Körper koerper_01,
+  Gruppen `hals_naht`, `hals_rand`, `alter_kopf`; Skript `gesicht_08_hals_datei.py`). Bis dahin sieht man am Kragen Reste des alten Halses.
+  Danach Kopf und Körper neu exportieren und packen.
+- Lidschlag und Mimik nur in der Vorschau, noch nicht an der Figur im Spiel.
 - Narben und Tattoos als Ebenen (Stufe 2); echte Hautvarianten (Sommersprossen, Alter) als gebackene MetaHuman-Hautvorlagen.
 - Haarkarten werden ausgestanzt (alphaTest 0,22), wirken dadurch strähnig; ggf. später sortiert durchscheinend.
 - Weitere Köpfe aus MetaHuman Creator als ganze Morphs (Vorlagen zum Mischen).

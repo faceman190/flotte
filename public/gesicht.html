@@ -39,7 +39,7 @@ label.c{display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0}
 <script type="module">
 // Testseite für den Gesichts-Editor (Plan: Claude Doc „Plan: Gesichts-Editor für die Spielerfigur“). Kopf aus dem MetaHuman,
 // 16 Kopfform-Regler (form_*) und 12 Mimik-Formen (mimik_*) als Morph Targets; Haare, Bart, Brauen folgen denselben Morphs.
-// Dateien: public/gesicht/*.glb (scripts/pack-gesicht.mjs). three kommt hier vom CDN, damit die Seite ohne Build läuft.
+// Dateien: asset-src/glb/gesicht/*.glb (scripts/pack-gesicht.mjs), über scripts/build-gesicht.mjs in der Paketliste. three kommt hier vom CDN, damit die Seite ohne Build läuft.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -138,11 +138,13 @@ function augenShader(m) {
 }
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 // Dateien werden erst geladen, wenn sie gebraucht werden, und dann behalten (Wechsel zurück ist sofort da)
+// Dateien stehen in der Paketliste des Spiels (lazy/Gesicht_<name>, scripts/build-gesicht.mjs)
+const MAN = fetch('assets/manifest.json').then(r => r.json());
 const szenen = {}, laeuft = {};
 let kopfDa = false;
 function laden(t) {
   if (szenen[t]) return Promise.resolve(szenen[t]);
-  return laeuft[t] ||= new Promise((ok, fail) => loader.load('gesicht/' + t + '.glb', g => {
+  return laeuft[t] ||= MAN.then(m => new Promise((ok, fail) => loader.load(m.files['lazy/Gesicht_' + t].url, g => {
     netze[t] = [];
     g.scene.traverse(o => {
       if (!o.isMesh) return; netze[t].push(o); o.frustumCulled = false;
@@ -153,7 +155,7 @@ function laden(t) {
     });
     // Die Szene liegt in Mannys Koordinaten (Kopf bei ~1,63 m); Y-up kommt vom GLB
     g.scene.visible = false; sc.add(g.scene); szenen[t] = g.scene; ok(g.scene);
-  }, undefined, e => { st.textContent = 'Fehler beim Laden von ' + t + ': ' + e.message; fail(e); }));
+  }, undefined, e => { st.textContent = 'Fehler beim Laden von ' + t + ': ' + e.message; fail(e); })));
 }
 async function haareSetzen() {
   const soll = PLAETZE.map(p => datei(p, S.wahl[p])).filter(Boolean);

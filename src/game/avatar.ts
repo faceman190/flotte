@@ -19,12 +19,12 @@ import { FremdFigur } from './fremdFigur';
 // Eigene Figur: angelegte Ausrüstung plus das gewählte Aussehen (seit 2026-11-20)
 export const figGear = (): FigGear => ({ ...(P.gear || {}), look: normLook(P.look) });
 // Neue Spielerfigur (figur.ts): gewählte Figur und die Teile, die zur angelegten Ausrüstung gehören
-export function trachtOf(figur: unknown, gear?: Record<string, string | undefined> | null): Tracht {
-  const t: Tracht = { figur: normFigur(figur), teile: {} };
+export function trachtOf(figur: unknown, gear?: Record<string, string | undefined> | null, gesicht?: string | null): Tracht {
+  const t: Tracht = { figur: normFigur(figur), teile: {}, gesicht: gesicht || null };
   for (const s of WEAR_SLOTS) { const teil = gearDef(gear?.[s] || '')?.teil; if (teil && TEIL_PLATZ[teil]) t.teile[TEIL_PLATZ[teil]] = teil; }
   return t;
 }
-export const figTracht = () => trachtOf(P.figur, P.gear);
+export const figTracht = () => trachtOf(P.figur, P.gear, P.gesicht);
 mannyHooks.tracht = figTracht;
 
 // =====================================================================================
@@ -351,7 +351,7 @@ export const newRemoteFig = (): RemoteFig => ({ av: null, x: 0, y: 0, z: 0, tx: 
 export const lookToNet = () => { const l = normLook(P.look); return l.kopf + ',' + l.farbe; };
 export function gearFromNet(g: string[] | null | undefined) {
   const lk = String(g?.[5] || '').split(','), look = normLook({ kopf: +lk[0], farbe: +lk[1] });
-  const tracht = trachtOf(g?.[6] ? +g[6] : 1, { helm: g?.[0], anzug: g?.[1], weste: g?.[7], handschuh: g?.[8], stiefel: g?.[9] });
+  const tracht = trachtOf(g?.[6] ? +g[6] : 1, { helm: g?.[0], anzug: g?.[1], weste: g?.[7], handschuh: g?.[8], stiefel: g?.[9] }, g?.[10]);
   return { gear: { helm: g?.[0] || undefined, anzug: g?.[1] || undefined, rucksack: g?.[2] || undefined, look } as FigGear, wid: g?.[3] || viewModelId(), tracht };
 }
 export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {

@@ -468,7 +468,7 @@ function shopAfter() {
   const sel = shopRows().find(r => r.key === shop.sel), d = sel && gearDef(sel.id);
   if (!sel || !d || !itemHasModel(sel.id)) { hideItem(); return; }
   const wear = !!d.teil && (WEAR_SLOTS as string[]).includes(d.kind);
-  showItem(document.getElementById('tmItem') as HTMLCanvasElement | null, sel.id, shop.probe && wear ? trachtOf(P.figur, { ...P.gear, [d.kind]: sel.id }) : null);
+  showItem(document.getElementById('tmItem') as HTMLCanvasElement | null, sel.id, shop.probe && wear ? trachtOf(P.figur, { ...P.gear, [d.kind]: sel.id }, P.gesicht) : null);
 }
 
 // ---------- Aufträge ----------
