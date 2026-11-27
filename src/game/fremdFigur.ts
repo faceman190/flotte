@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { mannyBase, mountGun, newGun, weaponKind, type GunState, type MannyKind } from './mannyAvatar';
+import { mannyBase, mountGun, newGun, weaponKind, type GunState } from './mannyAvatar';
 import { Figur, neuesSkelett, type Tracht } from './figur';
-import { makeLyraGun, driveLyraGun, type LyraGun } from './lyraGuns';
+import { makeLyraGun, driveLyraGun, type LyraGun, type LyraKind } from './lyraGuns';
 
 // =====================================================================================
 // Fremde Figuren auf dem UE5-Skelett (seit 2026-11-24): Mitspieler zu Fuß (Station, Mine, Planet) und die Wachen der Städte.
@@ -20,7 +20,7 @@ export interface FremdDrive {
   ground?: ((x: number, z: number) => number | null) | null;
   // Waffe in der Hand (null = unbewaffnet): id = Modell (mineArt WDEFS), lyra = eine der Waffen aus dem Lyra-Paket, aim = im Anschlag,
   // shots / hits = Zähler (eine Änderung löst Rückstoß bzw. Zucken aus), reload = Fortschritt 0..1, sonst −1
-  weapon?: { id: string; lyra?: MannyKind; aim: boolean; shots: number; hits: number; reload?: number } | null;
+  weapon?: { id: string; lyra?: LyraKind; aim: boolean; shots: number; hits: number; reload?: number } | null;
 }
 
 const gaitOf = (spd: number) => (spd < 3 ? 'walk' : spd < 5.9 ? 'run' : 'sprint');
@@ -32,7 +32,7 @@ export class FremdFigur {
   private loading = false;
   private gone = false;
   private gun: GunState = newGun();
-  private guns: Partial<Record<MannyKind, LyraGun>> = {};
+  private guns: Partial<Record<LyraKind, LyraGun>> = {};
   private st = { first: true, lx: 0, lz: 0, lastY: 0, air: false };
   /** neue Netze an der Figur (Körper oder Teil gewechselt): z. B. für das Stadtlicht (city.ts probeLit) */
   onDress: ((root: THREE.Object3D) => void) | null = null;
