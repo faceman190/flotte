@@ -1,3 +1,4 @@
+import { FELD_EXTRA } from '../game/fieldfight';
 import { look } from '../core/input';
 import { $, esc } from '../core/util';
 import { P, G, stats, settings } from '../game/state';
@@ -46,6 +47,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (GUN.max && GUN.reload <= 0 && GUN.mag < GUN.max * 0.5) r.push(['R', 'Nachladen']);
     if (fresh()) r.push(['Rechtsklick halten', 'Zielen']);
     if (grenadeCount() > 0) r.push(['G', 'Granate werfen']);
+    if (fresh()) r.push(['Q / E halten', 'Zur Seite lehnen']);
     return { title: DUN.e ? DUN.e.name : 'Mine', rows: r };
   }
   if (m === 'rover' && FOOT.active) {
@@ -55,6 +57,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (GUN.max && GUN.reload <= 0 && GUN.mag < GUN.max * 0.5) r.push(['R', 'Nachladen']);
     if (fresh()) r.push(['Rechtsklick halten', 'Zielen']);
     if (grenadeCount() > 0) r.push(['G', 'Granate werfen']);
+    if (fresh() || FELD_EXTRA.kampf()) r.push(['Q / E halten', 'Zur Seite lehnen']);      // lehnen.ts
     return { title: 'Zu Fuß', rows: r };
   }
   if (m === 'rover') {

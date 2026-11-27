@@ -3,6 +3,7 @@ import { scene, camera, GLOW } from '../core/engine';
 import { rand } from '../core/util';
 import { sfx, sfxAny } from '../core/audio';
 import { sparks, flash } from './fx';
+import { ngImpact, ngExplosion, ngAirBlast, bulletHole, warmNg, updateNg, clearNg } from './ngfx';
 
 // =====================================================================================
 // Effekte im Kampf zu Fuß (seit 2026-11-19), gemeinsam für Planetenboden (fieldfight.ts) und Minen (dungeon.ts). Maßstab Meter, nicht All.
@@ -152,7 +153,7 @@ function flip(kind: 'puff' | 'blast', x: number, y: number, z: number, s0: numbe
   return true;
 }
 /** Bildfolgen vorab laden (zu Fuß mit Waffe), damit der erste Einschlag sie schon zeigt */
-export function warmFlips() { for (const k of ['puff', 'blast'] as const) { const F = FLIPS[k]; if (!F.tex && window.TEXDATA?.[F.key]) { F.tex = new THREE.TextureLoader().load(window.TEXDATA[F.key], () => { F.ok = true; }); F.tex.colorSpace = THREE.NoColorSpace; F.tex.generateMipmaps = false; F.tex.minFilter = THREE.LinearFilter; } } }
+export function warmFlips() { warmNg(); for (const k of ['puff', 'blast'] as const) { const F = FLIPS[k]; if (!F.tex && window.TEXDATA?.[F.key]) { F.tex = new THREE.TextureLoader().load(window.TEXDATA[F.key], () => { F.ok = true; }); F.tex.colorSpace = THREE.NoColorSpace; F.tex.generateMipmaps = false; F.tex.minFilter = THREE.LinearFilter; } } }
 
 // ---------- Trümmer ----------
 interface Chunk { on: boolean; p: THREE.Vector3; v: THREE.Vector3; r: THREE.Euler; w: THREE.Vector3; s: number; life: number; ground: (x: number, z: number) => number }
@@ -170,16 +171,34 @@ function chInit() {
 // ---------- Einschläge ----------
 let impAt = 0;
 // kind: 'boden' (Erde, Fels: Staub und wenige Funken), 'metall' (Drohne: viele Funken, Blitz)
-export function impact(p: THREE.Vector3, dir: THREE.Vector3, kind: 'boden' | 'metall', col = '#ffd9a0') {
+// Einschlagsklang je Material (seit 27.11.2026, Aufnahmen aus Epics ShooterGame, asset-src/sound-lazy/imp_*): Zahl der Aufnahmen
+export type ImpStoff = 'default' | 'metall' | 'wasser' | 'fleisch';
+const IMP_N: Record<ImpStoff, number> = { default: 10, metall: 10, wasser: 6, fleisch: 8 };
+const IMP_VOL: Record<ImpStoff, number> = { default: 0.34, metall: 0.38, wasser: 0.36, fleisch: 0.42 };
+/** kind: Funken und Staub (boden) oder viele Funken (metall); stoff: Klang und Bild (Wasser spritzt, Fleisch ohne Staub). Ohne stoff: metall bzw. default */
+// n: Flächennormale an einer ruhenden Stelle (Boden, Wand): dann bleibt ein Einschussloch (ngfx.ts). Ohne n (Gegner, unbekannt) keins.
+export function impact(p: THREE.Vector3, dir: THREE.Vector3, kind: 'boden' | 'metall', col = '#ffd9a0', stoff?: ImpStoff, n?: THREE.Vector3 | null) {
+  const st: ImpStoff = stoff || (kind === 'metall' ? 'metall' : 'default');
+  if (n && (st === 'default' || st === 'metall')) bulletHole(p, n, st === 'metall' ? 0.07 : 0.1);
   if (kind === 'metall') {
     sparks(p.x, p.y, p.z, -dir.x, -dir.y + 0.2, -dir.z, '#ffc070', 9, 9, 0.28, 0.9, 0.018);
     flash(p.x, p.y, p.z, '#ffb060', 0.45, 0.07);
+    ngImpact(p, dir, 'metall', n);
+  } else if (st === 'wasser') {
+    sparks(p.x, p.y, p.z, 0, 1, 0, '#d8ecf4', 10, 4.5, 0.45, 0.9, 0.016);
+    dust(p.x, p.y + 0.05, p.z, '#cfe2ea', 0.45, 0.5, 0.9, 0.4);
+  } else if (st === 'fleisch') {
+    sparks(p.x, p.y, p.z, -dir.x, -dir.y + 0.2, -dir.z, col, 5, 3.5, 0.25, 0.85, 0.014);
   } else {
     sparks(p.x, p.y, p.z, -dir.x, -dir.y + 0.4, -dir.z, col, 3, 6, 0.2, 0.8, 0.012);
     flash(p.x, p.y, p.z, '#ffe2b0', 0.18, 0.05);
-    if (!flip('puff', p.x - dir.x * 0.12, p.y - dir.y * 0.12 + 0.12, p.z - dir.z * 0.12, 0.35, 1.25, 0.75, '#a89c8c', 0.45)) dust(p.x, p.y + 0.05, p.z, '#8a7f70', 0.55, 0.7, 0.5, 0.5);
-    const d = camD(p.x, p.y, p.z), now = performance.now();      // höchstens ein Einschlagsgeräusch je 70 ms (Schrot trifft siebenfach)
-    if (d < 45 && now - impAt > 70) { impAt = now; sfxAny('w_x_imp', 5, 0.3 / (1 + (d / 14) ** 2), 0.95 + Math.random() * 0.1); }
+    if (!ngImpact(p, dir, 'default', n) && !flip('puff', p.x - dir.x * 0.12, p.y - dir.y * 0.12 + 0.12, p.z - dir.z * 0.12, 0.35, 1.25, 0.75, '#a89c8c', 0.45)) dust(p.x, p.y + 0.05, p.z, '#8a7f70', 0.55, 0.7, 0.5, 0.5);
+  }
+  const d = camD(p.x, p.y, p.z), now = performance.now();      // höchstens ein Einschlagsgeräusch je 70 ms (Schrot trifft siebenfach)
+  if (d < 45 && now - impAt > 70) {
+    impAt = now;
+    const v = 1 / (1 + (d / 14) ** 2), r = 0.95 + Math.random() * 0.1;
+    sfxAny('imp_' + st, IMP_N[st], IMP_VOL[st] * v, r, () => { if (kind === 'boden') sfxAny('w_x_imp', 5, 0.3 * v, r); });   // fehlt die Aufnahme noch: der alte Klang (Metall still wie bisher)
   }
 }
 
@@ -253,7 +272,7 @@ export function droneDeath(x: number, y: number, z: number, ground: (x: number, 
   flash(x, y, z, '#fff0d0', 2.4 * k, 0.18); flash(x, y, z, '#ff8a40', 3.6 * k, 0.45);
   sparks(x, y, z, 0, 0.6, 0, '#ffc070', Math.round(28 * k), 11, 0.6, 1, 0.022);
   for (let i = 0; i < 6 * k; i++) dust(x + rand(-0.5, 0.5), y + rand(-0.2, 0.4), z + rand(-0.5, 0.5), i < 2 ? '#4a3e38' : '#2e2c2c', rand(2.2, 3.4) * k, rand(1.8, 3), rand(0.6, 1.3), 0.9);
-  flip('blast', x, y + 0.25 * k, z, 1.3 * k, 4.4 * k, 1.25, '#6a625c', 0.5);      // Feuerball, der zu Rauch wird
+  if (!ngAirBlast(x, y + 0.2 * k, z, k)) flip('blast', x, y + 0.25 * k, z, 1.3 * k, 4.4 * k, 1.25, '#6a625c', 0.5);      // Feuerball, der zu Rauch wird
   const m = chInit();
   for (let i = 0; i < 9 * k; i++) {
     const c = chunks[chI = (chI + 1) % CMAX];
@@ -265,12 +284,14 @@ export function droneDeath(x: number, y: number, z: number, ground: (x: number, 
   sfx('explosion' + Math.floor(Math.random() * 3), (big ? 0.75 : 0.5) * Math.max(0.15, kv), big ? 0.85 : 1.35);
 }
 
-// Granate: Feuerball, Blitz, Funken, Rauch (ohne Trümmer und ohne Ton – den spielt granate.ts)
-export function grenadeFx(x: number, y: number, z: number) {
+// Granate: Feuerball, Blitz, Funken, Rauch (ohne Trümmer und ohne Ton – den spielt granate.ts).
+// gy: Bodenhöhe darunter (Weltkoordinaten): dann Erdwurf und Brandfleck (ngfx.ts). Mit den Niagara-Bildern nur zwei alte Rauchflecken.
+export function grenadeFx(x: number, y: number, z: number, gy: number | null = null) {
   flash(x, y, z, '#fff0d0', 4.5, 0.16); flash(x, y, z, '#ff8a40', 7, 0.4);
   sparks(x, y, z, 0, 0.7, 0, '#ffc070', 46, 14, 0.7, 1, 0.024);
-  flip('blast', x, y + 0.5, z, 2, 7.5, 1.4, '#6a625c', 0.6);
-  for (let i = 0; i < 7; i++) dust(x + rand(-1, 1), y + rand(-0.2, 0.6), z + rand(-1, 1), i < 3 ? '#4a3e38' : '#2e2c2c', rand(3, 4.6), rand(2, 3.4), rand(0.5, 1.2), 0.85);
+  const ng = ngExplosion(x, y, z, 1, gy);
+  if (!ng) flip('blast', x, y + 0.5, z, 2, 7.5, 1.4, '#6a625c', 0.6);
+  for (let i = 0; i < (ng ? 2 : 7); i++) dust(x + rand(-1, 1), y + rand(-0.2, 0.6), z + rand(-1, 1), i < 3 ? '#4a3e38' : '#2e2c2c', rand(3, 4.6), rand(2, 3.4), rand(0.5, 1.2), 0.85);
 }
 const clearHooks: (() => void)[] = [];
 export function onClearFootFx(fn: () => void) { clearHooks.push(fn); }
@@ -285,6 +306,7 @@ export function clearFootFx() {
   for (const d of dusts) { d.life = 0; d.sp.visible = false; }
   for (const F of Object.values(FLIPS)) for (const f of F.pool) { f.life = 0; f.m.visible = false; }
   for (const L of shells.values()) for (const s of L) { s.life = 0; s.m.visible = false; }
+  clearNg();
 }
 // ---------- je Bild ----------
 let lastT = 0;
@@ -336,4 +358,5 @@ export function updateFootFx(dt?: number) {
     if (any) chMesh.instanceMatrix.needsUpdate = true;
   }
   updShells(dt);
+  updateNg(dt);
 }

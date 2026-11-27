@@ -1,9 +1,12 @@
+import { schritt } from './schritte';
+import { updateLehnen, lehnKopf, lehnPunkt, lehnKamera, lehnFigur } from './lehnen';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { scene, camera, ambient, rim, sun, view, ux, gl, overlay, BODY_LAYER, bodyOnly } from '../core/engine';
 import { keys, mouse, releaseAll } from '../core/input';
 import { clamp, rng, hashStr } from '../core/util';
 import { snd, sfx, shotSfx, gunShot, loopVol, type GunKind } from '../core/audio';
+import { ngMuzzle, ngVmFlash } from './ngfx';
 import { shotTrail, shotPending, shotFlush, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, clearFootFx, SHELL_PORT } from './footfx';
 import { texMat, std } from '../core/textures';
 import { P, G, settings, saveGame } from './state';
@@ -21,6 +24,7 @@ import { bauKoerper, koerperWeg } from './koerper';
 import { gunReady, gunFired, gunUpdate, GUN, AIM, aimUpdate, aimFov, aimShake, aimK, gunSpread, gunFalloff, camShake, hurtSound, noteKill, whiz, ZIEL, zielStrahl, zielWeite, spreadDir, kickView } from './footgun';
 import { drawFootRing, drawPrompt, drawFootCross } from '../ui/footHud';
 import { throwGrenade, updateGrenades } from './granate';
+import { fireLauncher, updateLauncher, launcherShot, type GwEnv } from './granatwerfer';
 import { noteToss, bodyView, fpBody } from './avatar';
 import { noteFoot } from './avatar';
 import { VIEW, STANCE, ACT, flinch, noteShot, readNetFlags, footPace, footBrake, footAccel, setIntent, makeAvatar, driveAvatar, avatarMuzzle, tpCamPos, resetTpCam, newRemoteFig, driveRemote, dropRemote, gearFromNet, figGear, type Avatar, type RemoteFig } from './avatar';
@@ -595,7 +599,8 @@ function buildFoe(tx: number, tz: number, boss: boolean): Foe {
 // ---------- Waffe des Piloten ----------
 // sfx: eigene Schussaufnahme (Schnellfeuer, audio.ts shotSfx) · kind: Patronenwaffe mit den Aufnahmen des Lyra-Pakets (audio.ts gunShot);
 // die Energiewaffen (Impuls, Splitter) und der Schneidbrenner behalten den Laserton, die SMG ihre eigene Aufnahme.
-const WEAP: Record<string, { iv: number; n: number; spread: number; auto: boolean; col: string; snd: number; sfx?: string; kind?: GunKind }> = {
+// gw: Granatwerfer (granatwerfer.ts) – verschießt ein Geschoss statt eines Strahls; dmg ist der Schaden in der Mitte der Explosion
+const WEAP: Record<string, { iv: number; n: number; spread: number; auto: boolean; col: string; snd: number; sfx?: string; kind?: GunKind; gw?: boolean }> = {
   waffe_pistole: { iv: 0.3, n: 1, spread: 0.008, auto: false, col: '#ffd9a0', snd: 1.5, kind: 'pistol' }, waffe_karabiner: { iv: 0.13, n: 1, spread: 0.018, auto: true, col: '#ffd9a0', snd: 1.25, kind: 'rifle' },
   waffe_smg: { iv: 0.075, n: 1, spread: 0.024, auto: true, col: '#ffd9a0', snd: 1.05, sfx: 'smg_shot' },
   waffe_flinte: { iv: 0.85, n: 7, spread: 0.075, auto: false, col: '#ffc080', snd: 0.8, kind: 'shotgun' }, waffe_impuls: { iv: 0.2, n: 1, spread: 0.006, auto: true, col: '#b090ff', snd: 1.9 },
@@ -604,13 +609,15 @@ const WEAP: Record<string, { iv: number; n: number; spread: number; auto: boolea
   waffe_sp12: { iv: 0.16, n: 1, spread: 0.022, auto: false, col: '#ffd9a0', snd: 1.5, kind: 'pistol' },
   waffe_kg30: { iv: 0.12, n: 1, spread: 0.022, auto: true, col: '#ffd9a0', snd: 1.25, kind: 'rifle' },
   waffe_tf8: { iv: 0.5, n: 9, spread: 0.052, auto: false, col: '#ffc080', snd: 0.8, kind: 'shotgun' },
+  waffe_gw40: { iv: 0.8, n: 1, spread: 0.006, auto: false, col: '#ffc080', snd: 0.7, gw: true },      // ShooterGame: Feuerpause 0,8 s
 };
 export const weapon = () => {
   const id = P.gear?.waffe || '', d = gearDef(id), w = WEAP[id];
-  return w && d ? { ...w, dmg: (d.st?.schaden || 6) / (w.n > 1 ? w.n * 0.45 : 1), name: d.n } : { iv: 0.42, n: 1, spread: 0.012, auto: false, col: '#ffb060', snd: 2.6, dmg: 5, name: 'Schneidbrenner', sfx: undefined as string | undefined, kind: undefined as GunKind | undefined };
+  return w && d ? { ...w, dmg: (d.st?.schaden || 6) / (w.n > 1 ? w.n * 0.45 : 1), name: d.n } : { iv: 0.42, n: 1, spread: 0.012, auto: false, col: '#ffb060', snd: 2.6, dmg: 5, name: 'Schneidbrenner', sfx: undefined as string | undefined, kind: undefined as GunKind | undefined, gw: undefined as boolean | undefined };
 };
 /** Schussgeräusch der Handwaffe (Mine und Planet) */
-export function shotSound(w: { snd: number; sfx?: string; kind?: GunKind }) {
+export function shotSound(w: { snd: number; sfx?: string; kind?: GunKind; gw?: boolean }) {
+  if (w.gw) { launcherShot(); return; }
   const laser = () => sfx('gun', 0.32, w.snd, () => snd(900, 0.06, 'square', 0.04, -500));
   if (w.kind) gunShot(w.kind, 0.55, 0.97 + Math.random() * 0.06, laser);      // bis die Aufnahmen geladen sind: der alte Ton
   else if (w.sfx) shotSfx(w.sfx, 0.5, 0.96 + Math.random() * 0.08, () => sfx('gun', 0.32, w.snd));   // SMG: eigene Aufnahme, Schnellfeuer
@@ -762,7 +769,7 @@ export function dungeonAlarm(n: number) {
 function openCrate(c: Crate, shared = false) {
   if (c.open) return;
   const st = P.dungeons![DUN.e!.id], pre = shared ? 'Geteilte Beute: ' : '';
-  if (c.med) { if (!shared) { DUN.hp = Math.min(DUN.maxHp, DUN.hp + 45); say('Verbandskasten: +45 Leben', '#3ad06a'); } }
+  if (c.med) { if (!shared) { DUN.hp = Math.min(DUN.maxHp, DUN.hp + 45); say('Verbandskasten: +45 Leben', '#3ad06a'); sfx('aufheben_heilung0', 0.5); } }
   else {
     const R = rng(hashStr(DUN.e!.id + ':' + c.idx + ':' + st.t)), id = lootId(R.next, c.big), d = gearDef(id)!;
     if (!canAdd(id)) {
@@ -776,7 +783,7 @@ function openCrate(c: Crate, shared = false) {
     }
   }
   c.open = true; if (!st.open.includes(c.idx)) st.open.push(c.idx);
-  sfx('pickup', shared ? 0.4 : 0.7, 1, () => snd(700, 0.2, 'triangle', 0.05, 300)); saveGame();
+  sfx('pickup', shared ? 0.4 : 0.7, 1, () => snd(700, 0.2, 'triangle', 0.05, 300)); if (!c.med) sfx('aufheben_munition0', shared ? 0.25 : 0.45); saveGame();      // Kiste durchwühlt (ShooterGame)
   if (!shared) coopSend('mcr', { e: DUN.e!.id, i: c.idx });
 }
 // Schalter umlegen: how = 'self' (selbst), 'mate' (Mitspieler), 'sync' (Stand beim Dazukommen, ohne Meldung)
@@ -1024,7 +1031,13 @@ function strahl(ox: number, oy: number, oz: number, dx: number, dy: number, dz: 
   let tw = max;
   for (let t = Math.min(0.3, max); t < max; t += step) {
     const lx = ox + dx * t, ly = oy + dy * t, lz = oz + dz * t;
-    if (ly < 0 || ly > 5.4 || solidAt(lx, lz)) { tw = Math.max(0.3, t - (WALL_R > 0.5 ? 0.32 : 0)); break; }
+    if (ly < 0) { tw = Math.max(0.3, -oy / dy); break; }                  // Boden und Decke: genau die Stelle, nicht der Schritt dahinter
+    if (ly > 5.4) { tw = Math.max(0.3, (5.4 - oy) / dy); break; }
+    if (solidAt(lx, lz)) {                                               // Fels: zwischen den beiden Schritten halbieren
+      let lo = Math.max(0, t - step), hi = t;
+      for (let i = 0; i < 4; i++) { const m = (lo + hi) / 2; if (solidAt(ox + dx * m, oz + dz * m)) hi = m; else lo = m; }
+      tw = Math.max(0.3, hi - (WALL_R > 0.5 ? 0.32 : 0)); break;
+    }
   }
   let best: Foe | null = null, bt = tw;
   for (const f of DUN.foes) {
@@ -1037,7 +1050,8 @@ function strahl(ox: number, oy: number, oz: number, dx: number, dy: number, dz: 
 }
 /** in jedem Bild vor dem Schießen: Zielstrahl durch das Fadenkreuz und Zielpunkt für die Haltung der Figur (footgun.ts ZIEL, Weltkoordinaten) */
 function zielen(dt: number) {
-  zielStrahl(camera, BASE.x + DUN.x, BASE.y + EYE(), BASE.z + DUN.z, DUN.yaw, DUN.pitch, VIEW.tp);
+  const lk = lehnKopf(DUN.yaw);      // gelehnt: der Kopf steht zur Seite (lehnen.ts)
+  zielStrahl(camera, BASE.x + DUN.x + lk.x, BASE.y + EYE() + lk.y, BASE.z + DUN.z + lk.z, DUN.yaw, DUN.pitch, VIEW.tp);
   const o = ZIEL.o, d = ZIEL.d;
   zielWeite(strahl(o.x - BASE.x, o.y - BASE.y, o.z - BASE.z, d.x, d.y, d.z, 40, 0.5).t, dt);
 }
@@ -1048,8 +1062,16 @@ function shoot() {
   shotSound(w); if (w.n > 1) camShake(0.32);
   const sp = gunSpread(w.spread);
   // Strahl der Kamera durch das Fadenkreuz, in den Koordinaten der Mine; E: Kopf der Figur
-  const ox = ZIEL.o.x - BASE.x, oy = ZIEL.o.y - BASE.y, oz = ZIEL.o.z - BASE.z, Ex = DUN.x, Ey = EYE(), Ez = DUN.z;
-  zielWeite(strahl(ox, oy, oz, ZIEL.d.x, ZIEL.d.y, ZIEL.d.z, 60).t, 0, true);      // die Waffe zeigt im Bild des Schusses genau auf den Zielpunkt
+  const ox = ZIEL.o.x - BASE.x, oy = ZIEL.o.y - BASE.y, oz = ZIEL.o.z - BASE.z, Ex = ZIEL.eye.x - BASE.x, Ey = ZIEL.eye.y - BASE.y, Ez = ZIEL.eye.z - BASE.z;
+  const c0 = strahl(ox, oy, oz, ZIEL.d.x, ZIEL.d.y, ZIEL.d.z, 60); zielWeite(c0.t, 0, true);      // die Waffe zeigt im Bild des Schusses genau auf den Zielpunkt
+  flashDue = true;
+  if (w.gw) {      // Granatwerfer: Geschoss knapp vor dem Kopf der Figur, gerichtet auf den Punkt unter dem Fadenkreuz (Koordinaten der Mine)
+    const a = new THREE.Vector3(Ex, Ey - 0.12, Ez);
+    const d = spreadDir(_sd2.set(ox, oy, oz).addScaledVector(ZIEL.d, Math.max(8, c0.t)).sub(a).normalize(), sp, _sd).clone();
+    camShake(0.35);
+    fireLauncher(a.addScaledVector(d, 0.5), d, mineEnv(), w.dmg);
+    return;
+  }
   for (let s = 0; s < w.n; s++) {
     // 1) entlang des Kamerastrahls (mit Streuung): der Zielpunkt dieser Kugel
     const d = spreadDir(ZIEL.d, sp, _sd);
@@ -1066,25 +1088,41 @@ function shoot() {
     const bt = h.t, best = h.foe, hp = new THREE.Vector3(BASE.x + ax + d.x * bt, BASE.y + ay + d.y * bt, BASE.z + az + d.z * bt);
     if (best && mates.size && !amHost(mates.keys())) { best.hit = 0.12; coopSend('mh', { e: DUN.e!.id, i: best.id, d: w.dmg }); impact(hp, d, 'metall'); G.hitMark = 0.12; }
     else if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg * gunFalloff(bt); best.hit = 0.12; best.lh = 0; best.alert = true; impact(hp, d, 'metall'); G.hitMark = 0.12; }
-    else impact(hp, d, 'boden', w.col);
+    else impact(hp, d, 'boden', w.col, undefined, mineNormal(hp, d, ax + d.x * bt, ay + d.y * bt, az + d.z * bt));
     shotTrail(hp, w.col, w.n > 1 ? 0.04 : 0.065);                    // Leuchtspur je Kugel: beginnt an der Mündung des Bildes (dungeonCamera)
     SHOT.end.copy(hp); SHOT.n++;
   }
 }
 /** nur für Prüfskripte: Endpunkt der letzten Kugel und Mündung, von der ihre Leuchtspur ausging */
 export const SHOT = { end: new THREE.Vector3(), a: new THREE.Vector3(), n: 0 };
-export function dungeonKey(code: string) {
-  if (!DUN.active || DUN.dead) return;
-  // Granate (granate.ts): rechnet in den Koordinaten der Mine, Boden bei 0, Fels und Decke sind fest
-  if (code === 'KeyG') {
-    if (throwGrenade(DUN.x, EYE(), DUN.z, DUN.yaw, DUN.pitch, { ground: () => 0, solid: (x, y, z) => y > 5.3 || solidAt(x, z), ox: BASE.x, oy: BASE.y, oz: BASE.z, blast: (x, y, z, r, dmg) => {
+let flashDue = false;
+// Flächennormale am Einschlag in der Mine (für das Einschussloch): Boden, sonst die getroffene Felswand (Kacheln, also entlang x oder z).
+// Decke und Wände mit Abstand (WALL_R > 0,5: Treffpunkt liegt vor der Wand) bekommen keins. Legt hp am Boden auf die Bodenhöhe.
+function mineNormal(hp: THREE.Vector3, d: THREE.Vector3, lx: number, ly: number, lz: number): THREE.Vector3 | null {
+  if (ly <= 0.3) { hp.y = BASE.y + 0.005; return new THREE.Vector3(0, 1, 0); }
+  if (ly >= 5.3 || WALL_R > 0.5) return null;
+  if (Math.abs(d.x) > 0.05 && solidAt(lx + Math.sign(d.x) * 0.3, lz)) return new THREE.Vector3(-Math.sign(d.x), 0, 0);
+  if (Math.abs(d.z) > 0.05 && solidAt(lx, lz + Math.sign(d.z) * 0.3)) return new THREE.Vector3(0, 0, -Math.sign(d.z));
+  return null;
+}
+// Umgebung für Granate und Granatwerfer (granate.ts, granatwerfer.ts): Koordinaten der Mine, Boden bei 0, Fels und Decke fest
+function mineEnv(): GwEnv {
+  return { ground: () => 0, solid: (x, y, z) => y > 5.3 || solidAt(x, z), ox: BASE.x, oy: BASE.y, oz: BASE.z,
+    hit: (x, y, z) => DUN.foes.some(f => Math.hypot(f.x - x, f.y - y, f.z - z) < (f.boss ? 0.85 : 0.55)),
+    blast: (x, y, z, r, dmg) => {
       for (const f of DUN.foes) {
         const d = Math.hypot(f.x - x, f.y - y, f.z - z); if (d > r) continue;
         const dm = dmg * (1 - 0.7 * d / r);
         if (mates.size && !amHost(mates.keys())) { f.hit = 0.12; coopSend('mh', { e: DUN.e!.id, i: f.id, d: dm }); }
         else { f.hp -= dm; f.hit = 0.12; f.alert = true; f.lh = 0; G.hitMark = 0.12; }
       }
-    } })) noteToss();
+    } };
+}
+export function dungeonKey(code: string) {
+  if (!DUN.active || DUN.dead) return;
+  // Granate (granate.ts): rechnet in den Koordinaten der Mine, Boden bei 0, Fels und Decke sind fest
+  if (code === 'KeyG') {
+    if (throwGrenade(DUN.x, EYE(), DUN.z, DUN.yaw, DUN.pitch, mineEnv())) noteToss();
     return;
   }
   if (code === 'KeyE' && DUN.act) DUN.act();
@@ -1116,11 +1154,13 @@ export function updateDungeon(dt: number) {
   if (free(DUN.x + dx, DUN.z + dzz)) { DUN.x += dx; DUN.z += dzz; } else if (free(DUN.x + dx, DUN.z)) { DUN.x += dx; DUN.vz = 0; } else if (free(DUN.x, DUN.z + dzz)) { DUN.z += dzz; DUN.vx = 0; } else DUN.vx = DUN.vz = 0;
   const moved = Math.hypot(DUN.x - ox, DUN.z - oz), v = dt > 0 ? moved / dt : 0;
   DUN.walked += moved; stepT -= moved;
-  if (stepT <= 0 && moved > 0) { stepT = v > 5 ? 2.1 : 1.6; sfx('step' + Math.floor(Math.random() * 5), v > 5 ? 0.5 : 0.34, 0.8 + Math.random() * 0.2); }
+  if (stepT <= 0 && moved > 0) { stepT = v > 5 ? 2.1 : 1.6; schritt('fels', (v > 5 ? 0.5 : 0.34) * (STANCE.crouch ? 0.55 : 1)); }      // Felsboden (schritte.ts)
+  updateLehnen(dt, DUN.dead <= 0 && v < 5, (sd, an) => { const p = lehnPunkt(DUN.yaw, sd, an); return free(DUN.x + p.x, DUN.z + p.z, 0.18); }, !DUN.act);      // Q / E gehalten (lehnen.ts)
   DUN.bob += (Math.sin(DUN.walked * 4.2) * Math.min(1, v / 4) * 0.045 - DUN.bob) * Math.min(1, dt * 14);
   if (moved > 0) reveal();
   // Schießen
   updateGrenades(dt, DUN.x, EYE() - 0.5, DUN.z, hurtPlayer);
+  updateLauncher(dt, DUN.x, EYE() - 0.5, DUN.z, hurtPlayer);
   aimUpdate(dt, !DUN.dead, { still: Math.hypot(DUN.vx, DUN.vz) < 0.4, crouch: STANCE.crouch, air: false });
   DUN.cool -= dt; DUN.kick = Math.max(0, DUN.kick - dt * 7); DUN.flash -= dt; DUN.hurt = Math.max(0, DUN.hurt - dt * 1.6);
   const wp = weapon();
@@ -1180,7 +1220,7 @@ export function updateDungeon(dt: number) {
     }
   }
   const client = mates.size > 0 && !amHost(mates.keys());
-  const players: { x: number; z: number; eye: number }[] = [{ x: DUN.x, z: DUN.z, eye: EYE() }];
+  const lk = lehnKopf(DUN.yaw), players: { x: number; z: number; eye: number }[] = [{ x: DUN.x + lk.x, z: DUN.z + lk.z, eye: EYE() + lk.y }];      // gelehnt: die Drohnen sehen den Kopf
   if (!client) for (const f of mates.values()) if (f.init) players.push({ x: f.x, z: f.z, eye: f.crouch ? 1.12 : 1.6 });
   for (let i = DUN.foes.length - 1; i >= 0; i--) {
     const fo = DUN.foes[i];
@@ -1280,8 +1320,10 @@ export function updateDungeon(dt: number) {
   // eigene Figur (Außensicht): Laufen nach Richtung, Anschlag nach Schüssen, Neigung mit dem Blick
   if (me) {
     const body = VIEW.tp || bodyView();      // Figur zeigen: Außensicht, oder Ich-Sicht mit ganzem Körper
+    let gelehnt = false;      // die neue Figur lehnt schon vor dem Ausrichten des Laufs (vorFit), der Soldat danach
     me.s.g.visible = body && (VIEW.tp || DUN.dead <= 0);
-    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on, aimAt: ZIEL.ok ? ZIEL.at : null });
+    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on, aimAt: ZIEL.ok ? ZIEL.at : null, vorFit: () => { lehnFigur(me!.s.g, DUN.yaw); gelehnt = true; } });
+    if (body && !gelehnt) lehnFigur(me.s.g, DUN.yaw);
   }
   for (const m of DUN.msg) m.life -= dt;
   DUN.msg = DUN.msg.filter(m => m.life > 0);
@@ -1296,6 +1338,7 @@ export function dungeonCamera() {
     tpCamPos(_v, DUN.x, 0, DUN.z, DUN.yaw, DUN.pitch, (x, y, z) => free(x, z, 0.28) && y > 0.25 && y < 2.6);
     camera.position.set(BASE.x + _v.x, BASE.y + _v.y, BASE.z + _v.z);
   }
+  lehnKamera(camera, DUN.yaw, VIEW.tp);      // seitlich lehnen (lehnen.ts)
   { const f = aimFov(74); if (Math.abs(camera.fov - f) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } }
   camera.updateMatrixWorld();
   if (head) {
@@ -1319,7 +1362,7 @@ export function dungeonCamera() {
     if (vm.glow) { const k = 0.82 + 0.18 * Math.sin(performance.now() * 0.004); vm.glow.color.setHex(vm.id === 'ef2' ? 0x6fc2ff : 0x8fd0ff).multiplyScalar(k); }
     vm.gun.visible = DUN.dead <= 0;
     const sup = vm.id === 'smg', f = DUN.flash > 0 && (!sup || shotsN % 3 === 0); vm.flash.visible = f; vm.flashLight.intensity = f ? (sup ? 0.12 : 2.6) : 0;   // SMG mit Schalldämpfer: kleines Mündungsfeuer
-    if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
+    if (f) { ngVmFlash(vm.flash); (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
     if (shotsN !== vmShotsN) { vmShotsN = shotsN; const port = SHELL_PORT[vm.id]; if (port) vmShell(vm.scene, vm.gun, port); }   // Hülse fliegt rechts heraus
   }
   updateFootFx();
@@ -1329,10 +1372,11 @@ export function dungeonCamera() {
     gun.visible = DUN.dead <= 0;
   }
   // Leuchtspuren und Mündungsfeuer des Schusses dieses Bildes: von der Mündung, wie sie jetzt steht (Figur, sonst das Waffenmodell im Bild)
-  if (shotPending()) {
+  if (shotPending() || flashDue) {
+    flashDue = false;
     const w = weapon(), tpm = VIEW.tp || fpOn ? avatarMuzzle(me) : null;
     const a = tpm || (vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)) : gun ? gun.localToWorld(_w.set(0, 0.008, -0.6)) : camera.localToWorld(_w.set(0.12, -0.15, -0.5)));
-    if (tpm) flash(tpm.x, tpm.y, tpm.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);
+    if (tpm && !ngMuzzle(tpm, ZIEL.d, 1, !!w.sfx)) flash(tpm.x, tpm.y, tpm.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);
     SHOT.a.copy(a); shotFlush(a);
   }
 }

@@ -4,7 +4,7 @@ import { BODY_LAYER, bodyPass } from '../core/engine';
 // @ts-ignore – reines JavaScript (aus der Manny-Demo übernommen), ohne Typen
 import { MannyAnimator } from './manny/MannyAnimator.js';
 import { buildHandWeapon } from './mineArt';
-import { makeLyraGun, driveLyraGun, LYRA_SPEC, type LyraGun } from './lyraGuns';
+import { makeLyraGun, driveLyraGun, LYRA_SPEC, LYRA_HALT, type LyraGun, type LyraKind } from './lyraGuns';
 import { Figur, type Tracht } from './figur';
 
 // =====================================================================================
@@ -40,7 +40,7 @@ import { Figur, type Tracht } from './figur';
 // turnRamp / turnMin: nach einem Richtungswechsel im Lauf steigt die Anlaufrate in turnRamp Sekunden von turnMin (Anteil) auf voll
 // test: nur für Prüfskripte – Waffe überall tragen (id wie in mineArt WDEFS), auch im Innenraum
 export const MANNY = { on: true, url: '' as string, body: '' as string, alt: false, brake: 8, accel: 0, turnRamp: 0.25, turnMin: 0.15,
-  test: null as null | { id: string; lyra?: Kind; aim: boolean; shots: number; hits: number; reload: number; toss?: number } };
+  test: null as null | { id: string; lyra?: LyraKind; aim: boolean; shots: number; hits: number; reload: number; toss?: number } };
 try {
   const q = new URLSearchParams(location.search).get('manny');
   if (q === '1' || q === '0') localStorage.setItem('lf_manny', q);
@@ -78,9 +78,10 @@ export interface MannyDrive {
   // Waffe in der Hand (null / fehlt = unbewaffnet): id = Modell (mineArt WDEFS), aim = im Anschlag, shots / hits = Zähler (eine Änderung
   // löst Rückstoß bzw. Zucken aus), reload = Fortschritt des Nachladens 0..1, sonst −1
   // lyra: statt des Modells id eine der drei Waffen aus dem Lyra-Paket (mit eigenen Knochen: Verschluss, Magazin)
-  weapon?: { id: string; lyra?: Kind; aim: boolean; shots: number; hits: number; reload: number; toss?: number } | null;      // toss: Zähler der Granatwürfe
+  weapon?: { id: string; lyra?: LyraKind; aim: boolean; shots: number; hits: number; reload: number; toss?: number } | null;      // toss: Zähler der Granatwürfe
   fp?: boolean;                                      // Ich-Sicht: die Kamera sitzt im Kopf (danach mannyFirstPerson mit der Kamera aufrufen)
   aimAt?: THREE.Vector3 | null;                      // Zielpunkt in der Welt (wohin das Fadenkreuz zeigt): der Lauf wird darauf gerichtet (fitGun)
+  vorFit?: () => void;                               // was die Haltung noch ändert, bevor der Lauf ausgerichtet wird (seitlich lehnen, lehnen.ts)
 }
 // Welche Haltung zu welcher Waffe gehört und wo die linke Hand greift (grip): Anteil der Strecke Griff → Mündung und Höhe unter der
 // Laufachse in Metern. Pistolen: beide Hände am Griff, wie der Clip sie hält. Gemessen am 23.11.2026 im Testfenster an der Figur.
@@ -96,20 +97,20 @@ const HOLD: Record<string, { kind: Kind; grip?: [number, number] }> = {
 const BORE: Record<Kind, number> = { rifle: 0.0893, pistol: 0.0837, shotgun: 0.0995 };      // Höhe der Mündung über dem Waffenknochen (lyra.json, sockets.Muzzle)
 const GRIP_LEFT = 0.07;                                         // die linke Hand (Handgelenk) liegt so weit links neben der Laufachse
 // Lyras Waffen (lyraGuns.ts): Modell im Rahmen des Waffenknochens, mit eigenen Clips für Verschluss und Magazin. Eine Kopie je Art für die Hand der Figur.
-const handGuns: Partial<Record<Kind, LyraGun>> = {};
-const lyraGun = (kind: Kind) => handGuns[kind] || (handGuns[kind] = makeLyraGun(kind) || undefined) || null;
+const handGuns: Partial<Record<LyraKind, LyraGun>> = {};
+const lyraGun = (kind: LyraKind) => handGuns[kind] || (handGuns[kind] = makeLyraGun(kind) || undefined) || null;
 // sight: Punkt auf der Visierlinie im Raum des Waffenmodells (beim Zielen in der Ich-Sicht rückt er vor das Auge)
 export interface GunState { id: string; g: THREE.Object3D | null; muzzle: THREE.Vector3; shown: boolean; lyra: LyraGun | null; sight: THREE.Vector3; fwd: THREE.Vector3 }
 export const newGun = (): GunState => ({ id: '', g: null, muzzle: new THREE.Vector3(), shown: false, lyra: null, sight: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, -1) });
 const gun = newGun();
-function setGun(id: string, lyra?: Kind) { mountGun(anim, gun, id, lyra, lyraGun); }
+function setGun(id: string, lyra?: LyraKind) { mountGun(anim, gun, id, lyra, lyraGun); }
 /** Haltung (Art der Clips) zu einem Waffenmodell */
-export const weaponKind = (id: string, lyra?: Kind): Kind => lyra || (HOLD[id] || HOLD.k12).kind;
+export const weaponKind = (id: string, lyra?: LyraKind): Kind => (lyra ? LYRA_HALT[lyra] : (HOLD[id] || HOLD.k12).kind);
 /**
  * Waffe id (bzw. Lyras Waffe lyra) in die Hand einer Figur legen: an = ihr Animator, gs = ihr Waffenstand, pick = woher Lyras Modelle
  * kommen (jede Figur braucht eigene Kopien). Auch für Mitspieler und Wachen (fremdFigur.ts).
  */
-export function mountGun(an: any, gs: GunState, id: string, lyra: Kind | undefined, pick: (k: Kind) => LyraGun | null) {
+export function mountGun(an: any, gs: GunState, id: string, lyra: LyraKind | undefined, pick: (k: LyraKind) => LyraGun | null) {
   const gun = gs;
   if (!an?.weapon) return;
   // Lyras Modell, sobald es geladen ist; bis dahin (und wenn es fehlt) das Modell des Spiels
@@ -306,7 +307,7 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
   const out = anim.update(dtc, {
     moveDir: _mv, gait, crouch: !!d.crouch, strafe: true, facing: face, style: mannyHooks.relaxed?.() && !wp ? 'relaxed' : 'neutral',
     jump, grounded: !air, verticalSpeed: vy, look: { pitch: d.pitch || 0 }, dead: !!d.dead,
-    weapon: wp ? { kind: wp.lyra || (HOLD[wp.id] || HOLD.k12).kind, aim: wp.aim, shots: wp.shots, hits: wp.hits, reload: wp.reload, toss: wp.toss } : null,
+    weapon: wp ? { kind: weaponKind(wp.id, wp.lyra), aim: wp.aim, shots: wp.shots, hits: wp.hits, reload: wp.reload, toss: wp.toss } : null,
     vel: led ? _vel.set(d.vx, d.vz) : undefined, stopDist: spd * Math.max(0, (MANNY.brake > 0 ? 1 / MANNY.brake : STOP_TAU + dtc) - dtc),   // Rest des Wegs bei Bremsrate r: Tempo × (1/r − Bilddauer)
   });
   // Animator-Blickrichtung relativ zum Halter, der schon um body + π gedreht ist. yaw, vx, vz und facing gelten im Raum des Halters
@@ -320,6 +321,7 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
   holder.updateMatrixWorld(true);
   // Waffe: Lauf auf den Zielpunkt, dann Rückstoß und Zucken darauf (WeaponLayer.additive); danach die Weltlage des Oberkörpers neu
   const WL = anim.weapon;
+  if (d.vorFit) { d.vorFit(); if (WL) WL.B[0].updateMatrixWorld(true); }
   if (WL && WL.ready) {
     if (gun.shown && d.aimAt && !d.dead) fitGun(d.aimAt, WL.fitW * (st.fp ? 1 - WL.aimW : 1));
     WL.additive(); WL.B[0].updateMatrixWorld(true);

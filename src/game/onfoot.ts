@@ -9,7 +9,9 @@ import { clamp } from '../core/util';
 import { sfx, snd } from '../core/audio';
 import { P, G, settings, stats } from './state';
 import { world } from './world';
-import { ROVER, SURF, terrainAt, liquidAt, resetRoverCamera, buildRover , landeHoehe, parkMarkers } from './surface';
+import { ROVER, SURF, terrainAt, liquidAt, resetRoverCamera, buildRover , landeHoehe, parkMarkers, planetOf } from './surface';
+import { LEHN, updateLehnen, lehnKopf, lehnPunkt, lehnKamera, lehnFigur } from './lehnen';
+import { schritt, sprungLaut, landeLaut, grundPlanet, type Grund } from './schritte';
 import { updateFlora, treeNear } from './flora';
 import { gearFactor } from './inventory';
 import { radio } from '../ui/radio';
@@ -121,7 +123,19 @@ export function leaveBaseOnFoot() {
 }
 export function enterRover() { fahrerZeigen(true); hideFieldViewModel(); FOOT.active = false; FOOT.act = ''; resetRoverCamera(); if (me) me.s.g.visible = false; sfx('door_close', 0.4, 1.2, () => snd(200, 0.2, 'triangle', 0.03, 60)); }
 export function footOff() { hideFieldViewModel(); FOOT.active = false; FOOT.act = ''; if (me) me.s.g.visible = false; if (document.pointerLockElement === gl && settings.steer === 'zeiger') document.exitPointerLock(); }   // direkte Lenkung: eingefangen lassen
-export function footJump() { if (!FOOT.active || FOOT.jy > 0 || FOOT.jv !== 0) return; FOOT.jv = 4.6; snd(95, 0.05, 'triangle', 0.02, 40); }
+export function footJump() { if (!FOOT.active || FOOT.jy > 0 || FOOT.jv !== 0) return; FOOT.jv = 4.6; sprungLaut(footGrund()); }
+// Untergrund unter den Füßen (schritte.ts): Stege und Landefeld der Basis Metall, Stadt Beton, sonst nach Planet, Hang und Ufer
+let grundT = 0, grundMerk: Grund = 'erde';
+export function footGrund(): Grund {
+  if (performance.now() - grundT < 250) return grundMerk;
+  grundT = performance.now();
+  const x = FOOT.x, z = FOOT.z, t = terrainAt(x, z);
+  if (CITY.walk) return (grundMerk = 'beton');
+  if (surfaceAt(x, z, FOOT.y) > t + 0.15) return (grundMerk = 'metall');
+  const hang = Math.hypot(terrainAt(x + 1, z) - terrainAt(x - 1, z), terrainAt(x, z + 1) - terrainAt(x, z - 1)) / 2;
+  const ufer = liquidAt(x + 1.6, z) || liquidAt(x - 1.6, z) || liquidAt(x, z + 1.6) || liquidAt(x, z - 1.6);
+  return (grundMerk = grundPlanet(planetOf(P.sector)?.type, hang, ufer));
+}
 
 // Platz für den Körper? (Gelände zu steil, Wasser/Lava, Kartenrand, Lagerstätten, Station, Schiff, Rover)
 function blocked(x: number, z: number, ox: number, oz: number) {
@@ -185,12 +199,12 @@ export function updateFoot(dt: number) {
   const g = surfaceAt(FOOT.x, FOOT.z, FOOT.y + FOOT.jy);
   if (FOOT.jv !== 0 || FOOT.jy > 0) {
     FOOT.jy += FOOT.jv * dt; FOOT.jv -= 15 * dt;
-    if (FOOT.jy <= 0) { FOOT.jy = 0; FOOT.jv = 0; stepT = 0; }
+    if (FOOT.jy <= 0) { landeLaut(footGrund(), Math.min(1, -FOOT.jv / 7)); FOOT.jy = 0; FOOT.jv = 0; stepT = 1.0; }      // Aufkommen hörbar, der nächste Schritt etwas später
   }
   FOOT.y += (g - FOOT.y) * Math.min(1, dt * (g > FOOT.y ? 45 : 18));      // bergauf fast sofort (sonst steckt man beim Aufstieg im Hang), bergab weich
   const moved = Math.hypot(FOOT.x - ox, FOOT.z - oz), v = dt > 0 ? moved / dt : 0;
   FOOT.walked += moved; stepT -= moved;
-  if (stepT <= 0 && moved > 0 && FOOT.jy === 0) { stepT = v > 5 ? 2.1 : 1.6; sfx('step' + Math.floor(Math.random() * 5), v > 5 ? 0.45 : 0.3, 0.75 + Math.random() * 0.2); }
+  if (stepT <= 0 && moved > 0 && FOOT.jy === 0) { stepT = v > 5 ? 2.1 : 1.6; schritt(footGrund(), (v > 5 ? 0.45 : 0.3) * (STANCE.crouch ? 0.55 : 1)); }      // geduckt leiser
   FOOT.bob += (Math.sin(FOOT.walked * 4.2) * Math.min(1, v / 4) * 0.045 - FOOT.bob) * Math.min(1, dt * 14);
   // Was ist in Reichweite?
   const mine = nearEntrance(FOOT.x, FOOT.z);
@@ -199,16 +213,24 @@ export function updateFoot(dt: number) {
   // Fahrzeug vor Schiff und Mine: Es meldet sich erst aus 4,5 m, Mine (18 m) und Schiff riefen sonst immer dazwischen (seit 2026-11-26)
   FOOT.act = tgt ? 'story' : door ? 'base' : crate ? 'crate' : footNearRover() ? 'rover' : footNearShip() ? 'ship' : mine ? 'mine' : '';
   FOOT.prompt = FOOT.act === 'story' ? tgt!.label : FOOT.act === 'crate' ? (crate!.big ? 'Tresorkiste öffnen' : 'Kiste öffnen') : FOOT.act === 'base' ? `${door!.st.name} betreten` : FOOT.act === 'ship' ? (settings.walk ? `An Bord der ${P.shipName} gehen` : `In die ${P.shipName} einsteigen`) : FOOT.act === 'mine' ? `${mine!.name} betreten` : FOOT.act === 'rover' ? 'In den Rover steigen' : '';
+  // Lehnen (Q / E gehalten, lehnen.ts): nicht im Sprint und nicht im Sprung; Wände, Deckungen, Bäume und Körper begrenzen
+  updateLehnen(dt, FIGHT.down <= 0 && FOOT.jy <= 0.05 && v < 5, (sd, an) => {
+    const p = lehnPunkt(FOOT.yaw, sd, an), ex = FOOT.x + p.x, ez = FOOT.z + p.z;
+    return !wallBetween(FOOT.x, FOOT.z, ex, ez, FOOT.y) && !FELD_EXTRA.solid(ex, FOOT.y + eyeH() - 0.1, ez) && !koerperSperrt(FOOT.x, FOOT.z, ex, ez, FOOT.y) && !treeNear(ex, ez, 0.35);
+  }, !FOOT.act);
+  const lk = lehnKopf(FOOT.yaw);
   // eigene Figur
   aimUpdate(dt, FIGHT.down <= 0, { still: Math.hypot(FOOT.vx, FOOT.vz) < 0.4, crouch: STANCE.crouch, air: FOOT.jy > 0.05 });
   // Kampf: Schießen (Klick), Drohnen, Geschosse. Vor der Figur: Der Schuss dieses Bildes hebt die Waffe schon in diesem Bild, und der
   // Zielpunkt (footgun.ts ZIEL), auf den die Figur den Lauf richtet, ist der dieses Bildes. Die Leuchtspur setzt footCamera an die Mündung.
-  updateFieldFight(dt, { x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH(), active: true, tp: VIEW.tp, geduckt: STANCE.crouch, vx: FOOT.vx, vz: FOOT.vz });
+  updateFieldFight(dt, { x: FOOT.x + lk.x, y: FOOT.y + FOOT.jy, z: FOOT.z + lk.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH() + lk.y, active: true, tp: VIEW.tp, geduckt: STANCE.crouch, vx: FOOT.vx, vz: FOOT.vz, lehnt: Math.abs(LEHN.v) > 0.4 });      // gelehnt: Schüsse und Sichtlinien der Gegner vom Kopf aus
+  let gelehnt = false;
   const body = VIEW.tp || bodyView();      // Figur zeigen: Außensicht, oder Ich-Sicht mit ganzem Körper
   if (body) me = syncAvatar(scene, me, figGear());
   if (me) {
     me.s.g.visible = body && (VIEW.tp || FIGHT.down <= 0);
-    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, ground: footGround, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert) || FELD_EXTRA.kampf(), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on, aimAt: ZIEL.ok ? ZIEL.at : null });
+    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, ground: footGround, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert) || FELD_EXTRA.kampf(), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on, aimAt: ZIEL.ok ? ZIEL.at : null, vorFit: () => { lehnFigur(me!.s.g, FOOT.yaw); gelehnt = true; } });
+    if (body && !gelehnt) lehnFigur(me.s.g, FOOT.yaw);      // Oberkörper zur Seite (lehnen.ts); die neue Figur lehnt schon vor dem Ausrichten des Laufs (vorFit)
   }
 }
 
@@ -219,7 +241,7 @@ export function footCamera(dt: number) {
   if (VIEW.tp && me) tpCamPos(_c, FOOT.x, FOOT.y + FOOT.jy, FOOT.z, FOOT.yaw, FOOT.pitch, (x, y, z) => y > padGround(x, z) + 0.3 && !baseBlocked(x, z, y - 1.2) && !(CITY.walk && wallBetween(FOOT.x, FOOT.z, x, z, y - 1.8)) && !(ROVER.model && Math.hypot(x - ROVER.x, z - ROVER.z) < 2.2) && !treeNear(x, z, 1.1), dt);
   else _c.set(FOOT.x, FOOT.y + FOOT.jy + eyeH() + FOOT.bob, FOOT.z);
   camera.position.copy(_c);
-  camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch + kickView(FIGHT.kick), FOOT.yaw, 0); aimShake(camera.rotation);
+  camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch + kickView(FIGHT.kick), FOOT.yaw, 0); aimShake(camera.rotation); lehnKamera(camera, FOOT.yaw, VIEW.tp);
   if (FIGHT.down > 0 && !VIEW.tp) camera.position.y -= (3 - FIGHT.down) * 0.4;
   const fpb = FOOT.active && !VIEW.tp && !!me && fpBody(camera, aimK());      // Ich-Sicht: der eigene Körper statt der Waffe allein
   fieldViewModel(FOOT.active && !VIEW.tp && !fpb, FOOT.bob, FOOT.walked);

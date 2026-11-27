@@ -9,10 +9,12 @@ import { P } from './state';
 // Magazin der Handwaffe zu Fuß (seit Alpha 1.54, mit der neuen Ringanzeige): Planeten und Minen teilen sich denselben Stand.
 // Der Vorrat ist unbegrenzt, nur das Magazin zählt. Leer lädt die Waffe von selbst nach, R lädt früher nach. Der Schneidbrenner (ohne Waffe)
 // läuft mit Energie und braucht kein Magazin.
-const MAG: Record<string, number> = { waffe_pistole: 12, waffe_smg: 40, waffe_karabiner: 30, waffe_flinte: 6, waffe_impuls: 24, waffe_splitter: 20, waffe_sp12: 12, waffe_kg30: 30, waffe_tf8: 8 };
-const RELOAD: Record<string, number> = { waffe_smg: 1.6, waffe_flinte: 2.2, waffe_karabiner: 1.8, waffe_splitter: 1.9, waffe_sp12: 2.0, waffe_kg30: 2.2, waffe_tf8: 2.8 };   // die drei letzten: Länge von Lyras Nachlade-Clips
+const MAG: Record<string, number> = { waffe_pistole: 12, waffe_smg: 40, waffe_karabiner: 30, waffe_flinte: 6, waffe_impuls: 24, waffe_splitter: 20, waffe_sp12: 12, waffe_kg30: 30, waffe_tf8: 8, waffe_gw40: 4 };
+const RELOAD: Record<string, number> = { waffe_smg: 1.6, waffe_flinte: 2.2, waffe_karabiner: 1.8, waffe_splitter: 1.9, waffe_sp12: 2.0, waffe_kg30: 2.2, waffe_tf8: 2.8, waffe_gw40: 3.4 };   // SP-12 bis TF-8: Länge von Lyras Nachlade-Clips; GW-40: ShooterGame (3,0 s Trommel + Klappe)
 // Patronenwaffen laden hörbar nach (Aufnahmen des Lyra-Pakets, audio.ts): Magazin heraus, Magazin hinein, Verschluss – zu den Zeitpunkten,
 // an denen die Figur in der Außensicht danach greift (Anteil der Nachladezeit). Energiewaffen behalten die alten Töne.
+// Eigene Nachladeklänge (ShooterGame): Anfang beim Start des Nachladens, Ende wenn die Waffe wieder bereit ist
+const LADE: Record<string, [string, string]> = { waffe_gw40: ['gw_lade_a0', 'gw_lade_b0'] };
 const KIND: Record<string, GunKind> = { waffe_pistole: 'pistol', waffe_karabiner: 'rifle', waffe_flinte: 'shotgun', waffe_smg: 'rifle', waffe_sp12: 'pistol', waffe_kg30: 'rifle', waffe_tf8: 'shotgun' };
 // Streuung nach Hitze (lyra.json, weapons.*.spread; nur die drei Waffen des Pakets): Jeder Schuss erzeugt Hitze (per), die Hitze ergibt den
 // Öffnungswinkel in Grad (curve). Nach der Pause delay kühlt die Waffe mit cool je Sekunde ab. Faktoren für Zielen, Stillstehen, Ducken und
@@ -82,7 +84,8 @@ export function gunReload() {
   gunSync();
   if (!GUN.max || GUN.reload > 0 || GUN.mag >= GUN.max) return;
   GUN.reload = GUN.reloadT; GUN.part = 0;
-  if (!GUN.kind) sfx('gear', 0.25, 1.6, () => snd(260, 0.08, 'triangle', 0.03, -60));
+  if (LADE[GUN.id]) sfx(LADE[GUN.id][0], 0.5, 1, () => sfx('gear', 0.25, 1.6));
+  else if (!GUN.kind) sfx('gear', 0.25, 1.6, () => snd(260, 0.08, 'triangle', 0.03, -60));
 }
 export function gunUpdate(dt: number) {
   gunSync();      // läuft zu Fuß in jedem Bild: Die Aufnahmen der Waffe sind so vor dem ersten Schuss geladen
@@ -90,9 +93,10 @@ export function gunUpdate(dt: number) {
   if (GUN.reload <= 0) return;
   GUN.reload -= dt;
   if (GUN.kind) { const p = 1 - GUN.reload / GUN.reloadT; while (GUN.part < PARTS.length && p >= PARTS[GUN.part][1]) gunPart(GUN.kind, PARTS[GUN.part++][0]); }
-  if (GUN.reload <= 0) { GUN.reload = 0; GUN.mag = GUN.max; if (!GUN.kind) snd(520, 0.05, 'triangle', 0.025, 80); }
+  if (LADE[GUN.id] && GUN.reload <= 0.62 && GUN.part === 0) { GUN.part = 1; sfx(LADE[GUN.id][1], 0.5); }      // Klappe zu, kurz bevor es weitergeht
+  if (GUN.reload <= 0) { GUN.reload = 0; GUN.mag = GUN.max; if (!GUN.kind && !LADE[GUN.id]) snd(520, 0.05, 'triangle', 0.025, 80); }
 }
-export const gunMode = (w: { n: number; auto: boolean }) => (w.n > 1 ? 'Schrot' : w.auto ? 'Dauerfeuer' : 'Einzelfeuer');
+export const gunMode = (w: { n: number; auto: boolean; gw?: boolean }) => (w.gw ? 'Granaten' : w.n > 1 ? 'Schrot' : w.auto ? 'Dauerfeuer' : 'Einzelfeuer');
 
 // =====================================================================================
 // Zielen, Kamera und Rückmeldungen zu Fuß (seit 2026-11-23, Planet und Mine gemeinsam). Werte und Aufnahmen aus dem Lyra-Paket (docs/lyra.md).
