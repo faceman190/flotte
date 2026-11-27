@@ -6,7 +6,8 @@ import { scene, camera, ambient, rim, sun, view, ux, gl, overlay, BODY_LAYER, bo
 import { keys, mouse, releaseAll } from '../core/input';
 import { clamp, rng, hashStr } from '../core/util';
 import { snd, sfx, shotSfx, gunShot, loopVol, type GunKind } from '../core/audio';
-import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, clearFootFx, SHELL_PORT } from './footfx';
+import { ngMuzzle, ngVmFlash } from './ngfx';
+import { shotTrail, shotPending, shotFlush, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, clearFootFx, SHELL_PORT } from './footfx';
 import { texMat, std } from '../core/textures';
 import { P, G, settings, saveGame } from './state';
 import { world } from './world';
@@ -21,7 +22,7 @@ import { droneBark } from './barks';
 import { kitMaterials } from '../models/kit';
 import { onCoop, coopSend, coopNow, pack, CoopGroup, coopNet } from './coop';
 import { bauKoerper, koerperWeg } from './koerper';
-import { gunReady, gunFired, gunUpdate, GUN, AIM, aimUpdate, aimFov, aimShake, aimK, gunSpread, gunFalloff, camShake, hurtSound, noteKill, whiz } from './footgun';
+import { gunReady, gunFired, gunUpdate, GUN, AIM, aimUpdate, aimFov, aimShake, aimK, gunSpread, gunFalloff, camShake, hurtSound, noteKill, whiz, ZIEL, zielStrahl, zielWeite, spreadDir, kickView } from './footgun';
 import { drawFootRing, drawPrompt, drawFootCross } from '../ui/footHud';
 import { throwGrenade, updateGrenades } from './granate';
 import { fireLauncher, updateLauncher, launcherShot, type GwEnv } from './granatwerfer';
@@ -1159,47 +1160,85 @@ function hurtPlayer(d: number) {
   DUN.hp -= dmg; DUN.hurt = 1; flinch(); hurtSound(d);
   if (DUN.hp <= 0) { DUN.hp = 0; DUN.dead = 2.2; say('Du bist zusammengebrochen. Der Förderkorb bringt dich nach oben.', '#ff6b5b'); }
 }
+// Was trifft ein Strahl von o in Richtung d bis zur Entfernung max? In den Koordinaten der Mine (Boden bei 0): Fels, Boden und Decke in
+// kleinen Schritten, Wächter als Kugel.
+function strahl(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, max: number, step = 0.25): { t: number; foe: Foe | null } {
+  let tw = max;
+  for (let t = Math.min(0.3, max); t < max; t += step) {
+    const lx = ox + dx * t, ly = oy + dy * t, lz = oz + dz * t;
+    if (ly < 0) { tw = Math.max(0.3, -oy / dy); break; }                  // Boden und Decke: genau die Stelle, nicht der Schritt dahinter
+    if (ly > 5.4) { tw = Math.max(0.3, (5.4 - oy) / dy); break; }
+    if (solidAt(lx, lz)) {                                               // Fels: zwischen den beiden Schritten halbieren
+      let lo = Math.max(0, t - step), hi = t;
+      for (let i = 0; i < 4; i++) { const m = (lo + hi) / 2; if (solidAt(ox + dx * m, oz + dz * m)) hi = m; else lo = m; }
+      tw = Math.max(0.3, hi - (WALL_R > 0.5 ? 0.32 : 0)); break;
+    }
+  }
+  let best: Foe | null = null, bt = tw;
+  for (const f of DUN.foes) {
+    const px = f.x - ox, py = f.y - oy, pz = f.z - oz, t = px * dx + py * dy + pz * dz;
+    if (t < 0 || t > bt) continue;
+    const r = (f.boss ? 0.8 : 0.48), qx = px - dx * t, qy = py - dy * t, qz = pz - dz * t;
+    if (qx * qx + qy * qy + qz * qz < r * r) { bt = t; best = f; }
+  }
+  return { t: bt, foe: best };
+}
+/** in jedem Bild vor dem Schießen: Zielstrahl durch das Fadenkreuz und Zielpunkt für die Haltung der Figur (footgun.ts ZIEL, Weltkoordinaten) */
+function zielen(dt: number) {
+  const lk = lehnKopf(DUN.yaw);      // gelehnt: der Kopf steht zur Seite (lehnen.ts)
+  zielStrahl(camera, BASE.x + DUN.x + lk.x, BASE.y + EYE() + lk.y, BASE.z + DUN.z + lk.z, DUN.yaw, DUN.pitch, VIEW.tp);
+  const o = ZIEL.o, d = ZIEL.d;
+  zielWeite(strahl(o.x - BASE.x, o.y - BASE.y, o.z - BASE.z, d.x, d.y, d.z, 40, 0.5).t, dt);
+}
+const _sd = new THREE.Vector3(), _sd2 = new THREE.Vector3();
 function shoot() {
   const w = weapon();
   DUN.cool = w.iv; DUN.kick = 1; DUN.flash = 0.06; shotsN++; noteShot();
   shotSound(w); if (w.n > 1) camShake(0.32);
   const sp = gunSpread(w.spread);
-  const cp = camera.getWorldPosition(_v).clone();
-  const tpm = VIEW.tp || fpOn ? avatarMuzzle(me) : null;
-  const a = tpm || (vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : gun ? gun.localToWorld(_w.set(0, 0.008, -0.6)).clone() : cp.clone());
-  if (tpm) flash(tpm.x, tpm.y, tpm.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);
-  if (w.gw) {      // Granatwerfer: Geschoss aus der Mündung in Blickrichtung (Koordinaten der Mine)
-    _e.set(DUN.pitch + (Math.random() - 0.5) * 2 * sp, DUN.yaw + (Math.random() - 0.5) * 2 * sp, 0);
-    const d = new THREE.Vector3(0, 0, -1).applyEuler(_e);
+  // Strahl der Kamera durch das Fadenkreuz, in den Koordinaten der Mine; E: Kopf der Figur
+  const ox = ZIEL.o.x - BASE.x, oy = ZIEL.o.y - BASE.y, oz = ZIEL.o.z - BASE.z, Ex = ZIEL.eye.x - BASE.x, Ey = ZIEL.eye.y - BASE.y, Ez = ZIEL.eye.z - BASE.z;
+  const c0 = strahl(ox, oy, oz, ZIEL.d.x, ZIEL.d.y, ZIEL.d.z, 60); zielWeite(c0.t, 0, true);      // die Waffe zeigt im Bild des Schusses genau auf den Zielpunkt
+  flashDue = true;
+  if (w.gw) {      // Granatwerfer: Geschoss knapp vor dem Kopf der Figur, gerichtet auf den Punkt unter dem Fadenkreuz (Koordinaten der Mine)
+    const a = new THREE.Vector3(Ex, Ey - 0.12, Ez);
+    const d = spreadDir(_sd2.set(ox, oy, oz).addScaledVector(ZIEL.d, Math.max(8, c0.t)).sub(a).normalize(), sp, _sd).clone();
     camShake(0.35);
-    fireLauncher(new THREE.Vector3(DUN.x, EYE() - 0.12, DUN.z).addScaledVector(d, 0.5), d, mineEnv(), w.dmg);
+    fireLauncher(a.addScaledVector(d, 0.5), d, mineEnv(), w.dmg);
     return;
   }
-  let end: THREE.Vector3 | null = null;
   for (let s = 0; s < w.n; s++) {
-    _e.set(DUN.pitch + (Math.random() - 0.5) * 2 * sp, DUN.yaw + (Math.random() - 0.5) * 2 * sp, 0);
-    const d = new THREE.Vector3(0, 0, -1).applyEuler(_e);
-    // Wand: in kleinen Schritten vorwärts, bis Fels, Boden oder Decke erreicht ist
-    let tw = 60;
-    for (let t = 0.3; t < 60; t += 0.25) {
-      const lx = DUN.x + d.x * t, ly = EYE() + d.y * t, lz = DUN.z + d.z * t;
-      if (ly < 0 || ly > 5.4 || solidAt(lx, lz)) { tw = Math.max(0.3, t - (WALL_R > 0.5 ? 0.32 : 0)); break; }
+    // 1) entlang des Kamerastrahls (mit Streuung): der Zielpunkt dieser Kugel
+    const d = spreadDir(ZIEL.d, sp, _sd);
+    let h = strahl(ox, oy, oz, d.x, d.y, d.z, 60), ax = ox, ay = oy, az = oz;
+    // 2) Außensicht: Ist der Weg vom Kopf der Figur dorthin frei? Sonst trifft die Kugel, was dazwischen steht
+    if (ZIEL.tp) {
+      const e = _sd2.set(ox + d.x * h.t - Ex, oy + d.y * h.t - Ey, oz + d.z * h.t - Ez), L = e.length();
+      if (L > 1.2) {
+        e.divideScalar(L);
+        const h2 = strahl(Ex, Ey, Ez, e.x, e.y, e.z, L);
+        if (h2.t < L - 0.8) { h = h2; ax = Ex; ay = Ey; az = Ez; d.copy(e); }
+      }
     }
-    // Wächter: Kugeltest entlang des Strahls
-    let best: Foe | null = null, bt = tw;
-    for (const f of DUN.foes) {
-      const ox = f.x - DUN.x, oy = f.y - EYE(), oz = f.z - DUN.z, t = ox * d.x + oy * d.y + oz * d.z;
-      if (t < 0 || t > bt) continue;
-      const r = (f.boss ? 0.8 : 0.48), px = ox - d.x * t, py = oy - d.y * t, pz = oz - d.z * t;
-      if (px * px + py * py + pz * pz < r * r) { bt = t; best = f; }
-    }
-    const hp = cp.clone().addScaledVector(d, bt); end = hp;
+    const bt = h.t, best = h.foe, hp = new THREE.Vector3(BASE.x + ax + d.x * bt, BASE.y + ay + d.y * bt, BASE.z + az + d.z * bt);
     if (best && mates.size && !amHost(mates.keys())) { best.hit = 0.12; coopSend('mh', { e: DUN.e!.id, i: best.id, d: w.dmg }); impact(hp, d, 'metall'); G.hitMark = 0.12; }
     else if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg * gunFalloff(bt); best.hit = 0.12; best.lh = 0; best.alert = true; impact(hp, d, 'metall'); G.hitMark = 0.12; }
-    else impact(hp, d, 'boden', w.col);
-    fxTracer(a, hp, w.col, w.n > 1 ? 0.04 : 0.065);                  // Leuchtspur je Kugel
+    else impact(hp, d, 'boden', w.col, undefined, mineNormal(hp, d, ax + d.x * bt, ay + d.y * bt, az + d.z * bt));
+    shotTrail(hp, w.col, w.n > 1 ? 0.04 : 0.065);                    // Leuchtspur je Kugel: beginnt an der Mündung des Bildes (dungeonCamera)
+    SHOT.end.copy(hp); SHOT.n++;
   }
-  void end;
+}
+/** nur für Prüfskripte: Endpunkt der letzten Kugel und Mündung, von der ihre Leuchtspur ausging */
+export const SHOT = { end: new THREE.Vector3(), a: new THREE.Vector3(), n: 0 };
+let flashDue = false;
+// Flächennormale am Einschlag in der Mine (für das Einschussloch): Boden, sonst die getroffene Felswand (Kacheln, also entlang x oder z).
+// Decke und Wände mit Abstand (WALL_R > 0,5: Treffpunkt liegt vor der Wand) bekommen keins. Legt hp am Boden auf die Bodenhöhe.
+function mineNormal(hp: THREE.Vector3, d: THREE.Vector3, lx: number, ly: number, lz: number): THREE.Vector3 | null {
+  if (ly <= 0.3) { hp.y = BASE.y + 0.005; return new THREE.Vector3(0, 1, 0); }
+  if (ly >= 5.3 || WALL_R > 0.5) return null;
+  if (Math.abs(d.x) > 0.05 && solidAt(lx + Math.sign(d.x) * 0.3, lz)) return new THREE.Vector3(-Math.sign(d.x), 0, 0);
+  if (Math.abs(d.z) > 0.05 && solidAt(lx, lz + Math.sign(d.z) * 0.3)) return new THREE.Vector3(0, 0, -Math.sign(d.z));
+  return null;
 }
 // Umgebung für Granate und Granatwerfer (granate.ts, granatwerfer.ts): Koordinaten der Mine, Boden bei 0, Fels und Decke fest
 function mineEnv(): GwEnv {
@@ -1261,6 +1300,7 @@ export function updateDungeon(dt: number) {
   DUN.cool -= dt; DUN.kick = Math.max(0, DUN.kick - dt * 7); DUN.flash -= dt; DUN.hurt = Math.max(0, DUN.hurt - dt * 1.6);
   const wp = weapon();
   gunUpdate(dt);
+  zielen(dt);
   if (mouse.down && DUN.cool <= 0 && gunReady()) { shoot(); gunFired(); if (!wp.auto) mouse.down = false; }   // Magazin: footgun.ts
   if (tracer && tracer.visible && (tracerT -= dt) <= 0) tracer.visible = false;
   // Was liegt vor mir? (Kiste, Schalter, Förderkorb)
@@ -1415,9 +1455,10 @@ export function updateDungeon(dt: number) {
   // eigene Figur (Außensicht): Laufen nach Richtung, Anschlag nach Schüssen, Neigung mit dem Blick
   if (me) {
     const body = VIEW.tp || bodyView();      // Figur zeigen: Außensicht, oder Ich-Sicht mit ganzem Körper
+    let gelehnt = false;      // die neue Figur lehnt schon vor dem Ausrichten des Laufs (vorFit), der Soldat danach
     me.s.g.visible = body && (VIEW.tp || DUN.dead <= 0);
-    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on });
-    if (body) lehnFigur(me.s.g, DUN.yaw);
+    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: DUN.x, y: 0, z: DUN.z, yaw: DUN.yaw, pitch: DUN.pitch, vx: DUN.vx, vz: DUN.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, hit: ACT.hit, fire: DUN.flash > 0, combat: DUN.foes.some(f => f.alert && Math.hypot(f.x - DUN.x, f.z - DUN.z) < 14), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on, aimAt: ZIEL.ok ? ZIEL.at : null, vorFit: () => { lehnFigur(me!.s.g, DUN.yaw); gelehnt = true; } });
+    if (body && !gelehnt) lehnFigur(me.s.g, DUN.yaw);
   }
   for (const m of DUN.msg) m.life -= dt;
   DUN.msg = DUN.msg.filter(m => m.life > 0);
@@ -1426,7 +1467,7 @@ export function updateDungeon(dt: number) {
 // Kamera, Stirnlampe und Waffe im Bild
 export function dungeonCamera() {
   camera.position.set(BASE.x + DUN.x, BASE.y + EYE() + DUN.bob - (DUN.dead > 0 ? (2.2 - DUN.dead) * 0.5 : 0), BASE.z + DUN.z);
-  camera.rotation.order = 'YXZ'; camera.rotation.set(DUN.pitch + DUN.kick * 0.012, DUN.yaw, 0); aimShake(camera.rotation);
+  camera.rotation.order = 'YXZ'; camera.rotation.set(DUN.pitch + kickView(DUN.kick), DUN.yaw, 0); aimShake(camera.rotation);
   if (VIEW.tp && me) {
     // Außensicht: über der rechten Schulter; hält Abstand zu Felswänden
     tpCamPos(_v, DUN.x, 0, DUN.z, DUN.yaw, DUN.pitch, (x, y, z) => free(x, z, 0.28) && y > 0.25 && y < 2.6);
@@ -1456,7 +1497,7 @@ export function dungeonCamera() {
     if (vm.glow) { const k = 0.82 + 0.18 * Math.sin(performance.now() * 0.004); vm.glow.color.setHex(vm.id === 'ef2' ? 0x6fc2ff : 0x8fd0ff).multiplyScalar(k); }
     vm.gun.visible = DUN.dead <= 0;
     const sup = vm.id === 'smg', f = DUN.flash > 0 && (!sup || shotsN % 3 === 0); vm.flash.visible = f; vm.flashLight.intensity = f ? (sup ? 0.12 : 2.6) : 0;   // SMG mit Schalldämpfer: kleines Mündungsfeuer
-    if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
+    if (f) { ngVmFlash(vm.flash); (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
     if (shotsN !== vmShotsN) { vmShotsN = shotsN; const port = SHELL_PORT[vm.id]; if (port) vmShell(vm.scene, vm.gun, port); }   // Hülse fliegt rechts heraus
   }
   updateFootFx();
@@ -1464,6 +1505,14 @@ export function dungeonCamera() {
     gun.position.copy(camera.localToWorld(_w.set(0.13, -0.12 + DUN.bob * 0.4, -0.26 + DUN.kick * 0.04)));
     gun.quaternion.copy(camera.quaternion).multiply(_q.setFromEuler(_e.set(DUN.kick * 0.12, 0.03, 0)));
     gun.visible = DUN.dead <= 0;
+  }
+  // Leuchtspuren und Mündungsfeuer des Schusses dieses Bildes: von der Mündung, wie sie jetzt steht (Figur, sonst das Waffenmodell im Bild)
+  if (shotPending() || flashDue) {
+    flashDue = false;
+    const w = weapon(), tpm = VIEW.tp || fpOn ? avatarMuzzle(me) : null;
+    const a = tpm || (vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)) : gun ? gun.localToWorld(_w.set(0, 0.008, -0.6)) : camera.localToWorld(_w.set(0.12, -0.15, -0.5)));
+    if (tpm && !ngMuzzle(tpm, ZIEL.d, 1, !!w.sfx)) flash(tpm.x, tpm.y, tpm.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);
+    SHOT.a.copy(a); shotFlush(a);
   }
 }
 // Maus: Blick bei gefangenem Zeiger

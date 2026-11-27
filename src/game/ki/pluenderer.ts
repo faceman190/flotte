@@ -9,6 +9,7 @@ import { SALV } from '../salvage';
 import { makeAvatar, driveAvatar, freeAvatar, avatarMuzzle, type Avatar } from '../avatar';
 import type { Tracht } from '../figur';
 import { tracer as fxTracer, impact, type ImpStoff } from '../footfx';
+import { ngMuzzle } from '../ngfx';
 import { flash } from '../fx';
 import { whiz, noteKill } from '../footgun';
 import { FELD_EXTRA, feldHurt, feldSay, feldKoop } from '../fieldfight';
@@ -212,7 +213,7 @@ function muendung(p: Pl): THREE.Vector3 {
 function schussBild(p: Pl, ex: number, ey: number, ez: number, traf: boolean) {
   const a = muendung(p); _b.set(ex, ey, ez);
   fxTracer(a, _b, '#ffcf8a', 0.05);
-  flash(a.x, a.y, a.z, '#ffd9a0', 0.32, 0.05);
+  if (!ngMuzzle(a, _d.copy(_b).sub(a).normalize(), 0.9)) flash(a.x, a.y, a.z, '#ffd9a0', 0.32, 0.05);
   const dist = Math.hypot(a.x - camera.position.x, a.z - camera.position.z);
   gunShot('rifle', 0.5 * Math.max(0.05, 1 - dist / 140), 0.93 + Math.random() * 0.08);
   if (!traf) { const st = stoffBei(ex, ey, ez); impact(_b, _d.copy(_b).sub(a).normalize(), st === 'metall' ? 'metall' : 'boden', undefined, st); }

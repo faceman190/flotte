@@ -49,13 +49,54 @@ schießen und laden mit Lyras Aufnahmen, die SM-4 behält die eigene Schussaufna
 
 | Lage | Haltung |
 |---|---|
-| Stehen, ruhig | Hüfthaltung, nach 1,4 s ohne Schuss um 16° gesenkt (Ich-Sicht 7°) |
+| Stehen, ruhig | Hüfthaltung, der Lauf zeigt auf den Zielpunkt. In der Ich-Sicht sinkt sie nach 1,4 s ohne Schuss um 7°; in der Außensicht seit 27.11.2026 nicht mehr (vorher 16°) |
 | Joggen und Sprinten | Tragehaltung: Waffe quer vor dem Körper, rund 20° nach unten (`MM_Rifle_Jog_Fwd`, `MM_Pistol_Jog_Fwd`) |
 | Zielen, Schuss, Nachladen, Granatwurf | Waffe sofort oben; nach einem Schuss bleibt sie 0,9 s oben, auch im Lauf |
 
 Eigene Sprint-Clips mit Waffe hat das Paket nicht: Der Sprint nutzt denselben Clip, etwas schneller abgespielt. In der Ich-Sicht wird
 die Tragehaltung nur zu 50 % (Joggen) bis 68 % (Sprint) eingemischt – voll getragen läge die Waffe unter dem Bildrand.
 Einstellwerte: `WeaponLayer.js` `TUNE` (`carry…`, `lowReady…`).
+
+### Schuss, Fadenkreuz und Lauf (seit 27.11.2026)
+
+Der Nutzer am 27.11.2026: „Die waffe zeigt nicht immer dort hin wo das crosshair ist in third person, schüsse sind ab und zu sehr schräg,
+nicht da wo das crosshair hinzeigt und nicht in verlängerung des laufs, kommen ab und zu neben dem lauf. in first person auch, schießt
+teilweise nicht da hin wo kimme und korn oder crosshair zeigen.“
+
+Was falsch war und was jetzt gilt (Planet `fieldfight.ts` und Mine `dungeon.ts` gleich):
+
+| Fehler | Ursache | Jetzt |
+|---|---|---|
+| Einschlag neben dem Fadenkreuz (Außensicht) | Der Schuss lief vom Kopf der Figur in Blickrichtung; die Kamera steht 0,45 bis 0,58 m rechts über der Schulter | Zielstrahl von der Kamera durch die Bildmitte (`footgun.ts` `ZIEL`, `zielStrahl`). Er beginnt auf Höhe der Figur: Was zwischen Kamera und Figur liegt, wird nicht getroffen |
+| Kugeln außerhalb der angezeigten Streuung | Nick- und Gierwinkel wurden einzeln gewürfelt (ein Quadrat, Ecken 41 % außerhalb) | Kegel wie in Lyra (`spreadDir`, Abstand von der Mitte = Zufall ^ `exponent`): jede Kugel bleibt im Kreis des Fadenkreuzes |
+| Einschlag im Bild des Schusses unter dem Fadenkreuz | Die Kamera sprang im selben Bild um den Rückstoß nach oben | Der Rückstoß der Kamera setzt ein Bild später ein (`kickView`) |
+| Leuchtspur neben dem Lauf | Sie begann an der Mündung des vorigen Bildes; in der Ich-Sicht wird die Figur erst nach der Kamera verschoben | Die Endpunkte warten (`footfx.ts` `shotTrail`), die Kamerafunktion setzt die Spur an die Mündung des gezeigten Bildes (`shotFlush`) |
+| Leuchtspur nicht in Verlängerung des Laufs | Lyras Haltungen richten die Waffe nur ungefähr nach dem Blick (gemessen 1 bis 11° daneben); beim Laufen war sie im Bild des Schusses noch gesenkt | `mannyAvatar.ts` `fitGun` dreht die Brust samt Armen, bis der Lauf von der Mündung auf den Zielpunkt zeigt. Ein Schuss hebt die Waffe im selben Bild aus der Tragehaltung. Der Rückstoß der Figur beginnt ein Bild später (Pistole und Flinte begannen voll ausgelenkt, 6 bis 9°) |
+| Ich-Sicht: Kimme und Korn zeigen woanders hin | Im Kampf (nach einem Schuss 3,5 s lang) nahm die Figur die Zielhaltung ein, ohne dass das Visier auf die Blickachse gerückt wurde; die Visierhöhen von Gewehr und Flinte stimmten nicht | In der Ich-Sicht gibt es die Zielhaltung nur noch mit der rechten Maustaste, und das Visier rückt mit der Haltung selbst vor das Auge (`mannyFirstPerson`, `WeaponLayer.aimW`). Visierhöhen am Bild abgeglichen (`lyraGuns.ts` `ads`): Gewehr 154,5 mm, Pistole 121 mm, Flinte 145 mm |
+
+Außensicht zusätzlich: Vom Kopf der Figur wird der Weg zum Zielpunkt geprüft. Steht dort eine Wand oder ein Gegner (die Kamera sieht über
+die Schulter an einer Kante vorbei, die Waffe nicht), trifft die Kugel das.
+
+Mit der Arbeit der anderen Sitzung zusammengeführt (Niagara-Effekte, GW-40, Lehnen): Das neue Mündungsfeuer entsteht an der Mündung des
+gezeigten Bildes; der Granatwerfer richtet sein Geschoss auf den Punkt unter dem Fadenkreuz (mindestens 12 m, in der Mine 8 m weit);
+gelehnt (Q / E) gilt der zur Seite gerückte Kopf, und die Figur lehnt, bevor der Lauf ausgerichtet wird (`Drive.vorFit`).
+
+Steht die Figur dicht an einer Wand (Einschlag unter 1,5 m vor der Mündung), gibt es keine Leuchtspur: So nah kann der Lauf nicht mehr auf
+den Einschlag zeigen.
+
+Gemessen im Testfenster (`scripts/schusstest.js`, Winkel in Grad; „Fadenkreuz“ von der Kamera des gezeigten Bildes aus):
+
+| | vorher | jetzt |
+|---|---|---|
+| Fadenkreuz ↔ Einschlag, Außensicht, erster Schuss im Stand | 1,0 bis 5,1 (Boden in 6 bis 15 m) | 0,01 bis 0,12 (Streuung des ersten Schusses 0,10 bis 0,15) |
+| Fadenkreuz ↔ Einschlag, alle Fälle | – | immer unter der Streuung des Schusses |
+| Lauf ↔ Leuchtspur, Gewehr | 1 bis 11 (so weit dreht `fitGun` nach) | 0,1 bis 1,4 |
+| Lauf ↔ Leuchtspur, Pistole und Flinte | 6 bis 9 dazu aus dem Rückstoß | 0,1 bis 1,4 |
+
+Bilder: `docs/bilder/schuss-aussensicht.jpg`, `docs/bilder/schuss-ichsicht.jpg` (Bild des Schusses, die Spur beginnt an der Mündung).
+
+Nicht geändert: Die älteren Waffen des Spiels haben keine echte Visierung, beim Zielen in der Ich-Sicht schaut man knapp über das Modell.
+Mitspieler und Wachen richten ihre Waffe weiter nur nach den Haltungen.
 
 ## Wie es gebaut ist
 
@@ -91,6 +132,8 @@ Einstellwerte: `WeaponLayer.js` `TUNE` (`carry…`, `lowReady…`).
 
 - `(0, eval)(await (await fetch('/scripts/waffentest.js')).text()); await __waffe();` – Figur mit Waffe und Lampe im Hangar.
 - `await __feld('waffe_kg30', false)` – echter Ablauf zu Fuß auf Eisgarten (zweiter Wert: Außensicht), dann `tk(n)` und `show()`.
+- `(0, eval)(await (await fetch('/scripts/schusstest.js')).text()); __schuss()` nach `__feld`: je Fall (Stand, Zielen, Laufen, beide Sichten)
+  Winkel Fadenkreuz ↔ Einschlag und Lauf ↔ Leuchtspur.
 - Gemessen: Rückstoß der Figur 4,5 cm in zwei Bildern; Sichtfeld beim Zielen 62,5° statt 72°; Streuung des KG-30 aus dem Stand
   0,15° für den ersten Schuss, nach 24 Schuss Dauerfeuer 3° nach jeder Seite, nach 2 s Pause wieder wie am Anfang.
 

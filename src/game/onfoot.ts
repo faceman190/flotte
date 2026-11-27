@@ -18,14 +18,14 @@ import { radio } from '../ui/radio';
 import { nearEntrance } from './dungeon';
 import { VIEW, STANCE, ACT, footPace, footBrake, footAccel, setIntent, eyeH, syncAvatar, driveAvatar, avatarMuzzle, tpCamPos, resetTpCam, figGear, type Avatar } from './avatar';
 import { viewModelId } from './mineArt';
-import { AIM, aimUpdate, aimFov, aimShake, aimK } from './footgun';
+import { AIM, ZIEL, aimUpdate, aimFov, aimShake, aimK, kickView } from './footgun';
 import { bodyView, fpBody } from './avatar';
 import { drawFootCross } from '../ui/footHud';
 import { fieldGrenade } from './fieldfight';
 import { noteToss, noteFoot } from './avatar';
 import { basePad, padGround, baseBlocked, nearDoor, surfaceAt, wallBetween } from './basewalk';
 import { nearCrate, salvageBlock, drawSalvageHUD } from './salvage';
-import { FIGHT, updateFieldFight, fieldDown, fieldViewModel, hideFieldViewModel, drawFieldHUD, FELD_EXTRA } from './fieldfight';
+import { FIGHT, updateFieldFight, fieldShotFx, fieldDown, fieldViewModel, hideFieldViewModel, drawFieldHUD, FELD_EXTRA } from './fieldfight';
 import { storyMarkers } from './story';
 import { landShip } from './surface';
 import { schiffSperrt, koerperSperrt } from './koerper';
@@ -167,7 +167,7 @@ export function updateFoot(dt: number) {
     noteFoot(false, true);      // auch in der Ich-Sicht: Mitspieler sehen die Figur fallen
     if (fieldDown(dt)) { leaveShipOnFoot(); radio('SYSTEM', 'Du kommst am Schiff wieder zu dir.'); }
     if (me) driveAvatar(me, dt, { x: FOOT.x, y: FOOT.y, z: FOOT.z, yaw: FOOT.yaw, pitch: 0, vx: 0, vz: 0, dead: FIGHT.down > 0, crouch: STANCE.crouch });
-    updateFieldFight(dt, { x: FOOT.x, y: FOOT.y, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH(), active: false, tp: VIEW.tp, muzzle: null });
+    updateFieldFight(dt, { x: FOOT.x, y: FOOT.y, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH(), active: false, tp: VIEW.tp });
     return;
   }
   FOOT.warn -= dt;
@@ -221,16 +221,17 @@ export function updateFoot(dt: number) {
   const lk = lehnKopf(FOOT.yaw);
   // eigene Figur
   aimUpdate(dt, FIGHT.down <= 0, { still: Math.hypot(FOOT.vx, FOOT.vz) < 0.4, crouch: STANCE.crouch, air: FOOT.jy > 0.05 });
+  // Kampf: Schießen (Klick), Drohnen, Geschosse. Vor der Figur: Der Schuss dieses Bildes hebt die Waffe schon in diesem Bild, und der
+  // Zielpunkt (footgun.ts ZIEL), auf den die Figur den Lauf richtet, ist der dieses Bildes. Die Leuchtspur setzt footCamera an die Mündung.
+  updateFieldFight(dt, { x: FOOT.x + lk.x, y: FOOT.y + FOOT.jy, z: FOOT.z + lk.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH() + lk.y, active: true, tp: VIEW.tp, geduckt: STANCE.crouch, vx: FOOT.vx, vz: FOOT.vz, lehnt: Math.abs(LEHN.v) > 0.4 });      // gelehnt: Schüsse und Sichtlinien der Gegner vom Kopf aus
+  let gelehnt = false;
   const body = VIEW.tp || bodyView();      // Figur zeigen: Außensicht, oder Ich-Sicht mit ganzem Körper
   if (body) me = syncAvatar(scene, me, figGear());
   if (me) {
     me.s.g.visible = body && (VIEW.tp || FIGHT.down <= 0);
-    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, ground: footGround, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert) || FELD_EXTRA.kampf(), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on });
-    if (body) lehnFigur(me.s.g, FOOT.yaw);      // Oberkörper zur Seite (lehnen.ts)
+    if (body) driveAvatar(me, dt, { fp: !VIEW.tp, x: FOOT.x, y: FOOT.y + FOOT.jy, z: FOOT.z, yaw: FOOT.yaw, pitch: FOOT.pitch, vx: FOOT.vx, vz: FOOT.vz, wid: viewModelId(P.gear?.waffe), crouch: STANCE.crouch, air: FOOT.jy > 0.05, ground: footGround, hit: ACT.hit, fire: FIGHT.flash > 0, combat: FIGHT.foes.some(f => !f.dead && f.alert) || FELD_EXTRA.kampf(), reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, armed: true, ads: AIM.on, aimAt: ZIEL.ok ? ZIEL.at : null, vorFit: () => { lehnFigur(me!.s.g, FOOT.yaw); gelehnt = true; } });
+    if (body && !gelehnt) lehnFigur(me.s.g, FOOT.yaw);      // Oberkörper zur Seite (lehnen.ts); die neue Figur lehnt schon vor dem Ausrichten des Laufs (vorFit)
   }
-  // Kampf: Schießen (Klick), Drohnen, Geschosse; in der Außensicht kommt der Leuchtstrich aus der Mündung der Figur
-  const mz = body ? avatarMuzzle(me) : null;
-  updateFieldFight(dt, { x: FOOT.x + lk.x, y: FOOT.y + FOOT.jy, z: FOOT.z + lk.z, yaw: FOOT.yaw, pitch: FOOT.pitch, eye: eyeH() + lk.y, active: true, tp: VIEW.tp, muzzle: mz, geduckt: STANCE.crouch, vx: FOOT.vx, vz: FOOT.vz, lehnt: Math.abs(LEHN.v) > 0.4 });      // gelehnt: Schüsse und Sichtlinien der Gegner vom Kopf aus
 }
 
 /** Taste G zu Fuß: Granate in Blickrichtung werfen */
@@ -240,10 +241,11 @@ export function footCamera(dt: number) {
   if (VIEW.tp && me) tpCamPos(_c, FOOT.x, FOOT.y + FOOT.jy, FOOT.z, FOOT.yaw, FOOT.pitch, (x, y, z) => y > padGround(x, z) + 0.3 && !baseBlocked(x, z, y - 1.2) && !(CITY.walk && wallBetween(FOOT.x, FOOT.z, x, z, y - 1.8)) && !(ROVER.model && Math.hypot(x - ROVER.x, z - ROVER.z) < 2.2) && !treeNear(x, z, 1.1), dt);
   else _c.set(FOOT.x, FOOT.y + FOOT.jy + eyeH() + FOOT.bob, FOOT.z);
   camera.position.copy(_c);
-  camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch + FIGHT.kick * 0.012, FOOT.yaw, 0); aimShake(camera.rotation); lehnKamera(camera, FOOT.yaw, VIEW.tp);
+  camera.rotation.order = 'YXZ'; camera.rotation.set(FOOT.pitch + kickView(FIGHT.kick), FOOT.yaw, 0); aimShake(camera.rotation); lehnKamera(camera, FOOT.yaw, VIEW.tp);
   if (FIGHT.down > 0 && !VIEW.tp) camera.position.y -= (3 - FIGHT.down) * 0.4;
   const fpb = FOOT.active && !VIEW.tp && !!me && fpBody(camera, aimK());      // Ich-Sicht: der eigene Körper statt der Waffe allein
   fieldViewModel(FOOT.active && !VIEW.tp && !fpb, FOOT.bob, FOOT.walked);
+  fieldShotFx(FOOT.active && me && (VIEW.tp || fpb) ? avatarMuzzle(me) : null);      // Leuchtspur des Schusses: von der Mündung, wie sie in diesem Bild steht
   { const f = aimFov(72); if (Math.abs(camera.fov - f) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } }
 }
 

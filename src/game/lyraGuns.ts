@@ -25,9 +25,9 @@ export const LYRA_OF_VM: Record<string, LyraKind> = { lyg: 'rifle', lyp: 'pistol
 // muzzle: Mündung im Rahmen der Waffe (lyra.json, sockets.Muzzle) · view: Lage vor der Kamera in der Ich-Sicht (rechts, unten, vorn) ·
 // ads: Lage beim Zielen – Visier in der Bildmitte, so weit vorn, dass der Schaft nicht ins Bild ragt
 export const LYRA_SPEC: Record<LyraKind, { file: string; muzzle: [number, number, number]; view: [number, number, number]; ads: [number, number, number] }> = {
-  rifle: { file: 'lazy/LyraGewehr', muzzle: [0.6981, 0, 0.0893], view: [0.13, -0.22, -0.42], ads: [0, -0.158, -0.5] },
-  pistol: { file: 'lazy/LyraPistole', muzzle: [0.1913, 0, 0.0837], view: [0.105, -0.165, -0.4], ads: [0, -0.118, -0.42] },
-  shotgun: { file: 'lazy/LyraFlinte', muzzle: [0.4374, 0, 0.0995], view: [0.135, -0.235, -0.44], ads: [0, -0.168, -0.52] },
+  rifle: { file: 'lazy/LyraGewehr', muzzle: [0.6981, 0, 0.0893], view: [0.13, -0.22, -0.42], ads: [0, -0.1545, -0.5] },
+  pistol: { file: 'lazy/LyraPistole', muzzle: [0.1913, 0, 0.0837], view: [0.105, -0.165, -0.4], ads: [0, -0.121, -0.42] },
+  shotgun: { file: 'lazy/LyraFlinte', muzzle: [0.4374, 0, 0.0995], view: [0.135, -0.235, -0.44], ads: [0, -0.145, -0.52] },
   // ShooterGame MuzzleFlashSocket (0 / −15,06 / 72,92 cm am Knochen LauncherRoot), umgerechnet in diesen Rahmen; Visier oben auf dem Rohr
   launcher: { file: 'lazy/Granatwerfer', muzzle: [0.729, 0, 0.151], view: [0.14, -0.27, -0.5], ads: [0, -0.215, -0.62] },
 };
