@@ -8,6 +8,39 @@ Spiel zu bringen.“
 
 ![Plan](bilder/deck3-plan.jpg)
 
+## Zwei Ebenen (seit dem 27.11.2026)
+
+Freigegeben in Alpha 1.68 (27.11.2026).
+
+Der Nutzer nach der Freigabe von Alpha 1.67: „Bei dem Hangar für die Spieler. Dort soll kein Deck sein, nur Hangarzugang und die beiden Aufzüge.
+Nicht nochmal Treffpunkt und Läden“. Vorher ging man vom Hangar durch Korridor und Vorhalle zu Fuß ins Forum; wer mit dem Aufzug in seine
+Bucht fuhr, stand danach wieder vor demselben Deck.
+
+![Hangarebene: Blick aus dem Korridor in die Vorhalle](bilder/deck3-hangarebene.jpg)
+
+![Hangarebene: Abschlusswand und Aufzug DECK 3](bilder/deck3-hangarebene-aufzug.jpg)
+
+![Deck 3: die Vorhalle mit der geschlossenen Westwand](bilder/deck3-vorhalle-deck.jpg)
+
+| Ebene | Bereiche | Abschluss |
+|---|---|---|
+| Hangarebene (`h`) | Hangar, Korridor, Vorhalle | Wand mit dem Schild HANGAREBENE, wo sonst das Forum beginnt |
+| Deck 3 (`d`) | Vorhalle, Forum, Läden, Einsatzzentrale, Flügel | Wand mit dem Schild DECK 3 in der Mündung des Korridors |
+
+- Die Vorhalle steht einmal im Modell und gilt für beide Ebenen. Was nur auf einer Ebene da ist, liegt in den Lichtraum-Teilen `pd_ebene_h`
+  und `pd_ebene_d` (Abschlusswand, Schrift am Südaufzug, Etagenanzeige, Bodenschrift). Beim Backen stehen diese beiden Teile nur für ihr
+  eigenes Bild in der Szene (`lm2_raum.py`, Angabe `solo`), das Licht der übrigen Teile bleibt, wie es war.
+- Der Südaufzug verbindet die Ebenen. Auf der Hangarebene heißt er DECK 3 und fährt mit **E** ohne Auswahl hinauf. Auf Deck 3 heißt er
+  HANGARBUCHTEN und zeigt die Buchtenwahl (eigene Bucht, Einladungen, Gäste einladen).
+- Der Aufzug QUARTIERE steht auf beiden Ebenen; nach dem Quartier kommt man auf der Ebene an, von der man gefahren ist.
+- Spieldaten: `ebenen` in `deck_bastion3.json` (Ebene je Lichtraum-Teil, Ebene je Weg der Läufer, Sperre je Ebene).
+- Spiel: `deck.ts` (`EBENE`, `Deck.ebenen`, `seen` mit Ebene, Wegweiser über den Aufzug), `interior.ts` (`ebeneFahrt`, `buchtFahrt`,
+  `stationEbene`). Wer in einem Bereich steht, den es nur auf einer Ebene gibt (Testlabor, Story-Bot, Spielstand), ist von selbst auf dieser
+  Ebene. Im Spielstand steht `eb: 'd'`, wenn der Pilot auf Deck 3 war (in der Vorhalle sagt der Ort allein es nicht).
+- Im Netz gehört die ganze Hangarebene zur Bucht (`<station>#h:<Besitzer>`): In Korridor und Vorhalle der Bucht sieht man nur, wer in
+  derselben Bucht ist.
+- Blender: `pd_lauf.py` zeigt je Ansicht die passende Ebene (`EBENE_H` in `pd_deck.py`: gang, hangarebene, deckaufzug).
+
 ## Aufbau
 
 Plan: x nach Osten, vom Hangartor weg; y nach Norden. Maße im Baukasten ab dem Tor (x = 0); die Spieldaten liegen um 32 m verschoben
@@ -15,8 +48,8 @@ Plan: x nach Osten, vom Hangartor weg; y nach Norden. Maße im Baukasten ab dem 
 
 | Bereich | Maße | Inhalt |
 |---|---|---|
-| Korridor | 16 × 8 m, 5 m hoch | vier Joche wie bisher, Tor zum Hangar 7 × 4,4 m |
-| Vorhalle | 14 × 18 m, 6,2 m hoch | zwei Aufzüge mit eigenem Leuchtschild: QUARTIERE (Nordwand) und HANGARBUCHTEN (Südwand), Wegweiser |
+| Korridor (nur Hangarebene) | 16 × 8 m, 5 m hoch | vier Joche wie bisher, Tor zum Hangar 7 × 4,4 m |
+| Vorhalle (beide Ebenen) | 14 × 18 m, 6,2 m hoch | zwei Aufzüge mit eigenem Leuchtschild: QUARTIERE (Nordwand) und an der Südwand HANGARBUCHTEN (Deck 3) oder DECK 3 (Hangarebene) |
 | Forum | 44 × 32 m; Mittelschiff 16 m breit und 11 m hoch, Seitenschiffe 8,4 m | acht Stützen, Lichtgaden, Trommel (Radius 7 m, Decke 14,6 m) über dem Treffpunkt mit der Galaxiekarte, Marktstände, Banner, Bänke, Laternen |
 | vier Läden | je 16 × 13 m, 4,6 m hoch, Portal 12 × 4,2 m | siehe unten |
 | Einsatzzentrale | 22 × 22 m, 6,2 m hoch | Aufträge und Missionen an zwei Tresen vor der Auftragswand, Lagetisch, Fenster nach Osten; Türen zu Besprechung (Nord) und Krankenstation (Süd) |
@@ -54,8 +87,8 @@ Ausrüstungsteile aus dem Paket des Nutzers. Plätze und Tracht stehen in `pd_de
 ## Aufzüge
 
 - QUARTIERE (Nordwand der Vorhalle): wie bisher (`quartier.ts`), ohne den Block „Hangarbuchten“.
-- HANGARBUCHTEN (Südwand der Vorhalle): eigener Ansprechpunkt „Aufzug · Hangarbuchten“ (`interior.ts`, Modus `bucht` in `ui/dock.ts vQuartier`):
-  eigene Bucht, Einladungen annehmen, Gäste einladen (`docs/hangarbuchten.md`).
+- HANGARBUCHTEN (Südwand der Vorhalle, Deck 3): eigener Ansprechpunkt „Aufzug · Hangarbuchten“ (`interior.ts`, Modus `bucht` in `ui/dock.ts vQuartier`):
+  eigene Bucht, Einladungen annehmen, Gäste einladen (`docs/hangarbuchten.md`). Auf der Hangarebene ist es der Aufzug DECK 3 (`ebeneFahrt`).
 
 ## Dateien
 
@@ -87,6 +120,8 @@ für freie Grundrisse, alle wahlweise (ohne sie gilt die alte Rundhalle):
 Lichtraum: 16 Teile (Korridor, Vorhalle, Forum West und Ost je Boden, Wand, Decke, vier Läden, Einsatzzentrale, zwei Flügel).
 
 ## Geprüft und offen
+
+Zwei Ebenen, geprüft am 27.11.2026 (Entwicklungsserver): Laufprobe je Ebene (`__walkRund`: alle Ansprechpunkte und Wegpunkte erreichbar, vom Hangar aus ist das Forum zu), Aufzugfahrt in beide Richtungen, Wegweiser über den Aufzug, Spielstand mit Ebene, Story-Bot durch Prolog und fünf Kapitel ohne Fehler, zwei Spieler (getrennte Hangarebenen, gemeinsames Deck 3, Einladung in die Bucht, Rückfahrt), Bildvergleich mit Blender. Nicht geprüft: die gebaute Fassung.
 
 Geprüft am 27.11.2026 (Entwicklungsserver): alle Ansprechpunkte, die Galaxiekarte und alle Wegpunkte der Läufer erreichbar
 (`scripts/decktest.js __walkRund`), beide Aufzüge (Fahrt in die Bucht, ins Quartier und zurück), Wegweiser durch die Portale, Story-Bot durch

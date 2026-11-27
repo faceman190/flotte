@@ -7,11 +7,12 @@ Seit dem 26.11.2026. Der Nutzer: „wenn man zum Beispiel sich in der Bastion tr
 ## Regeln
 
 - **Jeder Pilot hat an jeder Station seine eigene Hangarbucht.** Wer andockt oder vom Deck durch die Schleuse in den Hangar geht, steht in seiner Bucht bei seinen Schiffen.
-- **Im Hangar sieht man nur Piloten, die in derselben Bucht stehen.** Auf dem Deck und der Promenade sehen sich alle wie bisher.
+- **Bastion, seit dem 27.11.2026: Die Bucht hat kein Deck.** Der Nutzer: „Bei dem Hangar für die Spieler. Dort soll kein Deck sein, nur Hangarzugang und die beiden Aufzüge. Nicht nochmal Treffpunkt und Läden“. Zur Bucht gehören Hangar, Korridor und die Vorhalle mit den zwei Aufzügen (Hangarebene). Zum Forum fährt der Aufzug DECK 3, zurück der Aufzug HANGARBUCHTEN auf Deck 3 (`docs/deck3.md`, Abschnitt „Zwei Ebenen“).
+- **Im Hangar sieht man nur Piloten, die in derselben Bucht stehen.** Auf dem Deck und der Promenade sehen sich alle wie bisher. Auf der Bastion gilt das für die ganze Hangarebene, also auch für Korridor und Vorhalle der Bucht.
 - **In eine fremde Bucht kommt nur, wen der Besitzer einlädt.** Die Einladung gilt 15 Minuten und nur, solange beide an derselben Station angedockt sind.
 - **Dort steht das Schiff des Besitzers** mit offener Rampe. Am Schiff [E]: an Bord gehen (nur Schiffe mit begehbarem Innenraum).
 - **Legt der Besitzer ab, fliegt der Gast mit** (Mitflug, siehe [harpyie.md](harpyie.md)). Sein eigenes Schiff bleibt angedockt und folgt per Autopilot, wenn die beiden woanders andocken oder der Gast auf einem Planeten aussteigt.
-- **Wer die fremde Bucht durch die Schleuse zum Deck verlässt,** kommt beim nächsten Mal wieder in die eigene.
+- **Wer die fremde Bucht durch die Schleuse zum Deck verlässt,** kommt beim nächsten Mal wieder in die eigene. Auf der Bastion: wer mit dem Aufzug nach Deck 3 fährt.
 
 ## Bedienung
 
@@ -21,12 +22,12 @@ Seit dem 26.11.2026. Der Nutzer: „wenn man zum Beispiel sich in der Bastion tr
 | Aufzug „Hangarbuchten“ auf Deck 3 der Bastion (Südwand der Vorhalle, seit dem neuen Deck 3 vom 26.11.2026, `docs/deck3.md`) | dieselbe Auswahl; der Aufzug „Quartiere“ gegenüber führt nur noch zu den Quartieren |
 | Schiff des Gastgebers | [E] an Bord gehen, an der Luke [E] wieder von Bord |
 
-Der Wechsel in eine Bucht ist eine kurze Fahrt mit Blende (wie beim Quartier), man kommt an der Rückwand des Hangars an.
+Der Wechsel in eine Bucht ist eine kurze Fahrt mit Blende (wie beim Quartier). Wer an der Buchtenwahl im Hangar wechselt, kommt an der Rückwand des Hangars an; wer auf Deck 3 der Bastion in den Aufzug steigt, am Aufzug der Hangarebene.
 
 ## Technik
 
 - `src/game/hangarbucht.ts`: Zustand `HB` (Besitzer der besuchten Bucht, sein Schiff, Einladungen) und die Verbindungen `buchtHooks`.
-- Ortskennung im Netz (`quartier.ts ortKennung`): im Hangar `<station>#h:<Besitzer>`. `interior.ts updateWalk` setzt jedes Bild, ob die Figur im Hangar steht (`HB.zone`, z größer als die Rückwand).
+- Ortskennung im Netz (`quartier.ts ortKennung`): im Hangar `<station>#h:<Besitzer>`. `interior.ts updateWalk` setzt jedes Bild, ob die Figur im Hangar steht (`HB.zone`, z größer als die Rückwand; auf der Bastion: Ebene `h`, `deck.ts EBENE`).
 - `interior.ts refreshHangarShips`: in einer fremden Bucht steht statt der eigenen Schiffe das Schiff des Besitzers (Klasse und Lackierung aus seinem Netzstand); `syncParkedShip` blendet das eigene aus. `buchtFahrt` wechselt die Bucht.
 - `net.ts`: Einladung als Koop-Meldung `hi` (kein Eingriff am Server), `buchtHooks.fahren` prüft, dass der Besitzer noch hier angedockt ist. Legt er ab oder wechselt er das Schiff, wird die Bucht nachgeführt.
 - Ablegen mit Gast (`net.ts gastZiele`, Zweig Hangar): Sobald das Schiff des Besitzers fliegt, verlässt der Gast die Station (`main.ts mitAblegen`) und steht an derselben Stelle an Bord des fliegenden Schiffs. Sein Rückfallort ist die Station, an der sein Schiff steht.

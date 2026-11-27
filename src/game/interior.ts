@@ -34,7 +34,7 @@ import { bodyView, fpBody } from './avatar';
 import { viewModelId } from './mineArt';
 import { staffBark, isFem } from './barks';
 import { crewBesuch, crewSpruch, crewFetzen, crewDurchsage, crewEile, crewHooks } from './crewStimmen';
-import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, type Deck, type HangarBuild, type DeckQuartier } from './deck';
+import { loadDeck, buildDeck, hasDeck, loadHangar, buildHangar, EBENE, type Ebene, type Deck, type HangarBuild, type DeckQuartier } from './deck';
 import { QS, eigeneDeko, nrText, FUND_FARBE, ortKennung, type QDeko } from './quartier';
 import { puppenAufbau, puppenUpdate, puppenAbbau } from './schaupuppe';
 import { REP } from './reputation';
@@ -56,7 +56,7 @@ interface Person { g: THREE.Group; legL: THREE.Group; legR: THREE.Group; armL: T
 interface Stand { p: Person; x: number; z: number; face: number; name?: string; home?: number; span?: number; want?: number | null; seen?: number; away?: number; fix?: boolean; look?: THREE.Vector3; cust?: Walker | null; story?: boolean }
 // Haltepunkt eines Läufers abseits seines Wegs: Standort, Blickrichtung, Dauer (s, von–bis), Wahrscheinlichkeit; who: Personal, mit dem er dort redet
 interface Stop { x: number; z: number; face: number; t: [number, number]; p: number; who?: Stand; busy?: boolean }
-interface Walker { p: Person; path: number[][]; stops: (Stop | null)[]; i: number; to: number; x: number; z: number; ph: number; wait: number; rest: boolean; at: Stop | null; leave: boolean; say: number; sayI: number; look: THREE.Vector3 }
+interface Walker { eb?: string; p: Person; path: number[][]; stops: (Stop | null)[]; i: number; to: number; x: number; z: number; ph: number; wait: number; rest: boolean; at: Stop | null; leave: boolean; say: number; sayI: number; look: THREE.Vector3 }
 // Gesprächsgruppe: zwei oder drei Leute, die abwechselnd reden (sp = wer gerade spricht, t = Zeit bis zum Wechsel, gap = Pause)
 interface Chat { m: Stand[]; x: number; z: number; sp: number; t: number; gap: boolean }
 // Figur der Geschichte, die nach ihrer Szene abgeht (zum Gang und hinaus): erst kurz warten, umdrehen, dann den Weg gehen
@@ -426,10 +426,21 @@ function build(st: Station) {
     inters.push({ x: tx + 1.5, z: tz + 2, r: 3.4, label: () => `${name} ansprechen · Hangar`, act: () => talk(name, 'hangar') });
   }
   rects.push([-HW, HW, HZ0, HZ1 - 1.5]);
+  // Bastion mit zwei Ebenen: Am Durchgang steht im Deckmodell noch „DECK 3 · TREFFPUNKT“ (rh_kit.py b_hangartor). Seit dem 27.11.2026 führt er
+  // nur zum Hangarzugang mit den Aufzügen. Ein Schild davor nennt das Ziel; das Deckmodell wird dafür nicht neu gebacken.
+  if (dk?.ebenen) {
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 140; const g2 = c.getContext('2d')!;
+    g2.fillStyle = '#12161b'; g2.fillRect(0, 0, 1024, 140);
+    g2.fillStyle = '#b9b6ab'; g2.font = '600 62px "Share Tech Mono",Consolas,monospace'; g2.textAlign = 'center'; g2.textBaseline = 'middle';
+    g2.fillText('HANGARZUGANG  ·  AUFZÜGE', 512, 74);
+    const tx2 = new THREE.CanvasTexture(c); tx2.colorSpace = THREE.SRGBColorSpace; tx2.anisotropy = 4; disposables.push(tx2);
+    const sg = new THREE.Mesh(new THREE.PlaneGeometry(4.66, 0.64), mat(new THREE.MeshBasicMaterial({ map: tx2 }))); sg.position.set(0, 4.88, HZ0 + 0.755); deco.add(sg);
+  }
 
   // ===== Bastion: Deck 3 statt Korridor und Promenade =====
   if (dk) {
     g.add(dk.group);
+    dk.ebenen?.set('h');      // zwei Ebenen (deck.ts EBENE): Wer andockt, steht auf der Hangarebene
     for (const r of dk.rects) rects.push(r);
     for (const b of dk.blocks) obstacles.push(b);
   }
@@ -634,13 +645,17 @@ function build(st: Station) {
     inters.push({ x: dk.map.x, z: dk.map.z, r: 2.6, label: () => 'Galaxiekarte öffnen', act: () => interiorHooks.openMap() });
     dk.routes.forEach((rt, i) => {
       const nodes: Node[] = rt.map(n => [n.x, n.z, n.stop ? { x: n.x, z: n.z, face: n.stop.face, t: n.stop.t, p: n.stop.p, who: n.stop.who ? byTab[n.stop.who] : undefined } : null]);
+      const n0 = walkers.length, eb = dk.ebenen?.wege[i];
       mkWalker(nodes, i * 3);
-      if (i < 2) mkWalker(nodes, i * 3 + 7, true);
+      if (i < 2 || eb === 'h') mkWalker(nodes, i * 3 + 7, true);
+      if (eb) for (let k = n0; k < walkers.length; k++) walkers[k].eb = eb;      // Ebene des Wegs: In der Vorhalle sieht man nur die Läufer der eigenen Ebene
     });
     for (const [x, z, n] of dk.chats) mkChat(x, z, n);
     if (dk.quartier) quartierAufbau(dk.quartier, g);      // Aufzug auf Deck 3 und das Quartier (game/quartier.ts)
     // eigener Aufzug zu den Hangarbuchten (seit 2026-11-26, vorher hing die Buchtenwahl am Aufzug „Quartiere“)
-    if (dk.bucht) inters.push({ x: dk.bucht.aufzug[0], z: dk.bucht.aufzug[1], r: 2.4, label: () => 'Aufzug · Hangarbuchten', act: () => { QS.mode = 'bucht'; interiorHooks.openTab('quartier', ''); } });
+    // Zwei Ebenen (seit 2026-11-27): Auf der Hangarebene heißt derselbe Aufzug DECK 3 und fährt ohne Auswahl hinauf zum Forum
+    if (dk.bucht) inters.push({ x: dk.bucht.aufzug[0], z: dk.bucht.aufzug[1], r: 2.4, label: () => (dk.ebenen && EBENE.e === 'h' ? 'Aufzug · Deck 3 (Forum, Läden, Treffpunkt)' : 'Aufzug · Hangarbuchten'),
+      act: () => { if (dk.ebenen && EBENE.e === 'h') ebeneFahrt('d'); else { QS.mode = 'bucht'; interiorHooks.openTab('quartier', ''); } } });
     puppenAufbau(dk.puppen, g);      // Schaupuppen des Ausrüsters (schaupuppe.ts)
   }
 
@@ -762,11 +777,12 @@ function beginSeq(dir: number, dur: number, done: null | (() => void)) {
 // Spielstand zu Fuß geladen (main.ts, resumeAt): Das Schiff steht schon auf dem Platz, kein Landeablauf. at: Standpunkt beim Speichern,
 // gilt nur, wenn dort frei ist (sonst bleibt es beim Platz neben dem Schiff).
 let noSeq = false;
-export function enterStanding(st: Station, mode: boolean | 'city', at?: { x?: number; z?: number; yaw?: number }) {
+export function enterStanding(st: Station, mode: boolean | 'city', at?: { x?: number; z?: number; yaw?: number; eb?: string }) {
   noSeq = true;
   try { enterInterior(st, mode); } finally { noSeq = false; }
   if (!IN.active) return;
   for (const g2 of SHIP.glows) g2.visible = false;      // Triebwerke aus, wie nach dem Aufsetzen
+  if (at && at.eb === 'd') deck?.ebenen?.set('d');      // auf Deck 3 gespeichert (in der Vorhalle sagt der Ort allein nicht, welche Ebene es war)
   if (at && at.x !== undefined && at.z !== undefined && isFinite(at.x) && isFinite(at.z) && free(at.x, at.z)) { IN.x = at.x; IN.z = at.z; IN.yaw = at.yaw || 0; }
   // im Quartier gespeichert: im eigenen Quartier weiter (ohne eigenes Quartier vor dem Aufzug auf Deck 3)
   const Q = deck?.quartier;
@@ -882,7 +898,7 @@ export function enterInterior(st: Station, mode: boolean | 'city' = false) {
     say('SYSTEM', `Promenade von ${st.name}. Dein Schiff steht im Hangar.`);
   } else {
     if (!noSeq) beginSeq(-1, 4.5, null);   // Landung: das Schiff kommt durchs Tor herein und setzt auf
-    say('SYSTEM', deck ? `Willkommen auf ${st.name}. Durch die Schleuse an der Rückwand geht es auf ${deck.name === 'Deck 3' ? 'Deck 3' : 'das ' + deck.name}.` : `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
+    say('SYSTEM', deck?.ebenen ? `Willkommen auf ${st.name}. Durch die Schleuse an der Rückwand geht es zu den Aufzügen: Deck 3 und Quartiere.` : deck ? `Willkommen auf ${st.name}. Durch die Schleuse an der Rückwand geht es auf ${deck.name === 'Deck 3' ? 'Deck 3' : 'das ' + deck.name}.` : `Willkommen auf ${st.name}. Folge dem Korridor zur ${PAL[kind].hall}.`);
   }
   // Stadt: Tür am Ende der Promenade hinaus auf den Marktplatz
   if ((st.def as any).city && !onFoot) {
@@ -1026,7 +1042,7 @@ function quartierAufbau(Q: DeckQuartier, g: THREE.Group) {
   const own = () => QS.owner === P.name;
   const [hx, hz] = Q.halle.aufzug;
   inters.push({ x: hx, z: hz, r: 2.4, label: () => 'Aufzug · Quartiere', act: () => { QS.mode = 'aufzug'; interiorHooks.openTab('quartier', ''); } });
-  inters.push({ x: Q.aufzug[0], z: Q.aufzug[1], r: 1.5, label: () => 'Aufzug · zurück auf Deck 3', act: () => quartierFahrt('', null) });
+  inters.push({ x: Q.aufzug[0], z: Q.aufzug[1], r: 1.5, label: () => (deck?.ebenen && EBENE.e === 'h' ? 'Aufzug · zurück zur Hangarebene' : 'Aufzug · zurück auf Deck 3'), act: () => quartierFahrt('', null) });
   inters.push({ x: Q.koje[0], z: Q.koje[1], r: 1.7, label: () => (own() ? 'Koje · ausruhen' : `Koje von ${QS.owner}`), act: () => (own() ? kojeRuhen() : say('SYSTEM', `Das ist die Koje von ${QS.owner}. Du bist hier zu Gast.`)) });
   inters.push({ x: Q.spind[0], z: Q.spind[1], r: 1.5, label: () => (own() ? 'Spind öffnen' : `Spind von ${QS.owner} · abgeschlossen`), act: () => { if (own()) interiorHooks.openTab('ausruester', 'Dein Spind im Quartier: einlagern und herausnehmen.', 'spind'); else say('SYSTEM', 'Abgeschlossen.'); } });
   inters.push({ x: Q.regal[0], z: Q.regal[1], r: 1.6, label: () => 'Regal · Sammlung ansehen', act: () => { QS.mode = 'regal'; interiorHooks.openTab('quartier', ''); } });
@@ -1144,10 +1160,34 @@ export function buchtFahrt(owner: string, id: number, cls: string, paint: string
     if (QS.in) quartierSetzen('', null);
     HB.owner = fremd ? owner : ''; HB.id = fremd ? id : 0; HB.cls = fremd ? cls : ''; HB.paint = fremd ? paint : ''; HB.zone = true;
     refreshHangarShips();
-    const hs = hangarSpot(); IN.x = hs.x; IN.z = hs.z; IN.yaw = Math.PI; IN.pitch = 0; walkV.x = walkV.z = 0;
+    // Zwei Ebenen: Wer am Aufzug einsteigt (Deck 3), kommt am Aufzug der Hangarebene an; wer an der Buchtenwahl im Hangar wechselt, bleibt im Hangar
+    const lift = !!deck?.ebenen && !!deck.bucht && IN.z <= HZ0;
+    deck?.ebenen?.set('h');
+    if (lift) { [IN.x, IN.z, IN.yaw] = deck!.bucht!.ankunft; } else { const hs = hangarSpot(); IN.x = hs.x; IN.z = hs.z; IN.yaw = Math.PI; }
+    IN.pitch = 0; walkV.x = walkV.z = 0;
     deck?.update(IN.x, IN.z); deck?.prime();
-  }).then(() => say('SYSTEM', fremd ? `Hangarbucht von ${owner}. Du bist hier zu Gast.` : 'Deine Hangarbucht.'));
+  }).then(() => say('SYSTEM', (fremd ? `Hangarbucht von ${owner}. Du bist hier zu Gast.` : 'Deine Hangarbucht.') + (deck?.ebenen && IN.z <= HZ0 ? ' Durch den Korridor geht es zum Schiff.' : '')));
 }
+/** Südaufzug der Bastion: zwischen Hangarebene und Deck 3 fahren (deck.ts EBENE, seit 2026-11-27) */
+export function ebeneFahrt(e: Ebene) {
+  const B = deck?.bucht, eb = deck?.ebenen; if (!B || !eb || !IN.active || !IN.station || room) return;
+  IN.panel = null;
+  sfx('ui_confirm', 0.35, 0.6, () => snd(240, 0.25, 'sine', 0.03, -40));
+  snd(70, 1.4, 'sawtooth', 0.012, 30);
+  setTimeout(() => snd(1320, 0.5, 'sine', 0.035, -20), 1300);      // Glocke bei der Ankunft
+  void warmScene(e === 'd' ? 'Aufzug nach Deck 3' : 'Aufzug zur Hangarebene', () => {
+    if (QS.in) quartierSetzen('', null);
+    eb.set(e);
+    if (e === 'd' && buchtFremd()) { HB.owner = ''; HB.id = 0; HB.cls = ''; refreshHangarShips(); }      // aus der fremden Bucht hinauf: beim nächsten Mal wieder die eigene
+    HB.zone = e === 'h';
+    [IN.x, IN.z, IN.yaw] = B.ankunft; IN.pitch = 0; walkV.x = walkV.z = 0;
+    deck?.update(IN.x, IN.z); deck?.prime();
+  }).then(() => say('SYSTEM', e === 'd' ? 'Deck 3. Rechts liegt das Forum mit Läden und Treffpunkt.' : 'Hangarebene. Durch den Korridor geht es zu deinem Schiff.'));
+}
+/** für den Spielstand: 'd', wenn der Pilot auf Deck 3 steht (Station mit zwei Ebenen) */
+export const stationEbene = () => (IN.active && deck?.ebenen && !room ? EBENE.e : '');
+/** Prüfwerkzeuge (scripts/decktest.js): Ebene setzen, ohne zu fahren */
+export const ebeneSetzen = (e: Ebene) => { deck?.ebenen?.set(e); return !!deck?.ebenen; };
 /** der Besitzer der besuchten Bucht hat abgelegt oder ein anderes Schiff genommen (net.ts) */
 export function buchtSchiff(cls: string, paint: string) { if (!buchtFremd() || room) return; HB.cls = cls; HB.paint = paint; refreshHangarShips(); }
 // Aufzug fahren: ins Quartier (owner = Besitzer) oder zurück auf Deck 3 (owner leer)
@@ -1157,7 +1197,7 @@ export function quartierFahrt(owner: string, deko: QDeko | null) {
   sfx('ui_confirm', 0.35, 0.6, () => snd(240, 0.25, 'sine', 0.03, -40));
   snd(70, 1.6, 'sawtooth', 0.012, 30);      // Brummen des Aufzugs
   setTimeout(() => snd(1320, 0.5, 'sine', 0.035, -20), 1300);      // Glocke bei der Ankunft
-  void warmScene(owner ? 'Aufzug zu den Quartieren' : 'Aufzug nach Deck 3', () => {
+  void warmScene(owner ? 'Aufzug zu den Quartieren' : deck?.ebenen && EBENE.e === 'h' ? 'Aufzug zur Hangarebene' : 'Aufzug nach Deck 3', () => {
     quartierSetzen(owner, deko);
     const [x, z, yaw] = owner ? Q.ankunft : Q.halle.ankunft;
     IN.x = x; IN.z = z; IN.yaw = yaw; IN.pitch = 0; walkV.x = walkV.z = 0;
@@ -1547,8 +1587,12 @@ export function jump() { if (!IN.active || IN.jy > 0 || IN.jv !== 0) return; IN.
 const innenGrund = () => (mesh && IN.area === 'Frachtraum' ? 'metall' : grundInnen(!!IN.ship, IN.area || ''));
 export function updateWalk(dt: number) {
   if (!IN.active || !group) return;
-  HB.zone = !!IN.station && !QS.in && (room ? HB.zone : IN.z > HZ0);      // im Hangar zählt die Bucht (hangarbucht.ts)
-  if (buchtFremd() && !room && IN.station && IN.z < HZ0 - 0.6) { HB.owner = ''; HB.id = 0; HB.cls = ''; refreshHangarShips(); }      // durch die Schleuse zum Deck: beim nächsten Mal wieder die eigene Bucht
+  // Zwei Ebenen (Bastion): Wer in einem Bereich steht, den es nur auf einer Ebene gibt (Testlabor, Spielstand, Story-Bot), ist auf dieser Ebene
+  const ebn = !room && !QS.in && IN.station ? deck?.ebenen : undefined;
+  if (ebn) { const f = ebn.at(IN.x, IN.z); if (f && f !== EBENE.e) ebn.set(f); }
+  // im Hangar zählt die Bucht (hangarbucht.ts); mit zwei Ebenen gehört die ganze Hangarebene dazu (Korridor und Vorhalle der Bucht)
+  HB.zone = !!IN.station && !QS.in && (room ? HB.zone : ebn ? EBENE.e === 'h' : IN.z > HZ0);
+  if (buchtFremd() && !room && IN.station && (ebn ? EBENE.e === 'd' : IN.z < HZ0 - 0.6)) { HB.owner = ''; HB.id = 0; HB.cls = ''; refreshHangarShips(); }      // durch die Schleuse zum Deck: beim nächsten Mal wieder die eigene Bucht
   zoneLight();
   IN.say.t = Math.max(0, IN.say.t - dt);
   // Blick: Maus eingefangen → direkte Steuerung; sonst dreht die Zeigerposition wie beim Fliegen
@@ -1641,7 +1685,7 @@ export function updateWalk(dt: number) {
     const hs = deck.hangarSeen();
     if (hangarBody) hangarBody.visible = hs;
     for (const q of persons) q.p.g.visible = deck.seen(q.x, q.z);
-    for (const w of walkers) w.p.g.visible = deck.seen(w.x, w.z);
+    for (const w of walkers) w.p.g.visible = deck.seen(w.x, w.z, w.eb);
     puppenUpdate(IN.x, IN.z, on, deck.seen);
   }
   // eigene Figur: Außensicht, oder Ich-Sicht mit ganzem Körper (avatar.ts bodyView, seit 2026-11-24)
@@ -1728,7 +1772,7 @@ function drawBubble(W: number, H: number) {
   if (!bub) return;
   const age = G.time - (bub as any).t0, p = bub.p.g.position;
   if (Math.hypot(p.x - IN.x, p.z - IN.z) > 10) return;
-  if (deck && !room && p.z <= HZ0 && !deck.seen(p.x, p.z)) return;
+  if (deck && !room && p.z <= HZ0 && !bub.p.g.visible) return;      // die Figur ist ausgeblendet (anderer Raum, andere Ebene)
   headOf(bub.p, _p); _p.y += 0.3; _p.project(camera);
   if (_p.z > 1 || Math.abs(_p.x) > 1.05 || Math.abs(_p.y) > 1.05) return;
   drawSpeechBubble((_p.x + 1) / 2 * W, (1 - _p.y) / 2 * H, bub.text, Math.min(age * 4, (bub.dur - age) * 2));
@@ -1838,6 +1882,7 @@ export function updateRoomLife(dt: number) {
   // Figuren der Geschichte, die abgehen (storyNpcsLeave): umdrehen, zum Gang gehen, am Ende des Gangs aus dem Raum nehmen
   for (let i = leavers.length - 1; i >= 0; i--) {
     const w = leavers[i], an = w.p.anim, n = w.path[w.i], dx = n[0] - w.x, dzz = n[1] - w.z, d = Math.hypot(dx, dzz), ta = Math.atan2(dx, dzz);
+    if (deck?.ebenen && !room) w.p.g.visible = EBENE.e === 'h';      // ihr Weg liegt auf der Hangarebene (Hangar, Korridor, Vorhalle bis zum Aufzug)
     w.wait -= dt;
     if (w.wait <= 0 && !w.turned) w.turned = turnStep(w.p, ta, dt) || !an;
     const go = w.wait <= 0 && w.turned, sp = an ? animStep(an, dt, go, WALK_V) : go ? WALK_V : 0;
@@ -1947,7 +1992,7 @@ export function drawWalkHUD() {
   for (const l of [...labels, ...shipLabels, ...otherLabels()]) {
     const d = Math.hypot(l.p.x - IN.x, l.p.z - IN.z);
     if (d > 26) continue;
-    if (deck && !room && l.p.z <= HZ0 && !deck.seen(l.p.x, l.p.z)) continue;      // Deck: Namen hinter Wänden nicht zeigen (Figur ist dann auch ausgeblendet)
+    if (deck && !room && l.p.z <= HZ0 && !deck.seen(l.p.x, l.p.z, '*')) continue;      // Deck: Namen hinter Wänden nicht zeigen (Figur ist dann auch ausgeblendet)
     group.localToWorld(_p.copy(l.p)).project(camera);
     if (_p.z > 1 || Math.abs(_p.x) > 1.05 || Math.abs(_p.y) > 1.05) continue;
     ux.globalAlpha = clamp(1.6 - d / 16, 0.25, 1);

@@ -8,9 +8,10 @@ class Seite:      # gerade Wand von p0 nach p1; der Raum liegt in Richtung n (Ei
     def dress(s, name, u): return inst(dress(name), s.at(u, 1.7), s.aw, C_DECK)                      # Wandfüllung des alten Baukastens (2 m)
     def flat(s, c, u, into=None, z=0.0): return inst(prop(c) if isinstance(c, str) else c, s.at(u, 0.0, z), s.af, into or C_DECK)      # flacher Baustein
     def feld(s, u, name=None, hoch=None):      # 2 m Wand: Buchtwand bis 4,6 m, Füllung davor, Hochwand darüber
-        s.dress('buchtwand', u)
-        if name: s.dress(name, u)
-        if hoch: s.flat(module('Hochwand %.1f %.1f' % hoch, b_pd_hochwand, hoch[0], hoch[1]), u)
+        obs = [s.dress('buchtwand', u)]
+        if name: obs.append(s.dress(name, u))
+        if hoch: obs.append(s.flat(module('Hochwand %.1f %.1f' % hoch, b_pd_hochwand, hoch[0], hoch[1]), u))
+        return obs
     def hoch(s, u0, u1, z0, z1):      # Hochwand über einer Öffnung oder einem Portal
         n = max(1, int(round((u1 - u0) / 2)))
         for i in range(n): s.flat(module('Hochwand %.1f %.1f' % (z0, z1), b_pd_hochwand, z0, z1), u0 + (i + 0.5) * (u1 - u0) / n)
@@ -29,9 +30,22 @@ class Rahmen:      # Rahmen eines Ladens: Mündung bei x = 0, Tiefe nach +x, que
         wp, na = s._w(side, u); return inst(prop(name) if isinstance(name, str) else name, s.p(*wp), s.a + na + PI, C_DECK)
     def area(s, x, y, z, sx, sy, w, col_):
         prev = CUR[0]; CUR[0] = C_LIGHT; ob = area('Ladenlicht', s.p(x, y, z), (0, 0, s.a), sx, sy, w, col_); CUR[0] = prev; return ob
-def zeichen(fn, ang=0.0, loc=(0, 0, 0)): build_signs(fn, ang, loc)
-def bodenschrift(s_, x, y, ang, size=0.36):
-    zeichen(lambda: text(s_, size, (0, 0, 0.006), (0, -1, 0), (1, 0, 0), M['txto'], align='CENTER'), ang, (x, y, 0))
+# Zwei Ebenen (seit dem 27.11.2026). Nutzer: „Bei dem Hangar für die Spieler. Dort soll kein Deck sein, nur Hangarzugang und die beiden Aufzüge.
+# Nicht nochmal Treffpunkt und Läden“. Hangar, Korridor und Vorhalle sind die Hangarebene, Vorhalle und Forum sind Deck 3; dazwischen fährt nur
+# der Aufzug. Die Vorhalle steht einmal und gilt für beide Ebenen. Was nur auf einer Ebene zu sehen ist, trägt die Eigenschaft „teil“
+# (pd_spiel.py part_of): pd_ebene_h (Abschlusswand zum Forum, Schrift DECK 3 am Südaufzug) und pd_ebene_d (Abschlusswand zum Korridor, Schrift
+# HANGARBUCHTEN). Der Korridor gehört ganz zur Hangarebene, alles ab dem Forum zu Deck 3 (deck_bastion3.json „ebenen“).
+E_H, E_D = 'pd_ebene_h', 'pd_ebene_d'
+def eb(obs, teil):
+    for o in (obs if isinstance(obs, (list, tuple)) else [obs]): o['teil'] = teil
+    return obs
+def zeichen(fn, ang=0.0, loc=(0, 0, 0), teil=None):
+    vor = set(C_SIGN.objects); build_signs(fn, ang, loc)
+    if teil:
+        for o in C_SIGN.objects:
+            if o not in vor: o['teil'] = teil
+def bodenschrift(s_, x, y, ang, size=0.36, teil=None):
+    zeichen(lambda: text(s_, size, (0, 0, 0.006), (0, -1, 0), (1, 0, 0), M['txto'], align='CENTER'), ang, (x, y, 0), teil)
 def wegweiser(x, y, ang, lines, z=3.9, h=5.0, breit=3.4):
     def f():
         box('Wegweiser', 0.06, breit, 0.5, 0, 0, z, M['frame'], 0.014); box('Wegweiser Feld', 0.012, breit - 0.1, 0.42, -0.035, 0, z, M['glass'], 0)
@@ -52,23 +66,37 @@ def assemble():
         x = (i // 2) * 4 + (1.25 if i % 2 == 0 else 3.07)
         if side == 'l': inst(dress(name), (x, KW / 2 - 1.7, 0), -PI / 2, C_DECK)
         else: inst(dress(name), (x, -KW / 2 + 1.7, 0), PI / 2, C_DECK)
-    wegweiser(4.4, 0, 0.0, ['AUFZÜGE  ·  FORUM', 'QUARTIERE  ·  HANGARBUCHTEN']); wegweiser(12.4, 0, 0.0, ['DECK 3  ·  GERADEAUS', 'LÄDEN  ·  TREFFPUNKT  ·  EINSATZZENTRALE'])
+    wegweiser(4.4, 0, 0.0, ['AUFZÜGE  ·  GERADEAUS', 'DECK 3  ·  QUARTIERE']); wegweiser(12.4, 0, 0.0, ['AUFZUG DECK 3', 'FORUM  ·  LÄDEN  ·  TREFFPUNKT'])
     pk = module('Portal Korridor', b_portal, OW_K, OH_K, 0.62, YP_K + 0.5, 'gang')
-    inst(pk, (VX0, 0, 0), PI, C_DECK); zeichen(lambda: portal_sign('HANGAR', 'SCHIFFE  ·  DECKMEISTER  ·  START', 'w', OW_K, OH_K), PI, (VX0, 0, 0))
+    inst(pk, (VX0, 0, 0), PI, C_DECK)['teil'] = 'pd_korridor'; zeichen(lambda: portal_sign('HANGAR', 'SCHIFFE  ·  DECKMEISTER  ·  START', 'w', OW_K, OH_K), PI, (VX0, 0, 0), 'pd_korridor')
 
     # ---------- Vorhalle mit den beiden Aufzügen ----------
-    inst(module('Boden Vorhalle', b_pd_boden, VX1 - VX0, VW, 11, 0.3, (-1.7, 1.7)), (VX0, 0, 0), 0.0, C_DECK)
-    inst(module('Decke Vorhalle', b_pd_decke, VX1 - VX0, VW, VH), (VX0, 0, 0), 0.0, C_CEIL)
+    # Boden, Decke und Westwand der Vorhalle liegen mit ihrem Ursprung an der Grenze zum Korridor: fest der Vorhalle zuweisen (sie gilt für beide Ebenen)
+    inst(module('Boden Vorhalle', b_pd_boden, VX1 - VX0, VW, 11, 0.3, (-1.7, 1.7)), (VX0, 0, 0), 0.0, C_DECK)['teil'] = 'pd_vorhalle'
+    inst(module('Decke Vorhalle', b_pd_decke, VX1 - VX0, VW, VH), (VX0, 0, 0), 0.0, C_CEIL)['teil'] = 'pd_vorhalle'
     W_ = Seite((VX0, -VW / 2), (VX0, VW / 2), (1, 0))
-    for (u0, u1, z0) in ((0.0, VW / 2 - KW / 2, 0.0), (VW / 2 + KW / 2, VW, 0.0), (VW / 2 - KW / 2, VW / 2 + KW / 2, KH)): W_.rueck(VH, u0, u1, z0)      # die Mündung des Korridors bleibt frei
-    for (u, nm) in ((0.8, 'terminal'), (2.8, 'aushang'), (VW - 2.8, 'feuer'), (VW - 0.8, 'feld1')): W_.feld(u, nm, HO1)
+    for (u0, u1, z0) in ((0.0, VW / 2 - KW / 2, 0.0), (VW / 2 + KW / 2, VW, 0.0), (VW / 2 - KW / 2, VW / 2 + KW / 2, KH)): W_.rueck(VH, u0, u1, z0)['teil'] = 'pd_vorhalle'      # die Mündung des Korridors bleibt frei
+    for (u, nm) in ((0.8, 'terminal'), (2.8, 'aushang'), (VW - 2.8, 'feuer'), (VW - 0.8, 'feld1')): eb(W_.feld(u, nm, HO1), 'pd_vorhalle')
     for (S_, lab, sub, sig) in ((Seite((VX0, VW / 2), (VX1, VW / 2), (0, -1)), 'QUARTIERE', 'DECK Q  ·  KOJEN  ·  SPINDE', 'q'),
                                 (Seite((VX1, -VW / 2), (VX0, -VW / 2), (0, 1)), 'HANGARBUCHTEN', 'DEINE BUCHT  ·  BUCHTEN DER CREW', 'b')):
-        S_.rueck(VH); S_.flat(module('Aufzug ' + lab, b_pd_aufzug, lab, sub, sig), 7.0)
+        S_.rueck(VH); S_.flat(module('Aufzug ' + lab + ' Bau', b_pd_aufzug, lab, sub, sig, 'bau'), 7.0)
+        if sig == 'q': S_.flat(module('Aufzug ' + lab + ' Name', b_pd_aufzug, lab, sub, sig, 'name'), 7.0)
+        else:      # der Südaufzug verbindet die Ebenen: auf Deck 3 heißt er HANGARBUCHTEN, auf der Hangarebene DECK 3
+            eb(S_.flat(module('Aufzug ' + lab + ' Name', b_pd_aufzug, lab, sub, sig, 'name'), 7.0), E_D)
+            eb(S_.flat(module('Aufzug DECK 3 Name', b_pd_aufzug, 'DECK 3', 'FORUM  ·  LÄDEN  ·  TREFFPUNKT', sig, 'name'), 7.0), E_H)
+        eb(S_.flat(module('Aufzug Etage DECK 3 ' + sig, b_pd_aufzug, lab, sub, sig, 'etage', 'DECK 3'), 7.0), E_D)
+        eb(S_.flat(module('Aufzug Etage HANGAR ' + sig, b_pd_aufzug, lab, sub, sig, 'etage', 'HANGAR'), 7.0), E_H)
         for (u, nm) in ((1.0, 'bank'), (3.0, 'schirm'), (11.0, 'feldh1'), (13.0, 'bank')): S_.feld(u, nm, HO1)
     for sy in (-1, 1): inst(prop('saeule'), (VX0 + 3.2, sy * 6.2, 0), 0.0, C_DECK); inst(prop('rh_kuebel'), (VX1 - 1.4, sy * 7.6, 0), 0.0, C_DECK)
     inst(prop('automat'), (VX0 + 0.5, 7.9, 0), 0.0, C_DECK)
-    bodenschrift('QUARTIERE', 23.0, 5.2, PI / 2, 0.3); bodenschrift('HANGARBUCHTEN', 23.0, -5.2, -PI / 2, 0.3)
+    bodenschrift('QUARTIERE', 23.0, 5.2, PI / 2, 0.3); bodenschrift('HANGARBUCHTEN', 23.0, -5.2, -PI / 2, 0.3, E_D); bodenschrift('DECK 3', 23.0, -5.2, -PI / 2, 0.3, E_H)
+    # Abschlusswände je Ebene. Hangarebene: Wand vor dem Forum (18 m). Deck 3: Wand in der Mündung des Korridors, dessen Portal fehlt dort.
+    O_ = Seite((VX1, VW / 2), (VX1, -VW / 2), (-1, 0)); eb(O_.rueck(VH), E_H)
+    for k, nm in enumerate(('feldh1', 'schirm', 'feld2', 'pflanzwand', 'feld1', 'pflanzwand', 'feld2', 'aushang', 'feldh2')): eb(O_.feld(1.0 + 2 * k, nm, HO1), E_H)
+    eb(O_.flat(module('Ebenentafel Hangar', b_pd_ebenentafel, 'HANGAREBENE', 'DECK 3 UND QUARTIERE ÜBER DIE AUFZÜGE', 'w'), VW / 2), E_H)
+    eb(W_.rueck(KH, VW / 2 - KW / 2, VW / 2 + KW / 2), E_D)
+    for k, nm in enumerate(('feldh2', 'schirm', 'feld1', 'aushang', 'feldh1')): eb(W_.feld(5.0 + 2 * k, nm, HO1), E_D)
+    eb(W_.flat(module('Ebenentafel Deck', b_pd_ebenentafel, 'DECK 3', 'FORUM  ·  LÄDEN  ·  TREFFPUNKT  ·  EINSATZZENTRALE', 'w'), VW / 2), E_D)
 
     # ---------- Forum ----------
     inst(module('Boden Forum', b_pd_boden, FX1 - FX0, FW, 5, 0.3, (-1.7, 1.7)), (FX0, 0, 0), 0.0, C_DECK)
@@ -84,7 +112,7 @@ def assemble():
         S_ = Seite((FX0, sy * VW / 2), (FX0, sy * FW / 2), (1, 0)); S_.rueck(FHW)
         for (u, nm) in ((1.5, 'aushang' if sy > 0 else 'schirm'), (3.5, 'bank'), (5.5, 'feldh2')): S_.feld(u, nm, HO2)
         S_.flat('rh_pfeiler', 0.45)
-    inst(module('Sturz Vorhalle', b_pd_sturzwand, VW, VH, FHW, 'HANGAR  ·  AUFZÜGE', 'SCHIFFE  ·  QUARTIERE  ·  HANGARBUCHTEN', 'w'), (FX0, 0, 0), PI, C_DECK)
+    inst(module('Sturz Vorhalle', b_pd_sturzwand, VW, VH, FHW, 'AUFZÜGE', 'HANGARBUCHTEN  ·  QUARTIERE', 'w'), (FX0, 0, 0), PI, C_DECK)
     giebel = module('Giebel', lambda: (box('Giebelwand', 0.4, NW, FH - FHW, 0.2, 0, (FH + FHW) / 2, M['wall4'], 0), emblem((-0.01, 0, (FH + FHW) / 2), RIGHT_X, RIGHT_Y, 0.9, M['e_panel_h']),
                                        box('Giebellicht', 0.04, NW - 1.0, 0.04, -0.02, 0, FHW + 0.2, M['e_cool'], 0)))
     inst(giebel, (FX0, 0, 0), PI, C_CEIL); inst(giebel, (FX1, 0, 0), 0.0, C_CEIL)
@@ -122,7 +150,7 @@ def assemble():
         inst(prop('saeule'), (FX0 + 2.0, sy * 3.6, 0), 0.0, C_DECK); inst(prop('rh_kuebel'), (FX1 - 1.6, sy * 9.5, 0), 0.0, C_DECK)
         for x in (49.0, 55.0): inst(prop('rh_kuebel'), (x, sy * 10.6, 0), 0.0, C_DECK)
     for (x, y, nm, ang) in ((33.0, -13.0, 'kisten', 0.4), (72.0, 13.4, 'wagen', 1.2), (56.6, 14.2, 'tonne', 0), (47.4, -14.4, 'karre', 2.0), (31.6, -10.6, 'palette', 0.2)): inst(prop(nm), (x, y, 0), ang, C_DECK)
-    bodenschrift('TREFFPUNKT', TPX - 9.0, 0, 0.0, 0.42); bodenschrift('EINSATZZENTRALE', FX1 - 4.0, 0, 0.0, 0.36); bodenschrift('HANGAR', FX0 + 4.0, 0, PI, 0.36)
+    bodenschrift('TREFFPUNKT', TPX - 9.0, 0, 0.0, 0.42); bodenschrift('EINSATZZENTRALE', FX1 - 4.0, 0, 0.0, 0.36); bodenschrift('AUFZÜGE', FX0 + 4.0, 0, PI, 0.36)
     wegweiser(FX0 + 6.0, 0, 0.0, ['TREFFPUNKT  ·  GERADEAUS', 'WERFT  ◄    ►  AUSRÜSTER'], 5.2, FH - 0.3, 4.2); wegweiser(TPX + 12.0, 0, 0.0, ['EINSATZZENTRALE  ·  GERADEAUS', 'HANDELSKONTOR  ◄    ►  KANTINE'], 5.2, FH - 0.3, 4.6)
 
     # ---------- Läden ----------
@@ -265,6 +293,8 @@ def cameras():
     cam('vogel', (4, -52, 52), (50.0, 2.0, 0), 22)
     cam('gang', (1.6, -1.4, 1.65), (30.0, 0.8, 2.6), 20)
     cam('vorhalle', (17.5, -4.0, 1.7), (25.0, 9.0, 2.6), 16); cam('buchtenaufzug', (26.5, 3.0, 1.7), (22.5, -9.0, 2.4), 18)
+    cam('hangarebene', (12.0, -1.2, 1.7), (30.0, 0.8, 2.8), 15); cam('deckaufzug', (26.5, 3.0, 1.7), (22.5, -9.0, 2.4), 18)      # Hangarebene: Blick aus dem Korridor auf die Abschlusswand; der Südaufzug mit DECK 3
+    cam('vorhalle_west', (29.0, 2.5, 1.7), (16.0, -0.5, 2.8), 15)      # Deck 3: Blick vom Forum her auf die geschlossene Westwand
     cam('forum', (31.5, -3.0, 1.7), (60.0, 2.0, 5.0), 14); cam('forum2', (72.0, 5.0, 1.7), (44.0, -3.0, 5.0), 14)
     cam('treffpunkt', (42.0, -5.5, 1.7), (TPX + 2, 2.0, 5.0), 15); cam('kuppel', (46.0, 3.5, 1.6), (TPX + 1, -1.0, 13.0), 13)
     cam('werft', (41.0, 3.0, 1.7), (41.0, 24.0, 2.0), 15); cam('werft_innen', (36.0, 17.6, 1.65), (45.0, 27.0, 1.5), 16)
@@ -273,7 +303,15 @@ def cameras():
     cam('kantine', (63.0, -3.0, 1.7), (63.0, -24.0, 2.0), 15); cam('kantine_innen', (57.0, -17.8, 1.65), (66.0, -29.0, 1.5), 16)
     cam('einsatz', (75.5, -3.5, 1.7), (95.0, 1.5, 2.4), 15); cam('einsatz2', (93.0, 8.0, 1.7), (78.0, -6.0, 2.0), 15)
     cam('besprechung', (83.2, 21.0, 1.6), (88.0, 28.0, 1.3), 16); cam('krankenstation', (86.8, -21.0, 1.6), (82.0, -28.0, 1.0), 16)
-VIEWS = ['plan', 'vogel', 'gang', 'vorhalle', 'buchtenaufzug', 'forum', 'forum2', 'treffpunkt', 'kuppel', 'werft', 'werft_innen', 'handel', 'handel_innen', 'ausruester', 'ausruester_innen',
+VIEWS = ['plan', 'vogel', 'gang', 'hangarebene', 'deckaufzug', 'vorhalle', 'vorhalle_west', 'buchtenaufzug', 'forum', 'forum2', 'treffpunkt', 'kuppel', 'werft', 'werft_innen', 'handel', 'handel_innen', 'ausruester', 'ausruester_innen',
          'kantine', 'kantine_innen', 'einsatz', 'einsatz2', 'besprechung', 'krankenstation']
 assemble(); lights(); cameras()
+EBENE_H = ('gang', 'hangarebene', 'deckaufzug')      # Ansichten der Hangarebene; alle anderen zeigen Deck 3
+def ebene_zeigen(e):      # fürs Rendern: nur die Teile einer Ebene ('h' Hangarebene, 'd' Deck 3)
+    aus = E_D if e == 'h' else E_H
+    for c_ in (C_DECK, C_CEIL, C_SIGN):
+        for o in c_.objects:
+            if o.get('teil') in (E_H, E_D): o.hide_render = o.get('teil') == aus; o.hide_viewport = o.hide_render
+            elif o.get('teil') == 'pd_korridor': o.hide_render = e == 'd'; o.hide_viewport = o.hide_render      # Portal des Korridors samt Schild: auf Deck 3 nicht da
+ebene_zeigen('d')
 result = {'bausteine': len(MOD), 'instanzen': len(C_DECK.objects) + len(C_CEIL.objects), 'objekte': len(bpy.data.objects)}

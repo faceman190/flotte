@@ -85,7 +85,7 @@ export interface Player {
 //         (weiter geht es an der Promenadentür); x, z, yaw: Standpunkt im Innenraum (fehlt an Bord des eigenen Schiffs im Hangar)
 //   land: auf einem Planeten gelandet. ship: Lage des Schiffs, rover: Lage des Rovers, foot: Standpunkt zu Fuß (fehlt: im Rover; 'ship': an Bord)
 export type PlayerAt =
-  | { k: 'st'; id: string; base?: boolean; city?: boolean; x?: number; z?: number; yaw?: number }
+  | { k: 'st'; id: string; base?: boolean; city?: boolean; x?: number; z?: number; yaw?: number; eb?: 'd' }      // eb: auf Deck 3 der Bastion (zwei Ebenen, deck.ts EBENE)
   | { k: 'land'; ship: { x: number; y: number; z: number; yaw: number }; rover: { x: number; z: number; yaw: number }; foot?: { x: number; z: number; yaw: number } | 'ship' };
 export type Tool = 'guns' | 'laser' | 'charge';
 export interface Contract { id: string; station: string; sector: string; stName: string; item: ItemId; amount: number; reward: number; trust?: boolean }
