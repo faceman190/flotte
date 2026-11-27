@@ -351,7 +351,7 @@ export const newRemoteFig = (): RemoteFig => ({ av: null, x: 0, y: 0, z: 0, tx: 
 export const lookToNet = () => { const l = normLook(P.look); return l.kopf + ',' + l.farbe; };
 export function gearFromNet(g: string[] | null | undefined) {
   const lk = String(g?.[5] || '').split(','), look = normLook({ kopf: +lk[0], farbe: +lk[1] });
-  const tracht = trachtOf(g?.[6] ? +g[6] : 1, { helm: g?.[0], anzug: g?.[1], weste: g?.[7], handschuh: g?.[8], stiefel: g?.[9] }, g?.[10]);
+  const tracht = trachtOf(g?.[6] ? +g[6] : 1, { helm: g?.[0], anzug: g?.[1], rucksack: g?.[2], weste: g?.[7], handschuh: g?.[8], stiefel: g?.[9] }, g?.[10]);
   return { gear: { helm: g?.[0] || undefined, anzug: g?.[1] || undefined, rucksack: g?.[2] || undefined, look } as FigGear, wid: g?.[3] || viewModelId(), tracht };
 }
 export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {
