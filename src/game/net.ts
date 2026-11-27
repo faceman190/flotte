@@ -223,7 +223,7 @@ function sendState() {
   const v = rm ? [ROVER.kind, ROVER.speed, ROVER.steer, rm.position.x, rm.position.y, rm.position.z, rm.quaternion.x, rm.quaternion.y, rm.quaternion.z, rm.quaternion.w] : undefined;
   // Lage des gelandeten Schiffs: zu Fuß, im Fahrzeug, an Bord oder in der Mine auf dem Planeten
   const ls = world.surface && (ROVER.active || DUN.active || s.m === 'bord' || s.m === 'fuss') ? [ROVER.ship.x, ROVER.ship.y, ROVER.ship.z, ROVER.ship.yaw, world.ground ? world.ground(ROVER.ship.x, ROVER.ship.z) : ROVER.ship.y, (ROVER.ship.pitch || 0) * 180 / Math.PI, (ROVER.ship.roll || 0) * 180 / Math.PI] : undefined;      // 6./7.: Neigung in Grad (seit 2026-11-26; der Server rundet auf 0,01)
-  const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe), netFlags(), lookToNet(), String(P.figur ?? 1), gr.weste || '', gr.handschuh || '', gr.stiefel || ''];
+  const gr = P.gear || {}, g = [gr.helm || '', gr.anzug || '', gr.rucksack || '', viewModelId(gr.waffe), netFlags(), lookToNet(), String(P.figur ?? 1), gr.weste || '', gr.handschuh || '', gr.stiefel || '', P.gesicht || ''];      // 11.: Gesicht (Code, seit 2026-11-27)
   sendMsg({ t: 'st', p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], s: Math.hypot(P.vx, P.vy, P.vz), cls: P.cls, paint: P.paint, m: s.m, w, d: myStation(), g, v, ls, z: schiffsTeile() });
 }
 // Bewegliche Teile des eigenen Schiffs, wie main.ts sie gerade stellt (gltfShips.ts merkt sich den Wunsch, ausstieg.ts die Leiter)

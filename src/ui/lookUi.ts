@@ -65,11 +65,13 @@ export const garderobeOpen = () => !$('garderobe').classList.contains('hidden');
 export const garderobeHere = () => !!G.dockedAt || IN.active;   // angedockt oder zu Fuß in einer Station oder im Schiff
 export function openGarderobe() {
   tmp.figur = normFigur(P.figur);
-  figurPicker('grLook', tmp, () => {});
+  // Mit eigenem Gesicht gibt es hier nichts zu wählen (Gesicht nur bei „Neuer Pilot“, seit 2026-11-27); ältere Spielstände behalten Figur 1–3
+  if (P.gesicht) $('grLook').innerHTML = '<section class="ccSec"><div class="ccSecH"><i>01</i>Gesicht</div><p class="ccHint">Dein Gesicht hast du beim Dienstantritt festgelegt. Es lässt sich nicht mehr ändern.</p></section>';
+  else figurPicker('grLook', tmp, () => {});
   $('garderobe').classList.remove('hidden');
   $('grTag').textContent = P.name || 'Pilot';
   grReset();
-  showFig('grFig', () => trachtOf(tmp.figur, P.gear));
+  showFig('grFig', () => trachtOf(tmp.figur, P.gear, P.gesicht));
   sfx('ui_open', 0.4);
 }
 function closeGarderobe() {
@@ -77,4 +79,4 @@ function closeGarderobe() {
   if (document.getElementById('invFig')) showFig('invFig', figTracht);   // zurück zur Ausrüstung im Flottenband: deren Vorschau weiter
 }
 $('grBack').onclick = () => { closeGarderobe(); sfx('ui_close', 0.4); };
-$('grOk').onclick = () => { P.figur = tmp.figur; saveGame(); closeGarderobe(); sfx('ui_confirm', 0.5, 1, () => snd(700, 0.12, 'sine', 0.05, 200)); };
+$('grOk').onclick = () => { if (!P.gesicht) P.figur = tmp.figur; saveGame(); closeGarderobe(); sfx('ui_confirm', 0.5, 1, () => snd(700, 0.12, 'sine', 0.05, 200)); };
