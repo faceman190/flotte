@@ -9,6 +9,9 @@
 //             Lyra has no sprint clips. Standing relaxed, the hip stance sinks a little (aim offset pitched down: TUNE.lowReady)
 //   aim       the aim offset poses of Lyra (…_AO_LU, _CC, _RD …) as deltas on top: weapon and chest follow the view
 //   additive  recoil (…_Fire against its last frame) and hit reactions (MM_HitReact_… against their first frame)
+//   fit       the stances point the barrel only roughly along the view. Whoever owns the figure turns the chest afterwards until the
+//             barrel points at the aim point (mannyAvatar.ts fitGun, weight fitW); with o.late the additives wait for additive(),
+//             called after that – otherwise the fit would take the recoil out again
 //   left hand two bone IK onto the fore grip of the weapon actually carried (the game's weapons are shorter than Lyra's rifle)
 //
 // The clips are not played by the THREE mixer: the layer samples the tracks itself (ClipStore._decode) and writes the bones
@@ -53,7 +56,7 @@ export const TUNE = {
   carryAim: 0.35,       // share of the aim offsets (weapon follows the view) that stays while carrying
   carryRate: [0.85, 1.3],// playback speed of the carry clip: jogging … sprinting
   carryFp: [0.5, 0.68], // first person: share of the carry stance while jogging … sprinting (fully carried, the weapon leaves the picture)
-  lowReady: 16,         // deg – standing relaxed: the hip stance points this far below the view
+  lowReady: 0,          // deg – standing relaxed: the hip stance points this far below the view (16 until 2026-11-27; the user wants the weapon on the crosshair)
   lowReadyFp: 7,        // deg – the same in first person
   lowReadyIn: 1.6,      // 1/s – sinking into it (after lowReadyAfter s without a shot)
   lowReadyAfter: 1.4,
@@ -88,6 +91,7 @@ export class WeaponLayer {
     this.equipT = 9; this.reloadW = 0; this.reloadP = 0; this.ikW = 0; this.armed = false;
     this.tossT = 9; this.tosses = -1;
     this.carryW = 0; this.carryT = 0; this.lowW = 0;
+    this.fitW = 0; this._addW = 0; this._addFire = false;
   }
 
   _buf() { return { q: new Float32Array(this.N * 4), pel: new Float32Array([0, 0, 0, 1]), wp: new Float32Array(3) }; }
@@ -170,8 +174,9 @@ export class WeaponLayer {
     return r;
   }
 
-  _additive(name, t, frame, gain) {
+  _additive(name, t, frame, gain, fadeIn = 0) {
     const d = this._clip(name);
+    if (fadeIn > 0) gain *= Math.min(1, t / fadeIn);
     if (!d || t >= d.dur || gain <= 0.001) return;
     const ref = this._refPose(name, frame), p = this._sample(d, t, this._tmp2);
     // fade in over the first frame and out over the last 0.1 s: a clip cut off early or not ending exactly on its reference does not pop
@@ -208,10 +213,16 @@ export class WeaponLayer {
     this.w = o.snap ? want : clamp(this.w + Math.sign(want - this.w) * dt / T.blend, 0, 1);
     this.mount.visible = this.w > 0.35;
     // counters: the first value only sets the start
-    if (o.shots !== undefined) { if (this.shots >= 0 && o.shots !== this.shots) this.fireT = 0; this.shots = o.shots; }
+    // a shot brings the weapon up in this very frame: the tracer starts at the muzzle and has to leave along the barrel
+    let shotNow = false;
+    if (o.shots !== undefined) { if (this.shots >= 0 && o.shots !== this.shots) { shotNow = true; this.carryW = 0; this.lowW = 0; } this.shots = o.shots; }
     if (o.hits !== undefined) { if (this.hits >= 0 && o.hits !== this.hits && this.hitT > 0.25) { this.hitT = 0; this.hitClip = HITS[Math.floor(Math.random() * HITS.length)]; } this.hits = o.hits; }
     if (o.toss !== undefined) { if (this.tosses >= 0 && o.toss !== this.tosses) this.tossT = 0; this.tosses = o.toss; }
     this.t += dt; this.fireT += dt; this.hitT += dt; this.equipT += dt; this.tossT += dt;
+    // the recoil starts one frame after the shot (and fades in over 30 ms): in the frame of the shot the barrel still points at the aim
+    // point, the tracer leaves along it. The pistol and shotgun clips begin fully kicked (6 to 9 degrees).
+    if (shotNow) this.fireT = 0;
+    this.fitW = 0; this._addW = 0;
     if (this.w <= 0.001) { this.ikW = 0; this.aimW = 0; this.carryW = 0; this.lowW = 0; return; }
     const K = KINDS[this.kind], cw = clamp(o.crouchW || 0, 0, 1);
     const reloading = o.reload !== undefined && o.reload >= 0;
@@ -281,10 +292,22 @@ export class WeaponLayer {
         this.B[b].quaternion.premultiply(kA >= 0.999 ? _acc : _c.copy(ID).slerp(_acc, kA));
       }
     }
+    // how far the barrel may be turned onto the aim point: not while the weapon is carried, lowered or busy (reload, equip, throw)
+    this.fitW = W * (1 - busy) * (1 - this.carryW) * (1 - this.lowW * (1 - this.aimW) * (o.fp ? T.lowReadyFp : T.lowReady) / 7);
+    this.fitW = clamp(this.fitW, 0, 1);
     // ---- additive: recoil and hit
-    if (!reloading) this._additive(K.fire, this.fireT, -1, W * T.fireGain);
-    this._additive(this.hitClip, this.hitT, 0, W * T.hitGain);
+    this._addW = W; this._addFire = !reloading;
+    if (!o.late) this.additive();
     this.ikW = W * K.ik * (1 - busy);
+  }
+
+  /** recoil and hit reaction on top of the pose; with o.late the owner calls this after turning the barrel onto the aim point */
+  additive() {
+    const W = this._addW, K = KINDS[this.kind], T = TUNE;
+    if (W <= 0.001) return;
+    this._addW = 0;
+    if (this._addFire) this._additive(K.fire, this.fireT, -1, W * T.fireGain, 0.03);
+    this._additive(this.hitClip, this.hitT, 0, W * T.hitGain);
   }
 
   /** after the world transform of this frame is set: left hand onto the fore grip of the carried weapon */

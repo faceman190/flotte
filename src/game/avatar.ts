@@ -108,7 +108,7 @@ export interface Avatar {
   // fremde Figur (Mitspieler, Wache): tracht = was sie trägt; dann zeigt fremd (fremdFigur.ts) die neue Figur statt des Soldaten
   tracht?: Tracht | null; fremd?: FremdFigur | null;
 }
-export interface Drive { x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null; armed?: boolean; ads?: boolean; fp?: boolean; shots?: number }   // ads: Zielen gehalten (rechte Maustaste) · reload: Fortschritt 0..1, sonst −1 · armed: hier kann geschossen werden (Planet, Mine) – die neue Spielerfigur trägt dann die Waffe wid
+export interface Drive { aimAt?: THREE.Vector3 | null; x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null; armed?: boolean; ads?: boolean; fp?: boolean; shots?: number }   // ads: Zielen gehalten (rechte Maustaste) · reload: Fortschritt 0..1, sonst −1 · armed: hier kann geschossen werden (Planet, Mine) – die neue Spielerfigur trägt dann die Waffe wid
 
 export function makeAvatar(gear: FigGear, player = false): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
@@ -191,8 +191,8 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   // Testfigur Manny (?manny=1): eigene Bewegungslogik, der Soldat bleibt unsichtbar im Halter
   if (a.player) {
     const mx = INTENT.mx, mz = INTENT.mz, sprint = INTENT.sprint; INTENT.mx = INTENT.mz = 0; INTENT.sprint = false;
-    const weapon = d.armed && d.wid ? { id: d.wid, lyra: LYRA_ITEM[P.gear?.waffe || ''], aim: combat || !!d.ads, shots: ACT.shot, hits: ACT.hit, toss: ACT.toss, reload: d.reload ?? -1 } : null;
-    if (driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground, dead: !!d.dead, weapon, fp: d.fp })) return;
+    const weapon = d.armed && d.wid ? { id: d.wid, lyra: LYRA_ITEM[P.gear?.waffe || ''], aim: d.fp ? !!d.ads : combat || !!d.ads, shots: ACT.shot, hits: ACT.hit, toss: ACT.toss, reload: d.reload ?? -1 } : null;
+    if (driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground, dead: !!d.dead, weapon, fp: d.fp, aimAt: d.aimAt })) return;
     if (d.fp) { s.root.visible = false; return; }      // Ich-Sicht ohne die neue Figur: keinen Soldaten um die Kamera zeigen
     if (!s.root.visible) releaseManny(s.root);   // Schalter aus oder Figur nicht geladen: wieder der Soldat
   }

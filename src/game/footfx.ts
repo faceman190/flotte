@@ -60,6 +60,34 @@ export function tracer(a: THREE.Vector3, b: THREE.Vector3, col: string, w = 0.06
   m.setColorAt(trI, _c.set(col).lerp(_c.clone().set(0xffffff), 0.35)); if (m.instanceColor) m.instanceColor.needsUpdate = true;
 }
 
+// Leuchtspuren des eigenen Schusses: Der Schuss fällt in der Spiellogik, die Mündung steht aber erst fest, wenn Figur und Kamera dieses
+// Bildes stehen (Ich-Sicht: die Figur wird nach der Kamera verschoben). Bis dahin warten die Endpunkte hier; die Kamerafunktion ruft
+// shotFlush mit der Mündung des gezeigten Bildes. Vorher kam die Spur von der Mündung des vorigen Bildes – neben dem Lauf.
+const trail: { end: THREE.Vector3; col: string; w: number }[] = [];
+export function shotTrail(end: THREE.Vector3, col: string, w: number) { trail.push({ end: end.clone(), col, w }); }
+export const shotPending = () => trail.length;
+export function shotFlush(a: THREE.Vector3) {
+  for (const t of trail) {
+    // Einschlag dicht vor der Mündung (die Figur steht an der Wand): keine Spur. Auf unter 1,5 m kann der Lauf nicht mehr dorthin zeigen,
+    // die Spur läge quer zur Waffe.
+    if (a.distanceToSquared(t.end) < 2.25) continue;
+    tracer(a, t.end, t.col, t.w);
+    // schon in diesem Bild zeichnen (updateFootFx ist für dieses Bild gelaufen): das erste Stück ab der Mündung
+    const r = trs[trI]; if (r.on && trMesh) { r.t = 0.008; trDraw(trI, r); trMesh.instanceMatrix.needsUpdate = true; }
+  }
+  trail.length = 0;
+}
+// Lage einer Leuchtspur zur Zeit t.t; false, wenn sie im Ziel verschwunden ist
+function trDraw(i: number, t: Tr): boolean {
+  // sichtbares Tempo (echt wären ~400 m/s: auf 15 m nur ein Bild). Der Kopf bleibt am Einschlag stehen, das Ende läuft weiter nach,
+  // bis die Spur ganz im Ziel verschwunden ist (bis 2026-11-19 abends lief das Ende mit dem stehenden Kopf mit und die Spur verschwand nie)
+  const run = t.t * 240, head = Math.min(t.dist, run), tail = Math.max(0, run - t.len);
+  if (tail >= t.dist - 0.01 || t.t > 3) { t.on = false; trMesh!.setMatrixAt(i, _m.makeScale(0, 0, 0)); return false; }
+  _v.copy(t.a).addScaledVector(t.d, tail); _q.setFromUnitVectors(_z, t.d); _s.set(t.w, t.w, Math.max(0.05, head - tail));
+  trMesh!.setMatrixAt(i, _m.compose(_v, _q, _s));
+  return true;
+}
+
 // ---------- Staub und Rauch (weiche Flecken, normal gemischt) ----------
 interface Dust { sp: THREE.Sprite; life: number; max: number; v: THREE.Vector3; g0: number; g1: number; op: number }
 const dusts: Dust[] = [];
@@ -250,6 +278,7 @@ export function onClearFootFx(fn: () => void) { clearHooks.push(fn); }
 export function clearFootFx() {
   for (const fn of clearHooks) fn();
   for (const t of trs) t.on = false;
+  trail.length = 0;
   if (trMesh) { for (let i = 0; i < TMAX; i++) trMesh.setMatrixAt(i, _m.makeScale(0, 0, 0)); trMesh.instanceMatrix.needsUpdate = true; }
   for (const c of chunks) c.on = false;
   if (chMesh) { for (let i = 0; i < CMAX; i++) chMesh.setMatrixAt(i, _m.makeScale(0, 0, 0)); chMesh.instanceMatrix.needsUpdate = true; }
@@ -279,12 +308,7 @@ export function updateFootFx(dt?: number) {
       if (!t.on) { continue; }
       any = true;
       t.t += dt;
-      // sichtbares Tempo (echt wären ~400 m/s: auf 15 m nur ein Bild). Der Kopf bleibt am Einschlag stehen, das Ende läuft weiter nach,
-      // bis die Spur ganz im Ziel verschwunden ist (bis 2026-11-19 abends lief das Ende mit dem stehenden Kopf mit und die Spur verschwand nie)
-      const run = t.t * 240, head = Math.min(t.dist, run), tail = Math.max(0, run - t.len);
-      if (tail >= t.dist - 0.01 || t.t > 3) { t.on = false; trMesh.setMatrixAt(i, _m.makeScale(0, 0, 0)); continue; }
-      _v.copy(t.a).addScaledVector(t.d, tail); _q.setFromUnitVectors(_z, t.d); _s.set(t.w, t.w, Math.max(0.05, head - tail));
-      trMesh.setMatrixAt(i, _m.compose(_v, _q, _s));
+      trDraw(i, t);
     }
     if (any) trMesh.instanceMatrix.needsUpdate = true;
   }

@@ -80,6 +80,7 @@ export interface MannyDrive {
   // lyra: statt des Modells id eine der drei Waffen aus dem Lyra-Paket (mit eigenen Knochen: Verschluss, Magazin)
   weapon?: { id: string; lyra?: Kind; aim: boolean; shots: number; hits: number; reload: number; toss?: number } | null;      // toss: Zähler der Granatwürfe
   fp?: boolean;                                      // Ich-Sicht: die Kamera sitzt im Kopf (danach mannyFirstPerson mit der Kamera aufrufen)
+  aimAt?: THREE.Vector3 | null;                      // Zielpunkt in der Welt (wohin das Fadenkreuz zeigt): der Lauf wird darauf gerichtet (fitGun)
 }
 // Welche Haltung zu welcher Waffe gehört und wo die linke Hand greift (grip): Anteil der Strecke Griff → Mündung und Höhe unter der
 // Laufachse in Metern. Pistolen: beide Hände am Griff, wie der Clip sie hält. Gemessen am 23.11.2026 im Testfenster an der Figur.
@@ -131,6 +132,38 @@ export function mountGun(an: any, gs: GunState, id: string, lyra: Kind | undefin
   w.g.position.set(0, up, 0);
   an.weapon.grip = h.grip ? new THREE.Vector3(-GRIP_LEFT, w.muzzle.y + h.grip[1] + up, -L * h.grip[0]) : null;
 }
+// Lauf auf den Zielpunkt (seit 2026-11-27): Lyras Haltungen und Zielversätze richten die Waffe nur ungefähr nach dem Blick, um einige Grad
+// daneben, und sie wissen nichts davon, dass die Kamera der Außensicht neben der Figur steht. Nach den Haltungen wird deshalb die Brust
+// (FIT.bone, mit Armen und Waffe daran) so weit gedreht, dass der Lauf vom Ort der Mündung genau auf den Zielpunkt zeigt – dann liegt die
+// Leuchtspur in der Verlängerung des Laufs. Der Hals dreht zurück, der Kopf bleibt beim Blick. Zwei Durchgänge: Die Drehung um die Brust
+// verschiebt auch die Mündung. max: größte Korrektur (rad); mehr heißt, dass die Waffe gerade woanders ist (Drehen auf der Stelle).
+// w: Anteil (WeaponLayer.fitW: nicht beim Tragen, Nachladen, Werfen). In der Ich-Sicht beim Zielen übernimmt mannyFirstPerson.
+export const FIT = { on: true, bone: 'spine_04', max: 0.6, last: 0 };
+let fitBone: THREE.Object3D | null = null, fitNeck: THREE.Object3D | null = null;
+const _fq = new THREE.Quaternion(), _fp = new THREE.Quaternion(), _fs = new THREE.Quaternion(), _fi = new THREE.Quaternion(), _fb = new THREE.Vector3(), _fm = new THREE.Vector3();
+function turnWorld(b: THREE.Object3D, q: THREE.Quaternion) {      // Knochen um q drehen (Drehung in Weltachsen)
+  b.parent!.getWorldQuaternion(_fp); b.getWorldQuaternion(_fs);
+  b.quaternion.copy(_fp.invert().multiply(_fi.copy(q).multiply(_fs))); b.updateMatrixWorld(true);
+}
+function fitGun(at: THREE.Vector3, w: number) {
+  FIT.last = 0;
+  if (!FIT.on || w < 0.002 || !gun.g) return;
+  const model = anim.model as THREE.Object3D;
+  const bone = fitBone || (fitBone = model.getObjectByName(FIT.bone) || null), neck = fitNeck || (fitNeck = model.getObjectByName('neck_01') || null);
+  if (!bone || !bone.parent) return;
+  for (let i = 0; i < 2; i++) {
+    _fb.copy(gun.fwd).transformDirection(gun.g.matrixWorld);
+    gun.g.localToWorld(_fm.copy(gun.muzzle)); if (st.fp) _fm.add(fpShift);      // Ich-Sicht: die Figur wird nach der Kamera noch verschoben (wie im letzten Bild)
+    _fm.subVectors(at, _fm); if (_fm.lengthSq() < 0.25) return; _fm.normalize();
+    const ang = _fb.angleTo(_fm); if (ang < 1e-4) return;
+    _fq.setFromUnitVectors(_fb, _fm);
+    const k = w * Math.min(1, FIT.max / ang);
+    if (k < 0.999) _fq.copy(_fi.identity().slerp(_fq, k));
+    if (i === 0) FIT.last = ang;
+    turnWorld(bone, _fq);
+    if (neck && !st.fp) turnWorld(neck, _fq.invert());
+  }
+}
 /** Mündung der Waffe in der Hand der Figur (Weltkoordinaten); false, solange die Figur keine Waffe zeigt */
 export function mannyMuzzle(out: THREE.Vector3): boolean {
   if (!gun.shown || !gun.g || !anim?.weapon?.mount.visible) return false;
@@ -165,6 +198,10 @@ export function mannyFirstPerson(cam: THREE.Camera, aim = 0): boolean {
   head.scale.setScalar(0.001);                                  // Kopf weg (Haut und Haare hängen an diesem Knochen); der Animator setzt ihn im nächsten Bild zurück
   holder.updateWorldMatrix(true, false); model.updateMatrixWorld(true); cam.updateMatrixWorld();
   cam.getWorldDirection(_d);
+  // Anteil: die Zielhaltung der Figur selbst (WeaponLayer.aimW). Mit dem Zoom der Kamera (aim) allein stand die Waffe im Kampf in der
+  // Zielhaltung vor dem Auge, ohne dass Kimme und Korn auf der Blickachse lagen.
+  aim = Math.max(aim, anim.weapon?.ready ? anim.weapon.aimW * anim.weapon.w : 0);
+  aim = aim * aim * (3 - 2 * aim);
   const ads = aim > 0.001 && gun.shown && !!gun.g;
   // Zielen: Der Lauf zeigt in den Haltungen nur ungefähr in Blickrichtung (wenige Grad daneben). Die ganze Figur so weit drehen, dass er genau
   // dorthin zeigt – sonst stehen Kimme und Korn nicht hintereinander.
@@ -265,6 +302,7 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
   const LG = gun.shown ? gun.lyra : null;
   if (LG && wp) driveLyraGun(LG, wp.shots, wp.reload, dtc);
   anim.fpView = st.fp;      // Ich-Sicht: die Waffe sinkt weniger tief (WeaponLayer), sonst verschwindet sie aus dem Bild
+  anim.lateAdd = true;      // Rückstoß und Zucken erst nach dem Ausrichten des Laufs (unten)
   const out = anim.update(dtc, {
     moveDir: _mv, gait, crouch: !!d.crouch, strafe: true, facing: face, style: mannyHooks.relaxed?.() && !wp ? 'relaxed' : 'neutral',
     jump, grounded: !air, verticalSpeed: vy, look: { pitch: d.pitch || 0 }, dead: !!d.dead,
@@ -280,6 +318,12 @@ export function driveManny(holder: THREE.Object3D, soldier: THREE.Object3D, dt: 
   const room = holder.parent;
   if (room) room.updateWorldMatrix(true, false);
   holder.updateMatrixWorld(true);
+  // Waffe: Lauf auf den Zielpunkt, dann Rückstoß und Zucken darauf (WeaponLayer.additive); danach die Weltlage des Oberkörpers neu
+  const WL = anim.weapon;
+  if (WL && WL.ready) {
+    if (gun.shown && d.aimAt && !d.dead) fitGun(d.aimAt, WL.fitW * (st.fp ? 1 - WL.aimW : 1));
+    WL.additive(); WL.B[0].updateMatrixWorld(true);
+  }
   // Füße: im Raum der Figur festhalten (ein fliegendes Schiff nimmt sie mit) und dem Boden unter ihnen folgen
   anim.finalize(dtc, { space: room ? room.matrixWorld : null, ground: d.ground || null, baseY: d.y });
   return true;
