@@ -39,20 +39,34 @@ window.__deck = async () => {
 window.__walkRund = async (bild = false) => {
   const T = window.DT, D = T.DK.deckData('bastion'), HZ0 = -50, S = 0.25, K0 = D.kx0;
   const gx = y => -y, gz = x => HZ0 - (x - K0);
-  const key = (i, j) => (i + 2048) * 8192 + (j + 4096), seen = new Set(), qu = [[0, Math.round(-46 / S)]]; seen.add(key(...qu[0]));
-  while (qu.length) {
-    const [i, j] = qu.pop();
-    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const a = i + di, b = j + dj, x = a * S, z = b * S;
-      if (z > -44 || z < -190 || Math.abs(x) > 60 || seen.has(key(a, b)) || !T.I.walkFree(x, z)) continue;      // bis −190: Deck 3 seit 2026-11-26 reicht 128 m tief
-      seen.add(key(a, b)); qu.push([a, b]);
+  const key = (i, j) => (i + 2048) * 8192 + (j + 4096), seen = new Set();
+  const fuell = start => {
+    const qu = [start], vis = new Set([key(...start)]);      // je Ebene eine eigene Füllung (die Vorhalle gehört zu beiden)
+    while (qu.length) {
+      const [i, j] = qu.pop();
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const a = i + di, b = j + dj, x = a * S, z = b * S;
+        if (z > -44 || z < -190 || Math.abs(x) > 60 || vis.has(key(a, b)) || !T.I.walkFree(x, z)) continue;      // bis −190: Deck 3 seit 2026-11-26 reicht 128 m tief
+        vis.add(key(a, b)); qu.push([a, b]);
+      }
     }
+    for (const k of vis) seen.add(k);
+  };
+  // Zwei Ebenen (seit 2026-11-27): erst die Hangarebene vom Hangar aus, dann Deck 3 vom Südaufzug aus. Vom Hangar darf das Forum nicht erreichbar sein.
+  const eb = D.ebenen && T.I.ebeneSetzen, vorher = T.DK.EBENE ? T.DK.EBENE.e : 'h'; let dicht = null, nH = 0;
+  if (eb) T.I.ebeneSetzen('h');
+  fuell([0, Math.round(-46 / S)]); nH = seen.size;
+  if (eb) {
+    dicht = !seen.has(key(Math.round(gx(D.karte_xy[1] + 6) / S), Math.round(gz(D.karte_xy[0]) / S)));
+    const a = D.aufzug.bucht; T.I.ebeneSetzen('d'); fuell([Math.round(gx(a[1] + 1.2) / S), Math.round(gz(a[0]) / S)]);
+    T.I.ebeneSetzen(vorher);
   }
   const near = (x, z, r) => { for (let a = Math.floor((x - r) / S); a <= Math.ceil((x + r) / S); a++) for (let b = Math.floor((z - r) / S); b <= Math.ceil((z + r) / S); b++) if (seen.has(key(a, b)) && Math.hypot(a * S - x, b * S - z) <= r) return true; return false; };
   const spotsOff = D.personal.filter(s => !near(gx(s.ty), gz(s.tx), 1.6)).map(s => s.tab);
   if (!near(gx(D.karte_xy[1]), gz(D.karte_xy[0]), 2.4)) spotsOff.push('galaxiekarte');
   const wegOff = []; D.wege.forEach((w, i) => w.forEach((n, k) => { if (!near(gx(n[1]), gz(n[0]), 0.6)) wegOff.push(`${i}.${k}`); }));
   const out = { punkte: seen.size, flaeche: Math.round(seen.size * S * S), ansprechpunkteNichtErreichbar: spotsOff, wegpunkteNichtErreichbar: wegOff };
+  if (eb) { out.punkteHangarebene = nH; out.punkteDeck3 = seen.size - nH; out.forumVomHangarAusZu = dicht; }
   if (bild) {
     const W = 440, H = 960, sc = 7, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
     const px = (x, z) => [W / 2 + x * sc, (-46 - z) * sc];

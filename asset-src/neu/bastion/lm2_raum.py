@@ -258,8 +258,11 @@ def run():
     if OPT.get('clamp_indirect') is not None: SC.cycles.sample_clamp_indirect = OPT['clamp_indirect']
     prep_materials()
     tex = os.path.join(ROOT, 'asset-src', 'tex-world'); info = {}
+    solo = set(OPT.get('solo', []))      # Teile, die nur beim eigenen Backen in der Szene stehen (Deck 3: die Abschlusswände und Schriften je Ebene, pd_deck.py)
     for p in parts:
         J, name, s = p['J'], p['name'], p['lm']; me = J.data; tb = time.time()
+        ohne = OPT.get('solo_ohne', {}).get(name, [])      # Teile, die beim Backen dieses Teils fehlen sollen (Deck 3: das Portal des Korridors steht dort, wo auf Deck 3 die Abschlusswand steht)
+        for q in parts: q['J'].hide_render = q is not p and (q['name'] in solo or q['name'] in ohne)
         # 1. Lichtkarte der großen Flächen
         im = bpy.data.images.new('L2_lit', s, s, alpha=False, float_buffer=True); target(J, im); pick(J)
         SC.cycles.samples = p['spp']; bk = SC.render.bake

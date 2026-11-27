@@ -148,8 +148,15 @@ def b_pd_ladendecke(bw, bd):
 # =====================================================================================
 # Aufzug, Durchgang, Fensterfront (flach: Wandebene x = 0, Raum bei x < 0)
 # =====================================================================================
-def b_pd_aufzug(label, sub, sig):      # 6 m breite Aufzugfront mit eigenem Leuchtschild
+def b_pd_aufzug(label, sub, sig, was='alles', etage='DECK 3'):      # 6 m breite Aufzugfront mit eigenem Leuchtschild
+    # was: 'alles'; oder einzeln 'bau' (ohne Schrift), 'name' (Schild und Bodenschrift), 'etage' (Etagenanzeige). Seit dem 27.11.2026 tragen die
+    # Aufzüge je Ebene (Hangarebene, Deck 3) andere Schrift: Die Schriften sind eigene Bausteine und liegen in den Teilen pd_ebene_h und pd_ebene_d.
     s = M[SIG[sig]]; h = VH
+    if was in ('alles', 'name'):
+        text(label, 0.46 if len(label) < 11 else 0.36, (-0.24, 0, 3.92), RIGHT_X, RIGHT_Y, s, align='CENTER'); text(sub, 0.11, (-0.24, 0, 3.7), RIGHT_X, RIGHT_Y, M['txtw'], align='CENTER')
+        text(label, 0.22, (-1.2, 0, 0.008), (0, -1, 0), (1, 0, 0), M['txto'], align='CENTER')
+    if was in ('alles', 'etage'): text(etage, 0.09, (-0.235, 0, 3.325), RIGHT_X, RIGHT_Y, s, align='CENTER')
+    if was not in ('alles', 'bau'): return
     box('Aufzugwand', 0.3, 6.0, h, 0.15, 0, h / 2, M['wall4'], 0)
     for sy in (-1, 1):
         box('Aufzugrahmen', 0.34, 0.34, 3.1, -0.05, sy * 1.37, 1.55, M['frame'], 0.03); box('Rahmenlicht', 0.03, 0.05, 2.9, -0.23, sy * 1.37, 1.5, s, 0)
@@ -160,14 +167,19 @@ def b_pd_aufzug(label, sub, sig):      # 6 m breite Aufzugfront mit eigenem Leuc
     box('Aufzugsturz', 0.34, 3.08, 0.34, -0.05, 0, 3.07, M['frame'], 0.03); box('Sturzlicht', 0.03, 2.7, 0.05, -0.23, 0, 3.07, s, 0)
     box('Türspalt', 0.07, 0.02, 2.84, -0.03, 0, 1.45, M['rubber'], 0); box('Sockel', 0.1, 6.0, 0.2, -0.05, 0, 0.1, M['frame'], 0.01)
     box('Schildkasten', 0.24, 5.4, 1.0, -0.1, 0, 4.0, M['frame'], 0.02); box('Schildfeld', 0.02, 5.2, 0.84, -0.225, 0, 4.0, M['wall4'], 0)
-    text(label, 0.46 if len(label) < 11 else 0.36, (-0.24, 0, 3.92), RIGHT_X, RIGHT_Y, s, align='CENTER'); text(sub, 0.11, (-0.24, 0, 3.7), RIGHT_X, RIGHT_Y, M['txtw'], align='CENTER')
     box('Schildlinie', 0.012, 5.0, 0.025, -0.238, 0, 4.36, s, 0); box('Schildlinie', 0.012, 5.0, 0.025, -0.238, 0, 3.62, s, 0)
-    box('Etagenanzeige', 0.06, 0.9, 0.2, -0.2, 0, 3.36, M['frame'], 0.008); text('DECK 3', 0.09, (-0.235, 0, 3.325), RIGHT_X, RIGHT_Y, s, align='CENTER')
+    box('Etagenanzeige', 0.06, 0.9, 0.2, -0.2, 0, 3.36, M['frame'], 0.008)
     box('Ruftafel', 0.07, 0.36, 0.62, -0.035, -1.95, 1.35, M['frame'], 0.012); box('Rufschirm', 0.012, 0.28, 0.3, -0.073, -1.95, 1.47, M['screen'], 0)
     for k in range(2): cyl('Ruftaste', 0.035, 0.02, -0.075, -1.95, 1.2 - k * 0.1, s if k == 0 else M['steel'], 'X', n=12, bev=0.004)
-    box('Bodenmarke', 1.8, 3.2, 0.006, -1.2, 0, 0.003, M['warn'], 0); text(label, 0.22, (-1.2, 0, 0.008), (0, -1, 0), (1, 0, 0), M['txto'], align='CENTER')
+    box('Bodenmarke', 1.8, 3.2, 0.006, -1.2, 0, 0.003, M['warn'], 0)
     box('Kranz', 0.3, 6.0, 0.14, -0.15, 0, h - 0.07, M['frame'], 0.012); box('Kranzlicht', 0.04, 5.9, 0.03, -0.29, 0, h - 0.16, M['e_panel_h'], 0)
     area('Aufzuglicht', (-1.6, 0, 3.3), (0, -PI / 2 + 0.5, 0), 4.0, 0.8, 90, SIGC[sig])
+def b_pd_ebenentafel(titel, sub, sig, w=7.6, z=5.4):      # flach: breites Leuchtschild vor der Hochwand (Abschlusswände der Vorhalle je Ebene)
+    s = M[SIG[sig]]
+    box('Tafelkasten', 0.2, w, 1.1, -0.4, 0, z, M['frame'], 0.02); box('Tafelfeld', 0.02, w - 0.2, 0.94, -0.505, 0, z, M['wall4'], 0)
+    text(titel, 0.46, (-0.52, -0.3, z - 0.08), RIGHT_X, RIGHT_Y, s, align='CENTER'); text(sub, 0.12, (-0.52, -0.3, z - 0.34), RIGHT_X, RIGHT_Y, M['txtw'], align='CENTER')
+    box('Tafellinie', 0.012, w - 0.4, 0.025, -0.518, 0, z + 0.42, s, 0); box('Tafellinie', 0.012, w - 0.4, 0.025, -0.518, 0, z - 0.44, s, 0)
+    emblem((-0.52, w / 2 - 0.7, z), RIGHT_X, RIGHT_Y, 0.34, s)
 def b_pd_durchgang(label, h):      # 4 m breit: offener Durchgang im Querschnitt der alten Gänge (3,4 × 2,75) mit Schild
     for sy in (-1, 1):
         box('Durchgangwand', 0.3, 0.3, 2.75, 0.15, sy * 1.85, 1.375, M['wall4'], 0); box('Durchgangpfosten', 0.3, 0.26, 2.9, -0.04, sy * 1.83, 1.45, M['frame'], 0.03)
