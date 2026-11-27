@@ -17,8 +17,8 @@ import { gesichtAus, neuesGesicht, haarDatei, hautFaktor, HAAR_PLAETZE, HAARFARB
 // teilPreview.ts: eigenes Skelett aus neuesSkelett()). Netze und Bilder teilen sich alle Figuren (kein zweites Mal im Grafikspeicher).
 // =====================================================================================
 
-export type Platz = 'helm' | 'weste' | 'overall' | 'handschuh' | 'stiefel';
-export const PLAETZE: Platz[] = ['helm', 'weste', 'overall', 'handschuh', 'stiefel'];
+export type Platz = 'helm' | 'weste' | 'overall' | 'handschuh' | 'stiefel' | 'rucksack';      // rucksack seit 2026-11-27
+export const PLAETZE: Platz[] = ['helm', 'weste', 'overall', 'handschuh', 'stiefel', 'rucksack'];
 /** Was eine Figur trägt: Nummer der Figur und je Platz die Kennung eines Teils (helm_01, overall_02 …) */
 // gesicht: Code aus dem Gesichts-Editor (data/gesicht.ts). Ist er gesetzt, gilt er statt der Figur: Unteranzug-Körper, MetaHuman-Kopf mit den
 // Reglern, gewählte Haare; Haut (auch der Hände), Iris und Haarfarbe bekommt jede Figur in eigenen Materialien.

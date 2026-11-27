@@ -10,7 +10,7 @@ export type GearKind = 'helm' | 'weste' | 'anzug' | 'handschuh' | 'stiefel' | 'r
 export type GearSlot = 'helm' | 'weste' | 'anzug' | 'handschuh' | 'stiefel' | 'rucksack' | 'waffe' | 'werkzeug' | 'modul1' | 'modul2';
 export const GEAR_SLOTS: GearSlot[] = ['helm', 'weste', 'anzug', 'handschuh', 'stiefel', 'rucksack', 'waffe', 'werkzeug', 'modul1', 'modul2'];
 // Plätze, deren Gegenstand man an der Figur sieht (game/figur.ts)
-export const WEAR_SLOTS: GearSlot[] = ['helm', 'weste', 'anzug', 'handschuh', 'stiefel'];
+export const WEAR_SLOTS: GearSlot[] = ['helm', 'weste', 'anzug', 'handschuh', 'stiefel', 'rucksack'];
 export const SLOT_N: Record<GearSlot, string> = { helm: 'Helm', weste: 'Weste', anzug: 'Anzug', handschuh: 'Handschuhe', stiefel: 'Stiefel', rucksack: 'Rucksack', waffe: 'Waffe', werkzeug: 'Werkzeug', modul1: 'Modul 1', modul2: 'Modul 2' };
 export const KIND_N: Record<GearKind, string> = {
   helm: 'Helm', weste: 'Weste', anzug: 'Anzug', handschuh: 'Handschuhe', stiefel: 'Stiefel', rucksack: 'Rucksack', waffe: 'Waffe', werkzeug: 'Werkzeug', modul: 'Modul', verbrauch: 'Verbrauchsgut', fund: 'Fundstück',
@@ -92,13 +92,14 @@ export const GEAR = {
   anzug_overall: { n: 'Bordoverall', kind: 'anzug', rar: 0, val: 90, desc: 'Der Overall, den früher jeder Pilot der Crew bekam.', st: { schutz: 3 }, teil: 'overall_01' },
   anzug_druck: { n: 'Druckanzug', kind: 'anzug', rar: 1, val: 650, desc: 'Dicht, gefüttert, für Arbeiten im Vakuum.', st: { schutz: 12 }, teil: 'overall_02', vakuum: true },
   anzug_exo: { n: 'Exo-Rahmen', kind: 'anzug', rar: 2, val: 2900, desc: 'Leichter Anzug mit Stützmotoren an den Beinen.', st: { schutz: 16, tempo: 12 }, teil: 'overall_02' },
-  anzug_panzer: { n: 'Gefechtspanzer', kind: 'anzug', rar: 2, val: 2400, desc: 'Schwere Platten. Schützt gut, macht aber langsam.', st: { schutz: 26, tempo: -6 }, teil: 'overall_02' },
-  anzug_sturm: { n: 'Sturmrüstung', kind: 'anzug', rar: 2, val: 3200, desc: 'Gepanzerter Kampfanzug: rot lackierte Platten über dichtem Unterzeug, Versorgung im Tornister.', st: { schutz: 28, tempo: -3 }, teil: 'overall_02', vakuum: true },
-  anzug_veteran: { n: 'Veteranenrüstung', kind: 'anzug', rar: 3, val: 7800, desc: 'Getragen von den Letzten, die den Rückzug deckten.', st: { schutz: 34, tempo: 4 }, teil: 'overall_02', vakuum: true },
+  anzug_panzer: { n: 'Gefechtspanzer', kind: 'anzug', rar: 2, val: 2400, desc: 'Schwere Platten. Schützt gut, macht aber langsam.', st: { schutz: 26, tempo: -6 }, teil: 'overall_06' },
+  anzug_sturm: { n: 'Sturmrüstung', kind: 'anzug', rar: 2, val: 3200, desc: 'Gepanzerter Kampfanzug: rot lackierte Platten über dichtem Unterzeug, Versorgung im Tornister.', st: { schutz: 28, tempo: -3 }, teil: 'overall_07', vakuum: true },
+  anzug_veteran: { n: 'Veteranenrüstung', kind: 'anzug', rar: 3, val: 7800, desc: 'Getragen von den Letzten, die den Rückzug deckten.', st: { schutz: 34, tempo: 4 }, teil: 'overall_05', vakuum: true },
+  anzug_winter: { n: 'Winter-Kampfanzug', kind: 'anzug', rar: 1, val: 1400, desc: 'Gefütterter Kampfanzug mit Fellkragen und Platten an Brust und Knien. Für die Eiswelten gemacht.', st: { schutz: 14, tempo: -1 }, shop: 1, teil: 'overall_08' },
   // ----- Rucksäcke -----
   ruck_tasche: { n: 'Umhängetasche', kind: 'rucksack', rar: 0, val: 80, desc: 'Kleine Tasche für das Nötigste.', st: { plaetze: 4 }, shop: 0 },
-  ruck_feld: { n: 'Feldrucksack', kind: 'rucksack', rar: 1, val: 420, desc: 'Robuster Rucksack mit vielen Fächern.', st: { plaetze: 8 }, shop: 0 },
-  ruck_lasten: { n: 'Lastengestell', kind: 'rucksack', rar: 2, val: 1500, desc: 'Tragegestell der Bergleute. Fasst viel, drückt aufs Tempo.', st: { plaetze: 14, tempo: -4 }, shop: 1 },
+  ruck_feld: { n: 'Feldrucksack', kind: 'rucksack', rar: 1, val: 420, desc: 'Robuster Rucksack mit vielen Fächern.', st: { plaetze: 8 }, shop: 0, teil: 'rucksack_01' },
+  ruck_lasten: { n: 'Lastengestell', kind: 'rucksack', rar: 2, val: 1500, desc: 'Tragegestell der Bergleute. Fasst viel, drückt aufs Tempo.', st: { plaetze: 14, tempo: -4 }, shop: 1, teil: 'rucksack_02' },
   ruck_mmu: { n: 'Manövrierrucksack MR-1', kind: 'rucksack', rar: 1, val: 2800, desc: 'Tornister mit Kaltgasdüsen und zwei Drucktanks für Außenbordeinsätze: freies Fliegen ums Schiff. Ohne ihn halten dich nur die Leine und der Traktorstrahl deines Schiffs.', st: { plaetze: 4 }, shop: 0, immer: true, duesen: true },
   ruck_schwebe: { n: 'Schwebetornister', kind: 'rucksack', rar: 3, val: 6000, desc: 'Trägt sein Gewicht selbst.', st: { plaetze: 20 } },
   // ----- Waffen -----
