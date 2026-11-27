@@ -19,15 +19,22 @@ Stand 27.11.2026: Stufe 1 als Testseite, noch nicht im Spiel. Plan: Claude Doc �
   vom Kopf übertragenen Morphs (nur die mit Wirkung).
 - Packen: `node scripts/pack-gesicht.mjs <Quellordner> public/gesicht` (Meshopt, WebP bis 2048): 56 MB → 7,7 MB.
 
+## Hautton und Iris
+
+- Hautton: Farbleiste mit 7 Stufen (sRGB), Stufe 4 = Originalhaut (Mittelwert der Textur 0,581/0,394/0,313). Der Shader multipliziert die
+  Textur je Kanal mit Ziel/Original, Poren und Rötungen bleiben.
+- Iris: In der Augentextur liegt die Iris grau als Ring um die UV-Mitte (Radius 0,044 bis 0,166). Der Shader färbt diesen Ring nach der
+  Helligkeit um; 10 Vorgaben und ein Farbwähler.
+
 ## Speicherformat (Entwurf)
 
-Version, 16 Regler (je ein Byte, −100…100 als 0…200), Hautton, Haarfarbe, Teile als Bits, als URL-sicheres Base64 (26 Zeichen).
+Version, 16 Regler (je ein Byte, −100…100 als 0…200), Hautton, Haarfarbe, Irisfarbe (3 Byte), Teile als Bits, als URL-sicheres Base64 (31 Zeichen).
 Kommt später nach `P.gesicht` und ins Netzfeld `g`.
 
 ## Offen
 
 - Halsansatz: Der MetaHuman-Hals ragt an den Schultern aus Mannys Körper (spine_05 liegt 69 mm tiefer als bei Manny); kürzen oder an den
   Körper anpassen, Kopf und Hals des Körpers ausblenden.
-- Hautton ist nur eine Vorschau (Grundfarbe multipliziert); Stufe 2: entsättigte Grundtextur, Farbleiste, Narben und Tattoos als Ebenen.
+- Narben und Tattoos als Ebenen (Stufe 2); echte Hautvarianten (Sommersprossen, Alter) als gebackene MetaHuman-Hautvorlagen.
 - Haarkarten werden ausgestanzt (alphaTest 0,22), wirken dadurch strähnig; ggf. später sortiert durchscheinend.
 - Weitere Köpfe aus MetaHuman Creator als ganze Morphs (Vorlagen zum Mischen).
