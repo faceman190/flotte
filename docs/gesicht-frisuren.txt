@@ -1,0 +1,216 @@
+﻿Frisuren / Baerte / Schnurrbaerte / Augenbrauen fuer den Gesichts-Editor (MetaHuman-Grooms, Haarkarten)
+Quelle: MetaHuman-Plugin (UE 5.8) Optional/Grooms, exportiert aus der Projektkopie WebExport\_work\MetaHumanCopy (Original unveraendert)
+Aufbereitung wie haar_*.glb: Cards LOD0 (LOD1 wenn > 45000 Eckpunkte), Verschiebung wie Kopf (0, -7.7, -47 mm), Skin 100 % an head
+  (Manny-Skelett wie kopf_mh.glb), Atlas Graustufen + Alpha aus Coverage (Frisuren max. 2048, sonst 1024), form_/mimik_-Keys
+  vom Kopf uebertragen (nur Keys mit >= 0,3 mm Wirkung). Haarfarbe im Editor per Material-Farbe (Atlas multiplizieren).
+Anpassung an die Kopfform: die Plugin-Grooms sitzen auf einem Standardkopf. Grooms im selben Rahmen wie die 4 beim UE-Build bereits
+  angepassten (SweptUp/FlatThick/Beard_S_Curly/Mustache_M_Curly) werden ueber deren Verschiebungsfeld angepasst (Referenzfeld,
+  Pruefung an diesen 4: 0,1-2 mm Abweichung zum UE-Ergebnis); Grooms direkt auf dem Groom-Vorlagekopf ueber Vorlagekopf->Figur (Vorlagefeld).
+
+DATEIEN (je GLB ein Vorschaubild haar_..._vorschau.jpg: vorne + schraeg auf grauem Grundkopf; alle zusammen: frisuren.jpg)
+
+haar_frisur_kurz_klassisch.glb   [frisur]  kurz, ordentlich gescheitelt
+    Groom Hair_S_Clean, LOD0, 34451 Eckpunkte, 28055 Polygone, 7,78 MB, Atlas 4096px -> 2048px
+    Anpassung: Referenzfeld; Abstand zur Haut median 8,7 mm
+    Shape Keys (11): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_brauen_hoch, mimik_brauen_runter, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_stirn_hoehe, form_kiefer_breite, form_ohr_groesse
+haar_frisur_zurueckgekaemmt.glb   [frisur]  kurz, nach hinten gekaemmt
+    Groom Hair_S_SlickBack, LOD0, 44078 Eckpunkte, 37234 Polygone, 7,64 MB, Atlas 4096px -> 2048px
+    Anpassung: Referenzfeld; Abstand zur Haut median 7,2 mm
+    Shape Keys (8): mimik_kiefer_auf, mimik_brauen_hoch, mimik_brauen_runter, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_stirn_hoehe, form_ohr_groesse
+haar_frisur_wuschelig.glb   [frisur]  kurz, verwuschelt
+    Groom Hair_S_Messy, LOD1, 26359 Eckpunkte, 18708 Polygone, 5,73 MB, Atlas 4096px -> 2048px
+    Anpassung: Referenzfeld; Abstand zur Haut median 4,5 mm
+    Shape Keys (9): mimik_kiefer_auf, mimik_brauen_hoch, mimik_brauen_runter, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_stirn_hoehe, form_kiefer_breite, form_ohr_groesse
+haar_frisur_undercut.glb   [frisur]  Seiten kurz, Deckhaar lang nach oben (Undercut/Faux-Hawk)
+    Groom Hair_M_FauxMohawk, LOD0, 21624 Eckpunkte, 19067 Polygone, 4,51 MB, Atlas 4096px -> 2048px
+    Anpassung: Vorlagefeld (aus Vorlagekopf-Rahmen); Abstand zur Haut median 14,7 mm
+    Shape Keys (5): mimik_brauen_hoch, mimik_brauen_runter, mimik_nase_ruempfen, form_kopf_breite, form_stirn_hoehe
+haar_frisur_irokese.glb   [frisur]  Irokesenschnitt
+    Groom Hair_M_Mohawk, LOD0, 27308 Eckpunkte, 24581 Polygone, 5,3 MB, Atlas 4096px -> 2048px
+    Anpassung: Referenzfeld; Abstand zur Haut median 15,6 mm
+    Shape Keys (5): mimik_brauen_hoch, mimik_brauen_runter, mimik_nase_ruempfen, form_kopf_breite, form_stirn_hoehe
+haar_frisur_fade_locken.glb   [frisur]  sehr kurz rasierte Seiten, kurze Locken oben
+    Groom Hair_S_CurlyFade, LOD0, 42301 Eckpunkte, 31297 Polygone, 7,03 MB, Atlas 4096px -> 2048px
+    Anpassung: Referenzfeld; Abstand zur Haut median 3,7 mm
+    Shape Keys (7): mimik_kiefer_auf, mimik_brauen_hoch, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_stirn_hoehe, form_ohr_groesse
+haar_frisur_geheimratsecken.glb   [frisur]  lichtes Haar, Geheimratsecken (fast Glatze)
+    Groom Hair_S_HairLoss, LOD0, 33764 Eckpunkte, 28538 Polygone, 6,67 MB, Atlas 4096px -> 2048px
+    Anpassung: Referenzfeld; Abstand zur Haut median 6,3 mm
+    Shape Keys (8): mimik_kiefer_auf, mimik_brauen_hoch, mimik_brauen_runter, mimik_wangen_auf, form_kopf_breite, form_stirn_hoehe, form_kiefer_breite, form_ohr_groesse
+haar_frisur_zopf.glb   [frisur]  nach hinten gebunden, tiefer Zopf
+    Groom Hair_S_LowPonytail, LOD0, 33365 Eckpunkte, 30100 Polygone, 8,04 MB, Atlas 4096px -> 2048px
+    Anpassung: Vorlagefeld (aus Vorlagekopf-Rahmen); Abstand zur Haut median 5,5 mm
+    Shape Keys (11): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_brauen_hoch, mimik_brauen_runter, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_stirn_hoehe, form_kiefer_breite, form_ohr_groesse
+haar_frisur_flechtdutt.glb   [frisur]  geflochten, hochgesteckt
+    Groom Hair_S_UpdoBraids, LOD0, 39185 Eckpunkte, 34960 Polygone, 8,81 MB, Atlas 4096px -> 2048px
+    Anpassung: Vorlagefeld (aus Vorlagekopf-Rahmen); Abstand zur Haut median 7,4 mm
+    Shape Keys (10): mimik_laecheln_L, mimik_kiefer_auf, mimik_brauen_hoch, mimik_brauen_runter, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_stirn_hoehe, form_kiefer_breite, form_ohr_groesse
+haar_frisur_lang_glatt.glb   [frisur]  lang, glatt, offen
+    Groom Hair_L_Straight, LOD0, 36243 Eckpunkte, 34790 Polygone, 10,66 MB, Atlas 4096px -> 2048px
+    Anpassung: Vorlagefeld (aus Vorlagekopf-Rahmen); Abstand zur Haut median 14,1 mm
+    Shape Keys (18): mimik_laecheln_L, mimik_blinzeln_R, mimik_laecheln_R, mimik_kiefer_auf, mimik_brauen_hoch, mimik_brauen_runter, mimik_mund_breit, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_stirn_hoehe, form_augen_abstand, form_augen_hoehe, form_augen_groesse, form_wangenknochen, form_wangen_fuelle, form_kiefer_breite, form_ohr_groesse
+haar_frisur_bob_locken.glb   [frisur]  kinnlang, lockig
+    Groom Hair_M_BobCurly, LOD0, 31282 Eckpunkte, 29944 Polygone, 10,58 MB, Atlas 4096px -> 2048px
+    Anpassung: Vorlagefeld (aus Vorlagekopf-Rahmen); Abstand zur Haut median 13,9 mm
+    Shape Keys (20): mimik_blinzeln_L, mimik_laecheln_L, mimik_blinzeln_R, mimik_laecheln_R, mimik_kiefer_auf, mimik_brauen_hoch, mimik_brauen_runter, mimik_mund_breit, mimik_mund_spitz, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_stirn_hoehe, form_augen_abstand, form_augen_hoehe, form_augen_groesse, form_wangenknochen, form_wangen_fuelle, form_kiefer_breite, form_ohr_groesse
+haar_frisur_afro.glb   [frisur]  Afro, grosse Locken
+    Groom Hair_L_AfroCurly, LOD0, 30190 Eckpunkte, 34995 Polygone, 8,07 MB, Atlas 4096px -> 2048px
+    Anpassung: Referenzfeld; Abstand zur Haut median 32,5 mm
+    Shape Keys (10): mimik_kiefer_auf, mimik_brauen_hoch, mimik_brauen_runter, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_stirn_hoehe, form_wangenknochen, form_kiefer_breite, form_ohr_groesse
+haar_bart_vollbart_lang.glb   [bart]  langer Vollbart
+    Groom Beard_L_Full, LOD0, 19604 Eckpunkte, 12570 Polygone, 5,37 MB, Atlas 4096px -> 1024px
+    Anpassung: Referenzfeld; Abstand zur Haut median 3,5 mm
+    Shape Keys (15): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_mund_breit, mimik_mund_spitz, mimik_wangen_auf, form_kopf_breite, form_wangenknochen, form_wangen_fuelle, form_mund_breite, form_lippen_volumen, form_kiefer_breite, form_kinn_laenge, form_kinn_breite, form_ohr_groesse
+haar_bart_vollbart_kurz.glb   [bart]  kurzer, gepflegter Vollbart
+    Groom Beard_S_Full, LOD0, 14618 Eckpunkte, 9962 Polygone, 3,71 MB, Atlas 2048px -> 1024px
+    Anpassung: Referenzfeld; Abstand zur Haut median 2,1 mm
+    Shape Keys (16): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_mund_breit, mimik_mund_spitz, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_wangenknochen, form_wangen_fuelle, form_mund_breite, form_lippen_volumen, form_kiefer_breite, form_kinn_laenge, form_kinn_breite, form_ohr_groesse
+haar_bart_wild.glb   [bart]  langer, ungepflegter Bart
+    Groom Beard_L_Messy, LOD0, 14436 Eckpunkte, 10148 Polygone, 3,99 MB, Atlas 2048px -> 1024px
+    Anpassung: Referenzfeld; Abstand zur Haut median 2,7 mm
+    Shape Keys (16): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_mund_breit, mimik_mund_spitz, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_wangenknochen, form_wangen_fuelle, form_mund_breite, form_lippen_volumen, form_kiefer_breite, form_kinn_laenge, form_kinn_breite, form_ohr_groesse
+haar_bart_locken.glb   [bart]  mittellanger Lockenbart
+    Groom Beard_M_Curly, LOD0, 22548 Eckpunkte, 14316 Polygone, 5,66 MB, Atlas 4096px -> 1024px
+    Anpassung: Referenzfeld; Abstand zur Haut median 3,7 mm
+    Shape Keys (14): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_mund_breit, mimik_mund_spitz, mimik_wangen_auf, form_kopf_breite, form_wangen_fuelle, form_mund_breite, form_lippen_volumen, form_kiefer_breite, form_kinn_laenge, form_kinn_breite, form_ohr_groesse
+haar_bart_spitzbart.glb   [bart]  Kinnbart, spitz
+    Groom Goatee_M_Pointed, LOD0, 24025 Eckpunkte, 17496 Polygone, 5,55 MB, Atlas 4096px -> 1024px
+    Anpassung: Referenzfeld; Abstand zur Haut median 2,2 mm
+    Shape Keys (14): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_mund_breit, mimik_mund_spitz, mimik_wangen_auf, form_kopf_breite, form_wangen_fuelle, form_mund_breite, form_lippen_volumen, form_kiefer_breite, form_kinn_laenge, form_kinn_breite, form_ohr_groesse
+haar_bart_kinnriemen.glb   [bart]  schmaler Bart entlang der Kinnlinie
+    Groom Goatee_S_ChinStrap, LOD0, 18414 Eckpunkte, 10736 Polygone, 4,18 MB, Atlas 2048px -> 1024px
+    Anpassung: Referenzfeld; Abstand zur Haut median 2,0 mm
+    Shape Keys (14): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_mund_breit, mimik_mund_spitz, mimik_wangen_auf, form_kopf_breite, form_wangen_fuelle, form_mund_breite, form_lippen_volumen, form_kiefer_breite, form_kinn_laenge, form_kinn_breite, form_ohr_groesse
+haar_schnurr_lenker.glb   [schnurr]  Lenkerbart, gezwirbelt
+    Groom Mustache_L_Handlebar, LOD0, 13469 Eckpunkte, 10304 Polygone, 3,44 MB, Atlas 2048px -> 1024px
+    Anpassung: Referenzfeld; Abstand zur Haut median 1,2 mm
+    Shape Keys (13): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_mund_breit, mimik_mund_spitz, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_nase_laenge, form_nase_breite, form_wangen_fuelle, form_mund_breite, form_lippen_volumen
+haar_schnurr_western.glb   [schnurr]  Western-Schnurrbart, haengend
+    Groom Mustache_M_Gunslinger, LOD0, 10636 Eckpunkte, 9124 Polygone, 2,38 MB, Atlas 2048px -> 1024px
+    Anpassung: Referenzfeld; Abstand zur Haut median 3,4 mm
+    Shape Keys (12): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_mund_breit, mimik_mund_spitz, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_nase_laenge, form_nase_breite, form_mund_breite, form_lippen_volumen
+haar_schnurr_voll.glb   [schnurr]  voller Schnurrbart
+    Groom Mustache_L_Full, LOD0, 11758 Eckpunkte, 9898 Polygone, 2,69 MB, Atlas 2048px -> 1024px
+    Anpassung: Referenzfeld; Abstand zur Haut median 2,5 mm
+    Shape Keys (13): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_mund_breit, mimik_mund_spitz, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_nase_laenge, form_nase_breite, form_mund_breite, form_lippen_volumen, form_kinn_breite
+haar_schnurr_strich.glb   [schnurr]  duenner Oberlippenstrich
+    Groom Mustache_S_PencilThin, LOD0, 7192 Eckpunkte, 5394 Polygone, 1,49 MB, Atlas 512px -> 512px
+    Anpassung: Referenzfeld; Abstand zur Haut median 1,1 mm
+    Shape Keys (12): mimik_laecheln_L, mimik_laecheln_R, mimik_kiefer_auf, mimik_mund_breit, mimik_mund_spitz, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_nase_laenge, form_nase_breite, form_mund_breite, form_lippen_volumen
+haar_brauen_duenn.glb   [brauen]  duenn
+    Groom Eyebrows_M_Thin, LOD0, 4296 Eckpunkte, 2906 Polygone, 0,83 MB, Atlas 512px -> 512px
+    Anpassung: Vorlagefeld (aus Vorlagekopf-Rahmen); Abstand zur Haut median 2,3 mm
+    Shape Keys (10): mimik_blinzeln_L, mimik_blinzeln_R, mimik_brauen_hoch, mimik_brauen_runter, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_augen_abstand, form_augen_hoehe, form_augen_groesse
+haar_brauen_dicht.glb   [brauen]  dicht, kraeftig
+    Groom Eyebrows_M_Thick, LOD0, 4896 Eckpunkte, 2448 Polygone, 1,45 MB, Atlas 2048px -> 1024px
+    Anpassung: Vorlagefeld (aus Vorlagekopf-Rahmen); Abstand zur Haut median 2,5 mm
+    Shape Keys (10): mimik_blinzeln_L, mimik_blinzeln_R, mimik_brauen_hoch, mimik_brauen_runter, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_augen_abstand, form_augen_hoehe, form_augen_groesse
+haar_brauen_bogen.glb   [brauen]  leicht geschwungen
+    Groom Eyebrows_M_SlightArch, LOD0, 6422 Eckpunkte, 4364 Polygone, 1,2 MB, Atlas 2048px -> 1024px
+    Anpassung: Vorlagefeld (aus Vorlagekopf-Rahmen); Abstand zur Haut median 2,3 mm
+    Shape Keys (9): mimik_blinzeln_R, mimik_brauen_hoch, mimik_brauen_runter, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_augen_abstand, form_augen_hoehe, form_augen_groesse
+haar_brauen_buschig.glb   [brauen]  buschig, widerspenstig
+    Groom Eyebrows_M_Unruly, LOD0, 4212 Eckpunkte, 2804 Polygone, 1,62 MB, Atlas 2048px -> 1024px
+    Anpassung: Referenzfeld; Abstand zur Haut median 1,8 mm
+    Shape Keys (10): mimik_blinzeln_L, mimik_blinzeln_R, mimik_brauen_hoch, mimik_brauen_runter, mimik_wangen_auf, mimik_nase_ruempfen, form_kopf_breite, form_augen_abstand, form_augen_hoehe, form_augen_groesse
+
+GLATZE: keine Datei noetig (einfach keine Frisur laden). Rasierte/Stoppel-Varianten (Hair_S_BuzzCut, Hair_S_BaldingStubble,
+  Hair_S_360Waves, Hair_S_CoilBuzzCut, Beard_*_Stubble, Mustache_*_Stubble) haben im Plugin KEINE Haarkarten, nur Strands +
+  eine aufgemalte Textur (_baked) -> als Haut-Overlay moeglich, nicht als GLB.
+
+HAUT-VORLAGEN: nicht gemacht. Eine andere Hauttextur (face_texture_index) braucht in UE einen neuen Cloud-Textur-Abruf
+  (request_texture_sources); Sommersprossen/Alter sind Material-Parameter des MH-Hautshaders und muessten aufwendig gebacken werden.
+
+ALLE VERFUEGBAREN GROOMS IM PLUGIN (L0 = Eckpunkte Cards LOD0 laut UE, '-' = keine Haarkarten)
+  Hair
+    Hair_L_AfroCurly           L0 32591 -> haar_frisur_afro
+    Hair_L_MessyClumps         L0 117085
+    Hair_L_Straight            L0 36254 -> haar_frisur_lang_glatt
+    Hair_L_StraightBangs       L0 35173
+    Hair_M_BobBangs            L0 36420
+    Hair_M_BobCurly            L0 31320 -> haar_frisur_bob_locken
+    Hair_M_BobMessy            L0 36413
+    Hair_M_BobSlick            L0 36705
+    Hair_M_BobStraight         L0 40136
+    Hair_M_FauxMohawk          L0 21637 -> haar_frisur_undercut
+    Hair_M_Layered             L0 39852
+    Hair_M_Mohawk              L0 28102 -> haar_frisur_irokese
+    Hair_M_SideSweptFringe     L0 27078
+    Hair_M_TwistedBraids       L0 118354
+    Hair_S_360Waves            -
+    Hair_S_AfroFade            L0 38591
+    Hair_S_BaldingStubble      -
+    Hair_S_BobLayered          L0 40703
+    Hair_S_BrushCut            L0 47800
+    Hair_S_BuzzCut             -
+    Hair_S_Casual              L0 38730
+    Hair_S_Clean               L0 34461 -> haar_frisur_kurz_klassisch
+    Hair_S_Coil                L0 33345
+    Hair_S_CoilBuzzCut         -
+    Hair_S_Cornrows            L0 72972
+    Hair_S_CurlyFade           L0 42323 -> haar_frisur_fade_locken
+    Hair_S_HairLoss            L0 54545 -> haar_frisur_geheimratsecken
+    Hair_S_LowPonytail         L0 33552 -> haar_frisur_zopf
+    Hair_S_Messy               L0 46268 -> haar_frisur_wuschelig
+    Hair_S_Pixie               L0 35578
+    Hair_S_PulledBack          L0 17500
+    Hair_S_RecedeMessy         L0 42736
+    Hair_S_SideSweptFringe     L0 36908
+    Hair_S_SlickBack           L0 44114 -> haar_frisur_zurueckgekaemmt
+    Hair_S_SweptUp             L0 102418
+    Hair_S_Updo                L0 30654
+    Hair_S_UpdoBraids          L0 39336 -> haar_frisur_flechtdutt
+    Hair_S_UpdoBuns            L0 46906
+  Beards
+    Beard_L_Full               L0 19614 -> haar_bart_vollbart_lang
+    Beard_L_Messy              L0 14464 -> haar_bart_wild
+    Beard_M_Curly              L0 22548 -> haar_bart_locken
+    Beard_M_MuttonChops        nur LOD1 12597
+    Beard_M_Stubble            -
+    Beard_S_Curly              L0 22294
+    Beard_S_Full               L0 14622 -> haar_bart_vollbart_kurz
+    Beard_S_PencilThin         L0 22290
+    Beard_S_Stubble            -
+    Beard_S_Uneven             L0 22722
+    Goatee_L_Scraggly          L0 11699
+    Goatee_L_Wavy              L0 18865
+    Goatee_M_Pointed           L0 24025 -> haar_bart_spitzbart
+    Goatee_M_Soulpatch         L0 20238
+    Goatee_S_ChinStrap         L0 18414 -> haar_bart_kinnriemen
+    Goatee_S_SoulpatchStrip    L0 8579
+  Mustaches
+    Mustache_L_Full            L0 11764 -> haar_schnurr_voll
+    Mustache_L_Handlebar       L0 13469 -> haar_schnurr_lenker
+    Mustache_L_Messy           L0 11256
+    Mustache_L_Scraggly        L0 14194
+    Mustache_L_Stubble         -
+    Mustache_L_Wavy            L0 4622
+    Mustache_M_Curly           L0 7602
+    Mustache_M_Gunslinger      L0 10636 -> haar_schnurr_western
+    Mustache_M_Stubble         -
+    Mustache_S_ChinStrap       L0 14701
+    Mustache_S_Curly           L0 17294
+    Mustache_S_Full            L0 11235
+    Mustache_S_Horseshoe       -
+    Mustache_S_PencilThin      L0 12660 -> haar_schnurr_strich
+    Mustache_S_Stubble         -
+    Mustache_S_Uneven          L0 13522
+  Eyebrows
+    Eyebrows_L_Shaded          L0 5676
+    Eyebrows_M_Dense           -
+    Eyebrows_M_Fine            L0 5332
+    Eyebrows_M_FlatThick       L0 8154
+    Eyebrows_M_Full            L0 5682
+    Eyebrows_M_Messy           L0 7138
+    Eyebrows_M_Natural         L0 3858
+    Eyebrows_L_Scraggly        L0 5576
+    Eyebrows_M_Shaded          L0 4704
+    Eyebrows_M_SlightArch      L0 6429 -> haar_brauen_bogen
+    Eyebrows_M_Slit            L0 6874
+    Eyebrows_M_Swept           L0 4096
+    Eyebrows_M_Thick           L0 4896 -> haar_brauen_dicht
+    Eyebrows_M_Thin            L0 4296 -> haar_brauen_duenn
+    Eyebrows_M_Unruly          L0 4212 -> haar_brauen_buschig
+    Eyebrows_M_Wide            L0 4492
+    Eyebrows_S_FlatThin        L0 4893
+    Eyebrows_S_Shaded          L0 3456
