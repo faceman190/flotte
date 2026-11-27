@@ -85,3 +85,21 @@ für freie Grundrisse, alle wahlweise (ohne sie gilt die alte Rundhalle):
 | `abgang` | wohin die Figuren der Geschichte nach ihrem Auftritt gehen (in die Vorhalle, aus der Sichtlinie zum Hangar) |
 
 Lichtraum: 16 Teile (Korridor, Vorhalle, Forum West und Ost je Boden, Wand, Decke, vier Läden, Einsatzzentrale, zwei Flügel).
+
+## Geprüft und offen
+
+Geprüft am 27.11.2026 (Entwicklungsserver): alle Ansprechpunkte, die Galaxiekarte und alle Wegpunkte der Läufer erreichbar
+(`scripts/decktest.js __walkRund`), beide Aufzüge (Fahrt in die Bucht, ins Quartier und zurück), Wegweiser durch die Portale, Story-Bot durch
+Prolog und fünf Kapitel ohne Fehler, Bildvergleich mit den Blender-Ansichten. Gebaute Fassung: Start über „Weiterspielen“ auf dem Deck, Laden
+und Puppen sichtbar, keine Fehler in der Konsole.
+
+Lehren:
+- Eine durchgehende Rückwand (`Seite.rueck`) verschloss zuerst alle Portale. Vor dem Backen die Ansichten rendern, die DURCH die Öffnungen
+  schauen (`gang`, `forum`, `ausruester`, `kantine`), nicht nur die von innen.
+- Erst die Daten prüfen (`pd_back_lauf.py -- nur_daten`, `npm run assets`, `__walkRund`), dann backen: Der Bake dauert 28 Minuten.
+- Unter dem Boden liegt im Spiel eine dunkle Fläche (`Deckunterlage`): Durch die Fuge an der Rinne des Korridors schien sonst das All.
+
+Offen:
+- Rucksäcke nur als Auslage an der Wand; an den Puppen erst, wenn es Modelle dafür gibt.
+- Der Boden spiegelt im Spiel schwächer als in Blender.
+- Nicht geprüft: zwei Spieler zugleich auf dem neuen Deck, Bildrate auf einem schwachen Rechner, Lückensuche über alle Blickrichtungen.
