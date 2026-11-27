@@ -9,6 +9,9 @@ VERSATZ = -32.0
 for c_ in (C_DECK, C_CEIL, C_SIGN, C_LIGHT, C_CAM):
     for o in c_.objects:
         if o.parent is None and not o.get('pd_versetzt'): o.location.x += VERSATZ; o['pd_versetzt'] = 1      # über location: matrix_world frischer Objekte ist noch nicht berechnet
+for c_ in (C_DECK, C_CEIL, C_SIGN):      # pd_deck.py blendet fürs Rendern eine Ebene aus (ebene_zeigen): Fürs Spiel und fürs Backen sind alle Teile da
+    for o in c_.objects:
+        if o.get('teil'): o.hide_render = False; o.hide_viewport = False
 bpy.context.view_layer.update()
 def P_(x, y): return [round(x + VERSATZ, 3), round(y, 3)]
 def rect(x0, x1, y0, y1): return [P_(x0, y0), P_(x1, y0), P_(x1, y1), P_(x0, y1)]
@@ -48,6 +51,7 @@ for it in dg.object_instances:
     if not it.is_instance or it.parent is None: continue
     par = it.parent.original
     if par.name not in deck_names or not par.instance_collection or not wants_block(par.instance_collection): continue
+    if par.get('teil') in (E_H, E_D): continue      # Abschlusswände je Ebene: ihre Standfläche steht in „ebenen“ (sperre), sie gilt nur auf ihrer Ebene
     ob = it.object
     if ob.type != 'MESH': continue
     try: me = ob.to_mesh()
@@ -72,7 +76,7 @@ ORTE = []
 for sy, nm in ((1, 'Besprechung'), (-1, 'Krankenstation')):
     f = fluegel_f(sy); ORTE.append({'name': nm, 'poly': frect(f, 8.0, 16.0, -6.0, 6.0), 'decke': 3.25}); ORTE.append({'name': 'Deck 3', 'poly': frect(f, -0.4, 8.0, -2.0, 2.0), 'decke': 2.75})
 for sig in LADEN: ORTE.append({'name': LNAME[sig], 'poly': frect(laden_f(sig), 0.3, LBD, -LBW / 2, LBW / 2), 'decke': BH - 0.25})
-ORTE += [{'name': 'Treffpunkt', 'poly': kreis(TPX, 0, 4.9, 24), 'decke': 9.0}, {'name': 'Deck 3', 'poly': rect(-0.5, VX0, -KW / 2, KW / 2), 'decke': KH - 0.25},
+ORTE += [{'name': 'Treffpunkt', 'poly': kreis(TPX, 0, 4.9, 24), 'decke': 9.0}, {'name': 'Hangarzugang', 'poly': rect(-0.5, VX0, -KW / 2, KW / 2), 'decke': KH - 0.25},
          {'name': 'Vorhalle', 'poly': rect(VX0, VX1, -VW / 2, VW / 2), 'decke': VH - 0.4}, {'name': 'Einsatzzentrale', 'poly': rect(ZX0, ZX1, -ZW / 2, ZW / 2), 'decke': ZH - 0.4},
          {'name': 'Forum', 'poly': rect(FX0, FX1, -FW / 2, FW / 2), 'decke': 8.0}]
 
@@ -96,15 +100,17 @@ def stop(p, face, t, pr, who=None): return [p[0], p[1], {'face': round(face % 36
 def back(n): return n + n[-2:0:-1]
 fw, fh, fr, fk, fb, fq = laden_f('w'), laden_f('h'), laden_f('r'), laden_f('k'), fluegel_f(1), fluegel_f(-1)
 ROUTES = [
-    back([P_(3, -1.5), P_(14, -1.5), P_(22, -2.5), P_(31, -3.0), P_(38, 2.5), P_(41, 13.0), fw(1.4, 0.5), stop(fw(8.6, 1.5), 90, [6, 12], 0.9, 'werkstatt')]),
+    back([stop(P_(23.0, 6.6), 90, [4, 9], 0.7), P_(26.0, 3.0), P_(31, 1.0), P_(38, 2.5), P_(41, 13.0), fw(1.4, 0.5), stop(fw(8.6, 1.5), 90, [6, 12], 0.9, 'werkstatt')]),
     [P_(TPX + 7.6 * math.cos(RAD(t_)), 7.6 * math.sin(RAD(t_))) for t_ in range(10, 360, 25)],
     back([P_(60, 2.0), P_(72, 3.0), P_(78, 4.2), P_(86, 4.6), stop(P_(ZX1 - 6.6, 4.4), 0, [6, 12], 0.9, 'auftraege'), P_(85.6, -6.0), fq(0.5, 0.6), fq(7.2, 0.5), fq(9.2, 0.0), fq(10.4, -2.6), stop(fq(11.4, -3.4), -90, [5, 10], 0.6, 'kranken')]),
     back([fh(1.6, 0.0), stop(fh(8.8, -1.4), 90, [6, 12], 0.9, 'lager'), fh(1.4, 1.0), P_(62, 11.0), P_(61, 4.0), P_(61, -4.0), P_(62.5, -11.0), fk(1.4, 0.8), stop(fk(6.4, 4.4), 0, [8, 16], 0.9, 'kantine')]),
     back([fr(1.4, 0.0), stop(fr(8.8, 1.2), -90, [6, 12], 0.9, 'ausruester'), fr(1.4, -1.0), P_(40, -11.0), P_(34, -5.0), P_(28, -3.0), P_(24, -4.0), stop(P_(23.0, -6.6), -90, [4, 9], 0.7)]),
     back([P_(33, 11.0), P_(48, 11.5), P_(56, 11.5), P_(71, 11.0), P_(71.5, -11.0), P_(56, -11.5), P_(48, -11.5), P_(33, -11.0)]),
     back([P_(79.5, -4.0), P_(79.5, 4.5), P_(85.4, 6.0), fb(0.5, -0.6), fb(7.2, -0.5), fb(9.2, 0.0), fb(10.6, 2.7), stop(fb(12.0, 2.7), 90, [6, 12], 0.5)]),
+    back([P_(3, -1.5), P_(14, -1.5), P_(20.5, -3.0), stop(P_(23.0, -6.6), -90, [4, 9], 0.8), P_(21.0, 1.0), stop(P_(23.0, 6.6), 90, [4, 9], 0.6)]),      # Hangarebene: vom Tor zu den Aufzügen
 ]
-CHATS = [P_(36.5, 9.0) + [3], P_(58.5, -9.0) + [2], fk(4.4, -3.4) + [2], P_(20.6, -5.6) + [2], P_(80.0, 6.4) + [2], P_(46.0, -2.6) + [2]]
+WEGE_EBENE = ['d'] * (len(ROUTES) - 1) + ['h']
+CHATS = [P_(36.5, 9.0) + [3], P_(58.5, -9.0) + [2], fk(4.4, -3.4) + [2], P_(80.0, 6.4) + [2], P_(46.0, -2.6) + [2]]      # keine Gruppe in der Vorhalle: Sie stünde auf beiden Ebenen
 
 # ---------- Sichtzonen (der erste Treffer gilt), was man von wo sieht, Tore zwischen den Zonen ----------
 ZONEN = [{'id': 'wb', 'poly': frect(fluegel_f(1), -0.2, 16.5, -6.5, 6.5)}, {'id': 'wk', 'poly': frect(fluegel_f(-1), -0.2, 16.5, -6.5, 6.5)}]
@@ -128,10 +134,19 @@ for sig in LADEN:
 TEILE.append({'name': 'pd_einsatz', 'cells': [P_(84, 0)] + [P_(x, y) for x in (79.0, 86.0, 92.0) for y in (-5.0, 5.0)], 'lm': 2048, 'zone': 'z', 'spot': [5.8, 11]})
 for sy, ch in ((1, 'b'), (-1, 'k')):
     f = fluegel_f(sy); TEILE.append({'name': 'pd_fluegel_' + ch, 'cells': [f(12.6, 0)] + [f(2, 0), f(6, 0)] + [f(x, y) for x in (10, 14) for y in (-4, 0, 4)], 'lm': 1024, 'zone': 'w' + ch, 'spot': [3.15, 8]})
+TEILE += [{'name': E_H, 'cells': [P_(27.0, 0)], 'lm': 1024, 'zone': 'v', 'spot': [5.8, 11]}, {'name': E_D, 'cells': [P_(19.0, 0)], 'lm': 1024, 'zone': 'v', 'spot': [5.8, 11]}]
+# Zwei Ebenen (pd_deck.py): welcher Teil auf welcher Ebene zu sehen ist ('h' Hangarebene, 'd' Deck 3; die Vorhalle fehlt hier, sie gilt für beide),
+# die Sperre in der Mündung, die auf der Ebene zu ist, und die Ebene je Weg.
+EB_TEIL = {'pd_korridor': 'h', E_H: 'h', E_D: 'd'}
+for t_ in TEILE:
+    if t_['zone'] not in ('k', 'v'): EB_TEIL[t_['name']] = 'd'
+EBENEN = {'teile': EB_TEIL, 'wege': WEGE_EBENE,
+          'sperre': {'h': [rect(VX1 - 0.8, VX1 + 0.6, -VW / 2, VW / 2)], 'd': [rect(VX0 - 0.6, VX0 + 0.8, -KW / 2 - 0.3, KW / 2 + 0.3)]}}
 WANDTEILE = ('Wand ', 'Hochwand', 'Rückwand', 'Portal', 'Objekt rh_pfeiler', 'Sturz', 'Giebel', 'Objekt rh_banner')
 def part_of(o):
     c = o.instance_collection.name if (o.type == 'EMPTY' and o.instance_collection) else ''
     if c == 'Kulisse': return ''
+    if o.get('teil'): return o['teil']      # fest zugewiesen (Teile der Ebenen, Schild über dem Portal des Korridors)
     x, y = o.matrix_world.translation.x - VERSATZ, o.matrix_world.translation.y; ost = math.cos(o.matrix_world.to_euler().z)      # ost > 0: flacher Baustein schaut nach Westen
     if c.startswith(('Ladenschale', 'Ladendecke')) or abs(y) > FW / 2 + 0.4:
         if x > ZX0 - 2.5 and abs(y) > ZW / 2 + 0.2 and not c.startswith('Laden') and abs(x - 85.0) < 9.0 and (abs(y) > FW / 2 + LBD + 0.6 or x > 71.5): return 'pd_fluegel_' + ('b' if y > 0 else 'k')
@@ -155,9 +170,10 @@ meta = {'typ': 'rund', 'name': 'Deck 3', 'kx0': VERSATZ, 'tiefe': 112, 'walk': W
         'licht2': ['lichtraum2_deck3', 'Lichtraum2Deck3'], 'mund': [VX0 + VERSATZ, 0.0, OW_K / 2 - 0.2], 'tor': [VERSATZ, OW_K / 2],
         'zonen': ZONEN, 'sicht': SICHT, 'tore': TORE, 'teilzone': {t['name']: t['zone'] for t in TEILE}, 'lampen': {t['name']: t['spot'] for t in TEILE},
         'puppen': [dict(q, x=round(q['x'] + VERSATZ, 3), y=round(q['y'], 3)) for q in PUPPEN],
-        'weit': 150, 'abgang': [[-4.5, 19.0], [-6.5, 19.8]],      # Sichtweite (m); Abgang der Figuren der Geschichte (quer, Tiefe ab dem Tor): in die Vorhalle, aus der Sichtlinie zum Hangar
-        'aufzug': {'quartier': P_(23.0, VW / 2 - 0.8) + [270], 'bucht': P_(23.0, -VW / 2 + 0.8) + [90]}}
+        'weit': 150, 'abgang': [[-4.5, 19.0], [-7.4, 23.0]],      # Sichtweite (m); Abgang der Figuren der Geschichte (quer, Tiefe ab dem Tor): in die Vorhalle, aus der Sichtlinie zum Hangar
+        'aufzug': {'quartier': P_(23.0, VW / 2 - 0.8) + [270], 'bucht': P_(23.0, -VW / 2 + 0.8) + [90]}, 'ebenen': EBENEN}
 open(os.path.join(ROOT, 'asset-src', 'data', 'deck_bastion3.json'), 'w', encoding='utf-8').write(json.dumps(meta, ensure_ascii=False))
 open(os.path.join(HERE, 'lm2_deck3.json'), 'w', encoding='utf-8').write(json.dumps({'rooms': [{'name': t['name'], 'cells': t['cells'], 'lm': t['lm']} for t in TEILE], 'split': 'rund',
-     'glb': 'Lichtraum2Deck3.glb', 'json': 'lichtraum2_deck3.json', 'mark': 'lm2-deck3.txt', 'skipmats': ['Holoschleier'], 'clamp_direct': 8, 'clamp_indirect': 4, 'spuren': True, 'deflicker': 2.5, 'vsmooth': 0.25}, ensure_ascii=False))
-spiel = {'walk': len(WALK), 'blocks': len(BLOCKS), 'personal': len(SPOTS), 'wege': len(ROUTES), 'teile': NPART}
+     'glb': 'Lichtraum2Deck3.glb', 'json': 'lichtraum2_deck3.json', 'mark': 'lm2-deck3.txt', 'solo': [E_H, E_D], 'solo_ohne': {E_D: ['pd_korridor']}, 'skipmats': ['Holoschleier'], 'clamp_direct': 8, 'clamp_indirect': 4, 'spuren': True, 'deflicker': 2.5, 'vsmooth': 0.25}, ensure_ascii=False))
+GRENZE = sorted(set((o.instance_collection.name if (o.type == 'EMPTY' and o.instance_collection) else o.name.split('.')[0]) + ' → ' + o['l2part'] for cn_ in ('Deck', 'Decke', 'Schilder') for o in bpy.data.collections[cn_].objects if abs(o.matrix_world.translation.x - VERSATZ - VX0) < 0.6 or abs(o.matrix_world.translation.x - VERSATZ - VX1) < 0.6))      # was an den Grenzen der Vorhalle liegt und zu welchem Teil es zählt
+spiel = {'grenze': GRENZE, 'walk': len(WALK), 'blocks': len(BLOCKS), 'personal': len(SPOTS), 'wege': len(ROUTES), 'teile': NPART}

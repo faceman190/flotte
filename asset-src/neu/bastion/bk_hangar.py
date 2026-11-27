@@ -7,9 +7,10 @@ HW, YB, YG, HH, DW, DH, BAY = 92.0, 50.0, -112.0, 42.0, 62.0, 32.0, 18.0
 GZ = 9.6      # Lauffläche der Galerie
 SPIEL = globals().get('SPIEL', False)      # Fassung fürs Spiel: Öffnung für die Schleuse des Decks statt des eigenen Portals, keine Wandfüllungen auf der Galerie
 
-M['hfloor'] = mk('Hangarboden', (0.04, 0.043, 0.049), 0.6, 0.36, var=0.12, rvar=0.16, scale=0.3, bump=0.04, bscale=12.0, wear=0.5)
-M['hfloor2'] = mk('Hangarboden hell', (0.056, 0.06, 0.067), 0.55, 0.4, var=0.12, rvar=0.16, scale=0.3, bump=0.04, bscale=12.0, wear=0.5)
-M['hfloor3'] = mk('Hangarboden dunkel', (0.028, 0.03, 0.035), 0.65, 0.34, var=0.12, rvar=0.16, scale=0.3, bump=0.04, bscale=12.0, wear=0.5)
+# Hallenboden seit 2026-11-27 um ein Drittel heller: Im Spiel (Farbe mal gebackenes Licht, wenig Spiegelung) blieb er fast schwarz und die Lichtinseln unsichtbar
+M['hfloor'] = mk('Hangarboden', (0.054, 0.058, 0.066), 0.6, 0.36, var=0.12, rvar=0.16, scale=0.3, bump=0.04, bscale=12.0, wear=0.5)
+M['hfloor2'] = mk('Hangarboden hell', (0.074, 0.08, 0.089), 0.55, 0.4, var=0.12, rvar=0.16, scale=0.3, bump=0.04, bscale=12.0, wear=0.5)
+M['hfloor3'] = mk('Hangarboden dunkel', (0.038, 0.041, 0.047), 0.65, 0.34, var=0.12, rvar=0.16, scale=0.3, bump=0.04, bscale=12.0, wear=0.5)
 M['hwalk'] = mk('Fussweg', (0.075, 0.08, 0.086), 0.35, 0.5, var=0.14, scale=0.5, bump=0.12, bscale=20.0, wear=0.6)
 M['roof'] = mk('Dach', (0.018, 0.02, 0.024), 0.5, 0.6, var=0.2, scale=0.4, grime=False)
 M['paint_y'] = mk('Bodenfarbe ocker', (0.62, 0.3, 0.03), 0.0, 0.6, var=0.5, scale=1.1, grime=False)
@@ -276,14 +277,15 @@ def h_boden(v):      # 18 × 18 m: geschnittene Platten, Ablaufrinne, Zurrpunkte
     for i in range(3):
         for j, (y0, y1) in enumerate(ys): floorfield(-9 + i * 6, -3 + i * 6, y0, y1, 1 + (i + j * 2 + v) % 4, (i + j + v) % 2 == 0)
     box('Rinnenrahmen', BAY, 0.6, 0.06, 0, -3.0, -0.045, M['steel'], 0.006); array(box('Rinnenstab', 0.04, 0.5, 0.03, -8.94, -3.0, -0.012, M['grate'], 0), 150, (0.12, 0, 0)) if not SPIEL else box('Rinnenrost', BAY, 0.5, 0.03, 0, -3.0, -0.012, M['grate'], 0)      # im Spiel eine Fläche statt 150 Stäben
-    ob = cyl('Zurrpunkt', 0.14, 0.012, -6, -6, 0.004, M['steel'], 'Z', n=8 if SPIEL else 14, bev=0); array(ob, 3, (6, 0, 0)); array(ob, 3, (0, 6, 0))
+    # Zurrpunkte seit 2026-11-27 dunkel (Spant statt blankem Stahl): Im Spiel glitzerten sie als helle Punkte über den ganzen Boden; der gelbe Ring bleibt aus dem Spiel (flach am Boden glitzert auch er in der Ferne)
+    ob = cyl('Zurrpunkt', 0.14, 0.012, -6, -6, 0.004, M['frame'], 'Z', n=14, bev=0); array(ob, 3, (6, 0, 0)); array(ob, 3, (0, 6, 0))
     if not SPIEL: ob = cyl('Zurrpunkt Ring', 0.2, 0.004, -6, -6, 0.002, M['paint_y'], 'Z', n=14, bev=0); array(ob, 3, (6, 0, 0)); array(ob, 3, (0, 6, 0))
     for q in range(4): spot((R.uniform(-7, 7), R.uniform(-7, 7), 0.0), R.uniform(0.6, 2.2), 'fleck', R.uniform(0.6, 1.6))
     for q in range(3):
         x, y, a = R.uniform(-6, 6), R.uniform(-2, 8), R.uniform(-0.5, 0.5)
         streak((x, y, 0.0), (math.cos(a), math.sin(a), 0), (-math.sin(a), math.cos(a), 0), 0.45, R.uniform(5, 9), 'spur')
 def h_platz(hw):      # Stellplatz: Rahmen 2·hw × 104 m um die Platzmitte, Leitlinie zum Tor
-    for sx in (-1, 1): box('Platzlinie', 0.3, 104.0, 0.004, sx * hw, 0, 0.004, M['paint_y'], 0); array(cyl('Platzlicht', 0.14, 0.03, sx * (hw + 0.6), -50, 0.012, M['e_pad'], 'Z', n=12, bev=0), 26, (0, 4, 0))
+    for sx in (-1, 1): box('Platzlinie', 0.3, 104.0, 0.004, sx * hw, 0, 0.004, M['paint_y'], 0); array(cyl('Platzlicht', 0.13, 0.1, sx * (hw + 0.6), -50, 0.05, M['e_pad'], 'Z', n=12, bev=0), 26, (0, 4, 0)); array(cyl('Platzlicht Fuß', 0.19, 0.03, sx * (hw + 0.6), -50, 0.015, M['frame'], 'Z', n=12, bev=0), 26, (0, 4, 0))      # seit 2026-11-27 erhaben (10 cm): flach im Boden waren sie aus Augenhöhe nicht zu sehen
     for sy in (-1, 1):
         box('Platzlinie', 2 * hw, 0.3, 0.004, 0, sy * 52, 0.004, M['paint_y'], 0)
         for sx in (-1, 1):

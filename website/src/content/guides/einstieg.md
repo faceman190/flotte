@@ -69,17 +69,19 @@ Flieg nah an eine Station heran, bis links unten **Andocken** aufleuchtet, und d
 Ab hier läufst du mit <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>, rennst mit <kbd>Umschalt</kbd> und benutzt Terminals oder
 sprichst Leute mit <kbd>E</kbd> an.
 
-Jeder Dienst hat seinen eigenen Ort. Auf der Bastion führt vom Hangar ein breiter Korridor über die Vorhalle mit den zwei Aufzügen ins
-**Forum** (Deck 3). In der Mitte liegt der Treffpunkt, an den Längsseiten vier große Läden, jeder mit eigenem Leuchtschild, am Ende
-die Einsatzzentrale. Leitspuren am Boden zeigen den Weg.
+Jeder Dienst hat seinen eigenen Ort. Die Bastion hat zwei Ebenen. Dein Schiff steht auf der **Hangarebene**: Vom Hangar führt ein breiter
+Korridor in eine Vorhalle mit zwei Aufzügen. Der Aufzug **DECK 3** bringt dich hinauf zum **Forum**. Dort liegt in der Mitte der
+Treffpunkt, an den Längsseiten vier große Läden, jeder mit eigenem Leuchtschild, am Ende die Einsatzzentrale. Zurück zum Schiff fährst du
+auf Deck 3 mit dem Aufzug **HANGARBUCHTEN**. Die Marke am Bildschirmrand zeigt den Weg, auch über den Aufzug.
 
 | Ort | Dienste |
 |---|---|
 | Hangar, Deckmeister neben der Schleuse | Schiff wechseln, verkaufen, lackieren |
 | Treffpunkt in der Mitte des Forums | Auskunft, Galaxiekarte |
 | Einsatzzentrale (am Ende des Forums) | Aufträge und Missionen |
-| Vorhalle, Aufzug QUARTIERE | dein Quartier |
-| Vorhalle, Aufzug HANGARBUCHTEN | eigene Bucht, Gäste einladen, Einladungen annehmen |
+| Aufzug QUARTIERE (auf beiden Ebenen) | dein Quartier |
+| Aufzug DECK 3 (Hangarebene) | hinauf zum Forum |
+| Aufzug HANGARBUCHTEN (Deck 3) | zurück in deine Bucht, Gäste einladen, Einladungen annehmen |
 | Handelskontor | Markt, Stationslager |
 | Werft | Werft, Werkstatt (Ausbauten), Service |
 | Ausrüster | Ausrüstung und Module |
@@ -115,8 +117,8 @@ gute Wege zum Geld:
 
 ## Dein Quartier
 
-Sobald du 2.500 Credits übrig hast, lohnt sich ein **Quartier** auf der Bastion: Aufzug **QUARTIERE** in der Vorhalle von Deck 3,
-gleich hinter dem Korridor. Dort ruhst du dich in der Koje aus (Hülle und Schild voll, Spielstand gesichert), lagerst Ausrüstung im
+Sobald du 2.500 Credits übrig hast, lohnt sich ein **Quartier** auf der Bastion: Aufzug **QUARTIERE** in der Vorhalle,
+auf der Hangarebene gleich hinter dem Korridor und genauso auf Deck 3. Dort ruhst du dich in der Koje aus (Hülle und Schild voll, Spielstand gesichert), lagerst Ausrüstung im
 Spind und siehst im Regal deine Schiffe und Fundstücke. Am Bildschirm lädst du Mitspieler ein.
 
 ## Wenn es schiefgeht
