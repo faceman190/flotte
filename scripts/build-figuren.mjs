@@ -36,7 +36,7 @@ const KOERPER = [
   { name: 'Koerper2', file: 'charaktere/chr_spieler_02.glb', netze: ['Koerper', 'Kopf', 'Haare', 'Bart', 'Augenbrauen'], farbe: 1024 },
   { name: 'Koerper3', file: 'charaktere/chr_spieler_03.glb', netze: ['Koerper', 'Kopf'], farbe: 2048 },
 ];
-const FARBE = { overall: 2048, weste: 2048, handschuh: 2048, helm: 1024, stiefel: 1024 };
+const FARBE = { overall: 2048, weste: 2048, handschuh: 2048, helm: 1024, stiefel: 1024, rucksack: 2048 };
 
 async function zerlegen(file, netze, farbe) {
   const doc = await io.read(path.join(SRC, file));
@@ -70,8 +70,12 @@ const made = [];
 if (fs.existsSync(path.join(SRC, 'spiel.json'))) {
   const spiel = JSON.parse(fs.readFileSync(path.join(SRC, 'spiel.json'), 'utf8'));
   const write = async (name, doc) => { const b = Buffer.from(await io.writeBinary(doc)); fs.writeFileSync(path.join(LAZY, name + '.glb'), b); made.push(name); console.log(`${name}: ${(b.length / 1048576).toFixed(2)} MB`); };
-  await write('Skelett', await skelett());
-  for (const k of KOERPER) await write(k.name, await zerlegen(k.file, k.netze, k.farbe));
+  // Seit dem Baukasten (25.11.) liefert das Paket keine ganzen Figuren mehr: Skelett und Koerper1–3 bleiben dann, wie sie sind
+  const da = f => fs.existsSync(path.join(SRC, f));
+  if (da(KOERPER[0].file)) await write('Skelett', await skelett());
+  for (const k of KOERPER) if (da(k.file)) await write(k.name, await zerlegen(k.file, k.netze, k.farbe));
+  // Köpfe (Platz kopf) braucht das Spiel nicht mehr: Gesichter kommen aus dem Gesichts-Editor (docs/gesicht-editor.md)
+  spiel.ausruestung = spiel.ausruestung.filter(a => a.slot !== 'kopf');
   for (const a of spiel.ausruestung) await write('Teil_' + a.id, await zerlegen(a.file, null, FARBE[a.slot] || 1024));
   // Liste der Teile fürs Spiel (Platz je Teil, verdeckte Körperbereiche): src/data/figurTeile.ts
   fs.writeFileSync(path.join(ROOT, 'src', 'data', 'figurTeile.ts'), '// Erzeugt von scripts/build-figuren.mjs aus spiel.json des Pakets „Spielcharakter“ – nicht von Hand ändern.\n'

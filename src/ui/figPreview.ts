@@ -63,6 +63,13 @@ let drag: { x: number; yaw: number } | null = null, bound: HTMLCanvasElement | n
 let focus = 0, focusT = 0, rotDir = 0, headY = 1.62, headX = 0;
 const jobs: { t: Tracht; part: 'kopf' | 'brust'; cb: (url: string) => void; n: number }[] = [];
 
+// Lidschlag alle paar Sekunden (nur Figuren mit eigenem Gesicht haben die Morphs dafür)
+let blinkC = 0, blinkAt = 2;
+function blinzeln(f: { blinzeln(v: number): void }, dt: number) {
+  blinkC += dt; const p = blinkC - blinkAt;
+  if (p >= 0.16) { blinkC = 0; blinkAt = 2 + Math.random() * 4; }
+  f.blinzeln(p > 0 && p < 0.16 ? Math.sin(p / 0.16 * Math.PI) : 0);
+}
 export function showFig(canvasId: string, tracht: () => Tracht) {
   id = canvasId; trachtOf = tracht; last = 0; spin = true; focus = focusT = 0; rotDir = 0;
   prePass.fn = draw;
@@ -141,7 +148,7 @@ export function draw() {
   const k = Math.min(window.devicePixelRatio || 1, 1.5), w = Math.max(40, Math.round(cv.clientWidth * k)), h = Math.max(40, Math.round(cv.clientHeight * k));
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
   if (!main && !mainAsked) { mainAsked = true; puppe(holder, p => { main = p; }); }
-  if (main) { main.fig.setzen(trachtOf()); pose(main, dt); }   // neue Figur oder Ausrüstung lädt im Hintergrund, die alte bleibt bis dahin stehen
+  if (main) { main.fig.setzen(trachtOf()); pose(main, dt); blinzeln(main.fig, dt); }   // neue Figur oder Ausrüstung lädt im Hintergrund, die alte bleibt bis dahin stehen
   if (spin) yaw += dt * 0.35;
   yaw += rotDir * dt * 2.2;
   holder.rotation.y = yaw;

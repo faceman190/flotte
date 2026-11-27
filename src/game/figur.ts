@@ -5,6 +5,7 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import { MANIFEST } from '../core/assets';
 import { renderer } from '../core/engine';
 import { FIGUR_TEILE } from '../data/figurTeile';
+import { gesichtAus, neuesGesicht, haarDatei, hautFaktor, HAAR_PLAETZE, HAARFARBEN, KOPF_DATEI, FORM_KEYS, type Gesicht } from '../data/gesicht';
 
 // =====================================================================================
 // Spielerfiguren mit Ausrüstung (seit 2026-11-24, Paket „Spielcharakter“ des Spielers; docs/spielcharakter.md).
@@ -16,10 +17,12 @@ import { FIGUR_TEILE } from '../data/figurTeile';
 // teilPreview.ts: eigenes Skelett aus neuesSkelett()). Netze und Bilder teilen sich alle Figuren (kein zweites Mal im Grafikspeicher).
 // =====================================================================================
 
-export type Platz = 'helm' | 'weste' | 'overall' | 'handschuh' | 'stiefel';
-export const PLAETZE: Platz[] = ['helm', 'weste', 'overall', 'handschuh', 'stiefel'];
+export type Platz = 'helm' | 'weste' | 'overall' | 'handschuh' | 'stiefel' | 'rucksack';      // rucksack seit 2026-11-27
+export const PLAETZE: Platz[] = ['helm', 'weste', 'overall', 'handschuh', 'stiefel', 'rucksack'];
 /** Was eine Figur trägt: Nummer der Figur und je Platz die Kennung eines Teils (helm_01, overall_02 …) */
-export interface Tracht { figur: number; teile: Partial<Record<Platz, string>>; puppe?: boolean }      // puppe: Schaupuppe im Laden (Körper in Puppengrau, ohne Haare; schaupuppe.ts)
+// gesicht: Code aus dem Gesichts-Editor (data/gesicht.ts). Ist er gesetzt, gilt er statt der Figur: Unteranzug-Körper, MetaHuman-Kopf mit den
+// Reglern, gewählte Haare; Haut (auch der Hände), Iris und Haarfarbe bekommt jede Figur in eigenen Materialien.
+export interface Tracht { figur: number; teile: Partial<Record<Platz, string>>; puppe?: boolean; gesicht?: string | null }      // puppe: Schaupuppe im Laden (Körper in Puppengrau, ohne Haare; schaupuppe.ts)
 let PUPPE_MAT: THREE.MeshStandardMaterial | null = null;
 const puppeMat = () => (PUPPE_MAT ||= Object.assign(new THREE.MeshStandardMaterial({ color: 0x777a7c, roughness: 0.52, metalness: 0 }), { name: 'Schaupuppe', envMapIntensity: 0.3 }));
 export const TEIL_PLATZ = FIGUR_TEILE.teile as Record<string, Platz>;
@@ -29,7 +32,7 @@ const HAND = '^(hand|thumb|index|middle|ring|pinky|wrist)_';
 // Die wählbaren Figuren. teile: Dateien des Körpers; weg: je Netz (Name klein) Knochen, deren Flächen immer fehlen.
 // Figur 2 ist ein MetaHuman-Kopf: Das Paket liefert dazu keinen Rumpf und keinen Unteranzug (nur Arme und Beine in Haut). Deshalb
 // trägt sie den Unteranzug-Körper von Figur 1 ohne dessen Kopf und Hände; vom MetaHuman kommen Kopf, Haare, Bart und die Hände.
-interface KoerperTeil { f: string; weg?: Record<string, string> }
+interface KoerperTeil { f: string; weg?: Record<string, string>; nur?: string[] }      // nur: nur diese Netze der Datei
 export const FIGUREN: { id: number; n: string; d: string; teile: KoerperTeil[] }[] = [
   { id: 1, n: 'Figur 1', d: 'Kurzes dunkles Haar, Dreitagebart', teile: [{ f: 'lazy/Koerper1' }] },
   { id: 2, n: 'Figur 2', d: 'Graues Haar, Schnurrbart', teile: [
@@ -38,12 +41,21 @@ export const FIGUREN: { id: number; n: string; d: string; teile: KoerperTeil[] }
   ] },
   { id: 3, n: 'Figur 3', d: 'Kräftig, kurzes Haar, glatt rasiert', teile: [{ f: 'lazy/Koerper3' }] },
 ];
+// Körper zum eigenen Gesicht: der hautenge Anzug (koerper_01 von Figur 3) ohne den alten Hals (in Blender entfernt, gesicht_09), ohne
+// Hände; die Hände vom MetaHuman (Figur 2), damit sie den Hautton des Kopfes annehmen; dazu der Kopf aus dem Gesichts-Editor.
+// Die Haare kommen je nach Wahl dazu.
+const GESICHT_KOERPER: KoerperTeil[] = [
+  { f: 'lazy/Gesicht_koerper', weg: { koerper: HAND } },
+  { f: 'lazy/Koerper2', nur: ['koerper'], weg: { koerper: '^(?!(hand|thumb|index|middle|ring|pinky|wrist)_)' } },
+  { f: KOPF_DATEI },
+];
+const istGesichtDatei = (f: string) => f.startsWith('lazy/Gesicht_');
 export const figurDef = (id: number) => FIGUREN.find(f => f.id === id) || FIGUREN[0];
 export const normFigur = (id: unknown) => (FIGUREN.some(f => f.id === id) ? id as number : 1);
 const teilDatei = (id: string) => 'lazy/Teil_' + id;
 
 // ---------- geladene Dateien: Netze, Material, Knochennamen. Geteilt von allen Figuren, gezählt nach Benutzern ----------
-interface Netz { name: string; koerper: boolean; geo: THREE.BufferGeometry; mat: THREE.Material | THREE.Material[]; bones: string[]; inv: THREE.Matrix4[]; masken: Map<string, Uint8Array> }
+interface Netz { name: string; koerper: boolean; geo: THREE.BufferGeometry; mat: THREE.Material | THREE.Material[]; bones: string[]; inv: THREE.Matrix4[]; masken: Map<string, Uint8Array>; morph: Record<string, number> | null }
 interface Daten { netze: Netz[]; box: THREE.Box3 }
 const CACHE = new Map<string, { p: Promise<Daten | null>; d: Daten | null; refs: number; timer: number }>();
 const KEEP_MS = 30000;      // so lange bleibt eine Datei ohne Benutzer noch im Speicher (Wechsel hin und zurück lädt nicht neu)
@@ -66,11 +78,16 @@ async function laden(file: string): Promise<Daten | null> {
   g.scene.traverse((o: any) => {
     if (!o.isSkinnedMesh) return;
     const name = baseName(nodeOf(o).name);
-    for (const m of ([] as any[]).concat(o.material)) { prepMat(m); for (const v of Object.values(m)) if ((v as any)?.isTexture) texs.add(v as THREE.Texture); }
+    for (const m of ([] as any[]).concat(o.material)) {
+      prepMat(m);
+      // Haare des Gesichts-Editors: Karten beidseitig und feiner ausgestanzt (wie auf der Testseite); Farbe setzt jede Figur selbst
+      if (file.startsWith('lazy/Gesicht_haar')) { m.transparent = false; m.alphaTest = 0.22; m.depthWrite = true; m.side = THREE.DoubleSide; }
+      for (const v of Object.values(m)) if ((v as any)?.isTexture) texs.add(v as THREE.Texture);
+    }
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
     // Maße in Ruhehaltung: Die Eckpunkte sind beim Packen verdichtet, ihre Umrechnung steckt in den Bindematrizen (Knochen × Bindematrix)
     box.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(o.skeleton.bones[0].matrixWorld, o.skeleton.boneInverses[0])));
-    netze.push({ name, koerper: name === 'koerper' || name === 'kopf', geo: o.geometry, mat: o.material, bones: o.skeleton.bones.map((b: THREE.Bone) => b.name), inv: o.skeleton.boneInverses, masken: new Map() });
+    netze.push({ name, koerper: name === 'koerper' || name === 'kopf', geo: o.geometry, mat: o.material, bones: o.skeleton.bones.map((b: THREE.Bone) => b.name), inv: o.skeleton.boneInverses, masken: new Map(), morph: o.morphTargetDictionary || null });
   });
   // Bilder nach und nach in den Grafikspeicher legen, damit das erste Bild mit dem neuen Teil nicht hakt
   const list = [...texs];
@@ -130,7 +147,25 @@ export async function neuesSkelett(): Promise<THREE.Object3D | null> {
 }
 
 // ---------- eine Figur: Körper und Teile an einem Skelett ----------
-interface Inst { file: string; wk: string; netz: Netz; mesh: THREE.SkinnedMesh; base: Uint32Array | Uint16Array | null; weg: string | null }
+interface Inst { file: string; wk: string; netz: Netz; mesh: THREE.SkinnedMesh; base: Uint32Array | Uint16Array | null; weg: string | null; eigen: THREE.Material[] }
+
+// ---------- Gesicht: Hautton und Irisfarbe als Zusatz im Shader (wie public/gesicht.html), Werte je Figur ----------
+type U<T> = { value: T };
+function hautShader(m: THREE.Material, u: U<THREE.Vector3>) {
+  m.onBeforeCompile = sh => { sh.uniforms.uHaut = u;
+    sh.fragmentShader = 'uniform vec3 uHaut;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n diffuseColor.rgb *= uHaut;'); };
+}
+// Die Iris liegt in der Augentextur als grauer Ring um die Mitte; er wird nach seiner Helligkeit neu eingefärbt
+function augenShader(m: THREE.Material, u: U<THREE.Color>) {
+  m.onBeforeCompile = sh => { sh.uniforms.uIris = u;
+    sh.fragmentShader = 'uniform vec3 uIris;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      float dI = distance(vMapUv, vec2(0.5));
+      float mI = smoothstep(0.166, 0.152, dI) * smoothstep(0.044, 0.056, dI);
+      float lI = dot(diffuseColor.rgb, vec3(0.333));
+      vec3 cI = uIris * clamp(lI * 5.0, 0.0, 1.6) * mix(1.25, 0.8, smoothstep(0.06, 0.16, dI));
+      diffuseColor.rgb = mix(diffuseColor.rgb, cI, mI);`); };
+}
+const linear = (c: [number, number, number]): [number, number, number] => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
 export class Figur {
   readonly bones: Record<string, THREE.Bone> = {};
   /** der Körper der gewünschten Figur hängt am Skelett */
@@ -143,18 +178,31 @@ export class Figur {
   private files: string[] = [];
   private key = '';
   private gen = 0;
+  // Gesicht dieser Figur (leer: Figur ohne eigenes Gesicht)
+  private gcode = '';
+  private ges: Gesicht | null = null;
+  private readonly uHaut = { value: new THREE.Vector3(1, 1, 1) };
+  private readonly uIris = { value: new THREE.Color() };
+  private readonly haarMats: THREE.MeshStandardMaterial[] = [];
   constructor(readonly root: THREE.Object3D) {
     root.traverse((o: any) => { if (o.isBone) this.bones[o.name] = o; else if (o.isMesh) o.visible = false; });
   }
   /** Figur und Teile wählen. Fehlendes wird geladen; bis alles da ist, bleibt der alte Stand sichtbar. */
   setzen(t: Tracht) {
-    const def = t.figur ? figurDef(t.figur) : { id: 0, teile: [] as KoerperTeil[] };      // 0: kein Körper, nur die Teile (Ansicht im Laden)
+    const pu = !!t.puppe;
+    // eigenes Gesicht (nicht für die Schaupuppe): Code lesen; ungültig ergibt das Standardgesicht
+    const g = t.gesicht && !pu ? gesichtAus(t.gesicht) || neuesGesicht() : null;
+    if (g) { const code = t.gesicht!; if (code !== this.gcode) { this.gcode = code; this.ges = g; this.gesichtAnwenden(); } } else { this.gcode = ''; this.ges = null; }
+    const haare = g ? HAAR_PLAETZE.map(p => haarDatei(p, g.wahl[p])).filter((f): f is string => !!f).map(f => ({ f })) : [];
+    const def = g ? { id: 'g', teile: [...GESICHT_KOERPER, ...haare] as KoerperTeil[] }
+      : t.figur ? figurDef(t.figur) : { id: 0, teile: [] as KoerperTeil[] };      // 0: kein Körper, nur die Teile (Ansicht im Laden)
     const teile = PLAETZE.map(p => [p, t.teile[p]] as const).filter(x => x[1] && TEIL_PLATZ[x[1]!] === x[0]) as [Platz, string][];
-    const pu = !!t.puppe, key = def.id + '|' + teile.map(x => x[1]).join(',') + (pu ? '|p' : '');
+    const key = def.id + '|' + haare.map(h => h.f).join(',') + '|' + teile.map(x => x[1]).join(',') + (pu ? '|p' : '');
     if (key === this.key) return;
     this.key = key; this.fertig = false;
     const gen = ++this.gen;
-    const want = [...def.teile.map(k => ({ f: k.f, weg: k.weg || null })), ...teile.map(x => ({ f: teilDatei(x[1]), weg: null as Record<string, string> | null }))].map(w => ({ ...w, wk: JSON.stringify(w.weg) + (pu ? 'P' : '') }));
+    const want = [...def.teile.map(k => ({ f: k.f, weg: k.weg || null, nur: k.nur || null })), ...teile.map(x => ({ f: teilDatei(x[1]), weg: null as Record<string, string> | null, nur: null as string[] | null }))]
+      .map(w => ({ ...w, wk: JSON.stringify(w.weg) + (pu ? 'P' : '') + (g ? 'G' : '') }));
     const got = want.map(w => holen(w.f));
     Promise.all(got.map(c => c.p)).then(ds => {
       if (gen !== this.gen) { for (const w of want) lassen(w.f); return; }      // inzwischen etwas anderes gewünscht
@@ -162,16 +210,17 @@ export class Figur {
       const keep = new Set(want.map(w => w.f + w.wk));
       this.inst = this.inst.filter(i => { if (keep.has(i.file + i.wk)) return true; this.drop(i); return false; });
       const have = new Set(this.inst.map(i => i.file));
-      want.forEach((w, k) => { const d = ds[k]; if (d && !have.has(w.f)) for (const n of d.netze) this.add(w.f, w.wk, n, w.weg?.[n.name] || null, pu); });
+      want.forEach((w, k) => { const d = ds[k]; if (d && !have.has(w.f)) for (const n of d.netze) if (!w.nur || w.nur.includes(n.name)) this.add(w.f, w.wk, n, w.weg?.[n.name] || null, pu, !!g); });
       for (const f of this.files) lassen(f);
       this.files = want.map(w => w.f);
       this.maskieren(new Set(teile.map(x => x[0])));
+      if (g) this.gesichtAnwenden();
       this.bereit = def.teile.every(k => this.inst.some(i => i.file === k.f));
       this.fertig = true;
       this.onChange?.();
     });
   }
-  private add(file: string, wk: string, n: Netz, weg: string | null, puppe = false) {
+  private add(file: string, wk: string, n: Netz, weg: string | null, puppe = false, gesicht = false) {
     if (puppe && n.name === 'haare') return;
     let geo = n.geo, base: Inst['base'] = null;
     if (n.koerper || n.name === 'haare') {
@@ -182,23 +231,60 @@ export class Figur {
       geo.setIndex(new THREE.BufferAttribute(base.slice(), 1));
       geo.boundingBox = n.geo.boundingBox; geo.boundingSphere = n.geo.boundingSphere;
     }
-    const m = new THREE.SkinnedMesh(geo, puppe && n.koerper ? puppeMat() : n.mat);
+    // Gesicht: eigene Materialien dieser Figur (Bilder bleiben geteilt) für Hautton, Iris und Haarfarbe
+    let mat = puppe && n.koerper ? puppeMat() : n.mat;
+    const eigen: THREE.Material[] = [];
+    const haende = file === 'lazy/Koerper2';      // MetaHuman-Hände: nehmen den Hautton an
+    if (gesicht && ((istGesichtDatei(file) && file !== 'lazy/Gesicht_koerper') || haende)) {
+      const ein = (m0: THREE.Material) => {
+        const m1 = m0.clone(); eigen.push(m1);
+        if (m1.name === 'kopf_haut' || haende) hautShader(m1, this.uHaut);
+        else if (m1.name === 'auge_L' || m1.name === 'auge_R') augenShader(m1, this.uIris);
+        else if (file.startsWith('lazy/Gesicht_haar')) this.haarMats.push(m1 as THREE.MeshStandardMaterial);
+        return m1;
+      };
+      mat = Array.isArray(mat) ? mat.map(ein) : ein(mat);
+    }
+    const m = new THREE.SkinnedMesh(geo, mat);
     m.name = 'fig_' + n.name; m.frustumCulled = false; m.castShadow = true; m.userData.sh = false; m.userData.shared = true;
+    if (n.morph) m.morphTargetDictionary = n.morph;
     // Jedes Netz bringt seine eigenen Bindematrizen mit (beim Packen steckt darin auch die Umrechnung seiner verdichteten Eckpunkte)
     const bones = n.bones.map(b => this.bones[b]);
     if (bones.some(b => !b)) { console.warn('Figur: ' + file + ' passt nicht zum Skelett'); return; }
     this.root.add(m);
     m.bind(new THREE.Skeleton(bones, n.inv.map(x => x.clone())), new THREE.Matrix4());
-    this.inst.push({ file, wk, netz: n, mesh: m, base, weg });
+    this.inst.push({ file, wk, netz: n, mesh: m, base, weg, eigen });
   }
   private drop(i: Inst) {
     i.mesh.removeFromParent();
     if (i.base) i.mesh.geometry.dispose();      // nur die eigene Flächenliste; die geteilten Eckpunkte lädt three.js bei Bedarf neu hoch
+    for (const m of i.eigen) { m.dispose(); const k = this.haarMats.indexOf(m as THREE.MeshStandardMaterial); if (k >= 0) this.haarMats.splice(k, 1); }
+  }
+  /** Regler, Hautton, Iris und Haarfarbe des Gesichts auf die angehängten Netze legen (billig: nur Zahlen, nichts wird geladen) */
+  private gesichtAnwenden() {
+    const g = this.ges; if (!g) return;
+    const f = hautFaktor(g.haut, linear); this.uHaut.value.set(f[0], f[1], f[2]);
+    this.uIris.value.set(g.iris);
+    const hc = new THREE.Color(HAARFARBEN[g.haar]?.[0] || HAARFARBEN[0][0]);
+    for (const m of this.haarMats) m.color.copy(hc);
+    for (const i of this.inst) {
+      const d = i.mesh.morphTargetDictionary, inf = i.mesh.morphTargetInfluences; if (!d || !inf) continue;
+      for (const k of FORM_KEYS) { const x = d['form_' + k]; if (x !== undefined) inf[x] = g.form[k] || 0; }
+    }
+  }
+  /** Lidschlag (0 offen … 1 zu) für Figuren mit eigenem Gesicht */
+  blinzeln(v: number) {
+    if (!this.ges) return;
+    for (const i of this.inst) {
+      const d = i.mesh.morphTargetDictionary, inf = i.mesh.morphTargetInfluences; if (!d || !inf) continue;
+      for (const k of ['mimik_blinzeln_L', 'mimik_blinzeln_R']) { const x = d[k]; if (x !== undefined) inf[x] = v; }
+    }
   }
   // Körperflächen unter getragenen Teilen ausblenden; Haare verschwinden unter einem Helm
   private maskieren(an: Set<Platz>) {
     const zonen = PLAETZE.filter(p => an.has(p) && VERDECKT[p]).map(p => VERDECKT[p]!);
     for (const i of this.inst) {
+      if (i.file.startsWith('lazy/Gesicht_haar_frisur') || i.file === 'lazy/Gesicht_haar_haare') { i.mesh.visible = !an.has('helm'); continue; }
       if (!i.base) continue;
       if (i.netz.name === 'haare') { i.mesh.visible = !an.has('helm'); continue; }
       const ms = [...(i.netz.name === 'koerper' ? zonen : []), ...(i.weg ? [i.weg] : [])].map(z => maske(i.netz, z));

@@ -1,0 +1,244 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gesichts-Editor (Test)</title>
+<style>
+html,body{margin:0;height:100%;background:#15191f;color:#d7e6f2;font:13px system-ui,Segoe UI,sans-serif;overflow:hidden}
+#cv{position:fixed;left:0;top:0;right:340px;bottom:0}
+#p{position:fixed;right:0;top:0;bottom:0;width:340px;overflow-y:auto;background:#1d232b;border-left:1px solid #2c3540;padding:10px 14px;box-sizing:border-box}
+h1{font-size:15px;margin:2px 0 8px}h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#8fb3cc;margin:14px 0 6px;border-bottom:1px solid #2c3540;padding-bottom:3px}
+.r{display:grid;grid-template-columns:110px 1fr 38px;align-items:center;gap:6px;margin:3px 0}
+.r input[type=range]{width:100%}.r span{text-align:right;color:#9db;font-variant-numeric:tabular-nums}
+button{background:#2b3a48;color:#d7e6f2;border:1px solid #3c4f61;border-radius:4px;padding:5px 9px;cursor:pointer;margin:2px 2px 2px 0}button:hover{background:#36495b}
+label.c{display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0}
+.sw{display:inline-block;width:22px;height:22px;border-radius:50%;border:2px solid #0000;cursor:pointer;margin:2px}.sw.on{border-color:#fff}
+#code{width:100%;box-sizing:border-box;background:#11161c;color:#cfe;border:1px solid #2c3540;font:12px Consolas,monospace;padding:5px}
+#st{position:fixed;left:10px;top:8px;color:#9ab;text-shadow:0 1px 2px #000}
+@media (max-width:760px){#cv{right:0;bottom:45%}#p{width:auto;left:0;top:55%;border-left:0;border-top:1px solid #2c3540}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+</head><body>
+<div id="cv"></div><div id="st">lade …</div>
+<div id="p">
+  <h1>Gesichts-Editor <small style="color:#789">Test, Stufe 1</small></h1>
+  <div><button id="zuf">Zufall</button><button id="rst">Zurücksetzen</button><button id="cam">Ganzer Kopf / Nah</button></div>
+  <div id="regler"></div>
+  <h2>Haut</h2>
+  <div class="r"><label>Hautton</label><input type="range" id="haut" min="0" max="100" value="50"><span id="hautv">50</span></div>
+  <div id="hautfarben"></div>
+  <h2>Augen</h2>
+  <div id="irisfarben"></div>
+  <div class="r"><label>Eigene Farbe</label><input type="color" id="irisc" value="#5a7a9a"><span></span></div>
+  <h2>Haare</h2>
+  <div id="haarwahl"></div>
+  <div id="farben" style="margin-top:4px"></div>
+  <h2>Mimik</h2>
+  <label class="c"><input type="checkbox" id="blinz" checked>Blinzeln von selbst</label>
+  <div id="mimik"></div>
+  <h2>Gespeichert als</h2>
+  <input id="code" readonly><div style="color:#789;margin-top:4px">So kurz wird ein Gesicht im Spielstand und im Netz. Der Link merkt sich das Gesicht.</div>
+</div>
+<script type="module">
+// Testseite für den Gesichts-Editor (Plan: Claude Doc „Plan: Gesichts-Editor für die Spielerfigur“). Kopf aus dem MetaHuman,
+// 16 Kopfform-Regler (form_*) und 12 Mimik-Formen (mimik_*) als Morph Targets; Haare, Bart, Brauen folgen denselben Morphs.
+// Dateien: asset-src/glb/gesicht/*.glb (scripts/pack-gesicht.mjs), über scripts/build-gesicht.mjs in der Paketliste. three kommt hier vom CDN, damit die Seite ohne Build läuft.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+const FORM = [
+  ['Kopf', [['kopf_breite', 'Kopfbreite'], ['stirn_hoehe', 'Stirnhöhe']]],
+  ['Augen', [['augen_abstand', 'Abstand'], ['augen_hoehe', 'Höhe'], ['augen_groesse', 'Größe']]],
+  ['Nase', [['nase_laenge', 'Länge'], ['nase_breite', 'Breite'], ['nasenruecken', 'Nasenrücken']]],
+  ['Wangen', [['wangenknochen', 'Wangenknochen'], ['wangen_fuelle', 'Fülle']]],
+  ['Mund', [['mund_breite', 'Breite'], ['lippen_volumen', 'Lippen']]],
+  ['Kinn und Kiefer', [['kiefer_breite', 'Kieferbreite'], ['kinn_laenge', 'Kinnlänge'], ['kinn_breite', 'Kinnbreite']]],
+  ['Ohren', [['ohr_groesse', 'Größe']]],
+];
+const MIMIK = [['blinzeln_L', 'Blinzeln links'], ['blinzeln_R', 'Blinzeln rechts'], ['kiefer_auf', 'Kiefer auf'], ['laecheln_L', 'Lächeln links'],
+  ['laecheln_R', 'Lächeln rechts'], ['brauen_hoch', 'Brauen hoch'], ['brauen_runter', 'Brauen runter'], ['mund_breit', 'Mund breit'],
+  ['mund_spitz', 'Mund spitz'], ['wangen_auf', 'Wangen auf'], ['augen_weit', 'Augen weit'], ['nase_ruempfen', 'Nase rümpfen']];
+const HAARFARBEN = [['#e8e2d6', 'Weißgrau'], ['#9a9c9f', 'Grau'], ['#d8b77a', 'Blond'], ['#8a5a32', 'Hellbraun'], ['#4a2e1c', 'Braun'], ['#1c1714', 'Schwarz'], ['#9c3a1e', 'Rot'], ['#3a6ea8', 'Blau']];
+// Hautton: Farbleiste in sRGB, Stufe 3 ist die Originalhaut des MetaHuman (Mittelwert der Textur). Die Textur wird je Kanal mit
+// Ziel/Original multipliziert: Poren, Rötungen und Schatten bleiben erhalten.
+const HAUT = [[0.97, 0.84, 0.75], [0.90, 0.72, 0.61], [0.78, 0.58, 0.47], [0.581, 0.394, 0.313], [0.44, 0.29, 0.21], [0.30, 0.19, 0.14], [0.20, 0.13, 0.10]];
+const IRIS = [['#4f7fb8', 'Blau'], ['#7da6c9', 'Hellblau'], ['#5f8a5a', 'Grün'], ['#8a8a5a', 'Haselnuss'], ['#7b5a3a', 'Hellbraun'], ['#3e2a1c', 'Dunkelbraun'],
+  ['#8d949b', 'Grau'], ['#c08a2a', 'Bernstein'], ['#9b3030', 'Rot'], ['#7a4fb0', 'Violett']];
+// Haare je Platz: Index 0 = ohne, 1 = Haar des MetaHuman selbst, danach die Grooms aus dem MetaHuman-Plugin (Datei haar_<platz>_<name>.glb)
+const HAAR = {
+  frisur: { n: 'Frisur', ohne: 'Glatze', opts: [['haar_haare', 'Hochgestrichen (Original)'], ...[['kurz_klassisch', 'Kurz klassisch'], ['zurueckgekaemmt', 'Zurückgekämmt'],
+    ['wuschelig', 'Wuschelig'], ['undercut', 'Undercut'], ['irokese', 'Irokese'], ['fade_locken', 'Fade mit Locken'], ['geheimratsecken', 'Geheimratsecken'], ['zopf', 'Zopf'],
+    ['flechtdutt', 'Flechtdutt'], ['lang_glatt', 'Lang glatt'], ['bob_locken', 'Bob mit Locken'], ['afro', 'Afro']].map(([f, l]) => ['haar_frisur_' + f, l])] },
+  bart: { n: 'Bart', ohne: 'Glatt rasiert', opts: [['haar_bart', 'Kurz gelockt (Original)'], ...[['vollbart_lang', 'Vollbart lang'], ['vollbart_kurz', 'Vollbart kurz'],
+    ['wild', 'Wild'], ['locken', 'Locken'], ['spitzbart', 'Spitzbart'], ['kinnriemen', 'Kinnriemen']].map(([f, l]) => ['haar_bart_' + f, l])] },
+  schnurr: { n: 'Schnurrbart', ohne: 'Ohne', opts: [['haar_schnurrbart', 'Gelockt (Original)'], ...[['lenker', 'Lenker'], ['western', 'Western'], ['voll', 'Voll'],
+    ['strich', 'Strich']].map(([f, l]) => ['haar_schnurr_' + f, l])] },
+  brauen: { n: 'Brauen', ohne: 'Ohne', opts: [['haar_brauen', 'Flach dicht (Original)'], ...[['duenn', 'Dünn'], ['dicht', 'Dicht'], ['bogen', 'Bogen'],
+    ['buschig', 'Buschig']].map(([f, l]) => ['haar_brauen_' + f, l])] },
+};
+const PLAETZE = Object.keys(HAAR);
+const datei = (pl, i) => (i > 0 ? HAAR[pl].opts[i - 1]?.[0] : null);
+
+// ---------- Zustand und Speicherformat ----------
+const formKeys = FORM.flatMap(g => g[1].map(x => x[0]));
+const S = { v: 1, form: Object.fromEntries(formKeys.map(k => [k, 0])), haut: 50, haar: 1, iris: '#4f7fb8', wahl: { frisur: 1, bart: 1, schnurr: 1, brauen: 1 } };
+// Kodierung (Version 2): Version, 16 Regler (je 1 Byte, -100..100 → 0..200), Hautton, Haarfarbe, Iris (RGB), je Haarplatz die Nummer
+// → Base64 (URL-sicher). Version 1 (Teile als Bits) wird noch gelesen.
+function enc() {
+  const ic = parseInt(S.iris.slice(1), 16);
+  const b = [2, ...formKeys.map(k => Math.round(S.form[k] * 100) + 100), S.haut, S.haar, ic >> 16, (ic >> 8) & 255, ic & 255, ...PLAETZE.map(p => S.wahl[p])];
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function dec(s) {
+  try {
+    const b = [...atob(s.replace(/-/g, '+').replace(/_/g, '/'))].map(c => c.charCodeAt(0));
+    if ((b[0] !== 1 && b[0] !== 2) || b.length < formKeys.length + 4) return;
+    formKeys.forEach((k, i) => S.form[k] = Math.max(-1, Math.min(1, (b[1 + i] - 100) / 100)));
+    let i = 1 + formKeys.length; S.haut = Math.min(100, b[i++]); S.haar = Math.min(HAARFARBEN.length - 1, b[i++]);
+    if (b.length >= formKeys.length + 7) S.iris = '#' + ((b[i++] << 16) | (b[i++] << 8) | b[i++]).toString(16).padStart(6, '0');
+    if (b[0] === 1) { const t = b[i]; PLAETZE.forEach((p, j) => S.wahl[p] = (t >> j) & 1 ? 1 : 0); }
+    else PLAETZE.forEach(p => S.wahl[p] = Math.min(HAAR[p].opts.length, b[i++] ?? 0));
+  } catch { /* ungültiger Code: Standard bleibt */ }
+}
+const h = new URLSearchParams(location.hash.slice(1)).get('g'); if (h) dec(h);
+
+// ---------- Bühne ----------
+const host = document.getElementById('cv'), st = document.getElementById('st');
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setPixelRatio(Math.min(2, devicePixelRatio));
+r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace; host.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.background = new THREE.Color(0x15191f);
+sc.environment = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(), 0.04).texture; sc.environmentIntensity = 0.55;
+const key = new THREE.DirectionalLight(0xfff0e0, 2.4); key.position.set(1.2, 2.4, 1.6); sc.add(key);
+const rim = new THREE.DirectionalLight(0xbfd8ff, 1.4); rim.position.set(-1.5, 2, -1.2); sc.add(rim);
+const cam = new THREE.PerspectiveCamera(28, 1, 0.01, 50); const ctl = new OrbitControls(cam, r.domElement); ctl.enableDamping = true;
+let nah = true;
+function kamera() { const y = nah ? 1.65 : 1.58, d = nah ? 0.85 : 1.25; ctl.target.set(0, y, 0); cam.position.set(0.18 * d, y + 0.03, d); ctl.update(); }
+function groesse() { const w = host.clientWidth, hh = host.clientHeight; r.setSize(w, hh); cam.aspect = w / hh; cam.updateProjectionMatrix(); }
+addEventListener('resize', groesse); groesse(); kamera();
+
+// ---------- Laden ----------
+const netze = {}; // Teil → Liste von SkinnedMesh
+const haarMats = [];
+// Shader-Zusätze: Hautton (Faktor je Kanal) und Irisfarbe (Iris liegt in der Augentextur als grauer Ring um die Mitte)
+const uHaut = { value: new THREE.Vector3(1, 1, 1) }, uIris = { value: new THREE.Color() };
+const lin = c => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
+const hautOrig = lin(HAUT[3]);
+function hautShader(m) {
+  m.onBeforeCompile = sh => { sh.uniforms.uHaut = uHaut;
+    sh.fragmentShader = 'uniform vec3 uHaut;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n diffuseColor.rgb *= uHaut;'); };
+}
+function augenShader(m) {
+  m.onBeforeCompile = sh => { sh.uniforms.uIris = uIris;
+    sh.fragmentShader = 'uniform vec3 uIris;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      float dI = distance(vMapUv, vec2(0.5));
+      float mI = smoothstep(0.166, 0.152, dI) * smoothstep(0.044, 0.056, dI);
+      float lI = dot(diffuseColor.rgb, vec3(0.333));
+      vec3 cI = uIris * clamp(lI * 5.0, 0.0, 1.6) * mix(1.25, 0.8, smoothstep(0.06, 0.16, dI));
+      diffuseColor.rgb = mix(diffuseColor.rgb, cI, mI);`); };
+}
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+// Dateien werden erst geladen, wenn sie gebraucht werden, und dann behalten (Wechsel zurück ist sofort da)
+// Dateien stehen in der Paketliste des Spiels (lazy/Gesicht_<name>, scripts/build-gesicht.mjs)
+const MAN = fetch('assets/manifest.json').then(r => r.json());
+const szenen = {}, laeuft = {};
+let kopfDa = false;
+function laden(t) {
+  if (szenen[t]) return Promise.resolve(szenen[t]);
+  return laeuft[t] ||= MAN.then(m => new Promise((ok, fail) => loader.load(m.files['lazy/Gesicht_' + t].url, g => {
+    netze[t] = [];
+    g.scene.traverse(o => {
+      if (!o.isMesh) return; netze[t].push(o); o.frustumCulled = false;
+      const m = o.material;
+      if (t.startsWith('haar_')) { m.transparent = false; m.alphaTest = 0.22; m.depthWrite = true; m.side = THREE.DoubleSide; haarMats.push(m); }
+      if (m.name === 'kopf_haut') hautShader(m);
+      if (m.name === 'auge_L' || m.name === 'auge_R') augenShader(m);
+    });
+    // Die Szene liegt in Mannys Koordinaten (Kopf bei ~1,63 m); Y-up kommt vom GLB
+    g.scene.visible = false; sc.add(g.scene); szenen[t] = g.scene; ok(g.scene);
+  }, undefined, e => { st.textContent = 'Fehler beim Laden von ' + t + ': ' + e.message; fail(e); })));
+}
+async function haareSetzen() {
+  const soll = PLAETZE.map(p => datei(p, S.wahl[p])).filter(Boolean);
+  st.textContent = soll.some(t => !szenen[t]) ? 'lade Haare …' : '';
+  await Promise.all(soll.map(t => laden(t).catch(() => null)));
+  for (const t in szenen) if (t.startsWith('haar_')) szenen[t].visible = soll.includes(t);
+  st.textContent = ''; anwenden();
+}
+laden('kopf_mh').then(k => { k.visible = true; kopfDa = true; return haareSetzen(); });
+
+// ---------- Morphs setzen ----------
+function morph(name, v) {
+  for (const t in netze) for (const m of netze[t]) {
+    const i = m.morphTargetDictionary?.[name]; if (i !== undefined) m.morphTargetInfluences[i] = v;
+  }
+}
+const mimik = Object.fromEntries(MIMIK.map(x => [x[0], 0]));
+function anwenden() {
+  for (const k of formKeys) morph('form_' + k, S.form[k]);
+  for (const k in mimik) morph('mimik_' + k, mimik[k]);
+  const c = new THREE.Color(HAARFARBEN[S.haar][0]); for (const m of haarMats) m.color.copy(c);
+  // Vorschau Hautton: Grundfarbe zu dunklerer Haut hin multiplizieren (in Stufe 2 ersetzt durch entsättigte Grundtextur + Farbleiste)
+  { const x = S.haut / 100 * (HAUT.length - 1), i = Math.min(HAUT.length - 2, Math.floor(x)), f = x - i;
+    const c = lin(HAUT[i]).lerp(lin(HAUT[i + 1]), f); uHaut.value.set(c.r / hautOrig.r, c.g / hautOrig.g, c.b / hautOrig.b); }
+  uIris.value.set(S.iris);
+  const code = enc(); document.getElementById('code').value = code; history.replaceState(null, '', '#g=' + code);
+}
+
+// ---------- Bedienung ----------
+const rg = document.getElementById('regler'), inputs = {};
+function regler(parent, id, label, min, max, get, set) {
+  const d = document.createElement('div'); d.className = 'r';
+  d.innerHTML = `<label>${label}</label><input type="range" min="${min}" max="${max}" step="1"><span></span>`;
+  const inp = d.querySelector('input'), sp = d.querySelector('span');
+  const show = () => { inp.value = get(); sp.textContent = inp.value; };
+  inp.addEventListener('input', () => { set(+inp.value); sp.textContent = inp.value; anwenden(); });
+  parent.appendChild(d); inputs[id] = show; show();
+}
+for (const [grp, list] of FORM) {
+  const hd = document.createElement('h2'); hd.textContent = grp; rg.appendChild(hd);
+  for (const [k, l] of list) regler(rg, k, l, -100, 100, () => Math.round(S.form[k] * 100), v => S.form[k] = v / 100);
+}
+const mk = document.getElementById('mimik');
+for (const [k, l] of MIMIK) regler(mk, 'm_' + k, l, 0, 100, () => Math.round(mimik[k] * 100), v => mimik[k] = v / 100);
+const haut = document.getElementById('haut'), hautv = document.getElementById('hautv');
+haut.value = S.haut; hautv.textContent = S.haut; haut.addEventListener('input', () => { S.haut = +haut.value; hautv.textContent = haut.value; anwenden(); });
+const fb = document.getElementById('farben');
+HAARFARBEN.forEach(([c, n], i) => { const s = document.createElement('span'); s.className = 'sw' + (i === S.haar ? ' on' : ''); s.style.background = c; s.title = n;
+  s.onclick = () => { S.haar = i; fb.querySelectorAll('.sw').forEach((x, j) => x.classList.toggle('on', j === i)); anwenden(); }; fb.appendChild(s); });
+const hw = document.getElementById('haarwahl'), selects = {};
+for (const p of PLAETZE) {
+  const d = document.createElement('div'); d.className = 'r';
+  d.innerHTML = `<label>${HAAR[p].n}</label><select style="grid-column:span 2;background:#11161c;color:#d7e6f2;border:1px solid #3c4f61;padding:3px"></select>`;
+  const sel = d.querySelector('select');
+  [HAAR[p].ohne, ...HAAR[p].opts.map(o => o[1])].forEach((l, i) => sel.add(new Option(l, i)));
+  sel.value = S.wahl[p]; sel.onchange = () => { S.wahl[p] = +sel.value; haareSetzen(); };
+  selects[p] = sel; hw.appendChild(d);
+}
+const hf = document.getElementById('hautfarben');
+HAUT.forEach((c, i) => { const s = document.createElement('span'); s.className = 'sw'; s.style.background = `rgb(${c.map(v => Math.round(v * 255))})`;
+  s.onclick = () => { S.haut = Math.round(i / (HAUT.length - 1) * 100); alle(); anwenden(); }; hf.appendChild(s); });
+const irf = document.getElementById('irisfarben'), irisc = document.getElementById('irisc');
+const irisZeigen = () => { irf.querySelectorAll('.sw').forEach((x, j) => x.classList.toggle('on', IRIS[j][0] === S.iris)); irisc.value = S.iris; };
+IRIS.forEach(([c, n]) => { const s = document.createElement('span'); s.className = 'sw'; s.style.background = c; s.title = n;
+  s.onclick = () => { S.iris = c; irisZeigen(); anwenden(); }; irf.appendChild(s); });
+irisc.addEventListener('input', () => { S.iris = irisc.value; irisZeigen(); anwenden(); }); irisZeigen();
+const alle = () => { irisZeigen(); for (const p of PLAETZE) selects[p].value = S.wahl[p]; Object.values(inputs).forEach(f => f()); haut.value = S.haut; hautv.textContent = S.haut; fb.querySelectorAll('.sw').forEach((x, j) => x.classList.toggle('on', j === S.haar)); };
+document.getElementById('zuf').onclick = () => { for (const k of formKeys) S.form[k] = Math.round((Math.random() * 2 - 1) * 70) / 100; S.haut = Math.round(Math.random() * 100); S.haar = Math.floor(Math.random() * 6); S.iris = IRIS[Math.floor(Math.random() * 8)][0];
+  const zw = (p, leer) => (Math.random() < leer ? 0 : 1 + Math.floor(Math.random() * HAAR[p].opts.length));
+  S.wahl = { frisur: zw('frisur', 0.1), bart: zw('bart', 0.45), schnurr: zw('schnurr', 0.7), brauen: zw('brauen', 0) }; if (S.wahl.bart) S.wahl.schnurr = 0;
+  alle(); haareSetzen(); };
+document.getElementById('rst').onclick = () => { for (const k of formKeys) S.form[k] = 0; for (const k in mimik) mimik[k] = 0; S.haut = 50; alle(); anwenden(); };
+document.getElementById('cam').onclick = () => { nah = !nah; kamera(); };
+
+// ---------- Schleife (mit Blinzeln alle paar Sekunden) ----------
+const blinz = document.getElementById('blinz'); let naechstes = 2, clock = new THREE.Clock();
+r.setAnimationLoop(() => {
+  const t = clock.getElapsedTime();
+  if (blinz.checked && kopfDa) {
+    const p = t - naechstes; let v = 0; if (p > 0 && p < 0.16) v = Math.sin(p / 0.16 * Math.PI); else if (p >= 0.16) naechstes = t + 2 + Math.random() * 4;
+    const b = Math.max(v, mimik.blinzeln_L); morph('mimik_blinzeln_L', b); morph('mimik_blinzeln_R', Math.max(v, mimik.blinzeln_R));
+  }
+  ctl.update(); r.render(sc, cam);
+});
+</script>
+</body></html>
