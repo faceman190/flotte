@@ -7,6 +7,12 @@ export const FIGUR_TEILE = {
     "helm_02": "helm",
     "overall_01": "overall",
     "overall_02": "overall",
+    "overall_05": "overall",
+    "overall_06": "overall",
+    "overall_07": "overall",
+    "overall_08": "overall",
+    "rucksack_01": "rucksack",
+    "rucksack_02": "rucksack",
     "stiefel_01": "stiefel",
     "stiefel_02": "stiefel",
     "weste_01": "weste"

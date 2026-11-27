@@ -189,7 +189,7 @@ function act(a: string, k: string) {
   }
   if (a === 'fracht') { const id = v('tlWare') as ItemId; P.cargo[id] = (P.cargo[id] || 0) + 20; say(`+20 ${ITEMS[id].n} (ohne Rücksicht auf den Frachtraum).`); }
   if (a === 'leer') { for (const id of ITEM_IDS) P.cargo[id] = 0; say('Frachtraum geleert.'); }
-  if (a === 'figur') { P.figur = +k; say(`Figur: ${FIGUREN.find(f => f.id === +k)?.n}`); }
+  if (a === 'figur') { P.figur = +k; delete P.gesicht; say(`Figur: ${FIGUREN.find(f => f.id === +k)?.n}`); }
   if (a === 'zeit') { TESTF.zeit = +k; say(TESTF.zeit === 1 ? 'Zeit normal.' : `Zeitlupe ${String(TESTF.zeit).replace('.', ',')}×.`); }
   if (a === 'clip') { const n = v('tlClip'); if (n) void vorfuehren(n); return; }
   if (a === 'clipweg') vorWeg();

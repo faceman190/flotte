@@ -70,6 +70,7 @@ export interface Player {
   dungeons?: Record<string, { t: number; open: number[]; sw?: boolean; sws?: number[] }>;
   crewMem?: { kills: number; mined: number; earned: number; cls: string; done: string[] };   // Stand beim letzten Betreten einer Station (Stimmen der Crew, crewStimmen.ts)
   figur?: number;                                           // gewählte Spielerfigur (game/figur.ts FIGUREN; fehlt in alten Spielständen = 1)
+  gesicht?: string;                                         // eigenes Gesicht aus dem Gesichts-Editor (Code, data/gesicht.ts; seit 2026-11-27). Gesetzt: gilt statt figur
   look?: { kopf: number; farbe: number };                   // Aussehen: Kopf und Uniformfarbe (Charaktererstellung, Garderobe; mineArt.ts LOOK_*)
   smgStart?: boolean;                                       // ältere Spielstände: SMG einmal in den leeren Waffenplatz gelegt (loadGame)
   akademie?: { ring?: number; schuss?: number; med: { ring: number; schuss: number } };   // Übungsgelände Heimstatt: Bestzeiten (s), Abzeichen 0–3 (src/game/akademie.ts)
