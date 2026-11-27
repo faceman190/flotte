@@ -426,6 +426,16 @@ function build(st: Station) {
     inters.push({ x: tx + 1.5, z: tz + 2, r: 3.4, label: () => `${name} ansprechen · Hangar`, act: () => talk(name, 'hangar') });
   }
   rects.push([-HW, HW, HZ0, HZ1 - 1.5]);
+  // Bastion mit zwei Ebenen: Am Durchgang steht im Deckmodell noch „DECK 3 · TREFFPUNKT“ (rh_kit.py b_hangartor). Seit dem 27.11.2026 führt er
+  // nur zum Hangarzugang mit den Aufzügen. Ein Schild davor nennt das Ziel; das Deckmodell wird dafür nicht neu gebacken.
+  if (dk?.ebenen) {
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 140; const g2 = c.getContext('2d')!;
+    g2.fillStyle = '#12161b'; g2.fillRect(0, 0, 1024, 140);
+    g2.fillStyle = '#b9b6ab'; g2.font = '600 62px "Share Tech Mono",Consolas,monospace'; g2.textAlign = 'center'; g2.textBaseline = 'middle';
+    g2.fillText('HANGARZUGANG  ·  AUFZÜGE', 512, 74);
+    const tx2 = new THREE.CanvasTexture(c); tx2.colorSpace = THREE.SRGBColorSpace; tx2.anisotropy = 4; disposables.push(tx2);
+    const sg = new THREE.Mesh(new THREE.PlaneGeometry(4.66, 0.64), mat(new THREE.MeshBasicMaterial({ map: tx2 }))); sg.position.set(0, 4.88, HZ0 + 0.755); deco.add(sg);
+  }
 
   // ===== Bastion: Deck 3 statt Korridor und Promenade =====
   if (dk) {

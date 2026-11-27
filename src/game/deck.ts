@@ -254,7 +254,7 @@ async function lmMaterials(prefix: string) {
 // selbst, nach der Lage der Fläche und beliebig scharf. Aus Blender kommen nur noch: das Modell mit dem Materialnamen je Fläche, eine grobe
 // Lichtkarte für die großen Flächen, Licht je Eckpunkt für die kleinen (ihre Abwicklung liegt bei x = −1) und im Alphakanal der Eckfarben
 // die Marke „schmaler Streifen“ (Fase an einer Kante: dort sitzt der Kantenabrieb).
-interface L2Mat { kind: string; col?: number[]; metal?: number; rough?: number; var?: number; rvar?: number; scale?: number; emit?: number[] | null; es?: number; grime?: boolean; wear?: number; bump?: number; bscale?: number; streak?: number; studs?: boolean; stripes?: boolean; a?: number[]; c?: number[]; duty?: number; dir?: string; k?: number; spot?: boolean }
+interface L2Mat { kind: string; fern?: number; col?: number[]; metal?: number; rough?: number; var?: number; rvar?: number; scale?: number; emit?: number[] | null; es?: number; grime?: boolean; wear?: number; bump?: number; bscale?: number; streak?: number; studs?: boolean; stripes?: boolean; a?: number[]; c?: number[]; duty?: number; dir?: string; k?: number; spot?: boolean }
 interface L2Json { raeume: { name: string; zellen: number[][]; lit: string }[]; mats: Record<string, L2Mat> }
 const LICHT2: Record<string, [string, string][]> = { bastion: [['lichtraum2_bastion', 'Lichtraum2Bastion']], eisenkrone: [['lichtraum2_huette_ek', 'Lichtraum2HuetteEk']], pumpwerk: [['lichtraum2_pumpwerk', 'Lichtraum2Pumpwerk']] };
 // Seit Alpha 1.31 teilen sich die Materialien wenige Shader: Ihre Angaben sind Uniformen, keine festen Zahlen im Quelltext. Vorher hatte
@@ -309,12 +309,16 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
     if (p.kind === 'glow' || p.kind === 'screen') {
       // Leuchten: feste Farbe aus dem Material, gedeckelt wie bisher (Bildschirme bleiben unter der Schwelle des Bloom)
       const e = p.emit || p.col || [1, 1, 1], gain = (p.es || 1) * (p.kind === 'screen' ? 0.4 : 1), cap = p.kind === 'screen' ? 0.7 : GLOW_MAX, mx = Math.max(e[0], e[1], e[2], 0.001);
-      const U = { l2E: V3(e), l2G: V4(gain, cap / mx, 0, 0) };
+      // fern (Meter, lm2_raum.py OPT fern; Hangar seit 2026-11-27): Größe kleiner Leuchten. Deckt die Leuchte weniger als zwei Bildpunkte, wird sie
+      // dunkler, unter einem halben ist sie aus. Die Feuer im Hallenboden liegen flach und waren aus Augenhöhe ab 30 m nur Bruchteile eines
+      // Bildpunkts hoch: Sie blitzten beim Gehen als Glitzerpunkte auf.
+      const U = { l2E: V3(e), l2G: V4(gain, cap / mx, p.fern ?? 0, 0) };
       const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
       m.onBeforeCompile = (sh) => {
         Object.assign(sh.uniforms, U); sh.uniforms.bkGlow = GLOW; sh.uniforms.lmCap = LMCAP;
-        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float bkGlow; uniform float lmCap; uniform vec3 l2E; uniform vec4 l2G;')
-          .replace('#include <color_fragment>', 'diffuseColor.rgb = l2E * min(bkGlow * l2G.x, l2G.y * lmCap);');
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vL2W;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvL2W = position;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float bkGlow; uniform float lmCap; uniform vec3 l2E; uniform vec4 l2G; varying vec3 vL2W;')
+          .replace('#include <color_fragment>', 'float l2pw = max(length(dFdx(vL2W)), length(dFdy(vL2W)));\nfloat l2fd = l2G.z > 0.0 ? clamp((l2G.z / max(l2pw, 1e-5) - 0.5) / 1.5, 0.0, 1.0) : 1.0;\ndiffuseColor.rgb = l2E * min(bkGlow * l2G.x, l2G.y * lmCap) * mix(0.03, 1.0, l2fd);');
       };
       m.customProgramCacheKey = () => 'l2glow';
       out[name] = m; continue;
@@ -451,7 +455,10 @@ async function loadLicht2Set(dj: string, mu: string): Promise<LmRoom[]> {
   const TD = (window as any).TEXDATA || {}, ld = new THREE.TextureLoader(), rooms: LmRoom[] = [], by: Record<string, { set: Record<string, THREE.Material>; i: number }> = {};
   for (const R of data.raeume) {
     const u = TD[R.lit] as string | undefined; if (!u) throw new Error('Bild fehlt: ' + R.lit);
-    const lit = await ld.loadAsync(u); lit.flipY = false; lit.colorSpace = THREE.NoColorSpace; lit.anisotropy = 4; lit.needsUpdate = true;
+    const lit = await ld.loadAsync(u); lit.flipY = false; lit.colorSpace = THREE.NoColorSpace; lit.anisotropy = 4;
+    // Große Lichtkarten (Hangar seit 2026-11-27: 3072 und 4096) ohne Verkleinerungsstufen: Das Licht ändert sich weich, und die Stufen kosteten ein Drittel mehr Grafikspeicher
+    if ((lit.image as { width?: number })?.width! > 2048) { lit.generateMipmaps = false; lit.minFilter = THREE.LinearFilter; }
+    lit.needsUpdate = true;
     const set = l2Materials(data.mats, lit);
     by[R.name] = { set, i: rooms.length };
     rooms.push({ name: R.name, cells: R.zellen, meshes: [], env: null, keep: true, tex: [lit], mats: [...new Set(Object.values(set))].filter(m => m.userData.env) as THREE.MeshStandardMaterial[] });
@@ -687,12 +694,16 @@ export function loadHangar(): Promise<boolean> {
 // (Wandfüllungen und Kleinteile, in der Ferne ausgeblendet), hangar_dach. Die Standflächen kommen weiter aus den Daten des alten Hangars.
 const H2SET: [string, string] = ['lichtraum2_hangar', 'Lichtraum2Hangar'];
 let H2: LmRoom[] | null = null, h2loading: Promise<boolean> | null = null, H2ENV: THREE.Texture | null = null;
+// Standflächen der zweiten Runde (seit 2026-11-27, data/hangar_bastion2 aus lm2_hangar_lauf.py): Blender-Lage [x0, x1, y0, y1] je gesetztem Baustein
+let H2BLOCKS: number[][] | null = null;
 export function loadHangar2(): Promise<boolean> {
   if (H2) return Promise.resolve(true);
   if (h2loading) return h2loading;
   const W = window as any, dj = W.DATAFILES?.[H2SET[0]] as string | undefined, mu = W.BASEDATA?.[H2SET[1]] as string | undefined;
   if (!dj || !mu) return Promise.resolve(false);      // Artifact-Fassung: Der Satz passt nicht hinein, es bleibt beim alten Hangar
-  return (h2loading = loadLicht2Set(dj, mu).then(r => { H2 = r; return true; }, e => { console.warn('Hangar (Lichtraum 2) nicht geladen:', e); h2loading = null; return false; }));
+  const bj = W.DATAFILES?.hangar_bastion2 as string | undefined;
+  return (h2loading = Promise.all([loadLicht2Set(dj, mu), bj ? fetch(bj).then(r => r.json()).catch(() => null) : null])
+    .then(([r, b]) => { H2 = r; H2BLOCKS = Array.isArray(b?.bloecke) ? b.bloecke : null; return true; }, e => { console.warn('Hangar (Lichtraum 2) nicht geladen:', e); h2loading = null; return false; }));
 }
 export const hangar2Ready = () => !!H2;
 // Für den Start (main.ts): wartet, bis die Lichträume des Decks und danach der Hangar der neuen Art ausgepackt sind (dieselbe Reihenfolge wie
@@ -707,7 +718,7 @@ export function buildHangar(): HangarBuild | null {
   const blocks: Rect[] = [];
   const hrect = (x0: number, x1: number, y0: number, y1: number): Rect => [Math.min(x0, x1), Math.max(x0, x1), -Math.max(y0, y1), -Math.min(y0, y1)];
   if (H2 && deckTune.lichtraum && deckTune.scharf) {
-    instBlocks(HDATA, HPARTS, hrect, blocks);
+    if (H2BLOCKS) for (const b of H2BLOCKS) blocks.push(hrect(b[0], b[1], b[2], b[3])); else instBlocks(HDATA, HPARTS, hrect, blocks);
     // glTF (x, oben, −y aus Blender) ist schon die Lage im Innenraum (x = x, z = −y): keine weitere Drehung
     const group = new THREE.Group(), small: { m: THREE.Mesh; c: THREE.Vector3; r: number }[] = [], all: LmMesh[] = []; let tris = 0;
     for (const R of H2) {
