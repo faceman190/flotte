@@ -3,13 +3,15 @@ import { scene, camera, view, ux, overlay } from '../core/engine';
 import { mouse } from '../core/input';
 import { rng, hashStr, clamp } from '../core/util';
 import { sfx, snd, shotSfx } from '../core/audio';
-import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, clearFootFx, SHELL_PORT } from './footfx';
+import { ngMuzzle, ngVmFlash } from './ngfx';
+import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, clearFootFx, SHELL_PORT, type ImpStoff } from './footfx';
 import { P, G, saveGame } from './state';
 import { world } from './world';
-import { terrainAt } from './surface';
+import { terrainAt, liquidAt } from './surface';
 import { buildDrone, buildViewModel, viewModelId, poseViewModel, type DroneVis, type ViewModel } from './mineArt';
 import { weapon, shotSound } from './dungeon';
 import { throwGrenade, updateGrenades } from './granate';
+import { fireLauncher, updateLauncher, type GwEnv } from './granatwerfer';
 import { gunReady, gunFired, gunUpdate, GUN, aimK, gunSpread, gunFalloff, camShake, hurtSound, noteKill, whiz } from './footgun';
 import { drawFootRing } from '../ui/footHud';
 import { flinch, noteShot } from './avatar';
@@ -47,11 +49,13 @@ export const FELD_EXTRA = {
   ziel: (_ox: number, _oy: number, _oz: number, _dx: number, _dy: number, _dz: number, _tMax: number): { t: number; treffer: (dmg: number) => void } | null => null,
   blast: (_x: number, _y: number, _z: number, _r: number, _dmg: number) => {},
   solid: (_x: number, _y: number, _z: number) => false,
+  nah: (_x: number, _y: number, _z: number) => false,      // steht dort ein weiterer Gegner (Geschoss des Granatwerfers zündet)?
+  stoff: (x: number, _y: number, z: number): ImpStoff => (liquidAt(x, z) ? 'wasser' : 'default'),      // Material einer Einschlagstelle (pluenderer.ts: Container Metall)
   laerm: (_x: number, _y: number, _z: number, _r: number) => {},
   kampf: () => false,
   ruhe: () => {},
   weg: () => {},
-  update: (_dt: number, _me: { x: number; y: number; z: number; active: boolean; down: boolean; geduckt?: boolean; vx?: number; vz?: number }) => {},
+  update: (_dt: number, _me: { x: number; y: number; z: number; active: boolean; down: boolean; geduckt?: boolean; vx?: number; vz?: number; lehnt?: boolean }) => {},
   hud: () => {},
 };
 
@@ -169,7 +173,15 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
   shotSound(w); if (w.n > 1) camShake(0.32);
   const sp = gunSpread(w.spread);
   const a = muzzle ? muzzle.clone() : vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : new THREE.Vector3(px, py - 0.15, pz);
-  if (muzzle) flash(muzzle.x, muzzle.y, muzzle.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);   // Außensicht: kleines Mündungsfeuer (SMG gedämpft)
+  if (muzzle && !ngMuzzle(muzzle, _v.set(0, 0, -1).applyEuler(_e.set(pitch, yaw, 0)), 1, !!w.sfx)) flash(muzzle.x, muzzle.y, muzzle.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);   // Außensicht: Mündungsfeuer (SMG gedämpft)
+  if (w.gw) {      // Granatwerfer (granatwerfer.ts): Geschoss in Blickrichtung, knapp vor dem Auge (aus der Mündung stünde es in der Außensicht schief zur Kamera)
+    _e.set(pitch + (Math.random() - 0.5) * 2 * sp, yaw + (Math.random() - 0.5) * 2 * sp, 0);
+    const d = new THREE.Vector3(0, 0, -1).applyEuler(_e);
+    camShake(0.35);
+    fireLauncher(new THREE.Vector3(px, py - 0.12, pz).addScaledVector(d, 0.5), d, feldEnv(), w.dmg);
+    FELD_EXTRA.laerm(px, py, pz, 80);
+    return;
+  }
   let end: THREE.Vector3 | null = null;
   for (let s = 0; s < w.n; s++) {
     _e.set(pitch + (Math.random() - 0.5) * 2 * sp, yaw + (Math.random() - 0.5) * 2 * sp, 0);
@@ -188,29 +200,43 @@ function shoot(px: number, py: number, pz: number, yaw: number, pitch: number, m
     const ex = FELD_EXTRA.ziel(px, py, pz, d.x, d.y, d.z, bt);
     if (ex) { bt = ex.t; best = null; }
     end = new THREE.Vector3(px + d.x * bt, py + d.y * bt, pz + d.z * bt);
-    if (ex) { ex.treffer(w.dmg * gunFalloff(bt)); impact(end, d, 'boden', '#a03020'); }
+    if (ex) { ex.treffer(w.dmg * gunFalloff(bt)); impact(end, d, 'boden', '#a03020', 'fleisch'); }
     else if (best && best.id >= 0 && isClient()) { best.hit = 0.12; coopSend('fh', { s: P.sector, i: best.id, d: w.dmg }); impact(end, d, 'metall'); }
     else if (best) {
       if (!best.alert) droneBark('alarm', Math.hypot(best.x - px, best.z - pz)); best.hp -= w.dmg * gunFalloff(bt); best.hit = 0.12; best.alert = true; impact(end, d, 'metall'); G.hitMark = 0.12;
       if (best.hp <= 0) kill(best, coopNet.id);
-    } else if (bt < tw + 0.01 && tw < 120) impact(end, d, 'boden', w.col);
+    } else if (bt < tw + 0.01 && tw < 120) { const st = FELD_EXTRA.stoff(end.x, end.y, end.z); impact(end, d, st === 'metall' ? 'metall' : 'boden', w.col, st, hitNormal(end, d)); }
     fxTracer(a, end, w.col, w.n > 1 ? 0.04 : 0.065);                 // Leuchtspur je Kugel
   }
   FELD_EXTRA.laerm(px, py, pz, 70);
 }
+// Flächennormale am Einschlag für das Einschussloch: am Gelände aus dessen Steigung, sonst (Deckung, Container) eine senkrechte Wand
+// gegen die Schussrichtung. Hebt p auf die Geländeoberfläche, falls es darunter liegt.
+function hitNormal(p: THREE.Vector3, d: THREE.Vector3): THREE.Vector3 {
+  const g = terrainAt(p.x, p.z);
+  if (p.y - g < 0.35) { if (p.y < g) p.y = g;      // grobe Schritte von 0,5 m: Treffpunkt kann im Boden liegen
+    const e = 0.3; return new THREE.Vector3(terrainAt(p.x - e, p.z) - terrainAt(p.x + e, p.z), 2 * e, terrainAt(p.x, p.z - e) - terrainAt(p.x, p.z + e)).normalize(); }
+  const n = new THREE.Vector3(-d.x, 0, -d.z); return n.lengthSq() > 1e-6 ? n.normalize() : n.set(0, 1, 0);
+}
 // Granate werfen (Taste G, onfoot.ts): trifft alle Drohnen im Umkreis, zur Mitte hin voll
 export function fieldGrenade(me: { x: number; y: number; z: number; yaw: number; pitch: number; eye: number }) {
   if (FIGHT.down > 0) return false;
-  return throwGrenade(me.x, me.y + me.eye, me.z, me.yaw, me.pitch, { ground: terrainAt, solid: (x, y, z) => FELD_EXTRA.solid(x, y, z), blast: (x, y, z, r, dmg) => {
-    FELD_EXTRA.blast(x, y, z, r, dmg); FELD_EXTRA.laerm(x, y, z, 80);
-    for (const f of FIGHT.foes) {
-      if (f.dead) continue;
-      const d = Math.hypot(f.x - x, f.y - y, f.z - z); if (d > r) continue;
-      const dm = dmg * (1 - 0.7 * d / r);
-      if (f.id >= 0 && isClient()) { f.hit = 0.12; coopSend('fh', { s: P.sector, i: f.id, d: dm }); }
-      else { f.hp -= dm; f.hit = 0.12; f.alert = true; G.hitMark = 0.12; if (f.hp <= 0) kill(f, coopNet.id); }
-    }
-  } });
+  return throwGrenade(me.x, me.y + me.eye, me.z, me.yaw, me.pitch, feldEnv());
+}
+// Umgebung für Granate und Granatwerfer (granate.ts, granatwerfer.ts): Gelände, Deckungen der Plünderer, Drohnen und weitere Gegner
+function feldEnv(): GwEnv {
+  return { ground: terrainAt, solid: (x, y, z) => FELD_EXTRA.solid(x, y, z),
+    hit: (x, y, z) => FIGHT.foes.some(f => !f.dead && Math.hypot(f.x - x, f.y - y, f.z - z) < 0.65) || FELD_EXTRA.nah(x, y, z),
+    blast: (x, y, z, r, dmg) => {
+      FELD_EXTRA.blast(x, y, z, r, dmg); FELD_EXTRA.laerm(x, y, z, 80);
+      for (const f of FIGHT.foes) {
+        if (f.dead) continue;
+        const d = Math.hypot(f.x - x, f.y - y, f.z - z); if (d > r) continue;
+        const dm = dmg * (1 - 0.7 * d / r);
+        if (f.id >= 0 && isClient()) { f.hit = 0.12; coopSend('fh', { s: P.sector, i: f.id, d: dm }); }
+        else { f.hp -= dm; f.hit = 0.12; f.alert = true; G.hitMark = 0.12; if (f.hp <= 0) kill(f, coopNet.id); }
+      }
+    } };
 }
 function kill(f: Foe, by = coopNet.id) {
   f.dead = true; f.g.visible = false;
@@ -233,7 +259,7 @@ function kill(f: Foe, by = coopNet.id) {
 }
 
 // Ablauf je Bild (nur zu Fuß auf einem Planeten). me: Spielerposition, Blick; tp: Außensicht (Mündung der Figur)
-export function updateFieldFight(dt: number, me: { x: number; y: number; z: number; yaw: number; pitch: number; eye: number; active: boolean; tp: boolean; muzzle: THREE.Vector3 | null; geduckt?: boolean; vx?: number; vz?: number }) {
+export function updateFieldFight(dt: number, me: { x: number; y: number; z: number; yaw: number; pitch: number; eye: number; active: boolean; tp: boolean; muzzle: THREE.Vector3 | null; geduckt?: boolean; vx?: number; vz?: number; lehnt?: boolean }) {
   if (!world.surface || sector !== P.sector) return;
   if (!tracer) { tracer = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.9 })); tracer.frustumCulled = false; tracer.visible = false; scene.add(tracer); }
   // Kein Punktlicht fürs Mündungsfeuer mehr (seit 2026-11-18): Es kam beim ersten Schritt zu Fuß dazu und blieb danach für immer in der Szene –
@@ -305,8 +331,9 @@ export function updateFieldFight(dt: number, me: { x: number; y: number; z: numb
     coT = 0.1;
     coopSend('fst', { s: P.sector, f: FIGHT.foes.filter(f => f.id >= 0 && !f.dead).map(f => [f.id, ...pack(f.x, f.y, f.z), Math.round(f.hp), f.alert ? 1 : 0]), ev: coEv.splice(0) });
   } else if (!mates.length) coEv = [];
-  FELD_EXTRA.update(dt, { x: me.x, y: me.y, z: me.z, active: me.active, down: FIGHT.down > 0, geduckt: me.geduckt, vx: me.vx, vz: me.vz });
+  FELD_EXTRA.update(dt, { x: me.x, y: me.y, z: me.z, active: me.active, down: FIGHT.down > 0, geduckt: me.geduckt, vx: me.vx, vz: me.vz, lehnt: me.lehnt });
   updateGrenades(dt, px, me.y + 1.1, pz, hurt);
+  updateLauncher(dt, px, me.y + 1.1, pz, hurt);
   // Geschosse
   for (let i = FIGHT.bolts.length - 1; i >= 0; i--) {
     const b = FIGHT.bolts[i];
@@ -337,7 +364,7 @@ export function fieldViewModel(show: boolean, bob: number, walked: number) {
   poseViewModel(vm, { walked, bob, kick: FIGHT.kick, reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, ads: aimK(), shots: FIGHT.shots });   // mineArt.ts
   vm.gun.visible = FIGHT.down <= 0;
   const sup = vm.id === 'smg', f = FIGHT.flash > 0 && (!sup || FIGHT.shots % 3 === 0); vm.flash.visible = f; vm.flashLight.intensity = f ? (sup ? 0.12 : 2.6) : 0;   // SMG mit Schalldämpfer: kleines Mündungsfeuer
-  if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
+  if (f) { ngVmFlash(vm.flash); (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
   if (FIGHT.shots !== vmShots) { vmShots = FIGHT.shots; const port = SHELL_PORT[vm.id]; if (port) vmShell(vm.scene, vm.gun, port); }   // Hülse fliegt rechts heraus
   return vm;
 }
