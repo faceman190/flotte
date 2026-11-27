@@ -28,8 +28,7 @@ label.c{display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0}
   <div id="irisfarben"></div>
   <div class="r"><label>Eigene Farbe</label><input type="color" id="irisc" value="#5a7a9a"><span></span></div>
   <h2>Haare</h2>
-  <div><label class="c"><input type="checkbox" data-teil="haar_haare" checked>Haare</label><label class="c"><input type="checkbox" data-teil="haar_bart" checked>Bart</label>
-  <label class="c"><input type="checkbox" data-teil="haar_schnurrbart" checked>Schnurrbart</label><label class="c"><input type="checkbox" data-teil="haar_brauen" checked>Brauen</label></div>
+  <div id="haarwahl"></div>
   <div id="farben" style="margin-top:4px"></div>
   <h2>Mimik</h2>
   <label class="c"><input type="checkbox" id="blinz" checked>Blinzeln von selbst</label>
@@ -65,27 +64,40 @@ const HAARFARBEN = [['#e8e2d6', 'Weißgrau'], ['#9a9c9f', 'Grau'], ['#d8b77a', '
 const HAUT = [[0.97, 0.84, 0.75], [0.90, 0.72, 0.61], [0.78, 0.58, 0.47], [0.581, 0.394, 0.313], [0.44, 0.29, 0.21], [0.30, 0.19, 0.14], [0.20, 0.13, 0.10]];
 const IRIS = [['#4f7fb8', 'Blau'], ['#7da6c9', 'Hellblau'], ['#5f8a5a', 'Grün'], ['#8a8a5a', 'Haselnuss'], ['#7b5a3a', 'Hellbraun'], ['#3e2a1c', 'Dunkelbraun'],
   ['#8d949b', 'Grau'], ['#c08a2a', 'Bernstein'], ['#9b3030', 'Rot'], ['#7a4fb0', 'Violett']];
-const TEILE = ['kopf_mh', 'haar_haare', 'haar_bart', 'haar_schnurrbart', 'haar_brauen'];
+// Haare je Platz: Index 0 = ohne, 1 = Haar des MetaHuman selbst, danach die Grooms aus dem MetaHuman-Plugin (Datei haar_<platz>_<name>.glb)
+const HAAR = {
+  frisur: { n: 'Frisur', ohne: 'Glatze', opts: [['haar_haare', 'Hochgestrichen (Original)'], ...[['kurz_klassisch', 'Kurz klassisch'], ['zurueckgekaemmt', 'Zurückgekämmt'],
+    ['wuschelig', 'Wuschelig'], ['undercut', 'Undercut'], ['irokese', 'Irokese'], ['fade_locken', 'Fade mit Locken'], ['geheimratsecken', 'Geheimratsecken'], ['zopf', 'Zopf'],
+    ['flechtdutt', 'Flechtdutt'], ['lang_glatt', 'Lang glatt'], ['bob_locken', 'Bob mit Locken'], ['afro', 'Afro']].map(([f, l]) => ['haar_frisur_' + f, l])] },
+  bart: { n: 'Bart', ohne: 'Glatt rasiert', opts: [['haar_bart', 'Kurz gelockt (Original)'], ...[['vollbart_lang', 'Vollbart lang'], ['vollbart_kurz', 'Vollbart kurz'],
+    ['wild', 'Wild'], ['locken', 'Locken'], ['spitzbart', 'Spitzbart'], ['kinnriemen', 'Kinnriemen']].map(([f, l]) => ['haar_bart_' + f, l])] },
+  schnurr: { n: 'Schnurrbart', ohne: 'Ohne', opts: [['haar_schnurrbart', 'Gelockt (Original)'], ...[['lenker', 'Lenker'], ['western', 'Western'], ['voll', 'Voll'],
+    ['strich', 'Strich']].map(([f, l]) => ['haar_schnurr_' + f, l])] },
+  brauen: { n: 'Brauen', ohne: 'Ohne', opts: [['haar_brauen', 'Flach dicht (Original)'], ...[['duenn', 'Dünn'], ['dicht', 'Dicht'], ['bogen', 'Bogen'],
+    ['buschig', 'Buschig']].map(([f, l]) => ['haar_brauen_' + f, l])] },
+};
+const PLAETZE = Object.keys(HAAR);
+const datei = (pl, i) => (i > 0 ? HAAR[pl].opts[i - 1]?.[0] : null);
 
 // ---------- Zustand und Speicherformat ----------
 const formKeys = FORM.flatMap(g => g[1].map(x => x[0]));
-const S = { v: 1, form: Object.fromEntries(formKeys.map(k => [k, 0])), haut: 50, haar: 1, iris: '#4f7fb8', teile: { haar_haare: 1, haar_bart: 1, haar_schnurrbart: 1, haar_brauen: 1 } };
-// Kodierung: Version, 16 Regler (je 1 Byte, -100..100 → 0..200), Hautton, Haarfarbe, Iris (RGB), Teile als Bits → Base64 (URL-sicher)
+const S = { v: 1, form: Object.fromEntries(formKeys.map(k => [k, 0])), haut: 50, haar: 1, iris: '#4f7fb8', wahl: { frisur: 1, bart: 1, schnurr: 1, brauen: 1 } };
+// Kodierung (Version 2): Version, 16 Regler (je 1 Byte, -100..100 → 0..200), Hautton, Haarfarbe, Iris (RGB), je Haarplatz die Nummer
+// → Base64 (URL-sicher). Version 1 (Teile als Bits) wird noch gelesen.
 function enc() {
   const ic = parseInt(S.iris.slice(1), 16);
-  const b = [S.v, ...formKeys.map(k => Math.round(S.form[k] * 100) + 100), S.haut, S.haar, ic >> 16, (ic >> 8) & 255, ic & 255,
-    (S.teile.haar_haare ? 1 : 0) | (S.teile.haar_bart ? 2 : 0) | (S.teile.haar_schnurrbart ? 4 : 0) | (S.teile.haar_brauen ? 8 : 0)];
+  const b = [2, ...formKeys.map(k => Math.round(S.form[k] * 100) + 100), S.haut, S.haar, ic >> 16, (ic >> 8) & 255, ic & 255, ...PLAETZE.map(p => S.wahl[p])];
   return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 function dec(s) {
   try {
     const b = [...atob(s.replace(/-/g, '+').replace(/_/g, '/'))].map(c => c.charCodeAt(0));
-    if (b[0] !== 1 || b.length < formKeys.length + 4) return;
+    if ((b[0] !== 1 && b[0] !== 2) || b.length < formKeys.length + 4) return;
     formKeys.forEach((k, i) => S.form[k] = Math.max(-1, Math.min(1, (b[1 + i] - 100) / 100)));
     let i = 1 + formKeys.length; S.haut = Math.min(100, b[i++]); S.haar = Math.min(HAARFARBEN.length - 1, b[i++]);
     if (b.length >= formKeys.length + 7) S.iris = '#' + ((b[i++] << 16) | (b[i++] << 8) | b[i++]).toString(16).padStart(6, '0');
-    const t = b[i];
-    S.teile = { haar_haare: t & 1, haar_bart: t & 2, haar_schnurrbart: t & 4, haar_brauen: t & 8 };
+    if (b[0] === 1) { const t = b[i]; PLAETZE.forEach((p, j) => S.wahl[p] = (t >> j) & 1 ? 1 : 0); }
+    else PLAETZE.forEach(p => S.wahl[p] = Math.min(HAAR[p].opts.length, b[i++] ?? 0));
   } catch { /* ungültiger Code: Standard bleibt */ }
 }
 const h = new URLSearchParams(location.hash.slice(1)).get('g'); if (h) dec(h);
@@ -125,20 +137,32 @@ function augenShader(m) {
       diffuseColor.rgb = mix(diffuseColor.rgb, cI, mI);`); };
 }
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-let fertig = 0;
-for (const t of TEILE) loader.load('gesicht/' + t + '.glb', g => {
-  netze[t] = [];
-  g.scene.traverse(o => {
-    if (!o.isMesh) return; netze[t].push(o); o.frustumCulled = false;
-    const m = o.material;
-    if (t.startsWith('haar_')) { m.transparent = false; m.alphaTest = 0.22; m.depthWrite = true; m.side = THREE.DoubleSide; haarMats.push(m); }
-    if (m.name === 'kopf_haut') hautShader(m);
-    if (m.name === 'auge_L' || m.name === 'auge_R') augenShader(m);
-  });
-  // Die Szene liegt in Mannys Koordinaten (Kopf bei ~1,63 m); Y-up kommt vom GLB
-  sc.add(g.scene);
-  st.textContent = `lade … ${++fertig}/${TEILE.length}`; if (fertig === TEILE.length) { st.textContent = ''; anwenden(); }
-}, undefined, e => { st.textContent = 'Fehler beim Laden von ' + t + ': ' + e.message; });
+// Dateien werden erst geladen, wenn sie gebraucht werden, und dann behalten (Wechsel zurück ist sofort da)
+const szenen = {}, laeuft = {};
+let kopfDa = false;
+function laden(t) {
+  if (szenen[t]) return Promise.resolve(szenen[t]);
+  return laeuft[t] ||= new Promise((ok, fail) => loader.load('gesicht/' + t + '.glb', g => {
+    netze[t] = [];
+    g.scene.traverse(o => {
+      if (!o.isMesh) return; netze[t].push(o); o.frustumCulled = false;
+      const m = o.material;
+      if (t.startsWith('haar_')) { m.transparent = false; m.alphaTest = 0.22; m.depthWrite = true; m.side = THREE.DoubleSide; haarMats.push(m); }
+      if (m.name === 'kopf_haut') hautShader(m);
+      if (m.name === 'auge_L' || m.name === 'auge_R') augenShader(m);
+    });
+    // Die Szene liegt in Mannys Koordinaten (Kopf bei ~1,63 m); Y-up kommt vom GLB
+    g.scene.visible = false; sc.add(g.scene); szenen[t] = g.scene; ok(g.scene);
+  }, undefined, e => { st.textContent = 'Fehler beim Laden von ' + t + ': ' + e.message; fail(e); }));
+}
+async function haareSetzen() {
+  const soll = PLAETZE.map(p => datei(p, S.wahl[p])).filter(Boolean);
+  st.textContent = soll.some(t => !szenen[t]) ? 'lade Haare …' : '';
+  await Promise.all(soll.map(t => laden(t).catch(() => null)));
+  for (const t in szenen) if (t.startsWith('haar_')) szenen[t].visible = soll.includes(t);
+  st.textContent = ''; anwenden();
+}
+laden('kopf_mh').then(k => { k.visible = true; kopfDa = true; return haareSetzen(); });
 
 // ---------- Morphs setzen ----------
 function morph(name, v) {
@@ -150,7 +174,6 @@ const mimik = Object.fromEntries(MIMIK.map(x => [x[0], 0]));
 function anwenden() {
   for (const k of formKeys) morph('form_' + k, S.form[k]);
   for (const k in mimik) morph('mimik_' + k, mimik[k]);
-  for (const t in S.teile) for (const m of netze[t] || []) m.visible = !!S.teile[t];
   const c = new THREE.Color(HAARFARBEN[S.haar][0]); for (const m of haarMats) m.color.copy(c);
   // Vorschau Hautton: Grundfarbe zu dunklerer Haut hin multiplizieren (in Stufe 2 ersetzt durch entsättigte Grundtextur + Farbleiste)
   { const x = S.haut / 100 * (HAUT.length - 1), i = Math.min(HAUT.length - 2, Math.floor(x)), f = x - i;
@@ -180,7 +203,15 @@ haut.value = S.haut; hautv.textContent = S.haut; haut.addEventListener('input', 
 const fb = document.getElementById('farben');
 HAARFARBEN.forEach(([c, n], i) => { const s = document.createElement('span'); s.className = 'sw' + (i === S.haar ? ' on' : ''); s.style.background = c; s.title = n;
   s.onclick = () => { S.haar = i; fb.querySelectorAll('.sw').forEach((x, j) => x.classList.toggle('on', j === i)); anwenden(); }; fb.appendChild(s); });
-document.querySelectorAll('[data-teil]').forEach(cb => { cb.checked = !!S.teile[cb.dataset.teil]; cb.onchange = () => { S.teile[cb.dataset.teil] = cb.checked ? 1 : 0; anwenden(); }; });
+const hw = document.getElementById('haarwahl'), selects = {};
+for (const p of PLAETZE) {
+  const d = document.createElement('div'); d.className = 'r';
+  d.innerHTML = `<label>${HAAR[p].n}</label><select style="grid-column:span 2;background:#11161c;color:#d7e6f2;border:1px solid #3c4f61;padding:3px"></select>`;
+  const sel = d.querySelector('select');
+  [HAAR[p].ohne, ...HAAR[p].opts.map(o => o[1])].forEach((l, i) => sel.add(new Option(l, i)));
+  sel.value = S.wahl[p]; sel.onchange = () => { S.wahl[p] = +sel.value; haareSetzen(); };
+  selects[p] = sel; hw.appendChild(d);
+}
 const hf = document.getElementById('hautfarben');
 HAUT.forEach((c, i) => { const s = document.createElement('span'); s.className = 'sw'; s.style.background = `rgb(${c.map(v => Math.round(v * 255))})`;
   s.onclick = () => { S.haut = Math.round(i / (HAUT.length - 1) * 100); alle(); anwenden(); }; hf.appendChild(s); });
@@ -189,10 +220,11 @@ const irisZeigen = () => { irf.querySelectorAll('.sw').forEach((x, j) => x.class
 IRIS.forEach(([c, n]) => { const s = document.createElement('span'); s.className = 'sw'; s.style.background = c; s.title = n;
   s.onclick = () => { S.iris = c; irisZeigen(); anwenden(); }; irf.appendChild(s); });
 irisc.addEventListener('input', () => { S.iris = irisc.value; irisZeigen(); anwenden(); }); irisZeigen();
-const alle = () => { irisZeigen(); Object.values(inputs).forEach(f => f()); haut.value = S.haut; hautv.textContent = S.haut; fb.querySelectorAll('.sw').forEach((x, j) => x.classList.toggle('on', j === S.haar)); };
+const alle = () => { irisZeigen(); for (const p of PLAETZE) selects[p].value = S.wahl[p]; Object.values(inputs).forEach(f => f()); haut.value = S.haut; hautv.textContent = S.haut; fb.querySelectorAll('.sw').forEach((x, j) => x.classList.toggle('on', j === S.haar)); };
 document.getElementById('zuf').onclick = () => { for (const k of formKeys) S.form[k] = Math.round((Math.random() * 2 - 1) * 70) / 100; S.haut = Math.round(Math.random() * 100); S.haar = Math.floor(Math.random() * 6); S.iris = IRIS[Math.floor(Math.random() * 8)][0];
-  S.teile.haar_bart = Math.random() < 0.5 ? 1 : 0; S.teile.haar_schnurrbart = Math.random() < 0.5 ? 1 : 0;
-  document.querySelectorAll('[data-teil]').forEach(cb => cb.checked = !!S.teile[cb.dataset.teil]); alle(); anwenden(); };
+  const zw = (p, leer) => (Math.random() < leer ? 0 : 1 + Math.floor(Math.random() * HAAR[p].opts.length));
+  S.wahl = { frisur: zw('frisur', 0.1), bart: zw('bart', 0.45), schnurr: zw('schnurr', 0.7), brauen: zw('brauen', 0) }; if (S.wahl.bart) S.wahl.schnurr = 0;
+  alle(); haareSetzen(); };
 document.getElementById('rst').onclick = () => { for (const k of formKeys) S.form[k] = 0; for (const k in mimik) mimik[k] = 0; S.haut = 50; alle(); anwenden(); };
 document.getElementById('cam').onclick = () => { nah = !nah; kamera(); };
 
@@ -200,7 +232,7 @@ document.getElementById('cam').onclick = () => { nah = !nah; kamera(); };
 const blinz = document.getElementById('blinz'); let naechstes = 2, clock = new THREE.Clock();
 r.setAnimationLoop(() => {
   const t = clock.getElapsedTime();
-  if (blinz.checked && fertig === TEILE.length) {
+  if (blinz.checked && kopfDa) {
     const p = t - naechstes; let v = 0; if (p > 0 && p < 0.16) v = Math.sin(p / 0.16 * Math.PI); else if (p >= 0.16) naechstes = t + 2 + Math.random() * 4;
     const b = Math.max(v, mimik.blinzeln_L); morph('mimik_blinzeln_L', b); morph('mimik_blinzeln_R', Math.max(v, mimik.blinzeln_R));
   }
