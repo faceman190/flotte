@@ -13,7 +13,7 @@ const TURN = { t: 9, x: 0, z: 0 };
 export const footAccel = (base: number) => mannyAccel(base) * mannyTurn(TURN.t);   // Anlaufrate beim Drücken der Lauftasten (1/s)
 export const footBrake = mannyBrake;   // Bremsrate nach dem Loslassen der Lauftasten (1/s)
 import { P } from './state';
-import { aimK } from './footgun';
+import { aimK, GUN } from './footgun';
 import { LYRA_ITEM, LYRA_OF_VM } from './lyraGuns';
 import { FremdFigur } from './fremdFigur';
 // Eigene Figur: angelegte Ausrüstung plus das gewählte Aussehen (seit 2026-11-20)
@@ -76,12 +76,14 @@ export function flinch() { ACT.hit++; }
 export function noteShot() { ACT.shot++; }
 // Netzfeld g[4]: drei Zeichen [geduckt 0/1][Treffer mod 10][Schüsse mod 10]
 // vierte Stelle seit 24.11.2026: 0 am Boden, 1 im Sprung, 2 gefallen (ältere Spiele lesen nur die ersten drei)
-export const netFlags = () => (STANCE.crouch ? '1' : '0') + (ACT.hit % 10) + (ACT.shot % 10) + (performance.now() - ACT.t > 600 ? '0' : ACT.dead ? '2' : ACT.air ? '1' : '0');
-export interface NetAct { crouch: boolean; hit: number; fire: number; fl: string; shots?: number; air?: boolean; dead?: boolean }      // shots: Schüsse gezählt (für den Rückstoß der neuen Figur)
+// fünfte Stelle seit 27.11.2026: Handwaffe 0 in der Hand, 1 weggesteckt (Halterung am Körper), 2 keine Waffe (nur der Schneidbrenner)
+export const netFlags = () => (STANCE.crouch ? '1' : '0') + (ACT.hit % 10) + (ACT.shot % 10) + (performance.now() - ACT.t > 600 ? '0' : ACT.dead ? '2' : ACT.air ? '1' : '0') + (P.gear?.waffe ? (GUN.weg ? '1' : '0') : '2');
+export interface NetAct { crouch: boolean; hit: number; fire: number; fl: string; shots?: number; air?: boolean; dead?: boolean; halter?: number }      // halter: Handwaffe 0 in der Hand, 1 weggesteckt, 2 keine (fehlt bei älteren Spielen) · shots: Schüsse gezählt (für den Rückstoß der neuen Figur)
 export function readNetFlags(n: NetAct, s?: string | null) {
   if (!s || s.length < 3) return;
   n.crouch = s[0] === '1';
   n.air = s[3] === '1'; n.dead = s[3] === '2';
+  n.halter = s.length > 4 ? +s[4] : undefined;
   if (n.fl && s[1] !== n.fl[1]) n.hit++;
   if (n.fl && s[2] !== n.fl[2]) { n.fire = 0.25; n.shots = (n.shots || 0) + ((+s[2] - +n.fl[2] + 10) % 10 || 1); }
   n.fl = s;
@@ -108,7 +110,7 @@ export interface Avatar {
   // fremde Figur (Mitspieler, Wache): tracht = was sie trägt; dann zeigt fremd (fremdFigur.ts) die neue Figur statt des Soldaten
   tracht?: Tracht | null; fremd?: FremdFigur | null;
 }
-export interface Drive { aimAt?: THREE.Vector3 | null; vorFit?: () => void; x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null; armed?: boolean; ads?: boolean; fp?: boolean; shots?: number }   // ads: Zielen gehalten (rechte Maustaste) · reload: Fortschritt 0..1, sonst −1 · armed: hier kann geschossen werden (Planet, Mine) – die neue Spielerfigur trägt dann die Waffe wid
+export interface Drive { halter?: number; aimAt?: THREE.Vector3 | null; vorFit?: () => void; x: number; y: number; z: number; yaw: number; pitch: number; vx: number; vz: number; wid?: string; fire?: boolean; combat?: boolean; dead?: boolean; crouch?: boolean; air?: boolean; hit?: number; reload?: number; ground?: ((x: number, z: number) => number | null) | null; armed?: boolean; ads?: boolean; fp?: boolean; shots?: number }   // halter: Mitspieler – Stand ihrer Handwaffe (NetAct.halter) · ads: Zielen gehalten (rechte Maustaste) · reload: Fortschritt 0..1, sonst −1 · armed: hier kann geschossen werden (Planet, Mine) – die neue Spielerfigur trägt dann die Waffe wid
 
 export function makeAvatar(gear: FigGear, player = false): Avatar | null {
   const s = buildSoldier(gear); if (!s) return null;
@@ -184,14 +186,20 @@ export function driveAvatar(a: Avatar, dt: number, d: Drive) {
   // Mitspieler und Wachen: die neue Figur mit ihrer Ausrüstung (fremdFigur.ts); solange sie lädt, der Soldat
   if (!a.player && a.tracht) {
     const f = a.fremd || (a.fremd = new FremdFigur());
-    const weapon = d.armed && d.wid ? { id: d.wid, lyra: LYRA_OF_VM[d.wid], aim: combat || !!d.ads, shots: d.shots ?? 0, hits: d.hit ?? 0, reload: d.reload ?? -1 } : null;
+    // Waffe: in der Hand, wo gekämpft werden kann (armed) und sie nicht weggesteckt ist – sonst in ihrer Halterung am Körper, wenn der
+    // Mitspieler eine hat (halter 0 oder 1; ältere Spiele melden das nicht: dort verschwindet sie wie bisher)
+    const hand = !!d.armed && d.halter !== 1, koerper = d.halter === 0 || d.halter === 1;
+    const weapon = d.wid && (hand || koerper) ? { id: d.wid, lyra: LYRA_OF_VM[d.wid], aim: hand && (combat || !!d.ads), shots: d.shots ?? 0, hits: d.hit ?? 0, reload: d.reload ?? -1, weg: !hand, koerper } : null;
     if (f.drive(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, dead: d.dead, air: d.air, ground: d.ground, tracht: a.tracht, weapon })) return;
     s.root.visible = true;
   }
   // Testfigur Manny (?manny=1): eigene Bewegungslogik, der Soldat bleibt unsichtbar im Halter
   if (a.player) {
     const mx = INTENT.mx, mz = INTENT.mz, sprint = INTENT.sprint; INTENT.mx = INTENT.mz = 0; INTENT.sprint = false;
-    const weapon = d.armed && d.wid ? { id: d.wid, lyra: LYRA_ITEM[P.gear?.waffe || ''], aim: d.fp ? !!d.ads : combat || !!d.ads, shots: ACT.shot, hits: ACT.hit, toss: ACT.toss, reload: d.reload ?? -1 } : null;
+    // Waffe: in der Hand, wo gekämpft werden kann (armed) und sie nicht weggesteckt ist (Taste H, footgun.ts) – sonst in ihrer Halterung
+    // am Körper (Station, Schiff). Ohne eigene Waffe gibt es nur den Schneidbrenner in der Hand.
+    const hat = !!P.gear?.waffe, hand = !!d.armed && !(hat && GUN.weg);
+    const weapon = d.wid && (hand || hat) ? { id: d.wid, lyra: LYRA_ITEM[P.gear?.waffe || ''], aim: hand && (d.fp ? !!d.ads : combat || !!d.ads), shots: ACT.shot, hits: ACT.hit, toss: ACT.toss, reload: d.reload ?? -1, weg: !hand, koerper: hat } : null;
     if (driveManny(s.g, s.root, dt, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, vx: d.vx, vz: d.vz, crouch: d.crouch, air: d.air, mx, mz, sprint, ground: d.ground, dead: !!d.dead, weapon, fp: d.fp, aimAt: d.aimAt, vorFit: d.vorFit })) return;
     if (d.fp) { s.root.visible = false; return; }      // Ich-Sicht ohne die neue Figur: keinen Soldaten um die Kamera zeigen
     if (!s.root.visible) releaseManny(s.root);   // Schalter aus oder Figur nicht geladen: wieder der Soldat
@@ -364,7 +372,7 @@ export function driveRemote(holder: THREE.Object3D, f: RemoteFig, dt: number) {
   const ivx = (f.x - ox) / Math.max(dt, 1e-3), ivz = (f.z - oz) / Math.max(dt, 1e-3), kv = Math.min(1, dt * 6);
   f.vx += (ivx - f.vx) * kv; f.vz += (ivz - f.vz) * kv;
   f.fire -= dt;
-  driveAvatar(f.av, dt, { x: f.x, y: f.y, z: f.z, yaw: f.yaw, pitch: 0, vx: Math.abs(f.vx) < 0.05 ? 0 : f.vx, vz: Math.abs(f.vz) < 0.05 ? 0 : f.vz, wid: f.wid, crouch: f.crouch, hit: f.hit, fire: f.fire > 0, shots: f.shots, armed: !f.ohneWaffe, air: f.air, dead: f.dead });      // Planet und Mine: bewaffnet (außenbord ohne Waffe)
+  driveAvatar(f.av, dt, { x: f.x, y: f.y, z: f.z, yaw: f.yaw, pitch: 0, vx: Math.abs(f.vx) < 0.05 ? 0 : f.vx, vz: Math.abs(f.vz) < 0.05 ? 0 : f.vz, wid: f.wid, crouch: f.crouch, hit: f.hit, fire: f.fire > 0, shots: f.shots, armed: !f.ohneWaffe, halter: f.ohneWaffe ? 2 : f.halter, air: f.air, dead: f.dead });      // Planet und Mine: bewaffnet (außenbord ohne Waffe)
 }
 /** fremde Figur abbauen (Mitspieler weg, Stadt verlassen): auch die neue Figur freigeben */
 export function freeAvatar(a: Avatar) { a.fremd?.dispose(); a.fremd = null; a.s.g.removeFromParent(); }

@@ -2099,7 +2099,7 @@ function updateOthers(dt: number) {
     if (r.av) {
       // Laufrichtung relativ zur Blickrichtung des Piloten ergibt die Richtungsclips (vor, seitlich, zurück)
       r.fire -= dt;
-      driveAvatar(r.av, dt, { x: r.x, y: r.y, air: r.air, dead: r.dead, z: r.z, yaw: r.tyaw, pitch: 0, vx: Math.abs(r.vx) < 0.05 ? 0 : r.vx, vz: Math.abs(r.vz) < 0.05 ? 0 : r.vz, wid: r.wid, crouch: r.crouch, hit: r.hit, fire: r.fire > 0, shots: r.shots });
+      driveAvatar(r.av, dt, { x: r.x, y: r.y, air: r.air, dead: r.dead, z: r.z, yaw: r.tyaw, pitch: 0, vx: Math.abs(r.vx) < 0.05 ? 0 : r.vx, vz: Math.abs(r.vz) < 0.05 ? 0 : r.vz, wid: r.wid, crouch: r.crouch, hit: r.hit, fire: r.fire > 0, shots: r.shots, halter: r.halter });
       continue;
     }
     if (!r.p) continue;

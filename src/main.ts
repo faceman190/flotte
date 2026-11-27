@@ -83,7 +83,7 @@ import { updateAlteWerft } from './game/altewerft';
 import { updateLeitbojen } from './game/leitbojen';
 import { updateGedenkboje } from './game/gedenkboje';
 import { updateSektor3 } from './game/sektor3';
-import { gunReload } from './game/footgun';
+import { gunReload, gunHolster } from './game/footgun';
 import { hideFieldViewModel } from './game/fieldfight';
 import { toggleSchnellflug, pickNav, bigSectorHint } from './game/schnellflug';
 import { loadStationModels } from './models/stationModels';
@@ -641,6 +641,7 @@ onKey(code => {
   // Erkundungsbuggy „Wiesel“: R tastet ab (wiesel.ts); X am Schiff: das andere Fahrzeug nehmen (surface.ts fahrzeugTauschen)
   if (code === 'KeyR' && G.mode === 'rover' && !FOOT.active && ROVER.active && ROVER.kind === 'wiesel' && !G.dead) { wieselScan(ROVER.x, ROVER.y, ROVER.z); return; }
   if (code === 'KeyX' && G.mode === 'rover' && !G.dead && (FOOT.active ? footNearShip() : nearShip())) { const t = fahrzeugTauschen(); if (t) radio('SYSTEM', t); return; }
+  if (code === 'KeyH' && (G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active)) && !G.dead) { gunHolster(); return; }      // zu Fuß: Waffe wegstecken / ziehen
   if (code === 'KeyR' && (G.mode === 'dungeon' || (G.mode === 'rover' && FOOT.active))) { gunReload(); return; }   // zu Fuß: nachladen (footgun.ts)
   if (code === 'KeyG' && G.mode === 'rover' && FOOT.active) { footGrenade(); return; }
   if (code === 'KeyG' && G.mode === 'play') { aufstehen(); return; }      // im Flug vom Pilotensitz aufstehen, Autopilot hält Kurs (bordflug.ts)      // zu Fuß: Granate werfen (in der Mine: dungeonKey)

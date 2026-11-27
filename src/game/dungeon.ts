@@ -1360,7 +1360,7 @@ export function dungeonCamera() {
     const run = Math.hypot(DUN.vx, DUN.vz) > 5 ? 1 : 0, b = DUN.bob;
     poseViewModel(vm, { walked: DUN.walked, bob: b, kick: DUN.kick, sx: sway.x, sy: sway.y, run, reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, ads: aimK(), shots: shotsN });   // mineArt.ts
     if (vm.glow) { const k = 0.82 + 0.18 * Math.sin(performance.now() * 0.004); vm.glow.color.setHex(vm.id === 'ef2' ? 0x6fc2ff : 0x8fd0ff).multiplyScalar(k); }
-    vm.gun.visible = DUN.dead <= 0;
+    vm.gun.visible = DUN.dead <= 0 && !GUN.weg;
     const sup = vm.id === 'smg', f = DUN.flash > 0 && (!sup || shotsN % 3 === 0); vm.flash.visible = f; vm.flashLight.intensity = f ? (sup ? 0.12 : 2.6) : 0;   // SMG mit Schalldämpfer: kleines Mündungsfeuer
     if (f) { ngVmFlash(vm.flash); (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
     if (shotsN !== vmShotsN) { vmShotsN = shotsN; const port = SHELL_PORT[vm.id]; if (port) vmShell(vm.scene, vm.gun, port); }   // Hülse fliegt rechts heraus

@@ -59,7 +59,22 @@ export function spreadDir(d: THREE.Vector3, sp: number, out: THREE.Vector3): THR
 export const gunFalloff = (d: number) => { const H = HEAT[GUN.id]; return H ? curve(H.fall, d) : 1; };
 const PARTS: ['out' | 'in' | 'end', number][] = [['out', 0.12], ['in', 0.55], ['end', 0.86]];
 export const gunHooks = { sync: () => {} };      // Waffe gewechselt oder zum ersten Mal zu Fuß: weitere Modelle vorab laden (granate.ts)
-export const GUN = { id: '?', mag: 0, max: 0, reload: 0, reloadT: 1.5, kind: undefined as GunKind | undefined, part: 0 };
+// weg: die Waffe steckt in ihrer Halterung am Körper (Taste H; Rücken oder Oberschenkel, manny/WeaponLayer.js HOLSTER) · zieh: so lange
+// dauert das Ziehen noch (s) – erst danach fällt der Schuss
+export const GUN = { id: '?', mag: 0, max: 0, reload: 0, reloadT: 1.5, kind: undefined as GunKind | undefined, part: 0, weg: false, zieh: 0 };
+const ZIEH = 0.6;      // Griff zur Halterung 0,24 s + Schwung in den Anschlag 0,36 s (WeaponLayer TUNE.reachT, swingT): erst dann zeigt der Lauf aufs Ziel
+/**
+ * Waffe wegstecken oder ziehen (Taste H; ohne Wert: umschalten). Schießen und Zielen ziehen sie von selbst. Ohne Waffe (Schneidbrenner)
+ * gibt es nichts wegzustecken. Ein laufendes Nachladen bricht ab, das Magazin bleibt, wie es war.
+ */
+export function gunHolster(weg = !GUN.weg) {
+  gunSync();
+  if (!P.gear?.waffe) { GUN.weg = false; return; }
+  if (GUN.weg === weg) return;
+  GUN.weg = weg; GUN.zieh = weg ? 0 : ZIEH;
+  if (weg) GUN.reload = 0;
+  sfxAny('w_x_swap', 3, 0.4);
+}
 
 export function gunSync() {
   const id = P.gear?.waffe || '';
@@ -73,7 +88,8 @@ export function gunSync() {
 // darf jetzt geschossen werden? (leeres Magazin startet das Nachladen)
 export function gunReady(): boolean {
   gunSync();
-  if (GUN.reload > 0) return false;
+  if (GUN.weg) { gunHolster(false); return false; }      // weggesteckt: erst ziehen
+  if (GUN.zieh > 0 || GUN.reload > 0) return false;
   if (GUN.max && GUN.mag <= 0) { gunReload(); return false; }
   return true;
 }
@@ -82,13 +98,15 @@ export function gunFired() {
   if (GUN.max) { GUN.mag = Math.max(0, GUN.mag - 1); if (GUN.mag === 0) gunReload(); } }
 export function gunReload() {
   gunSync();
-  if (!GUN.max || GUN.reload > 0 || GUN.mag >= GUN.max) return;
+  if (!GUN.max || GUN.weg || GUN.reload > 0 || GUN.mag >= GUN.max) return;
   GUN.reload = GUN.reloadT; GUN.part = 0;
   if (LADE[GUN.id]) sfx(LADE[GUN.id][0], 0.5, 1, () => sfx('gear', 0.25, 1.6));
   else if (!GUN.kind) sfx('gear', 0.25, 1.6, () => snd(260, 0.08, 'triangle', 0.03, -60));
 }
 export function gunUpdate(dt: number) {
   gunSync();      // läuft zu Fuß in jedem Bild: Die Aufnahmen der Waffe sind so vor dem ersten Schuss geladen
+  GUN.zieh = Math.max(0, GUN.zieh - dt);
+  if (GUN.weg && !P.gear?.waffe) GUN.weg = false;
   { const H = HEAT[GUN.id]; HS.since += dt; if (!H) HS.h = 0; else if (HS.since > H.delay) HS.h = Math.max(0, HS.h - H.cool * dt); }
   if (GUN.reload <= 0) return;
   GUN.reload -= dt;
@@ -146,7 +164,8 @@ const ZOOM = Math.tan(35 * Math.PI / 180) / Math.tan(40 * Math.PI / 180);
 /** je Bild, solange zu Fuß gekämpft werden kann; can: nicht gefallen */
 export function aimUpdate(dt: number, can: boolean, body?: { still: boolean; crouch: boolean; air: boolean }) {
   if (body) Object.assign(BODY, body);
-  const on = can && mouse.right && GUN.reload <= 0;
+  if (can && mouse.right && GUN.weg) gunHolster(false);      // Zielen zieht die Waffe
+  const on = can && mouse.right && GUN.reload <= 0 && !GUN.weg;
   if (on !== AIM.on) { AIM.on = on; sfxAny(on ? 'w_x_zin' : 'w_x_zout', 3, 0.3); }
   AIM.k = clamp(AIM.k + (on ? 1 : -1) * dt / 0.22, 0, 1);
   AIM.shake = Math.max(0, AIM.shake - dt * 3.2);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mannyBase, mountGun, newGun, weaponKind, type GunState } from './mannyAvatar';
-import { Figur, neuesSkelett, type Tracht } from './figur';
+import { Figur, neuesSkelett, halterTiefe, type Tracht } from './figur';
 import { makeLyraGun, driveLyraGun, type LyraGun, type LyraKind } from './lyraGuns';
 
 // =====================================================================================
@@ -20,7 +20,8 @@ export interface FremdDrive {
   ground?: ((x: number, z: number) => number | null) | null;
   // Waffe in der Hand (null = unbewaffnet): id = Modell (mineArt WDEFS), lyra = eine der Waffen aus dem Lyra-Paket, aim = im Anschlag,
   // shots / hits = Zähler (eine Änderung löst Rückstoß bzw. Zucken aus), reload = Fortschritt 0..1, sonst −1
-  weapon?: { id: string; lyra?: LyraKind; aim: boolean; shots: number; hits: number; reload?: number } | null;
+  // weg: nicht in der Hand; mit koerper hängt sie dann in ihrer Halterung am Körper (WeaponLayer.js HOLSTER)
+  weapon?: { id: string; lyra?: LyraKind; aim: boolean; shots: number; hits: number; reload?: number; weg?: boolean; koerper?: boolean } | null;
 }
 
 const gaitOf = (spd: number) => (spd < 3 ? 'walk' : spd < 5.9 ? 'run' : 'sprint');
@@ -73,13 +74,15 @@ export class FremdFigur {
     if (spd > 0.3) _mv.set(d.vx / spd, d.vz / spd); else _mv.set(0, 0);
     const wp = d.dead ? null : d.weapon || null;
     if (wp) mountGun(an, this.gun, wp.id, wp.lyra, k => this.guns[k] || (this.guns[k] = makeLyraGun(k) || undefined) || null);
+    if (an.weapon?.ready) { const ht = halterTiefe(d.tracht); an.weapon.setDepth(ht[0], ht[1]); }      // Halterung am Körper: über Weste und Rüstung
     const G = this.gun;
-    G.shown = !!wp && !!G.g && (G.id === wp.id || G.id === 'lyra:' + wp.lyra);
+    const hand = !!wp && !wp.weg;
+    G.shown = hand && !!G.g && (G.id === wp!.id || G.id === 'lyra:' + wp!.lyra) && (an.weapon?.ready && an.weapon.holder ? an.weapon.inHand : true);
     if (G.shown && G.lyra && wp) driveLyraGun(G.lyra, wp.shots, wp.reload ?? -1, dtc);
     const out = an.update(dtc, {
       moveDir: _mv, gait: gaitOf(spd), crouch: !!d.crouch, strafe: true, facing: face,
       jump, grounded: !air, verticalSpeed: jump ? Math.max(vy, 3) : Math.abs(vy) < 20 ? vy : 0, look: { pitch: d.pitch || 0 }, dead: !!d.dead,
-      weapon: wp ? { kind: weaponKind(wp.id, wp.lyra), aim: wp.aim, shots: wp.shots, hits: wp.hits, reload: wp.reload ?? -1 } : null,
+      weapon: wp ? { kind: weaponKind(wp.id, wp.lyra), aim: wp.aim && hand, shots: wp.shots, hits: wp.hits, reload: hand ? wp.reload ?? -1 : -1, hand, body: !!wp.koerper } : null,
       stopDist: spd * 0.08,
     });
     // wie die eigene Figur (mannyAvatar.ts driveManny): Blickrichtung relativ zum Halter, Füße im Raum der Figur
@@ -94,7 +97,7 @@ export class FremdFigur {
 
   /** Mündung der Waffe (Weltkoordinaten) für Leuchtspur und Mündungsfeuer; false ohne sichtbare Waffe */
   muzzle(out: THREE.Vector3): boolean {
-    if (!this.gun.shown || !this.gun.g || !this.anim?.weapon?.mount.visible) return false;
+    if (!this.gun.shown || !this.gun.g || !this.anim?.weapon?.mount.visible || !this.anim.weapon.inHand) return false;
     this.gun.g.updateWorldMatrix(true, false);
     this.gun.g.localToWorld(out.copy(this.gun.muzzle));
     return true;
