@@ -19,6 +19,14 @@ Stand 27.11.2026: Stufe 1 als Testseite, noch nicht im Spiel. Plan: Claude Doc �
   vom Kopf übertragenen Morphs (nur die mit Wirkung).
 - Packen: `node scripts/pack-gesicht.mjs <Quellordner> public/gesicht` (Meshopt, WebP bis 2048): 56 MB → 7,7 MB.
 
+## Frisuren, Bärte, Brauen
+
+26 Haarkarten-Sätze aus dem MetaHuman-Plugin (UE 5.8), an den Grundkopf angepasst und gepackt (151 MB → 28,6 MB): 12 Frisuren
+(`haar_frisur_*`), 6 Bärte (`haar_bart_*`), 4 Schnurrbärte (`haar_schnurr_*`), 4 Brauen (`haar_brauen_*`), dazu die vier Haare des
+MetaHuman selbst. Liste und Werte: [gesicht-frisuren.txt](gesicht-frisuren.txt), Bildbogen `bilder/gesicht-frisuren.jpg`. Skripte:
+`Charaktererstellung\Skripte\gesicht_05_frisuren.py` (weitere Grooms über `auswahl.json`), `ue_groom_export.py`. Grooms ohne Karten
+(Buzzcut, Stoppeln) gibt es nur als aufgemalte Textur: später als Hautebene. Die Testseite lädt jede Datei erst, wenn sie gewählt wird.
+
 ## Hautton und Iris
 
 - Hautton: Farbleiste mit 7 Stufen (sRGB), Stufe 4 = Originalhaut (Mittelwert der Textur 0,581/0,394/0,313). Der Shader multipliziert die
@@ -28,7 +36,7 @@ Stand 27.11.2026: Stufe 1 als Testseite, noch nicht im Spiel. Plan: Claude Doc �
 
 ## Speicherformat (Entwurf)
 
-Version, 16 Regler (je ein Byte, −100…100 als 0…200), Hautton, Haarfarbe, Irisfarbe (3 Byte), Teile als Bits, als URL-sicheres Base64 (31 Zeichen).
+Version, 16 Regler (je ein Byte, −100…100 als 0…200), Hautton, Haarfarbe, Irisfarbe (3 Byte), je Haarplatz die Nummer (Frisur, Bart, Schnurrbart, Brauen; 0 = ohne), als URL-sicheres Base64 (32 Zeichen, Version 2).
 Kommt später nach `P.gesicht` und ins Netzfeld `g`.
 
 ## Offen
