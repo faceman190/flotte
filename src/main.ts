@@ -34,7 +34,7 @@ import { START, leaveToBlack, startBusy, bootLog, bootReady, openCover, settled,
 import type { IntroEnd } from './game/intro';
 import { radio, clearRadio } from './ui/radio';
 import { openDock, undock, dockHooks, refreshDock, showMenu, closeMenu, dockTabs } from './ui/dock';
-import { quartierFahrt, inKojeAufwachen, startLaunch, updateHangarSequence, hangarGearDown, IN, folgeSchiff, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther, rampeHinein } from './game/interior';
+import { quartierFahrt, stationEbene, inKojeAufwachen, startLaunch, updateHangarSequence, hangarGearDown, IN, folgeSchiff, enterInterior, enterStanding, leaveInterior, updateWalk, updateRoomLife, applyWalkCamera, drawWalkHUD, interact, jump, syncParkedShip, refreshHangarShips, interiorHooks, enterShip, nearestOther, rampeHinein } from './game/interior';
 import { hasMeshRoom, meshRoomReady } from './game/meshRoom';
 import { quartierHooks } from './game/quartier';
 import { fzOrdnen } from './game/fahrzeuge';
@@ -201,7 +201,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 function whereAmI(): PlayerAt | null | undefined {
   if (pendingAt) return pendingAt;
   if (G.mode === 'menu' || G.mode === 'intro') return undefined;
-  if (IN.active && IN.station) return { k: 'st', id: IN.station.id, ...(G.baseWalk ? { base: true } : {}), ...(IN.ship ? {} : { x: r2(IN.x), z: r2(IN.z), yaw: r2(IN.yaw) }) };
+  if (IN.active && IN.station) return { k: 'st', id: IN.station.id, ...(G.baseWalk ? { base: true } : {}), ...(IN.ship ? {} : { x: r2(IN.x), z: r2(IN.z), yaw: r2(IN.yaw), ...(stationEbene() === 'd' ? { eb: 'd' as const } : {}) }) };
   if (G.cityWalk && G.dockedAt) return { k: 'st', id: G.dockedAt.id, city: true };
   if (world.surface && (ROVER.active || FOOT.active || IN.active)) return {
     k: 'land', ship: { x: r2(ROVER.ship.x), y: r2(ROVER.ship.y), z: r2(ROVER.ship.z), yaw: r2(ROVER.ship.yaw) }, rover: { x: r2(ROVER.x), z: r2(ROVER.z), yaw: r2(ROVER.yaw) },
