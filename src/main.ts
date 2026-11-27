@@ -40,7 +40,7 @@ import { quartierHooks } from './game/quartier';
 import { fzOrdnen } from './game/fahrzeuge';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
-import { buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, roverView, liquidAt, ROVER, SURF , fzImLaderaum, fzWeg, fzInHalle, landeHoehe } from './game/surface';
+import { landePose, buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, roverView, liquidAt, ROVER, SURF , fzImLaderaum, fzWeg, fzInHalle, landeHoehe } from './game/surface';
 import { wieselScan } from './game/wiesel';
 import { initTestlabor, updateTestlabor, testHooks } from './game/testlabor';
 import { mannyHooks } from './game/mannyAvatar';
@@ -51,9 +51,9 @@ import { stationFaction } from './game/reputation';
 import { TESTF } from './game/testflags';
 import { PLANETS, PTYPE, planetBaseId } from './data/planets';
 import { d3 } from './core/util';
-import { openBand, closeBand, drawBand, bandHooks } from './ui/band';
+import { openBand, closeBand, drawBand, bandHooks, openModulPlatz } from './ui/band';
 import { updateControls } from './ui/controls';
-import { netUpdate, NET, isOnline, gastAusstieg, meldeFehler } from './game/net';
+import { netUpdate, NET, isOnline, gastAusstieg, meldeFehler, gastSchiff, gastFahrt, gaestePflege, mitMelden } from './game/net';
 import { cockpitUpdate, cockpitKamera, cockpitUmschalten, cockpitLaden } from './game/cockpit';
 import { TRADE, requestTrade } from './game/trade';
 import { openChat } from './ui/mp';
@@ -68,6 +68,11 @@ import { updateKisten, TRAKTOR, kistenLeeren } from './game/kisten';
 import { INNEN } from './models/innenFlaeche';
 import { schiffslicht } from './models/gltfShips';
 import { BORD, aufstehen, updateBordflug, zumSteuer, ausBord } from './game/bordflug';
+import { GUN, schuetzeAn, schuetzeAus, schuetzeGrund, updateSchuetze, turmKamera, drawTurmHUD, turmBild } from './game/turm';
+import { modulBild } from './game/modulplatz';
+import { invHooks } from './game/inventory';
+import type { ShipSlot } from './data/gear';
+import type { ShipId } from './data/ships';
 import { anBordStellen } from './game/fahrzeuge';
 import { hasInterior, SHIPS } from './data/ships';
 import { loadRockModel } from './game/world';
@@ -482,8 +487,86 @@ interiorHooks.tabs = () => (G.dockedAt ? dockTabs(G.dockedAt) : []);
 interiorHooks.takeoff = () => { leaveInterior(); boardShip(); G.mode = 'play'; $('hud').classList.remove('hidden'); saveGame(); };
 interiorHooks.toFahrzeug = (kind: string) => { leaveInterior(); ROVER.active = true; if (fzImLaderaum(kind as any)) { footOff(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); radio('SYSTEM', 'Über die Rampe hinausfahren. Zum Einladen hinauffahren und im Laderaum [E].'); } };
 interiorHooks.zumSteuer = () => zumSteuer();
+// Schützenplatz (turm.ts): am eigenen Schiff oder als Gast auf dem Schiff eines Mitspielers
+interiorHooks.schuetze = () => {
+  const sh = IN.ship; if (!sh) return 'Kein Schiff.';
+  const g = schuetzeGrund(sh.ctx); if (g) return g;
+  const gm = sh.gast ? gastSchiff(sh.gast) : null;
+  if (sh.gast && !gm) return 'Das Schiff ist nicht mehr da.';
+  return schuetzeAn(sh.cls, gm ? gm.g : SHIP.g, sh.gast || 0, { yaw: IN.yaw, pitch: IN.pitch }) ? '' : 'Dieses Schiff hat keinen Turm.';
+};
+interiorHooks.modulPlatz = slot => openModulPlatz(slot as ShipSlot);
+// Schiffsmodule tauschen: nur gelandet oder angedockt (Nutzer 26.11.2026), auch in der Ausrüstungs-App
+invHooks.umbau = () => (G.dockedAt || (IN.active && !!IN.station) || (world.surface && (ROVER.active || FOOT.active || (IN.active && IN.ship?.ctx === 'planet' && !IN.ship.gast))) ? '' : 'Umbauen geht nur gelandet oder angedockt.');
 interiorHooks.ausBord = ausBord;
-interiorHooks.gastRaus = () => { const o = gastAusstieg(); leaveInterior(); ROVER.active = true; if (o) footAt(o.x, o.z, o.yaw); else leaveShipOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden'); };      // als Gast aus dem Schiff eines Mitspielers (net.ts)
+// als Gast aus dem Schiff eines Mitspielers (net.ts). Nach einer Reise (anderer Planet, oder weiter als 300 m vom eigenen Schiff) folgt das
+// eigene Schiff per Autopilot und landet neben dem Schiff, aus dem man steigt.
+interiorHooks.gastRaus = () => {
+  const o = gastAusstieg(); leaveInterior(); ROVER.active = true;
+  const weit = !!o && world.surface && (o.unterwegs || Math.hypot(ROVER.ship.x - o.x, ROVER.ship.z - o.z) > 300);
+  if (o && weit) {
+    let ziel: { x: number; y: number; z: number; yaw: number } | null = null;
+    suche: for (const d of [75, 95, 120, 150, 190]) for (let k = 0; k < 12; k++) {
+      const a = o.syaw + Math.PI / 2 + k * Math.PI / 6, x = o.sx + Math.sin(a) * d, z = o.sz + Math.cos(a) * d;
+      if (Math.abs(x) > SURF.limit || Math.abs(z) > SURF.limit) continue;
+      const lp = landePose(x, z, o.syaw); if (lp.ok) { ziel = { x, y: lp.lage.y, z, yaw: o.syaw }; break suche; }
+    }
+    if (!ziel) { const x = o.sx + 110, z = o.sz; ziel = { x, y: landePose(x, z, o.syaw).lage.y, z, yaw: o.syaw }; }
+    relandShip(ziel, { x: ziel.x + 8, z: ziel.z + 8, yaw: ziel.yaw });
+    radio('BORDRECHNER', `Die ${P.shipName} ist dir per Autopilot gefolgt und steht ${Math.round(Math.hypot(ziel.x - o.x, ziel.z - o.z))} m entfernt.`, '#8fd3ff');
+  }
+  mitHeimat = null;
+  if (o) footAt(o.x, o.z, o.yaw); else leaveShipOnFoot();
+  G.mode = 'rover'; resetRoverCamera(); releaseAll(); $('hud').classList.remove('hidden');
+  if (weit) saveGame();
+};
+// ---------- Mitreise als Gast (net.ts MIT) ----------
+let mitHeimat: { sector: string; at: PlayerAt } | null = null;      // wo das eigene Schiff steht, seit man an Bord gegangen ist
+const blitzAus = () => { const fl = $('flash'); setTimeout(() => { fl.style.transition = 'opacity 1.2s'; fl.style.opacity = '0'; setTimeout(() => (fl.style.background = '#fff'), 1300); }, 40); };
+interiorHooks.mitStart = () => { const at = whereAmI(); mitHeimat = at ? { sector: P.sector, at } : null; };
+// Der Besitzer der Hangarbucht legt ab, der Gast ist an Bord: aus der Station hinaus (das eigene Schiff bleibt dort angedockt)
+interiorHooks.mitAblegen = () => { if (IN.active) leaveInterior(); G.dockedAt = null; G.baseWalk = false; $('dock').classList.add('hidden'); SHIP.g.visible = false; G.mode = 'walk'; $('hud').classList.add('hidden'); releaseAll(); };
+interiorHooks.mitBlende = (art, t) => {
+  const fl = $('flash'); fl.style.transition = `opacity ${Math.max(0.2, t)}s ease-in`; fl.style.background = art === 'surface' ? '#ff8a40' : art === 'orbit' ? '#d8ecff' : '#fff'; fl.style.opacity = '1';
+  if (art === 'sprung') sfx('jump_out', 0.6, 1, () => snd(200, 1.2, 'sine', 0.04, 700)); else snd(art === 'surface' ? 120 : 200, t, 'sawtooth', 0.03, art === 'surface' ? -40 : 400);
+};
+// Der Gast baut dieselbe Welt auf wie das Schiff, auf dem er mitfliegt, und wartet dort auf es (net.ts geht dann wieder an Bord)
+interiorHooks.mitWechsel = (art, nach, von) => {
+  const fl = $('flash'); fl.style.transition = 'none'; fl.style.opacity = '1';
+  if (IN.active) leaveInterior();
+  footOff(); ROVER.active = false; SHIP.g.visible = false;
+  if (!SECTOR[nach] || (art === 'surface' && !PLANETS[nach])) { interiorHooks.mitHeim('Das Ziel ist unbekannt.'); return; }
+  if (art === 'surface') void enterSurface(nach); else enterSector(nach, art === 'orbit' ? { orbit: true } : gateTo(von) ? { gateFrom: von } : {});
+  P.vx = P.vy = P.vz = 0; G.mode = 'walk'; $('hud').classList.add('hidden'); releaseAll();
+};
+interiorHooks.mitDa = gun => { G.mode = 'walk'; $('hud').classList.add('hidden'); blitzAus(); if (gun) interiorHooks.schuetze(); };
+interiorHooks.mitDock = (stId, name, cls) => {
+  if (IN.active) leaveInterior();
+  const st = stationById(stId);
+  if (st && resumeStation(st, { k: 'st', id: st.id, base: !!world.surface })) {
+    mitHeimat = null; blitzAus();
+    radio('BORDRECHNER', `Die ${SHIPS[cls as ShipId]?.n || 'Maschine'} von ${name} hat an ${st.name} angedockt. Die ${P.shipName} ist dir per Autopilot gefolgt und steht im Hangar.`, '#8fd3ff');
+    saveGame();
+  } else interiorHooks.mitHeim('Andocken war nicht möglich.');
+};
+interiorHooks.mitHeim = text => {
+  if (IN.active) leaveInterior();
+  const h = mitHeimat; mitHeimat = null;
+  if (h && h.at.k === 'st') {      // das eigene Schiff steht angedockt an einer Station: dorthin zurück
+    const at = h.at, fl = $('flash');
+    if (P.sector !== h.sector || !!world.surface !== !!at.base) { fl.style.transition = 'none'; fl.style.opacity = '1'; if (at.base) void enterSurface(h.sector); else enterSector(h.sector, { station: at.id }); }
+    const st = stationById(at.id);
+    if (st && resumeStation(st, at)) { blitzAus(); radio('SYSTEM', `${text} Du bist zurück bei deinem Schiff an ${st.name}.`, '#ffb347'); saveGame(); return; }
+    blitzAus(); G.mode = 'play'; SHIP.g.visible = true;
+  } else if (h && h.at.k === 'land' && PLANETS[h.sector]) {
+    const sh = (h.at as Extract<PlayerAt, { k: 'land' }>).ship;
+    if (P.sector !== h.sector || !world.surface) { const fl = $('flash'); fl.style.transition = 'none'; fl.style.opacity = '1'; void enterSurface(h.sector, { x: sh.x, y: sh.y, z: sh.z, yaw: sh.yaw }).then(blitzAus); } else blitzAus();
+    ROVER.active = true; resumeLanded(h.at as Extract<PlayerAt, { k: 'land' }>);
+  } else if (world.surface) { blitzAus(); ROVER.active = true; leaveShipOnFoot(); G.mode = 'rover'; resetRoverCamera(); releaseAll(); }
+  else { blitzAus(); G.mode = 'play'; }
+  $('hud').classList.remove('hidden');
+  radio('SYSTEM', `${text} Du bist zurück bei deinem Schiff.`, '#ffb347'); saveGame();
+};
 // Nach dem Landen auf einem Planeten (seit 2026-11-26, Nutzer: „E zum Landen, ob man das Fahrzeug rausfährt, macht man selber“): Begehbare Schiffe
 // lassen den Piloten hinter dem Sitz aufstehen, hinaus geht es über die Rampe zu Fuß oder im Fahrzeug aus dem Laderaum. Kleine Flieger: zu Fuß an der
 // Leiter. Ist der Innenraum noch nicht geladen, steht man draußen (sonst hinge man bis zum Ende des Ladens zwischen Cockpit und Boden).
@@ -519,6 +602,7 @@ onKey(code => {
   // Intro und Szenen: nur überspringen bzw. weiterblättern
   if (G.mode === 'intro') { if (code === 'Escape') skipIntro(); return; }
   if (G.mode === 'scene') { if (code === 'Space' || code === 'Enter' || code === 'NumpadEnter' || code === 'Escape') sceneNext(); return; }
+  if (GUN.aktiv && G.mode === 'walk') { if (code === 'KeyE' || code === 'KeyF' || code === 'Escape') schuetzeAus(); return; }      // am Schützenplatz: nur aufstehen (turm.ts)
   if (code === 'Escape') {
     if (G.mode === 'map') closeMap();
     else if (G.mode === 'play' || G.mode === 'walk' || G.mode === 'rover' || G.mode === 'dungeon' || G.mode === 'eva') pause();
@@ -619,6 +703,7 @@ onKey(code => {
 function startJump(g: Gate) {
   G.mode = 'jump';
   G.jumpT = 1.3;
+  mitMelden('sprung', g.to, world.def!.id, 1.3);      // Gäste an Bord springen mit (net.ts)
   G.jumpTo = g.to;
   G.jumpFrom = world.def!.id;
   releaseAll();
@@ -669,6 +754,7 @@ function startEntry(to: 'surface' | 'orbit') {
   if (to === 'surface') sfx('entry', 0.7);   // Rauschen und Rütteln beim Eintritt in die Atmosphäre
   G.transT = to === 'surface' ? 2.4 : 1.4;
   G.transTo = to;
+  mitMelden(to, P.sector, '', G.transT);      // Gäste an Bord machen den Übergang mit (net.ts)
   releaseAll();
   snd(to === 'surface' ? 120 : 200, G.transT, 'sawtooth', 0.04, to === 'surface' ? -40 : 400);
   if (to === 'surface') radio('SYSTEM', `Eintritt in die Atmosphäre von ${PLANETS[P.sector].name}.`);
@@ -785,7 +871,7 @@ function updateCamera(dt: number) {
   if (G.mode === 'intro') { camera.position.copy(INTRO.pos); camera.lookAt(INTRO.look); setFov(50); return; }
   if (DUN.active) { dungeonCamera(); return; }
   if (G.mode === 'eva' || (G.mode === 'pause' && EVA.active)) { evaCamera(); return; }
-  if (IN.active) { applyWalkCamera(); return; }
+  if (IN.active) { if (GUN.aktiv) turmKamera(); else applyWalkCamera(); return; }
   if (G.mode === 'rover' || (G.mode === 'pause' && ROVER.active) || (G.mode === 'map' && ROVER.active)) { if (FOOT.active) footCamera(dt); else roverCamera(dt); return; }
   if (G.mode === 'menu' || (G.mode === 'dock' && G.dockedAt) || (G.mode === 'map' && G.dockedAt)) {
     const big = world.stations[0] && world.stations[0].R > 400;   // neue, doppelt so große Bastion
@@ -856,7 +942,11 @@ function simulate(dt: number) {
     else if (world.surface && !G.dead && P.y > SURF.ceiling) startEntry('orbit');
     updateSurfaceFlight(dt);
   } else if (m === 'jump') updateJump(dt);
-  else if (m === 'walk') { updateBordflug(dt); if (G.mode === 'walk') updateWalk(dt); }      // im Flug an Bord: Autopilot bewegt das Schiff (bordflug.ts)
+  else if (m === 'walk') {
+    updateBordflug(dt);
+    if (!IN.active && GUN.aktiv) schuetzeAus();
+    if (G.mode === 'walk') { if (GUN.aktiv) { const f = BORD.aktiv ? 1 : 0, gv = GUN.gast ? gastFahrt(GUN.gast) : null; if (gv) updateSchuetze(dt, gv.x, gv.y, gv.z); else updateSchuetze(dt, P.vx * f, P.vy * f, P.vz * f); } else updateWalk(dt); }      // am Schützenplatz richtet die Maus den Turm (turm.ts)
+  }      // im Flug an Bord: Autopilot bewegt das Schiff (bordflug.ts)
   else if (m === 'dungeon') updateDungeon(dt);
   else if (m === 'eva') updateEva(dt);      // Außenbordeinsatz (eva.ts)
   else if ((m as string) === 'launch') { updateHangarSequence(dt); updateRoomLife(dt); }
@@ -978,6 +1068,9 @@ function loop(now: number, manual = false) {
     INNEN.amb.value = IN.active ? 1 : 0.45;      // Schiffsinnenräume von draußen: weniger Umgebungslicht (innenFlaeche.ts)
     schiffslicht(IN.active || !world.surface ? 1 : 0.6);
     cockpitUpdate(dt, (G.mode === 'play' || G.mode === 'jump' || (G.mode === 'pause' && !EVA.active)) && !G.dead && !IN.active && !ROVER.active && !DUN.active && SHIP.g.visible);      // Leuchten der Schiffe auf Planeten draußen gedämpft (gltfShips.ts)
+    turmBild(dt);      // Rückenturm: Stellung ans Modell (turm.ts)
+    modulBild();      // Modulplätze im Technikraum: nach einem Umbau neu bestücken (modulplatz.ts)
+    gaestePflege();      // Gäste an Bord: wer lange schweigt, gilt als fort (net.ts)
     updateCamera(dt);
     shadowSweep -= dt;
     if (shadowSweep <= 0) { shadowSweep = 0.4; markShadows(scene, sky); }
@@ -1002,7 +1095,7 @@ function loop(now: number, manual = false) {
   drawHUD();
   if (world.def && G.mode !== 'map' && !IN.active && !DUN.active) drawFlare(ux, dt, flareOccluders());
   if (!(FOOT.active && world.surface && G.mode === 'rover')) hideFieldViewModel();   // Waffe der Ich-Sicht nur zu Fuß auf einem Planeten (blieb nach Sektorwechsel sonst im Bild, auch in der Station)
-  drawWalkHUD();
+  if (GUN.aktiv && G.mode === 'walk') drawTurmHUD(); else drawWalkHUD();
   if (G.mode === 'play' || G.mode === 'rover') drawRecht();
   if (G.mode === 'eva') drawEva();      // Fahndung (recht.ts)
   if (!FOOT.active) { drawRoverHUD(); if (G.mode === 'rover' && ROVER.active) { drawSalvageHUD(ROVER.x, ROVER.z); drawGroundMarkers(); } } else drawFootHUD();

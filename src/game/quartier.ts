@@ -5,13 +5,14 @@
 // Wessen Quartier es gerade ist, steht in QS.owner; was darin steht (Schiffsmodelle, Fundstücke, Türschild), kommt aus dem Spielstand des
 // Besitzers (QDeko). Im Mehrspieler sieht man nur Piloten im selben Quartier: Der Ort im Netz heißt dann „bastion#q:<Besitzer>“ (net.ts).
 // Besuch nur auf Einladung: Der Besitzer lädt am Bildschirm einen Piloten auf der Bastion ein, die Einladung trägt seine Ausstattung mit.
+import { buchtKennung } from './hangarbucht';
 import { P } from './state';
 import { gearDef } from '../data/gear';
 import { SHIPS, type ShipId } from '../data/ships';
 
 export interface QDeko { nr: number; name: string; schiffe: string[]; funde: string[]; legenden: string[] }
 export interface QEinladung { von: string; id: number; deko: QDeko; t: number }
-export type QMode = 'aufzug' | 'schirm' | 'regal';
+export type QMode = 'aufzug' | 'schirm' | 'regal' | 'bucht';      // bucht: Buchtenwahl im Hangar (hangarbucht.ts)
 export const QPREIS = 2500;
 export const QEINLADUNG_MS = 15 * 60 * 1000;
 export const QS = {
@@ -36,7 +37,7 @@ export function quartierNr(name: string) {
 }
 export const nrText = (nr: number) => `Q-${nr}`;
 // Ort im Netz: Mitspieler sieht man nur im selben Quartier (oder beide auf Deck 3)
-export const ortKennung = (station: string) => station + (QS.in && QS.owner ? '#q:' + QS.owner : '');
+export const ortKennung = (station: string) => station + (QS.in && QS.owner ? '#q:' + QS.owner : buchtKennung());      // im Hangar: die Bucht (hangarbucht.ts)
 
 const FUND = ['fund_k_ferrit', 'fund_k_iridium', 'fund_k_erden', 'fund_k_titan', 'fund_k_kupfer', 'fund_k_eisen', 'fund_k_eis'];
 export function funde(): Record<string, number> {

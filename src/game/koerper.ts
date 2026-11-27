@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SHIPS, type ShipId } from '../data/ships';
-import { hasModel, modelInstance, RAMP_ENTRY } from '../models/gltfShips';
+import { hasModel, modelInstance, rampenVon } from '../models/gltfShips';
 import { type Lage, gekippt, zuLokal, zuWelt } from './lage';
 
 // =====================================================================================
@@ -114,8 +114,9 @@ export function schiffSperrt(cls: string, s: Lage, ox: number, oz: number, nx: n
     const p = zuLokal(ox, fy + h, oz, s, _a), q = zuLokal(nx, fy + h, nz, s, _b);
     if (g.strecke(p.x, p.y, p.z, q.x, q.y, q.z)) return true;
   }
-  const e = rampeOffen ? RAMP_ENTRY[SHIPS[cls as ShipId]?.model || ''] : null;
-  if (e) { const drin = (p: { x: number; z: number }) => Math.abs(p.x) < e.hw + LEIB && p.z > e.door && p.z < e.foot + LEIB; if (drin(b) && !drin(a)) return true; }
+  if (rampeOffen) for (const e of rampenVon(SHIPS[cls as ShipId]?.model || '')) {      // Heck- und Bugrampe (Möwe): Richtung e.s
+    const drin = (p: { x: number; z: number }) => Math.abs(p.x) < e.hw + LEIB && e.s * p.z > e.s * e.door && e.s * p.z < e.s * e.foot + LEIB; if (drin(b) && !drin(a)) return true;
+  }
   return false;
 }
 

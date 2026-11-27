@@ -10,7 +10,7 @@ import type { ShipId } from '../data/ships';
 // Gebaut wird hier nur Geometrie und Grundriss; was die Stationen tun, legt interior.ts fest.
 // =====================================================================================
 export type Rect = [number, number, number, number];
-export type StationKind = 'seat' | 'hatch' | 'log' | 'scanner' | 'bench' | 'drones' | 'bed' | 'locker' | 'ramp';      // ramp: Rampenschalter (Wisent)
+export type StationKind = 'seat' | 'hatch' | 'log' | 'scanner' | 'bench' | 'drones' | 'bed' | 'locker' | 'ramp' | 'gunner' | 'mod_waffe' | 'mod_abwehr' | 'mod_antrieb' | 'mod_system1' | 'mod_system2';      // ramp: Rampenschalter (Wisent)
 export interface ShipSpot { kind: StationKind; x: number; z: number; r: number; label: string }
 export interface ShipRoom {
   g: THREE.Group; rects: Rect[]; obstacles: Rect[]; spots: ShipSpot[];

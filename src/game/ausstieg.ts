@@ -17,7 +17,7 @@ export type AusArt = 'kanzel' | 'rampe' | 'heck';
 export function ausArt(): AusArt {
   if (kanzelInfo(SHIP.g)) return 'kanzel';
   let name = ''; SHIP.g.traverse(o => { if (!name && o.userData.model) name = o.userData.model; });
-  return name === 'Kormoran' || name === 'Wisent' || name === 'Dohle' ? 'rampe' : 'heck';
+  return name === 'Kormoran' || name === 'Wisent' || name === 'Dohle' || name === 'Kranich' || name === 'Moewe' || name === 'Harpyie' ? 'rampe' : 'heck';
 }
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(1, 1, 1);
 /** Schiffskoordinaten → Welt: am Boden aus der Landelage (x, y, z, Gierwinkel), sonst aus dem Schiffsmodell */

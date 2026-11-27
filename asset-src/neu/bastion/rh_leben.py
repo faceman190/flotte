@@ -286,5 +286,6 @@ def cams_neu():
     cam('arbeit', (4.8, 8.0, 1.7), (2.56, 12.0, 0.3), 18)
     VIEWS.extend(['markt', 'markt2', 'garkueche', 'banner', 'arbeit'])
 
-leben(); licht_neu(); cams_neu()
-result['leben'] = {'banner': len(BANNER), 'staende': 3}
+if not globals().get('NUR_HELFER_RH'):
+    leben(); licht_neu(); cams_neu()
+    result['leben'] = {'banner': len(BANNER), 'staende': 3}

@@ -69,14 +69,17 @@ Flieg nah an eine Station heran, bis links unten **Andocken** aufleuchtet, und d
 Ab hier läufst du mit <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>, rennst mit <kbd>Umschalt</kbd> und benutzt Terminals oder
 sprichst Leute mit <kbd>E</kbd> an.
 
-Jeder Dienst hat seinen eigenen Ort. Auf der Bastion führt vom Hangar ein breiter Korridor in die **Rundhalle** (Deck 3). In der
-Mitte liegt der Treffpunkt, ringsum die Läden, jeder mit eigenem Leuchtschild. Leitspuren am Boden zeigen den Weg.
+Jeder Dienst hat seinen eigenen Ort. Auf der Bastion führt vom Hangar ein breiter Korridor über die Vorhalle mit den zwei Aufzügen ins
+**Forum** (Deck 3). In der Mitte liegt der Treffpunkt, an den Längsseiten vier große Läden, jeder mit eigenem Leuchtschild, am Ende
+die Einsatzzentrale. Leitspuren am Boden zeigen den Weg.
 
 | Ort | Dienste |
 |---|---|
 | Hangar, Deckmeister neben der Schleuse | Schiff wechseln, verkaufen, lackieren |
-| Treffpunkt in der Hallenmitte | Auskunft, Galaxiekarte |
-| Aufträge (gegenüber dem Korridor) | Aufträge und Missionen |
+| Treffpunkt in der Mitte des Forums | Auskunft, Galaxiekarte |
+| Einsatzzentrale (am Ende des Forums) | Aufträge und Missionen |
+| Vorhalle, Aufzug QUARTIERE | dein Quartier |
+| Vorhalle, Aufzug HANGARBUCHTEN | eigene Bucht, Gäste einladen, Einladungen annehmen |
 | Handelskontor | Markt, Stationslager |
 | Werft | Werft, Werkstatt (Ausbauten), Service |
 | Ausrüster | Ausrüstung und Module |
@@ -112,8 +115,8 @@ gute Wege zum Geld:
 
 ## Dein Quartier
 
-Sobald du 2.500 Credits übrig hast, lohnt sich ein **Quartier** auf der Bastion: Aufzug **QUARTIERE** an der Nordseite von Deck 3,
-zwischen Handelskontor und Werft. Dort ruhst du dich in der Koje aus (Hülle und Schild voll, Spielstand gesichert), lagerst Ausrüstung im
+Sobald du 2.500 Credits übrig hast, lohnt sich ein **Quartier** auf der Bastion: Aufzug **QUARTIERE** in der Vorhalle von Deck 3,
+gleich hinter dem Korridor. Dort ruhst du dich in der Koje aus (Hülle und Schild voll, Spielstand gesichert), lagerst Ausrüstung im
 Spind und siehst im Regal deine Schiffe und Fundstücke. Am Bildschirm lädst du Mitspieler ein.
 
 ## Wenn es schiefgeht

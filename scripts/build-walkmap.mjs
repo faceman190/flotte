@@ -7,7 +7,7 @@
 //  5. Der größte zusammenhängende Bereich unter einer Decke ist der Innenraum.
 //  6. Punkte: Pilotensitz (ganz vorn), Einstieg (hinten unten), Koje (beim Holz), Logbuch, Spind, Lichter, Bereiche.
 // Aufruf: node --max-old-space-size=12000 scripts/build-walkmap.mjs <innen.glb> <außen.glb> <aus.json> [--cell=0.2]
-// --offen=x0,x1,z0,z1 (Schiffskoordinaten): dort zählen auch Flächen ohne Decke darüber als Boden (offene Heckrampe des Wisent).
+// --offen=x0,x1,z0,z1[,y0,y1][;x0,x1,z0,z1 …] (Schiffskoordinaten): dort zählen auch Flächen ohne Decke darüber als Boden (offene Heckrampe des Wisent).
 // --spawn=x,y,z: Einstieg fest an dieser Stelle (nächste begehbare Zelle) statt automatisch. Weitere Auslöser-Arten aus --spots
 // (z. B. „ramp“ für den Rampenschalter) kommen zusätzlich in die Liste.
 import fs from 'fs';
@@ -18,7 +18,8 @@ import { io } from './glb-lib.mjs';
 
 const args = process.argv.slice(2), opt = Object.fromEntries(args.filter(a => a.startsWith('--')).map(a => a.slice(2).split('=')));
 const [inInner, inOuter, out] = args.filter(a => !a.startsWith('--'));
-const CELL = +(opt.cell || 0.2), HEAD = 1.95, STEP = 0.45, OFFEN = opt.offen ? opt.offen.split(',').map(Number) : null;
+const CELL = +(opt.cell || 0.2), HEAD = 1.95, STEP = 0.45, OFFEN = opt.offen ? opt.offen.split(';').map(b => b.split(',').map(Number)) : null;      // mehrere Bereiche mit ; getrennt (Möwe: Heck- und Bugrampe)
+const inOffen = (x, z, y) => !!OFFEN && OFFEN.some(o => x >= o[0] && x <= o[1] && z >= o[2] && z <= o[3] && (y === undefined || o.length < 6 || (y >= o[4] && y <= o[5])));      // optional y0,y1 (Möwe: nur die Bugrampe, nicht die offene Haube darüber)
 const t0 = Date.now();
 const outer = await io.read(inOuter), ob = getBounds(outer.getRoot().listScenes()[0]);
 const cx = (ob.min[0] + ob.max[0]) / 2, cy = (ob.min[1] + ob.max[1]) / 2, cz = (ob.min[2] + ob.max[2]) / 2;
@@ -63,7 +64,7 @@ for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) {
     const h = hits[k]; if (faceNy(h.faceIndex) < 0.7) continue;
     const above = k > 0 ? hits[k - 1].point.y - h.point.y : Infinity;
     if (above >= HEAD && above < 60) list.push({ y: h.point.y, ceil: above });   // ohne Decke darüber = Außenhaut, kein Deck
-    else if (OFFEN && above === Infinity && x >= OFFEN[0] && x <= OFFEN[1] && z >= OFFEN[2] && z <= OFFEN[3]) list.push({ y: h.point.y, ceil: 6 });
+    else if (above === Infinity && inOffen(x, z, h.point.y)) list.push({ y: h.point.y, ceil: 6 });
   }
   if (list.length) floors[ix * NZ + iz] = list.slice(0, 4);
 }
@@ -95,7 +96,7 @@ for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) {
 if (opt.minY) for (let i = 0; i < floors.length; i++) if (floors[i]) { floors[i] = floors[i].filter(f => f.y >= +opt.minY); if (!floors[i].length) floors[i] = undefined; }
 // --minYaussen=y: zusätzlich alles unter y weglassen, außer im Bereich --offen (Rampe bis zum Boden; Hohlräume unter dem Laderaum zählen nicht)
 if (opt.minYaussen) for (let i = 0; i < floors.length; i++) if (floors[i]) {
-  const ix = Math.floor(i / NZ), iz = i % NZ, x = x0 + (ix + 0.5) * CELL, z = z0 + (iz + 0.5) * CELL, inO = OFFEN && x >= OFFEN[0] && x <= OFFEN[1] && z >= OFFEN[2] && z <= OFFEN[3];
+  const ix = Math.floor(i / NZ), iz = i % NZ, x = x0 + (ix + 0.5) * CELL, z = z0 + (iz + 0.5) * CELL, inO = inOffen(x, z);
   if (!inO) { floors[i] = floors[i].filter(f => f.y >= +opt.minYaussen); if (!floors[i].length) floors[i] = undefined; }
 }
 // 2./3. Verbindungen zwischen Nachbarn (Wände per waagerechter Strahlen)

@@ -29,6 +29,7 @@ import { FZ, FZ_IDS, buildFahrzeug, fzLaden, normFz, type FzId } from '../models
 import { bodenAushang, bodenAnnehmen, bodenAbgeben } from '../game/bodenaufgaben';
 import { aufgabenAushang } from '../game/aufgaben';
 import { abholen as fzAbholen, ABHOLEN_PREIS, eigene, ortText, kaufen as fzKaufen, verladen as fzVerladen, passtIn, schiffePasst, anBord, freiePlaetze, stellplaetze, ortVon, FZ_MASS } from '../game/fahrzeuge';
+import { HB, HB_MS, buchtHooks, buchtEinladungen, buchtFremd } from '../game/hangarbucht';
 import { QS, QPREIS, quartierHooks, eigeneDeko, mieten, nrText, gueltigeEinladungen, funde, schiffe, fundName, QEINLADUNG_MS, type QDeko } from '../game/quartier';
 
 // Stationsterminals (seit Alpha 1.25): Jeder Dienst hat seinen eigenen Ort auf der Station und sein eigenes Terminal.
@@ -72,7 +73,7 @@ export function openDock(s: Station) {
 }
 // Ein Terminal öffnen (vom Tresen oder Stand aus): genau ein Dienst
 export function showMenu(t?: string, n?: string, sub?: string) {
-  const quart = t === 'quartier' && G.dockedAt?.id === 'bastion';      // Quartier: kein Dienst der Station, nur über Aufzug und Möbel im Quartier
+  const quart = t === 'quartier' && (G.dockedAt?.id === 'bastion' || QS.mode === 'bucht');      // Buchtenwahl im Hangar: an jeder Station      // Quartier: kein Dienst der Station, nur über Aufzug und Möbel im Quartier
   if (!G.dockedAt || !t || (!tabs().includes(t as Tab) && !quart)) return;
   tab = t as Tab; note = n || '';
   resetSel(); opening = true;
@@ -577,6 +578,21 @@ function vQuartier(): View {
   const own = P.quartier, nr = own ? nrText(own.nr) : '—';
   const k = kpi('Quartier', nr) + kpi('Credits', `${fmtN(P.credits)} Cr`);
   const rowB = (name: string, sub: string, btn: string) => `<div class="rw gH"><span class="nm"><span><b>${esc(name)}</b><small>${sub}</small></span></span><span></span><span></span><span class="r">${btn}</span></div>`;
+  const buchten = () => {
+    const inv = buchtEinladungen(), pl = buchtHooks.piloten();
+    let b = `<h3>Hangarbuchten</h3><p>Jeder Pilot hat an dieser Station seine eigene Hangarbucht. In eine fremde Bucht kommt nur, wen der Besitzer einlädt. Dort steht sein Schiff, und über die Rampe geht es an Bord.</p>
+      <div class="act"><button class="${buchtFremd() || !HB.zone ? 'pri ' : ''}big" data-a="hfahrt"><span>${buchtFremd() ? 'Zurück in meine Hangarbucht' : 'In meine Hangarbucht'}</span><span class="mo">${esc(P.shipName)}</span></button></div>`;
+    b += '<h3>Einladungen in Buchten</h3>' + (inv.length ? inv.map((e, i) => rowB(e.von, `gilt noch ${Math.max(1, Math.ceil((HB_MS - (Date.now() - e.t)) / 60000))} min`, `<button class="pri" data-a="hbesuch" data-n="${i}">${HB.owner === e.von ? 'Du bist dort' : 'Besuchen'}</button>`)).join('')
+      : '<p class="hint">Keine Einladungen. Ein anderer Pilot lädt dich am Aufzug „Hangarbuchten“ auf Deck 3 oder an der Buchtenwahl in seinem Hangar ein.</p>');
+    b += '<h3>In meine Bucht einladen</h3>' + (pl.length ? pl.map(p => rowB(p.name, 'an dieser Station', `<button class="pri" data-a="hinv" data-n="${p.id}">Einladen</button>`)).join('')
+      : '<p class="hint">Gerade ist kein anderer Pilot an dieser Station. Einladen kannst du nur, wer mit dir online hier angedockt ist.</p>');
+    return b;
+  };
+  if (QS.mode === 'bucht') {
+    return { k: kpi('Hangarbucht', buchtFremd() ? esc(HB.owner) : 'eigene') + kpi('Schiff', esc(P.shipName)), cols: 'minmax(0,1fr) 400px',
+      h: `<section class="pn">${buchten()}</section><aside class="pn"><p class="lb">Zu Gast</p><div>${line('Zutritt', 'nur mit Einladung')}${line('Einladung gilt', '15 Minuten')}${line('An Bord', 'über die Rampe')}</div>
+        <div class="box"><p class="lb acc">Mitfliegen</p><p>Bist du an Bord und der Besitzer legt ab, fliegst du mit: durch Tore, in den Orbit, auf Planeten. Dein eigenes Schiff bleibt hier angedockt und folgt dir per Autopilot, wenn ihr woanders ankommt.</p></div></aside>` };
+  }
   if (QS.mode === 'aufzug') {
     let h = `<section class="pn"><h3>Quartiere der Bastion</h3><p>Ein eigener Raum an Bord: Koje, Spind, Schreibtisch und ein Fenster ins All. Die Bastion vermietet Quartiere an die Piloten der Flotte. Einmal bezahlt, gehört es dir.</p>`;
     if (own) h += `<div class="box"><p class="lb acc">Dein Quartier</p><h2>${nr}</h2><p>Deck Q, über diesen Aufzug. Gemietet seit ${new Date(own.seit).toLocaleDateString('de-DE')}.</p></div>
@@ -657,6 +673,10 @@ $('dockCard').addEventListener('click', e => {
   if (a === 'qmiete') { note = mieten(); if (P.quartier) { sfx('ui_confirm', 0.5, 1, () => snd(900, 0.15, 'sine', 0.05, 400)); saveGame(); } }
   if (a === 'qfahrt' && P.quartier) { closeMenu(); quartierHooks.fahren(P.name, eigeneDeko()); return; }
   if (a === 'qbesuch') { const e = gueltigeEinladungen()[n]; if (e) { closeMenu(); quartierHooks.fahren(e.von, e.deko); return; } note = 'Diese Einladung gilt nicht mehr.'; }
+  // Hangarbuchten (game/hangarbucht.ts)
+  if (a === 'hfahrt') { closeMenu(); buchtHooks.fahren('', 0); return; }
+  if (a === 'hbesuch') { const e = buchtEinladungen()[n]; const g = e ? buchtHooks.fahren(e.von, e.id) : 'Diese Einladung gilt nicht mehr.'; if (!g) { closeMenu(); return; } note = g; }
+  if (a === 'hinv') { const who = buchtHooks.piloten().find(p => p.id === n); note = who && buchtHooks.einladen(n) ? `Einladung in deine Hangarbucht an ${who.name} geschickt.` : 'Einladen ging nicht (nicht verbunden).'; }
   if (a === 'qinv') { const who = quartierHooks.piloten().find(p => p.id === n); note = who && quartierHooks.einladen(n, eigeneDeko()) ? `Einladung an ${who.name} geschickt.` : 'Einladen ging nicht (nicht verbunden).'; }
   // Mengen wählen (Markt, Raffinerie): Umschalt-Klick ändert um zehn
   if (a === 'inc' || a === 'dec' || a === 'max') {
