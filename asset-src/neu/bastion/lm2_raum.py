@@ -51,6 +51,7 @@ def params(m):
         e = sock(b, 'Emission Color', 'Emission'); es = sock(b, 'Emission Strength')
         if e is not None and es is not None and es.default_value > 0: d['emit'] = list(e.default_value)[:3]; d['es'] = es.default_value
     d['kind'] = kind(m)
+    if nm in OPT.get('fern', {}): d['fern'] = OPT['fern'][nm]      # Größe kleiner Leuchten (m): Das Spiel blendet sie aus, wenn sie kleiner als ein Bildpunkt werden (deck.ts, l2glow)
     return nm, {k: (round(v, 4) if isinstance(v, float) else v) for k, v in d.items()}
 
 # ---------- Auflösen (wie lm_raum.py) ----------
@@ -99,10 +100,59 @@ def poly_arrays(me):
     mi = np.empty(npol, dtype=np.int32); me.polygons.foreach_get('material_index', mi)
     lt = np.empty(npol, dtype=np.int32); me.polygons.foreach_get('loop_total', lt); ls = np.empty(npol, dtype=np.int32); me.polygons.foreach_get('loop_start', ls)
     return npol, nl, ar, mi, lt, ls
-def unwrap_big(J, size, kinds, bmin=None):      # bmin: Mindestfläche (m²) für die Lichtkarte; Vorgabe OPT['big']
+def teilen(J):      # OPT teilen (Meter; Hangar, 2026-11-27): lange Flächen an einem Raster zerschneiden. Die Halle hat Flächen von 18 bis 184 m Länge
+    # (Dachplatte, Träger, Rohre, Fußweg). Als eine Insel zwingen sie die ganze Abwicklung klein (das Bild war nur zu 12 bis 46 % belegt), und als
+    # schmale Streifen mit Eckpunkt-Licht haben sie nur vier Lichtwerte auf ihrer ganzen Länge.
+    T = float(OPT['teilen']); me = J.data; bm = bmesh.new(); bm.from_mesh(me); geom = set(); lo = [1e9] * 3; hi = [-1e9] * 3
+    for f in bm.faces:
+        a = [1e9] * 3; b = [-1e9] * 3
+        for v in f.verts:
+            c = v.co
+            for k in range(3):
+                if c[k] < a[k]: a[k] = c[k]
+                if c[k] > b[k]: b[k] = c[k]
+        if max(b[0] - a[0], b[1] - a[1], b[2] - a[2]) > T * 1.25:
+            geom.add(f); geom.update(f.edges); geom.update(f.verts)
+            for k in range(3): lo[k] = min(lo[k], a[k]); hi[k] = max(hi[k], b[k])
+    n0 = len(bm.faces)
+    if geom:
+        geom = list(geom)
+        for k in range(3):
+            no = [0.0, 0.0, 0.0]; no[k] = 1.0; q = math.floor(lo[k] / T) * T + T
+            while q < hi[k] - 0.01:
+                co = [0.0, 0.0, 0.0]; co[k] = q + 0.0137      # knapp neben dem Raster: nicht genau in Plattenfugen und Bausteingrenzen
+                geom = bmesh.ops.bisect_plane(bm, geom=geom, dist=1e-4, plane_co=co, plane_no=no, clear_inner=False, clear_outer=False)['geom']; q += T
+        bm.to_mesh(me); me.update()
+    n1 = len(bm.faces); bm.free(); return n1 - n0
+def verdeckt(J, big):      # OPT verdeckt (Hangar, 2026-11-27): große Flächen, die niemand sieht, aus der Lichtkarte nehmen (sie bekommen Eckpunkt-Licht).
+    # Das sind Rückseiten der Wandplatten, die Wand hinter den Platten, der Grund unter den Bodenplatten, Außenseiten von Wand und Dach. Sie belegten
+    # über die Hälfte der Lichtkarte. Probe je Fläche an der Mitte und auf 80 % des Wegs zu jeder Ecke, entlang der Normale:
+    #   außerhalb des Innenraums (OPT innen = [x0, x1, y0, y1, z0, z1]) · etwas näher als verdeckt_d davor · oder der Strahl trifft eine Rückseite (wir stecken in einem Körper)
+    from mathutils.bvhtree import BVHTree
+    bm = bmesh.new(); bm.from_mesh(J.data); bm.faces.ensure_lookup_table(); tree = BVHTree.FromBMesh(bm, epsilon=0.0)
+    out = np.zeros(len(bm.faces), dtype=bool); d = float(OPT.get('verdeckt_d', 0.2)); box = OPT.get('innen')
+    if box and not isinstance(box[0], (list, tuple)): box = [box]      # ein Kasten oder mehrere (Hangar: Halle und Tordurchfahrt)
+    for i in np.nonzero(big)[0].tolist():
+        f = bm.faces[i]; n = f.normal
+        if n.length < 0.5: continue
+        c = f.calc_center_median(); hid = True
+        for p in [c] + [c.lerp(v.co, 0.8) for v in f.verts]:
+            q = p + n * 0.05
+            if box and not any(b[0] <= q.x <= b[1] and b[2] <= q.y <= b[3] and b[4] <= q.z <= b[5] for b in box): continue
+            loc, nrm, idx, dist = tree.ray_cast(p + n * 0.002, n, 600.0)
+            if loc is None or (dist > d and nrm.dot(n) <= 0.3): hid = False; break
+        out[i] = hid
+    bm.free(); return out
+def unwrap_big(J, size, kinds, bmin=None, schmal=None):      # schmal: Mindestbreite (m) für die Lichtkarte je Teil; Vorgabe OPT['schmal']      # bmin: Mindestfläche (m²) für die Lichtkarte; Vorgabe OPT['big']
     me = J.data; npol, nl, ar, mi, lt, ls = poly_arrays(me)
     lit = np.array([k == 'lit' for k in kinds], dtype=bool)[mi]
-    big = (ar >= (bmin or OPT['big'])) & lit
+    big = (ar >= (bmin or OPT['big'])) & lit; averd = 0.0
+    schmal = OPT.get('schmal') if schmal is None else schmal
+    if schmal:      # schmale Streifen (Rohre, Kanten, Leisten) nicht in die Lichtkarte: Sie belegen dort viel Rand und wenig Fläche
+        co = np.empty(len(me.vertices) * 3, dtype=np.float32); me.vertices.foreach_get('co', co); co = co.reshape(-1, 3)
+        lv = np.empty(nl, dtype=np.int32); me.loops.foreach_get('vertex_index', lv); nxt = np.arange(nl) + 1; nxt[ls + lt - 1] = ls
+        per = np.add.reduceat(np.linalg.norm(co[lv] - co[lv[nxt]], axis=1), ls); big &= (2.0 * ar / np.maximum(per, 1e-6)) >= float(schmal)
+    if OPT.get('verdeckt'): hid = verdeckt(J, big); averd = float(ar[big & hid].sum()); big &= ~hid
     me.uv_layers.new(name='LM'); me.uv_layers.active = me.uv_layers['LM']
     for o in bpy.context.view_layer.objects: o.select_set(False)
     J.select_set(True); bpy.context.view_layer.objects.active = J
@@ -125,7 +175,7 @@ def unwrap_big(J, size, kinds, bmin=None):      # bmin: Mindestfläche (m²) fü
     a[~lbig] = -1.0      # kleine Flächen: außerhalb des Bildes, das Spiel nimmt für sie das Licht der Eckpunkte
     me.uv_layers['LM'].data.foreach_set('uv', a.ravel())
     cover = sum(0.5 * abs(float(np.dot(a[s:s + t, 0], np.roll(a[s:s + t, 1], 1)) - np.dot(a[s:s + t, 1], np.roll(a[s:s + t, 0], 1)))) for s, t, g in zip(ls, lt, big) if g)
-    return cover, float(ar[big].sum()), float(ar.sum()), int(big.sum())
+    return cover, float(ar[big].sum()), float(ar.sum()), int(big.sum()), averd
 
 # ---------- Backen ----------
 def prep_materials():      # Metall zählt beim Backen als Lack (das Spiel rechnet den Glanz selbst), kein Dunst
@@ -202,7 +252,7 @@ def run():
     for cn in OPT.get('hide_colls', []):
         if cn in bpy.data.collections:
             for ob in bpy.data.collections[cn].all_objects: ob.hide_render = True
-    parts = [dict(name=r['name'], cells=[list(c) for c in r.get('cells', [])], lm=r.get('lm', OPT['lm']), spp=r.get('samples', OPT['samples']), big=r.get('big', OPT['big']), emp=[]) for r in OPT['rooms']]
+    parts = [dict(name=r['name'], cells=[list(c) for c in r.get('cells', [])], lm=r.get('lm', OPT['lm']), spp=r.get('samples', OPT['samples']), big=r.get('big', OPT['big']), schmal=r.get('schmal'), emp=[]) for r in OPT['rooms']]
     if OPT.get('split') == 'hangar':
         # Hangar: Teile nach Lage wie die Bereiche im Spiel (deck.ts, buildHangar): Dach; Halle in 3 × 3 Feldern (h<i><j>); Wandfüllungen und
         # Kleinteile des Gang-Baukastens in denselben Feldern, aber eigene Teile (k<i><j>), damit das Spiel sie in der Ferne ausblenden kann
@@ -246,10 +296,13 @@ def run():
         p['mats'] = [params(m) for m in p['J'].data.materials]      # vor dem Umbau fürs Backen
         for nm, d in p['mats']: table[nm] = d
         note('aufgelöst: %s %d Instanzen, %d Dreiecke, %d Lampen, %d Materialien (%.0f s)' % (p['name'], len(p['emp']), tri(p['J']), nl, len(set(n for n, _ in p['mats'])), time.time() - t0))
+    if OPT.get('teilen'):
+        for p in parts: p['geteilt'] = teilen(p['J'])
+        note('geteilt: %s (%.0f s)' % (', '.join('%s +%d' % (p['name'].replace(OPT.get('prefix', ''), ''), p['geteilt']) for p in parts), time.time() - t0))
     for p in parts:
-        cov, abig, aall, nbig = unwrap_big(p['J'], p['lm'], [d['kind'] for _, d in p['mats']], p['big'])
+        cov, abig, aall, nbig, averd = unwrap_big(p['J'], p['lm'], [d['kind'] for _, d in p['mats']], p['big'], p['schmal'])
         p['dichte'] = math.sqrt(cov * p['lm'] ** 2 / max(abig, 1e-6))
-        note('abgewickelt: %s %d große Flächen, %.0f von %.0f m², Bild belegt %.0f %%, %.0f Bildpunkte je Meter (%.0f s)' % (p['name'], nbig, abig, aall, cov * 100, p['dichte'], time.time() - t0))
+        note('abgewickelt: %s %d große Flächen, %.0f von %.0f m², Bild belegt %.0f %%, %.0f Bildpunkte je Meter%s (%.0f s)' % (p['name'], nbig, abig, aall, cov * 100, p['dichte'], ', verdeckt %.0f m²' % averd if averd else '', time.time() - t0))
     cp = bpy.context.preferences.addons['cycles'].preferences; cp.compute_device_type = 'OPTIX'; cp.get_devices()
     for d in cp.devices: d.use = d.type == 'OPTIX'
     SC.render.engine = 'CYCLES'; SC.cycles.device = 'GPU'
@@ -258,8 +311,11 @@ def run():
     if OPT.get('clamp_indirect') is not None: SC.cycles.sample_clamp_indirect = OPT['clamp_indirect']
     prep_materials()
     tex = os.path.join(ROOT, 'asset-src', 'tex-world'); info = {}
+    solo = set(OPT.get('solo', []))      # Teile, die nur beim eigenen Backen in der Szene stehen (Deck 3: die Abschlusswände und Schriften je Ebene, pd_deck.py)
     for p in parts:
         J, name, s = p['J'], p['name'], p['lm']; me = J.data; tb = time.time()
+        ohne = OPT.get('solo_ohne', {}).get(name, [])      # Teile, die beim Backen dieses Teils fehlen sollen (Deck 3: das Portal des Korridors steht dort, wo auf Deck 3 die Abschlusswand steht)
+        for q in parts: q['J'].hide_render = q is not p and (q['name'] in solo or q['name'] in ohne)
         # 1. Lichtkarte der großen Flächen
         im = bpy.data.images.new('L2_lit', s, s, alpha=False, float_buffer=True); target(J, im); pick(J)
         SC.cycles.samples = p['spp']; bk = SC.render.bake

@@ -20,7 +20,7 @@ try:
     if views:
         ns['cycles'](int(opt.get('samples', '128')))
         for v in views:
-            tv = time.time(); ns['view'](v, os.path.join(B, 'pd-' + v + '.jpg'), int(opt.get('pct', '100')))
+            tv = time.time(); ns['ebene_zeigen']('h' if v in ns['EBENE_H'] else 'd'); ns['view'](v, os.path.join(B, 'pd-' + v + '.jpg'), int(opt.get('pct', '100')))
             note('%s in %.0f s' % (v, time.time() - tv))
     note('FERTIG nach %.0f s' % (time.time() - t0))
 except Exception:

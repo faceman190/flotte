@@ -49,6 +49,8 @@ interface RundJson {
   tiefe?: number; weit?: number; zonen?: { id: string; poly: number[][] }[]; sicht?: Record<string, string[]>; tore?: [string, string, number[]][];
   teilzone?: Record<string, string>; lampen?: Record<string, [number, number]>; aufzug?: { quartier: number[]; bucht: number[] };
   puppen?: { x: number; y: number; z: number; face: number; teile: Record<string, string>; titel: string }[]; abgang?: number[][];
+  // Zwei Ebenen (seit 2026-11-27): Ebene je Lichtraum-Teil ('h' Hangarebene, 'd' Deck 3; fehlt = beide), Ebene je Weg der Läufer, Sperre je Ebene
+  ebenen?: { teile: Record<string, string>; wege: string[]; sperre: Record<string, number[][][]> };
 }
 // Anbau eines Decks (seit 2026-11-24): das Quartier der Bastion, weit abseits der Rundhalle im selben Plan (asset-src/neu/bastion/qu_spiel.py)
 interface AnbauJson {
@@ -73,7 +75,9 @@ export interface Deck {
   group: THREE.Group; rects: Rect[]; blocks: Rect[]; spots: DeckSpot[]; routes: DeckNode[][]; chats: [number, number, number][];
   map: { x: number; z: number }; name: string; inside: (z: number) => boolean; area: (x: number, z: number) => string; ceil: (x: number, z: number) => number;
   update: (x: number, z: number) => void; view: (x: number, z: number) => void; way: (off: number) => number[][]; tris: number;
-  seen: (x: number, z: number) => boolean; hangarSeen: () => boolean;
+  seen: (x: number, z: number, eb?: string) => boolean; hangarSeen: () => boolean;      // eb: Ebene der Figur, wenn sie in der Vorhalle steht (ohne Angabe Deck 3, '*' = jede)
+  // Zwei Ebenen (Bastion seit 2026-11-27): wege = Ebene je Weg der Läufer; at = Ebene, die an diesem Ort gilt ('' = beide, die Vorhalle); set = Ebene wechseln
+  ebenen?: { wege: string[]; at: (x: number, z: number) => '' | Ebene; set: (e: Ebene) => void };
   release: () => void;      // beim Verlassen des Innenraums: Grafikspeicher der Lichtraum-Bilder freigeben
   prime: () => void;        // beim Betreten, hinter der Blende: alle Raumspiegelungen aufnehmen
   primeStep: () => boolean; // beim Anflug: eine Raumspiegelung aufnehmen (false = alle fertig)
@@ -84,6 +88,15 @@ export interface Deck {
   stale: () => boolean;     // ohne Lichträume gebaut, die inzwischen geladen sind: Der Innenraum baut das Deck dann neu      // ist dieser Ort bzw. der Hangar vom Standort aus zu sehen?
 }
 
+// ---------- Zwei Ebenen (seit 2026-11-27, docs/deck3.md) ----------
+// Nutzer: „Bei dem Hangar für die Spieler. Dort soll kein Deck sein, nur Hangarzugang und die beiden Aufzüge. Nicht nochmal Treffpunkt und Läden“.
+// Die Bastion hat seitdem zwei Ebenen: Hangarebene (Hangar, Korridor, Vorhalle mit den Aufzügen) und Deck 3 (Vorhalle, Forum, Läden,
+// Einsatzzentrale). Dazwischen fährt nur der Südaufzug. Die Vorhalle steht einmal im Modell und gilt für beide Ebenen; je Ebene ist eine ihrer
+// Mündungen mit einer Wand zu (Teile pd_ebene_h und pd_ebene_d, dazu je eine Sperre in den Standflächen). Auf welcher Ebene der Pilot steht,
+// merkt sich EBENE (über den Neuaufbau des Decks hinweg); die Sperren sind je Deck dieselben Rechtecke, weil der Innenraum sie behält.
+export type Ebene = 'h' | 'd';
+export const EBENE = { e: 'h' as Ebene };
+const SPERRE: Record<string, { e: Ebene; r: Rect; o: Rect }[]> = {};
 const RANGE = 70;                 // Bereiche weiter weg werden nicht gezeichnet (m); 46 m schnitten das Ende langer Gänge ab
 const LIGHT = { value: 1.0 };     // Stärke des vorberechneten Lichts
 const GLOW = { value: 0.7 };      // Stärke der Leuchten
@@ -241,7 +254,7 @@ async function lmMaterials(prefix: string) {
 // selbst, nach der Lage der Fläche und beliebig scharf. Aus Blender kommen nur noch: das Modell mit dem Materialnamen je Fläche, eine grobe
 // Lichtkarte für die großen Flächen, Licht je Eckpunkt für die kleinen (ihre Abwicklung liegt bei x = −1) und im Alphakanal der Eckfarben
 // die Marke „schmaler Streifen“ (Fase an einer Kante: dort sitzt der Kantenabrieb).
-interface L2Mat { kind: string; col?: number[]; metal?: number; rough?: number; var?: number; rvar?: number; scale?: number; emit?: number[] | null; es?: number; grime?: boolean; wear?: number; bump?: number; bscale?: number; streak?: number; studs?: boolean; stripes?: boolean; a?: number[]; c?: number[]; duty?: number; dir?: string; k?: number; spot?: boolean }
+interface L2Mat { kind: string; fern?: number; col?: number[]; metal?: number; rough?: number; var?: number; rvar?: number; scale?: number; emit?: number[] | null; es?: number; grime?: boolean; wear?: number; bump?: number; bscale?: number; streak?: number; studs?: boolean; stripes?: boolean; a?: number[]; c?: number[]; duty?: number; dir?: string; k?: number; spot?: boolean }
 interface L2Json { raeume: { name: string; zellen: number[][]; lit: string }[]; mats: Record<string, L2Mat> }
 const LICHT2: Record<string, [string, string][]> = { bastion: [['lichtraum2_bastion', 'Lichtraum2Bastion']], eisenkrone: [['lichtraum2_huette_ek', 'Lichtraum2HuetteEk']], pumpwerk: [['lichtraum2_pumpwerk', 'Lichtraum2Pumpwerk']] };
 // Seit Alpha 1.31 teilen sich die Materialien wenige Shader: Ihre Angaben sind Uniformen, keine festen Zahlen im Quelltext. Vorher hatte
@@ -296,12 +309,16 @@ function l2Materials(mats: Record<string, L2Mat>, lit: THREE.Texture) {
     if (p.kind === 'glow' || p.kind === 'screen') {
       // Leuchten: feste Farbe aus dem Material, gedeckelt wie bisher (Bildschirme bleiben unter der Schwelle des Bloom)
       const e = p.emit || p.col || [1, 1, 1], gain = (p.es || 1) * (p.kind === 'screen' ? 0.4 : 1), cap = p.kind === 'screen' ? 0.7 : GLOW_MAX, mx = Math.max(e[0], e[1], e[2], 0.001);
-      const U = { l2E: V3(e), l2G: V4(gain, cap / mx, 0, 0) };
+      // fern (Meter, lm2_raum.py OPT fern; Hangar seit 2026-11-27): Größe kleiner Leuchten. Deckt die Leuchte weniger als zwei Bildpunkte, wird sie
+      // dunkler, unter einem halben ist sie aus. Die Feuer im Hallenboden liegen flach und waren aus Augenhöhe ab 30 m nur Bruchteile eines
+      // Bildpunkts hoch: Sie blitzten beim Gehen als Glitzerpunkte auf.
+      const U = { l2E: V3(e), l2G: V4(gain, cap / mx, p.fern ?? 0, 0) };
       const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
       m.onBeforeCompile = (sh) => {
         Object.assign(sh.uniforms, U); sh.uniforms.bkGlow = GLOW; sh.uniforms.lmCap = LMCAP;
-        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float bkGlow; uniform float lmCap; uniform vec3 l2E; uniform vec4 l2G;')
-          .replace('#include <color_fragment>', 'diffuseColor.rgb = l2E * min(bkGlow * l2G.x, l2G.y * lmCap);');
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vL2W;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvL2W = position;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float bkGlow; uniform float lmCap; uniform vec3 l2E; uniform vec4 l2G; varying vec3 vL2W;')
+          .replace('#include <color_fragment>', 'float l2pw = max(length(dFdx(vL2W)), length(dFdy(vL2W)));\nfloat l2fd = l2G.z > 0.0 ? clamp((l2G.z / max(l2pw, 1e-5) - 0.5) / 1.5, 0.0, 1.0) : 1.0;\ndiffuseColor.rgb = l2E * min(bkGlow * l2G.x, l2G.y * lmCap) * mix(0.03, 1.0, l2fd);');
       };
       m.customProgramCacheKey = () => 'l2glow';
       out[name] = m; continue;
@@ -438,7 +455,10 @@ async function loadLicht2Set(dj: string, mu: string): Promise<LmRoom[]> {
   const TD = (window as any).TEXDATA || {}, ld = new THREE.TextureLoader(), rooms: LmRoom[] = [], by: Record<string, { set: Record<string, THREE.Material>; i: number }> = {};
   for (const R of data.raeume) {
     const u = TD[R.lit] as string | undefined; if (!u) throw new Error('Bild fehlt: ' + R.lit);
-    const lit = await ld.loadAsync(u); lit.flipY = false; lit.colorSpace = THREE.NoColorSpace; lit.anisotropy = 4; lit.needsUpdate = true;
+    const lit = await ld.loadAsync(u); lit.flipY = false; lit.colorSpace = THREE.NoColorSpace; lit.anisotropy = 4;
+    // Große Lichtkarten (Hangar seit 2026-11-27: 3072 und 4096) ohne Verkleinerungsstufen: Das Licht ändert sich weich, und die Stufen kosteten ein Drittel mehr Grafikspeicher
+    if ((lit.image as { width?: number })?.width! > 2048) { lit.generateMipmaps = false; lit.minFilter = THREE.LinearFilter; }
+    lit.needsUpdate = true;
     const set = l2Materials(data.mats, lit);
     by[R.name] = { set, i: rooms.length };
     rooms.push({ name: R.name, cells: R.zellen, meshes: [], env: null, keep: true, tex: [lit], mats: [...new Set(Object.values(set))].filter(m => m.userData.env) as THREE.MeshStandardMaterial[] });
@@ -674,12 +694,16 @@ export function loadHangar(): Promise<boolean> {
 // (Wandfüllungen und Kleinteile, in der Ferne ausgeblendet), hangar_dach. Die Standflächen kommen weiter aus den Daten des alten Hangars.
 const H2SET: [string, string] = ['lichtraum2_hangar', 'Lichtraum2Hangar'];
 let H2: LmRoom[] | null = null, h2loading: Promise<boolean> | null = null, H2ENV: THREE.Texture | null = null;
+// Standflächen der zweiten Runde (seit 2026-11-27, data/hangar_bastion2 aus lm2_hangar_lauf.py): Blender-Lage [x0, x1, y0, y1] je gesetztem Baustein
+let H2BLOCKS: number[][] | null = null;
 export function loadHangar2(): Promise<boolean> {
   if (H2) return Promise.resolve(true);
   if (h2loading) return h2loading;
   const W = window as any, dj = W.DATAFILES?.[H2SET[0]] as string | undefined, mu = W.BASEDATA?.[H2SET[1]] as string | undefined;
   if (!dj || !mu) return Promise.resolve(false);      // Artifact-Fassung: Der Satz passt nicht hinein, es bleibt beim alten Hangar
-  return (h2loading = loadLicht2Set(dj, mu).then(r => { H2 = r; return true; }, e => { console.warn('Hangar (Lichtraum 2) nicht geladen:', e); h2loading = null; return false; }));
+  const bj = W.DATAFILES?.hangar_bastion2 as string | undefined;
+  return (h2loading = Promise.all([loadLicht2Set(dj, mu), bj ? fetch(bj).then(r => r.json()).catch(() => null) : null])
+    .then(([r, b]) => { H2 = r; H2BLOCKS = Array.isArray(b?.bloecke) ? b.bloecke : null; return true; }, e => { console.warn('Hangar (Lichtraum 2) nicht geladen:', e); h2loading = null; return false; }));
 }
 export const hangar2Ready = () => !!H2;
 // Für den Start (main.ts): wartet, bis die Lichträume des Decks und danach der Hangar der neuen Art ausgepackt sind (dieselbe Reihenfolge wie
@@ -694,7 +718,7 @@ export function buildHangar(): HangarBuild | null {
   const blocks: Rect[] = [];
   const hrect = (x0: number, x1: number, y0: number, y1: number): Rect => [Math.min(x0, x1), Math.max(x0, x1), -Math.max(y0, y1), -Math.min(y0, y1)];
   if (H2 && deckTune.lichtraum && deckTune.scharf) {
-    instBlocks(HDATA, HPARTS, hrect, blocks);
+    if (H2BLOCKS) for (const b of H2BLOCKS) blocks.push(hrect(b[0], b[1], b[2], b[3])); else instBlocks(HDATA, HPARTS, hrect, blocks);
     // glTF (x, oben, −y aus Blender) ist schon die Lage im Innenraum (x = x, z = −y): keine weitere Drehung
     const group = new THREE.Group(), small: { m: THREE.Mesh; c: THREE.Vector3; r: number }[] = [], all: LmMesh[] = []; let tris = 0;
     for (const R of H2) {
@@ -1054,8 +1078,25 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
   const ORTE = A ? [...D.orte, ...A.orte] : D.orte;
   const QM = A ? A.quartier.mitte : null, QR = A ? A.quartier.r : 0;
   const inQ = (px: number, py: number) => !!QM && Math.hypot(px - QM[0], py - QM[1]) < QR;      // Plankoordinaten im Quartier?
-  const group = new THREE.Group(), meshes: { m: THREE.Mesh; c: THREE.Vector3; r: number }[] = []; let tris = 0;
+  const group = new THREE.Group(), meshes: { m: THREE.Mesh; c: THREE.Vector3; r: number; eb: string }[] = []; let tris = 0;
   const WEIT = D.weit ?? RANGE;
+  // Zwei Ebenen: Sperre je Ebene als Standfläche (aktiv = auf dieser Ebene steht dort eine Wand)
+  const EB = D.ebenen;
+  if (EB && !SPERRE[id]) {
+    SPERRE[id] = [];
+    for (const e of ['h', 'd'] as Ebene[]) for (const p of EB.sperre[e] || []) {
+      const q = I(p), xs = q.map(v => v[0]), zs = q.map(v => v[1]), o: Rect = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+      SPERRE[id].push({ e, o, r: [...o] as Rect });
+    }
+  }
+  const sperren = EB ? SPERRE[id] : [];
+  for (const q of sperren) blocks.push(q.r);
+  let ebAn = '';
+  const ebSetzen = () => {
+    ebAn = EBENE.e;
+    for (const q of sperren) { const an = q.e === ebAn; for (let i = 0; i < 4; i++) q.r[i] = an ? q.o[i] : 1e9; }
+    state = '';
+  };
   if (D.zonen) {      // dunkle Fläche knapp unter dem Boden: Durch die Fugen zwischen Bodenplatten und Wand (Rinne im Korridor) schien sonst das All
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
     for (const p of D.walk) for (const [x, y] of p) { x0 = Math.min(x0, gx(y)); x1 = Math.max(x1, gx(y)); z0 = Math.min(z0, gz(x)); z1 = Math.max(z1, gz(x)); }
@@ -1066,17 +1107,17 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
   const lm = deckTune.lichtraum ? LM[id] : undefined;
   const lmT = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0));
   const SPOT: Record<string, [number, number]> = { halle: [6.8, 14], korridor: [4.6, 9], bucht: [4.3, 8], fluegel: [3.15, 8], quartier: [2.4, 6] };      // Höhe und Reichweite der Schlüssellampen je Teil
-  const parts: { R: LmRoom; pts: [number, number][]; x: number; z: number; spot: [number, number]; gpu: boolean }[] = [];
+  const parts: { R: LmRoom; pts: [number, number][]; x: number; z: number; spot: [number, number]; gpu: boolean; eb: string }[] = [];
   if (lm) for (const R of lm.rooms2) {
     for (const q of R.meshes) {
       const m = new THREE.Mesh(q.geo, q.mat); m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(lmT, q.mw); m.userData.shared = true;
       if (q.mat.transparent) m.renderOrder = 3;
       m.userData.sh = false; m.castShadow = false; m.receiveShadow = !q.mat.transparent;
-      group.add(m); meshes.push({ m, c: q.geo.boundingSphere!.center.clone().applyMatrix4(m.matrix), r: q.geo.boundingSphere!.radius }); tris += q.tris;
+      group.add(m); meshes.push({ m, c: q.geo.boundingSphere!.center.clone().applyMatrix4(m.matrix), r: q.geo.boundingSphere!.radius, eb: EB?.teile[R.name] || '' }); tris += q.tris;
     }
     const pts = R.cells.map(([x, y]) => [gx(y), gz(x)] as [number, number]);
     const kind = Object.keys(SPOT).find(k => R.name.includes(k)) || 'bucht';
-    parts.push({ R, pts: pts.slice(1), x: pts[0][0], z: pts[0][1], spot: D.lampen?.[R.name] || SPOT[kind], gpu: false });
+    parts.push({ R, pts: pts.slice(1), x: pts[0][0], z: pts[0][1], spot: D.lampen?.[R.name] || SPOT[kind], gpu: false, eb: EB?.teile[R.name] || '' });
   }
   const keys: THREE.SpotLight[] = [], more: THREE.SpotLight[] = [];
   if (lm) for (let i = 0; i < SPOTS_MAX; i++) {
@@ -1101,7 +1142,7 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
     }
     // aktiver Teil: der mit dem nächsten Lampenplatz; die Lampen mit Schatten auf dessen nächsten Plätzen, die übrigen dahinter
     let act = -1, bd = 1e9;
-    parts.forEach((q, i) => { for (const [x, z] of q.pts) { const d = Math.hypot(x - px, z - pz); if (d < bd) { bd = d; act = i; } } });
+    parts.forEach((q, i) => { if (q.eb && q.eb !== ebAn) return; for (const [x, z] of q.pts) { const d = Math.hypot(x - px, z - pz); if (d < bd) { bd = d; act = i; } } });      // nur Teile der eigenen Ebene
     const q = hy && act >= 0 ? parts[act] : null;
     const order = q ? q.pts.map((_, i) => i).sort((a, b) => Math.hypot(q.pts[a][0] - px, q.pts[a][1] - pz) - Math.hypot(q.pts[b][0] - px, q.pts[b][1] - pz)) : [];
     const near = order.slice(0, keys.length).sort((a, b) => a - b), far = order.slice(keys.length, keys.length + more.length);
@@ -1161,6 +1202,9 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
     if ((za === 'k' && zb === 'h') || (za === 'h' && zb === 'k')) { const t = (MX - ax) / (bx - ax || 1e-6), ym = ay + (by - ay) * t; return t >= 0 && t <= 1 && Math.abs(ym) < MH; }
     return false;
   };
+  // Zwei Ebenen: welche Ebene an einem Ort gilt ('' = beide: die Vorhalle, das Quartier; ohne Ebenen immer '')
+  const ebOrt = (px: number, py: number): '' | Ebene => { if (!EB || inQ(px, py)) return ''; if (px < K0 + 0.2) return 'h'; const z = zoneOf(px, py); return z === 'k' ? 'h' : z === 'v' ? '' : 'd'; };
+  const ebSicht = (x: number, z: number, eb?: string) => { if (!EB) return true; const [px, py] = toPlan(x, z), e = ebOrt(px, py) || (eb ?? 'd'); return e === '*' || e === EBENE.e || inQ(px, py); };
   // Quartier in Innenraum-Koordinaten: Punkte (Plan x, y) → (x, z); Blick in Grad (0 = Osten) → Gierwinkel der Figur (IN.yaw = Winkel)
   let quartier: DeckQuartier | undefined;
   if (A) {
@@ -1200,7 +1244,16 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
   };
   const yawOf = (deg: number) => { const f = deg * Math.PI / 180; return Math.atan2(-Math.sin(f), -Math.cos(f)); };
   const bz = D.aufzug?.bucht, bw = bz ? bz[2] * Math.PI / 180 : 0, TIEFE = D.tiefe ?? 90;
+  const LIFT = bz ? [gx(bz[1] + Math.sin(bw) * 1.1), gz(bz[0] + Math.cos(bw) * 1.1)] : null;      // vor dem Aufzug zwischen den Ebenen
   const route = (x: number, z: number, tx: number, tz: number) => {
+    if (EB && LIFT) {      // Ziel auf der anderen Ebene: erst zum Südaufzug, die Länge zählt den Weg dahinter mit
+      const [px, py] = toPlan(tx, tz), te = ebOrt(px, py);
+      if (te && te !== EBENE.e) {
+        const [ax, az] = LIFT, r = routeZ(x, z, ax, az), r2 = routeZ(ax, az, tx, tz);
+        const d = (r ? r.d : Math.hypot(ax - x, az - z)) + (r2 ? r2.d : Math.hypot(tx - ax, tz - az));
+        return r ? { x: r.x, z: r.z, d } : { x: ax, z: az, d };
+      }
+    }
     if (ZN) return routeZ(x, z, tx, tz);
     const [ax, ay] = toPlan(x, z), [bx, by] = toPlan(tx, tz);
     if (inQ(ax, ay) || inQ(bx, by)) return null;
@@ -1230,13 +1283,15 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
     area: (x, z) => ort(x, z)?.name || D.name,
     ceil: (x, z) => (ort(x, z)?.decke ?? 4),
     view: (x, z) => { camX = x; camZ = z; },
+    ebenen: EB ? { wege: EB.wege, at: (x, z) => ebOrt(...toPlan(x, z)), set: e => { EBENE.e = e; ebSetzen(); } } : undefined,
     update: (x, z) => {
       lastX = x; lastZ = z;
-      for (const q of meshes) q.m.visible = Math.hypot(q.c.x - x, q.c.z - z) - q.r < WEIT;
+      if (EB && ebAn !== EBENE.e) ebSetzen();
+      for (const q of meshes) q.m.visible = (!q.eb || q.eb === ebAn) && Math.hypot(q.c.x - x, q.c.z - z) - q.r < WEIT;
       if (lm) { apply(x, z); if (live) { tick++; const sp = keys[tick % keys.length]; if (sp.intensity > 0) sp.shadow.needsUpdate = true; } }
     },
-    seen: (x, z) => (z > hz0 - 0.2 ? gate() : lastZ > hz0 - 0.2 ? sight(x, z) : seenFrom(lastX, lastZ, x, z) || (camX < 1e8 && camZ <= hz0 - 0.2 && seenFrom(camX, camZ, x, z))),
-    hangarSeen: gate,
+    seen: (x, z, eb) => ebSicht(x, z, eb) && (z > hz0 - 0.2 ? gate() : lastZ > hz0 - 0.2 ? sight(x, z) : seenFrom(lastX, lastZ, x, z) || (camX < 1e8 && camZ <= hz0 - 0.2 && seenFrom(camX, camZ, x, z))),
+    hangarSeen: () => (!EB || EBENE.e === 'h') && gate(),
     release: () => { for (const q of parts) q.gpu = false; },
     prime: () => {
       if (!lm || !deckTune.hybrid) return;

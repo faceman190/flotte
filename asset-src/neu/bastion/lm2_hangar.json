@@ -4,117 +4,127 @@
  "rooms": [
   {
    "name": "hangar_h00",
-   "lm": 2048,
-   "samples": 192,
+   "lm": 3072,
+   "samples": 256,
    "big": 0.25
   },
   {
    "name": "hangar_k00",
    "lm": 1024,
-   "samples": 160,
-   "big": 0.03
+   "samples": 192,
+   "big": 0.03,
+   "schmal": 0
   },
   {
    "name": "hangar_h01",
-   "lm": 2048,
-   "samples": 192,
+   "lm": 3072,
+   "samples": 256,
    "big": 0.25
   },
   {
    "name": "hangar_k01",
    "lm": 1024,
-   "samples": 160,
-   "big": 0.03
+   "samples": 192,
+   "big": 0.03,
+   "schmal": 0
   },
   {
    "name": "hangar_h02",
-   "lm": 2048,
-   "samples": 192,
+   "lm": 4096,
+   "samples": 256,
    "big": 0.25
   },
   {
    "name": "hangar_k02",
    "lm": 1024,
-   "samples": 160,
-   "big": 0.03
+   "samples": 192,
+   "big": 0.03,
+   "schmal": 0
   },
   {
    "name": "hangar_h10",
-   "lm": 2048,
-   "samples": 192,
+   "lm": 3072,
+   "samples": 256,
    "big": 0.25
   },
   {
    "name": "hangar_k10",
    "lm": 1024,
-   "samples": 160,
-   "big": 0.03
+   "samples": 192,
+   "big": 0.03,
+   "schmal": 0
   },
   {
    "name": "hangar_h11",
-   "lm": 2048,
-   "samples": 192,
+   "lm": 3072,
+   "samples": 256,
    "big": 0.25
   },
   {
    "name": "hangar_k11",
    "lm": 1024,
-   "samples": 160,
-   "big": 0.03
+   "samples": 192,
+   "big": 0.03,
+   "schmal": 0
   },
   {
    "name": "hangar_h12",
-   "lm": 2048,
-   "samples": 192,
+   "lm": 4096,
+   "samples": 256,
    "big": 0.25
   },
   {
    "name": "hangar_k12",
    "lm": 1024,
-   "samples": 160,
-   "big": 0.03
+   "samples": 192,
+   "big": 0.03,
+   "schmal": 0
   },
   {
    "name": "hangar_h20",
-   "lm": 2048,
-   "samples": 192,
+   "lm": 3072,
+   "samples": 256,
    "big": 0.25
   },
   {
    "name": "hangar_k20",
    "lm": 1024,
-   "samples": 160,
-   "big": 0.03
+   "samples": 192,
+   "big": 0.03,
+   "schmal": 0
   },
   {
    "name": "hangar_h21",
-   "lm": 2048,
-   "samples": 192,
+   "lm": 3072,
+   "samples": 256,
    "big": 0.25
   },
   {
    "name": "hangar_k21",
    "lm": 1024,
-   "samples": 160,
-   "big": 0.03
+   "samples": 192,
+   "big": 0.03,
+   "schmal": 0
   },
   {
    "name": "hangar_h22",
-   "lm": 2048,
-   "samples": 192,
+   "lm": 4096,
+   "samples": 256,
    "big": 0.25
   },
   {
    "name": "hangar_k22",
    "lm": 1024,
-   "samples": 160,
-   "big": 0.03
+   "samples": 192,
+   "big": 0.03,
+   "schmal": 0
   },
   {
    "name": "hangar_dach",
-   "lm": 1024,
-   "samples": 128,
-   "big": 1
+   "lm": 2048,
+   "samples": 192,
+   "big": 1,
+   "schmal": 0.8
   }
  ],
  "hide": [
@@ -128,7 +138,34 @@
  "glb": "Lichtraum2Hangar.glb",
  "json": "lichtraum2_hangar.json",
  "mark": "lm2-hangar.txt",
- "vsamples": 128,
+ "vsamples": 160,
  "deflicker": 2.5,
- "vsmooth": 0.35
+ "vsmooth": 0.35,
+ "spuren": true,
+ "verdeckt": true,
+ "innen": [
+  [
+   -92,
+   92,
+   -112,
+   50.55,
+   -0.05,
+   42.02
+  ],
+  [
+   -62.02,
+   62.02,
+   -115.05,
+   -111.9,
+   -0.05,
+   32.05
+  ]
+ ],
+ "teilen": 3,
+ "schmal": 0.3,
+ "fern": {
+  "Platzlicht": 0.26,
+  "LED gruen": 0.04,
+  "LED rot": 0.2
+ }
 }
