@@ -42,6 +42,13 @@ interface RundJson {
   typ: 'rund'; name: string; kx0: number; walk: number[][][]; blocks: number[][][]; orte: { name: string; poly: number[][]; decke: number }[];
   personal: DeckJson['personal']; wege: DeckJson['wege']; gruppen: number[][]; karte_xy: number[]; licht2: [string, string];
   mund: number[]; tor: number[];      // mund: Mündung des Korridors in die Halle (x, y, halbe Breite); tor: Hangartor (x, halbe Breite)
+  // Deck 3 der Bastion in der dritten Fassung (seit 2026-11-26, asset-src/neu/bastion/pd_spiel.py, docs/deck3.md): kein Kreis mehr, sondern mehrere
+  // verbundene Bereiche. Sichtzonen als Vielecke (der erste Treffer gilt), je Zone die Zonen, die man von dort sieht, die Tore zwischen den Zonen
+  // (Wegweiser), Zone und Lampenmaß (Höhe, Reichweite) je Lichtraum-Teil, Tiefe des Decks ab dem Hangartor, Sichtweite, die beiden Aufzüge
+  // (x, y, Blick in Grad), die Schaupuppen des Ausrüsters und der Abgang der Figuren der Geschichte (quer, Tiefe ab dem Tor).
+  tiefe?: number; weit?: number; zonen?: { id: string; poly: number[][] }[]; sicht?: Record<string, string[]>; tore?: [string, string, number[]][];
+  teilzone?: Record<string, string>; lampen?: Record<string, [number, number]>; aufzug?: { quartier: number[]; bucht: number[] };
+  puppen?: { x: number; y: number; z: number; face: number; teile: Record<string, string>; titel: string }[]; abgang?: number[][];
 }
 // Anbau eines Decks (seit 2026-11-24): das Quartier der Bastion, weit abseits der Rundhalle im selben Plan (asset-src/neu/bastion/qu_spiel.py)
 interface AnbauJson {
@@ -58,6 +65,8 @@ export interface DeckQuartier {
   schiffe: [number, number, number][]; funde: [number, number, number][]; halle: { aufzug: [number, number]; ankunft: [number, number, number] };
   drin: (x: number, z: number) => boolean;
 }
+/** Schaupuppe im Laden (Innenraum-Koordinaten): Standort, Höhe des Sockels, Drehung der Figur, getragene Teile */
+export interface DeckPuppe { x: number; y: number; z: number; yaw: number; bx: number; bz: number; teile: Record<string, string>; titel: string }      // bx, bz: Blickrichtung
 export interface DeckSpot { tab: string; x: number; z: number; face: number; tx: number; tz: number; titel?: string; satz?: string }      // titel und satz: Figur ohne Dienst, sagt nur ihren Satz
 export interface DeckNode { x: number; z: number; stop: null | { face: number; t: [number, number]; p: number; who: string | null } }
 export interface Deck {
@@ -69,6 +78,8 @@ export interface Deck {
   prime: () => void;        // beim Betreten, hinter der Blende: alle Raumspiegelungen aufnehmen
   primeStep: () => boolean; // beim Anflug: eine Raumspiegelung aufnehmen (false = alle fertig)
   quartier?: DeckQuartier;  // Bastion: das Quartier (Anbau) mit Aufzug auf Deck 3
+  bucht?: { aufzug: [number, number]; ankunft: [number, number, number] };      // Bastion: Aufzug „Hangarbuchten“ auf Deck 3 (seit 2026-11-26)
+  puppen?: DeckPuppe[];     // Schaupuppen mit Ausrüstung (schaupuppe.ts)
   route?: (x: number, z: number, tx: number, tz: number) => { x: number; z: number; d: number } | null;   // Wegweiser: nächster Wegpunkt zum Ziel und Weglänge (m)
   stale: () => boolean;     // ohne Lichträume gebaut, die inzwischen geladen sind: Der Innenraum baut das Deck dann neu      // ist dieser Ort bzw. der Hangar vom Standort aus zu sehen?
 }
@@ -93,7 +104,7 @@ const LMCAP = { value: 1 }, LMSHADE = { value: 0 }, LMSPEC = { value: 1 };      
 // in die dessen Modell nicht passt, nimmt das alte Hüttendeck aus dem Bastion-Baukasten.
 // Bastion seit 2026-11-19: Rundhalle (nur Daten, ganz im Lichtraum 2); ohne deren Dateien (Artifact-Fassung) das alte Deck 3 nach Plan D
 // Pumpwerk Reifschleier seit 2026-11-24: Deck aus dem Eiswerk-Baukasten (asset-src/neu/eiswerk, docs/eiswerk-baukasten.md), ganz im Lichtraum 2
-const DECKS: Record<string, [string, string][]> = { bastion: [['deck_rund', ''], ['deck_bastion', 'BastionDeck']], eisenkrone: [['deck_huette_ek', ''], ['deck_eisenkrone', 'EisenkroneDeck']], pumpwerk: [['deck_pumpwerk', '']] };
+const DECKS: Record<string, [string, string][]> = { bastion: [['deck_bastion3', ''], ['deck_rund', ''], ['deck_bastion', 'BastionDeck']], eisenkrone: [['deck_huette_ek', ''], ['deck_eisenkrone', 'EisenkroneDeck']], pumpwerk: [['deck_pumpwerk', '']] };
 const LOADED: Record<string, { data: DeckJson; parts: Record<string, Part[]>; neu: boolean; anbau?: AnbauJson }> = {}, LOADING: Record<string, Promise<boolean>> = {};
 function pickDeck(id: string): [string, string, boolean] | null {
   const W = window as any;
@@ -1044,6 +1055,13 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
   const QM = A ? A.quartier.mitte : null, QR = A ? A.quartier.r : 0;
   const inQ = (px: number, py: number) => !!QM && Math.hypot(px - QM[0], py - QM[1]) < QR;      // Plankoordinaten im Quartier?
   const group = new THREE.Group(), meshes: { m: THREE.Mesh; c: THREE.Vector3; r: number }[] = []; let tris = 0;
+  const WEIT = D.weit ?? RANGE;
+  if (D.zonen) {      // dunkle Fläche knapp unter dem Boden: Durch die Fugen zwischen Bodenplatten und Wand (Rinne im Korridor) schien sonst das All
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+    for (const p of D.walk) for (const [x, y] of p) { x0 = Math.min(x0, gx(y)); x1 = Math.max(x1, gx(y)); z0 = Math.min(z0, gz(x)); z1 = Math.max(z1, gz(x)); }
+    const u = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0 + 4, z1 - z0 + 1), new THREE.MeshBasicMaterial({ color: 0x030405 }));
+    u.rotation.x = -Math.PI / 2; u.position.set((x0 + x1) / 2, -0.09, (z0 + z1) / 2 - 1.5); u.name = 'Deckunterlage'; group.add(u);
+  }
   // Lichtraum 2: Teile mit ihren Punkten (Plan → Innenraum)
   const lm = deckTune.lichtraum ? LM[id] : undefined;
   const lmT = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(gx(0), 0, gz(0));
@@ -1058,7 +1076,7 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
     }
     const pts = R.cells.map(([x, y]) => [gx(y), gz(x)] as [number, number]);
     const kind = Object.keys(SPOT).find(k => R.name.includes(k)) || 'bucht';
-    parts.push({ R, pts: pts.slice(1), x: pts[0][0], z: pts[0][1], spot: SPOT[kind], gpu: false });
+    parts.push({ R, pts: pts.slice(1), x: pts[0][0], z: pts[0][1], spot: D.lampen?.[R.name] || SPOT[kind], gpu: false });
   }
   const keys: THREE.SpotLight[] = [], more: THREE.SpotLight[] = [];
   if (lm) for (let i = 0; i < SPOTS_MAX; i++) {
@@ -1132,12 +1150,14 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
   // Figuren und ihre Namen nur zeigen, wo man sie sehen kann: Korridor, Halle samt Buchten, je Flügel (Gang und Raum) ein Bereich.
   // Vom Korridor in Halle und Buchten nur durch die Mündung; in die Flügel nur aus dem Flügel selbst.
   const RR = Math.hypot(D.mund[0], D.mund[2]) + 0.4;      // Hallenradius (aus der Mündung des Korridors)
-  const zoneOf = (px: number, py: number) => (inQ(px, py) ? 'q' : px < MX ? 'k' : Math.hypot(px, py) < RR ? 'h' : (() => {
+  const ZN = D.zonen, SI = D.sicht || {};
+  const zoneOf = (px: number, py: number) => (inQ(px, py) ? 'q' : ZN ? (ZN.find(q => inPoly(q.poly, px, py))?.id || 'f') : px < MX ? 'k' : Math.hypot(px, py) < RR ? 'h' : (() => {
     const d = Math.atan2(py, px) * 180 / Math.PI; return Math.abs(Math.abs(d) - 30) < 14 ? 'w' + Math.sign(d) : 'h';
   })());
   const seenFrom = (ex: number, ez: number, x: number, z: number) => {
     const [ax, ay] = toPlan(ex, ez), [bx, by] = toPlan(x, z), za = zoneOf(ax, ay), zb = zoneOf(bx, by);
     if (za === zb) return true;
+    if (ZN) return za !== 'q' && zb !== 'q' && !!SI[za]?.includes(zb);      // freie Grundrisse: nach der Sichtliste der Zonen
     if ((za === 'k' && zb === 'h') || (za === 'h' && zb === 'k')) { const t = (MX - ax) / (bx - ax || 1e-6), ym = ay + (by - ay) * t; return t >= 0 && t <= 1 && Math.abs(ym) < MH; }
     return false;
   };
@@ -1145,14 +1165,14 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
   let quartier: DeckQuartier | undefined;
   if (A) {
     const Q = A.quartier, pt = (p: number[]) => [gx(p[1]), gz(p[0])] as [number, number], RAD = Math.PI / 180, sc = Q.schild;
-    const hz = A.halle.aufzug;
+    const hz = D.aufzug?.quartier || [A.halle.aufzug[0], A.halle.aufzug[1], 270], fw = (hz[2] ?? 270) * RAD;
     quartier = {
       mitte: pt(Q.mitte), r: Q.r, ankunft: [...pt(Q.ankunft), Q.ankunft[2] * RAD], aufzug: pt(Q.aufzug), koje: pt(Q.koje), spind: pt(Q.spind), regal: pt(Q.regal), tisch: pt(Q.tisch), fenster: pt(Q.fenster),
       schild: { x: gx(sc[1]), y: sc[2], z: gz(sc[0]), nx: -sc[4], nz: -sc[3], w: sc[5], h: sc[6] },
       karte: Q.karte ? { x: gx(Q.karte[1]), y: Q.karte[2], z: gz(Q.karte[0]), nx: -Q.karte[4], nz: -Q.karte[3], w: Q.karte[5], h: Q.karte[6], tilt: Q.karte[7] } : null,
       monitor: Q.monitor ? { x: gx(Q.monitor[1]), y: Q.monitor[2], z: gz(Q.monitor[0]), nx: -Q.monitor[4], nz: -Q.monitor[3], w: Q.monitor[5], h: Q.monitor[6], tilt: Q.monitor[7] } : null,
       schiffe: Q.schiffe.map(p => [gx(p[1]), p[2], gz(p[0])] as [number, number, number]), funde: Q.funde.map(p => [gx(p[1]), p[2], gz(p[0])] as [number, number, number]),
-      halle: { aufzug: pt(hz), ankunft: [...pt([hz[0], hz[1] - 0.6]), 270 * RAD] },
+      halle: { aufzug: pt(hz), ankunft: [...pt([hz[0] + Math.cos(fw) * 0.6, hz[1] + Math.sin(fw) * 0.6]), fw] },
       drin: (x, z) => { const [px, py] = toPlan(x, z); return inQ(px, py); },
     };
   }
@@ -1160,7 +1180,28 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
   // und Hangar (durch den Korridor). Plan: Hallenmitte (0, 0), Korridor auf −x bis zum Tor bei kx0.
   const MUND = (D.mund?.[0] ?? -16) + 2;
   const zone = (px: number, py: number) => (px < K0 + 0.2 ? 'h' : px < MUND && Math.abs(py) < 4.5 ? 'k' : Math.hypot(px, py) < 14.5 ? 'm' : 'o');
+  // Freie Grundrisse (Deck 3 seit 2026-11-26): Zonen als Knoten, Tore als Kanten; der Hangar hängt über das Tor am Korridor
+  const TORE: [string, string, number[]][] = ZN ? [['hg', 'k', [K0 - 0.4, 0]], ...(D.tore || [])] : [];
+  const zoneW = (px: number, py: number) => (px < K0 + 0.2 ? 'hg' : zoneOf(px, py));
+  const routeZ = (x: number, z: number, tx: number, tz: number) => {
+    const [ax, ay] = toPlan(x, z), [bx, by] = toPlan(tx, tz);
+    if (inQ(ax, ay) || inQ(bx, by)) return null;
+    const za = zoneW(ax, ay), zb = zoneW(bx, by);
+    if (za === zb) return null;
+    const from = new Map<string, [string, number[]]>(), todo = [za];      // Breitensuche über die Tore
+    for (let i = 0; i < todo.length && !from.has(zb); i++) for (const [p, q, at] of TORE) { const o = p === todo[i] ? q : q === todo[i] ? p : ''; if (o && o !== za && !from.has(o)) { from.set(o, [todo[i], at]); todo.push(o); } }
+    if (!from.has(zb)) return null;
+    const pts: number[][] = [[bx, by]];
+    for (let q = zb; q !== za;) { const [p, at] = from.get(q)!; pts.unshift(at); q = p; }
+    let d = 0, cx = ax, cy = ay, next: number[] | null = null;
+    for (const p of pts) { const l = Math.hypot(p[0] - cx, p[1] - cy); if (!next && l > 1.5) next = p; d += l; cx = p[0]; cy = p[1]; }
+    const n = next || [bx, by];
+    return { x: gx(n[1]), z: gz(n[0]), d };
+  };
+  const yawOf = (deg: number) => { const f = deg * Math.PI / 180; return Math.atan2(-Math.sin(f), -Math.cos(f)); };
+  const bz = D.aufzug?.bucht, bw = bz ? bz[2] * Math.PI / 180 : 0, TIEFE = D.tiefe ?? 90;
   const route = (x: number, z: number, tx: number, tz: number) => {
+    if (ZN) return routeZ(x, z, tx, tz);
     const [ax, ay] = toPlan(x, z), [bx, by] = toPlan(tx, tz);
     if (inQ(ax, ay) || inQ(bx, by)) return null;
     const za = zone(ax, ay), zb = zone(bx, by), aw = Math.atan2(ay, ax), bw = Math.atan2(by, bx);
@@ -1182,14 +1223,16 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
   return {
     route,
     quartier,
+    bucht: bz ? { aufzug: [gx(bz[1]), gz(bz[0])], ankunft: [gx(bz[1] + Math.sin(bw) * 0.6), gz(bz[0] + Math.cos(bw) * 0.6), bw] } : undefined,
+    puppen: D.puppen?.map(q => ({ x: gx(q.y), y: q.z, z: gz(q.x), yaw: yawOf(q.face), bx: -Math.sin(q.face * Math.PI / 180), bz: -Math.cos(q.face * Math.PI / 180), teile: q.teile, titel: q.titel })),
     group, rects, blocks, spots, routes, chats, tris, map: { x: gx(D.karte_xy[1]), z: gz(D.karte_xy[0]) }, name: D.name,
-    inside: (z: number) => z < hz0 - 0.2 && z > hz0 - 90,
+    inside: (z: number) => z < hz0 - 0.2 && z > hz0 - TIEFE,
     area: (x, z) => ort(x, z)?.name || D.name,
     ceil: (x, z) => (ort(x, z)?.decke ?? 4),
     view: (x, z) => { camX = x; camZ = z; },
     update: (x, z) => {
       lastX = x; lastZ = z;
-      for (const q of meshes) q.m.visible = Math.hypot(q.c.x - x, q.c.z - z) - q.r < RANGE;
+      for (const q of meshes) q.m.visible = Math.hypot(q.c.x - x, q.c.z - z) - q.r < WEIT;
       if (lm) { apply(x, z); if (live) { tick++; const sp = keys[tick % keys.length]; if (sp.intensity > 0) sp.shadow.needsUpdate = true; } }
     },
     seen: (x, z) => (z > hz0 - 0.2 ? gate() : lastZ > hz0 - 0.2 ? sight(x, z) : seenFrom(lastX, lastZ, x, z) || (camX < 1e8 && camZ <= hz0 - 0.2 && seenFrom(camX, camZ, x, z))),
@@ -1202,7 +1245,7 @@ function buildRund(id: string, D: RundJson, hz0: number): Deck {
     primeStep: () => { if (!lm || !deckTune.hybrid) return false; const q = parts.find(r => !r.R.env); if (!q) return false; capture(q); return true; },
     stale: () => !lm && deckTune.lichtraum && !!LM[id],
     // Weg der Story-Figuren: durch das Tor, den Korridor hinunter und in der Halle links außer Sicht der Sichtlinie zum Hangar
-    way: (off: number) => [[off, hz0 + 4], [off * 0.5, hz0 - 1.5], [off * 0.4, hz0 - 14], [-3.5, hz0 - 19], [-7.5, hz0 - 21.5]],
+    way: (off: number) => [[off, hz0 + 4], [off * 0.5, hz0 - 1.5], [off * 0.4, hz0 - 14], ...(D.abgang ? D.abgang.map(p => [p[0], hz0 - p[1]]) : [[-3.5, hz0 - 19], [-7.5, hz0 - 21.5]])],
   };
 }
 

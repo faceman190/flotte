@@ -1,0 +1,11 @@
+{
+ "hinweis": "Kranich (eigenes Modell aus asset-src/neu/kranich, Export kra_export.py): Materialien kommen fertig aus Blender, hier stehen nur die Auslöser im Innenraum (Schiffskoordinaten: x, y, z; Nase nach −Z, Mitte des Modells im Ursprung; aus Blender x = −y, y = z − 3,985, z = −(x + 0,062); Werte aus kra-gelenke.json). seat: linker Pilotensitz, log: Schreibplatz in der Kabine, bed: Kojen, locker: Spinde an der Vorderwand des Laderaums, scanner: Pult vor dem Energiekern, ramp: Rampenschalter an der Backbordseite der Heckluke.",
+ "spots": {
+  "seat": [-0.78, -0.685, -11.35],
+  "log": [-1.21, -1.635, -5.61],
+  "bed": [-1.28, -1.635, -2.71],
+  "locker": [-1.9, -1.635, 4.14],
+  "scanner": [-1.2, -1.635, -0.96],
+  "ramp": [-1.9, -1.635, 15.0]
+ }
+}

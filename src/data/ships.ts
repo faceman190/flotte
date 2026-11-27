@@ -49,6 +49,30 @@ export const SHIPS = {
     hull: 330, shield: 130, speed: 250, acc: 400, turn: 0.75, cargo: 150, ammo: 450, rockets: 6, dmg: 1.35,
     laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1700, charges: 0, drones: 0, radius: 15, camUp: 24, camBack: 78, upMul: 1.7, col: 0x4a86d8, model: 'Kormoran', len: 46,
   },
+  // Eigenes Modell (asset-src/neu/kranich, Blender-Skripte, docs/kranich.md): 32,1 × 15,1 × 8 m, Mehrzweckschiff für zwei (seit 2026-11-26).
+  // Laderaum mit Heckrampe (ein Wiesel passt hinein), Technik mit Energiekern, Wohnteil mit Kojen, Kombüse und Waschzelle, volles Cockpit im Modell.
+  // Antrieb: zwei Haupttriebwerke, vier Hubdüsen unten (senkrechter Start), zehn Steuerdüsenblöcke; alles innen begehbar.
+  kranich: {
+    n: 'Kranich', role: 'Mehrzweckschiff', price: 14500, desc: 'Mehrzweckschiff für zwei: Laderaum mit Heckrampe für einen Wiesel und Kisten, Kabine mit Kojen, Kombüse, Technik mit Energiekern und ein Cockpit mit Rundumsicht. Hubdüsen für senkrechte Starts, Steuerdüsen für feines Manövrieren, starker Scanner auf dem Rücken. Innen begehbar.',
+    hull: 240, shield: 105, speed: 262, acc: 470, turn: 0.86, cargo: 110, ammo: 400, rockets: 4, dmg: 1.15,
+    laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 2100, charges: 0, drones: 0, radius: 11, camUp: 14, camBack: 52, upMul: 1.4, col: 0x8fc0d8, model: 'Kranich', len: 32.12,
+  },
+  // Eigenes Modell (asset-src/neu/moewe, Blender-Skripte, docs/moewe.md): 36,88 × 26,8 × 12,2 m, Fahrzeugtransporter (seit 2026-11-26).
+  // Durchfahrt-Laderaum für zwei Dachs (Bugtor mit Haube und Bugrampe, Heckrampe in der Schräge), Treppe hinauf in die Kabine mit sechs Sitzen,
+  // Cockpit im Aufbau mit großer Frontscheibe; vier schwere Landebeine, zwei Mantelrotoren an den Flügelspitzen, zwei Heckrotoren, Hubdüsen.
+  moewe: {
+    n: 'Möwe', role: 'Fahrzeugtransporter', price: 30500, desc: 'Schwerer Fahrzeugtransporter: Laderaum zum Durchfahren für zwei Dachs, Bugtor mit Haube und Rampe, Heckrampe, Kistenbahnen an den Wänden. Eine Treppe führt in die Kabine mit sechs Sitzen und ins Cockpit mit großer Frontscheibe. Mantelrotoren und Hubdüsen für senkrechte Starts, vier schwere Landebeine. Innen begehbar.',
+    hull: 420, shield: 150, speed: 205, acc: 330, turn: 0.6, cargo: 260, ammo: 300, rockets: 0, dmg: 0.9,
+    laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1500, charges: 0, drones: 0, radius: 15, camUp: 20, camBack: 70, upMul: 1.6, col: 0xd8d2c4, model: 'Moewe', len: 36.88,
+  },
+  // Eigenes Modell (asset-src/neu/harpyie, Blender-Skripte, docs/harpyie.md): 37,57 × 19,7 × 10,2 m, schweres Landungsschiff (seit 2026-11-26).
+  // Eigener Entwurf nach Bildern eines Landungsschiffs aus einem anderen Spiel (nicht kopiert): Truppenraum mit zwölf Sitzen und Heckrampe, Oberdeck (Kojen, Messe, Schützenplatz), Waffenkammer, Technikraum,
+  // seitliche Panzerwülste mit Fahrwerk, Kanzelbuckel, Profilflügel, Rückenturm, vier schwenkbare Triebwerksgondeln.
+  harpyie: {
+    n: 'Harpyie', role: 'Landungsschiff', price: 38000, desc: 'Schweres, gepanzertes Landungsschiff: Truppenraum mit zwölf Klappsitzen und Heckrampe, Stellplatz für einen Dachs. Darüber ein Mannschaftsdeck mit Kojen, Messe, Kombüse und Schützenplatz, darunter Waffenkammer und Technikraum. Rückenturm mit Doppelrohr, Kinnkanonen, Raketenbehälter. Vier schwenkbare Triebwerksgondeln für senkrechte Starts. Innen begehbar.',
+    hull: 480, shield: 180, speed: 230, acc: 380, turn: 0.68, cargo: 140, ammo: 600, rockets: 8, dmg: 1.3,
+    laser: 0, beams: 0, laserRange: 0, heat: 1, scan: 1600, charges: 0, drones: 0, radius: 14, camUp: 18, camBack: 64, upMul: 1.5, col: 0x3c3f44, model: 'Harpyie', len: 37.57,
+  },
   // Eigenes Modell (asset-src/neu/wuerger, Blender-Skripte, docs/wuerger.md): 24,8 × 26,2 × 5 m, einsitzig, kein Innenraum
   wuerger: {
     n: 'Würger', role: 'Schwerer Jäger', price: 16000, desc: 'Einsitziger schwerer Jäger der Bastion: Schienenkanone unter dem Rumpf, zwei Flügelkanonen, vier Flugkörper, dicke Panzerung. Kaum Fracht, kein Bergbau.',

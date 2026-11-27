@@ -19,6 +19,8 @@ import { radio } from '../ui/radio';
 import { updateMining, throwCharge } from './mining';
 import { updateSchnellflug, SF, schnellflugHit } from './schnellflug';
 import { TESTF } from './testflags';
+import { hilfsduesen } from './hilfsduesen';
+import { turmAuto } from './turm';
 
 // Das Modell des aktiven Schiffs (wird beim Umsteigen ausgetauscht)
 export let SHIP: ShipModel = buildShipModel('milan');
@@ -37,6 +39,8 @@ export function setShipModel(cls: ShipId, paint: Paint = 'Orange', force = false
 }
 
 const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _v = new THREE.Vector3();
+// Startpunkte der Raketen in Schiffskoordinaten (Harpyie: Behälter unter den vorderen Flügeln, har-gelenke.json raketen)
+const RAKETEN: Partial<Record<string, number[][]>> = { harpyie: [[-6, 0.576, -7.909], [6, 0.576, -7.909]] };
 export function fwd() { _e.set(P.pitch, P.yaw, 0); return new THREE.Vector3(0, 0, -1).applyEuler(_e); }
 function right() { return new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw)); }
 export const playerTargetable = () => G.mode === 'play' && !G.dead;
@@ -183,6 +187,9 @@ export function updatePlayer(dt: number) {
   }
   P.x += P.vx * dt; P.y += P.vy * dt; P.z += P.vz * dt;
   G.thrust += (th - G.thrust) * Math.min(1, dt * 6);
+  // Hub- und Steuerdüsen (Kranich): Drehwunsch und Schieben aus den Eingaben, Bodennähe auf Planeten (hilfsduesen.ts)
+  hilfsduesen(SHIP.g, P.cls, dt, yawRate, pitchRate, G.roll, { sx: (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), sv: (keys.Space ? 1 : 0) - (keys.ControlLeft || keys.ControlRight || keys.KeyX ? 1 : 0), brems: keys.KeyS ? 1 : 0 },
+    world.surface && world.ground ? P.y - st.radius * 0.6 - world.ground(P.x, P.z) : Infinity, SHIP.glows[0]);
   // ---- Sektorgrenze bzw. Boden und Rand auf Planeten ----
   const hd = world.surface ? 0 : Math.hypot(P.x, P.z);
   if (world.surface && world.ground) {
@@ -253,6 +260,7 @@ export function updatePlayer(dt: number) {
     if (c > best) { best = c; G.lockT = z; }
   }
   if (G.lockT && G.lockT !== hadLock) sfx('lock_tone', 0.5);   // neues Ziel erfasst
+  turmAuto(dt, P.tool === 'guns' && mouse.down);      // Rückenturm: aufgeschaltet auf das erfasste Ziel (turm.ts)
   // ---- Kanonen ----
   G.cool -= dt;
   fullWarn -= dt;
@@ -299,7 +307,8 @@ export function updatePlayer(dt: number) {
     else {
       sfx('rocket_fire', 0.7); P.rockets--;
       _e.set(P.pitch, P.yaw, G.roll);
-      _v.set(world.rockets.length % 2 ? 3.6 : -3.6, -0.6, 0).applyEuler(_e);
+      const rp = RAKETEN[P.cls];      // Schiffe mit Raketenbehältern starten sichtbar aus ihnen
+      if (rp) { const q = rp[world.rockets.length % rp.length]; _v.set(q[0], q[1], q[2]).applyEuler(_e); } else _v.set(world.rockets.length % 2 ? 3.6 : -3.6, -0.6, 0).applyEuler(_e);
       launchRocket(P.x + _v.x, P.y + _v.y, P.z + _v.z, P.vx + f.x * 150, P.vy + f.y * 150, P.vz + f.z * 150, G.lockT);
     }
   }

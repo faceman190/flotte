@@ -23,7 +23,8 @@ import { REP, REP_IDS, RANKS, TRUST_LV, level, nextRank, rankName, repOf, repHoo
 import { abandonMission, missionLines, missionTypeName, missionHooks } from '../game/missions';
 import { aufgabenListe, aufgabeAbbrechen } from '../game/aufgaben';
 import { storyObjective } from '../game/story';
-import { invApp, invAct } from './invApp';
+import { invApp, invPlatz, invAct } from './invApp';
+import type { ShipSlot } from '../data/gear';
 import { shipMods } from '../game/inventory';
 import { abwerfen } from '../game/kisten';
 import { radio } from './radio';
@@ -54,6 +55,8 @@ $('bandApps').innerHTML = APPS.map(a => `<button data-app="${a.id}"><svg viewBox
 $('bandApps').addEventListener('click', e => { const b = (e.target as HTMLElement).closest('button'); if (b?.dataset.app) setApp(b.dataset.app as App); });
 $('bandX').onclick = () => closeBand();
 
+/** Modulplatz im Technikraum (interior.ts): Ausrüstung öffnen, Schiffsseite, nur passende Module */
+export function openModulPlatz(slot: ShipSlot) { invPlatz(slot); if (G.mode === 'map') setApp('inventar'); else openBand('inventar'); }
 export function openBand(a?: App) {
   if (G.mode === 'map') { if (a && a !== app) setApp(a); return; }
   prevMode = G.mode;
@@ -71,6 +74,7 @@ export function openBand(a?: App) {
 }
 export function closeBand() {
   if (G.mode !== 'map') return;
+  invPlatz(null);      // Auswahl am Modulplatz endet mit dem Band
   if (TRADE.open) cancelTrade();   // das Handelsfenster gehört zum Band: zu = Handel abgebrochen
   hideMap(); hideFig();
   $('band').classList.add('hidden');

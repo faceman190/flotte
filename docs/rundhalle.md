@@ -1,5 +1,8 @@
 # Bastion: Rundhalle (neues Deck 3)
 
+> Seit dem 26.11.2026 ersetzt durch das Forum (`docs/deck3.md`). Bausteine, Marktstände und Banner der Rundhalle werden dort weiterbenutzt;
+> die Daten der Rundhalle (`deck_rund.json`, `Lichtraum2Rund`) sind nicht mehr im Spiel. Wiederherstellen: `rh_back_lauf.py`.
+
 Stand 19.11.2026: im Spiel seit Alpha 1.52. Ersetzt das verwinkelte Deck 3 nach Plan D (`docs/bastion-deck.md`).
 
 Auftrag des Nutzers (Skizze vom 18.11.2026): Das alte Deck ist zu verschachtelt, eng und unübersichtlich. Vom Hangar führt ein breiter
