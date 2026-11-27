@@ -77,6 +77,10 @@ Was falsch war und was jetzt gilt (Planet `fieldfight.ts` und Mine `dungeon.ts` 
 Außensicht zusätzlich: Vom Kopf der Figur wird der Weg zum Zielpunkt geprüft. Steht dort eine Wand oder ein Gegner (die Kamera sieht über
 die Schulter an einer Kante vorbei, die Waffe nicht), trifft die Kugel das.
 
+Mit der Arbeit der anderen Sitzung zusammengeführt (Niagara-Effekte, GW-40, Lehnen): Das neue Mündungsfeuer entsteht an der Mündung des
+gezeigten Bildes; der Granatwerfer richtet sein Geschoss auf den Punkt unter dem Fadenkreuz (mindestens 12 m, in der Mine 8 m weit);
+gelehnt (Q / E) gilt der zur Seite gerückte Kopf, und die Figur lehnt, bevor der Lauf ausgerichtet wird (`Drive.vorFit`).
+
 Steht die Figur dicht an einer Wand (Einschlag unter 1,5 m vor der Mündung), gibt es keine Leuchtspur: So nah kann der Lauf nicht mehr auf
 den Einschlag zeigen.
 
