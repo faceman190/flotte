@@ -45,7 +45,7 @@ Einstieg in den Frachtflug.
 
 ## Lieferaufträge
 
-Im Auftragsbüro der Rundhalle (Bastion) oder im Kontor (Eisenkrone) bietet jede Station drei **Lieferaufträge** an: eine Ware an einen anderen Hafen
+In der Einsatzzentrale am Ende des Forums (Bastion) oder im Kontor (Eisenkrone) bietet jede Station drei **Lieferaufträge** an: eine Ware an einen anderen Hafen
 bringen. Nimmst du einen an, rückt ein neues Angebot nach. Abbrechen kostet Ruf bei der Fraktion, die den Auftrag vergeben hat.
 
 > **Tipp:** In Heimstatt liegen die Häfen weit auseinander (Eisenkrone 20 km, Heimstatt-Ring 30 km von der Bastion). Wähl den Zielhafen
