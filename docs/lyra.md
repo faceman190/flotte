@@ -98,6 +98,41 @@ Bilder: `docs/bilder/schuss-aussensicht.jpg`, `docs/bilder/schuss-ichsicht.jpg` 
 Nicht geändert: Die älteren Waffen des Spiels haben keine echte Visierung, beim Zielen in der Ich-Sicht schaut man knapp über das Modell.
 Mitspieler und Wachen richten ihre Waffe weiter nur nach den Haltungen.
 
+### Waffe am Körper: Rücken und Oberschenkel (seit 27.11.2026)
+
+Der Nutzer am 27.11.2026: „Wie richten wir ein das man gewehre auf den rücken packt? so seitlich das noch platz für einen rucksack ist“,
+danach: „Kannst du schon mal bauen, ich schicke bald ein paket mit rucksäcken, du bracusht keine eigenen zu machen“. Gebaut ist Stufe 1
+(ein Waffenplatz, tragen und wegstecken). Stufe 2 (zweiter Waffenplatz, zwei Langwaffen) ist offen.
+
+| Was | Wie |
+|---|---|
+| Wo die Waffe hängt | Langwaffen (Gewehr, Flinte, Granatwerfer) rechts neben der Wirbelsäule, Mündung nach unten, um 42° aus der Rückenebene gedreht (halb hochkant). Die Mitte des Rückens bleibt für einen Rucksack frei. Pistolen außen am rechten Oberschenkel, Mündung nach unten, Griff nach hinten |
+| Wann | Überall, wo die Waffe bisher verschwand (Station, Schiff zu Fuß), hängt sie am Körper. Auf Planet und in der Mine steckt **H** sie weg und zieht sie wieder; Schießen und Zielen ziehen sie von selbst |
+| Ziehen | 0,6 s: Die rechte Hand greift in 0,24 s zur Halterung, dann schwingt die Waffe in 0,36 s in den Anschlag. Erst danach fällt der Schuss (`footgun.ts` `GUN.zieh`) |
+| Wegstecken | derselbe Weg rückwärts. Ein laufendes Nachladen bricht ab, das Magazin bleibt, wie es war |
+| Über Weste und Rüstung | Die Halterung rückt um die Dicke dessen ab, was getragen wird: Plattenträger 10 cm, Rüstung 6 cm (Oberschenkel 4 cm), Overall 1,5 cm (`figur.ts` `HALTER_TIEFE`, am Bild abgeglichen) |
+| Verschiedene Modelle | Langwaffen liegen mit dem Kolbenende und der Oberkante an einem festen Punkt hinter der Schulter (Oberkante bei rund 1,58 m), gleich wie lang und hoch das Modell ist (`mannyAvatar.ts` `fitHolder` misst es beim Anlegen) |
+| Mitspieler | sehen es: fünftes Zeichen im Netzfeld der Haltung (0 in der Hand, 1 weggesteckt, 2 keine Waffe). Ältere Spiele senden es nicht, dort verschwindet die Waffe wie bisher |
+| Nicht zu sehen | im Sitzen (Pilotensitz, Rover) und außenbords: Dort ist die Figur eine eigene Kopie ohne Waffe. Der Manövrierrucksack MR-1 ist 44 cm breit und ließe keinen Platz |
+
+Gebaut in `manny/WeaponLayer.js`:
+
+- `HOLSTER`: die Halterungen (`back`, `backL` für einen zweiten Platz links, `thigh`), als Werte im Rahmen der Figur in Ruhehaltung
+  (Ort, Laufrichtung, wohin die Oberseite zeigt). Eine Halterung hat den Rahmen des Waffenknochens; die Waffe wird nicht umgebaut, ihr
+  Halter (`mount`) hängt entweder am Waffenknochen oder an der Halterung. `SLOT`: welche Waffenart wohin.
+- Zustand `hs` (`hand`, `body`, `draw`, `stow`) und `u` (wie weit die Hand an der Halterung ist). `_reach` führt den Waffenknochen
+  auf einem Bogen über die Schulter zur Halterung; `solveArm` stellt den rechten Arm dazu (aus den Orten gerechnet – der Löser der
+  Beine kippte, wenn der Ellbogen gegen seine jetzige Beugung zeigen sollte: Die Hand blieb 24 cm vor der Halterung).
+- Lyras Zieh-Clip (`MM_Rifle_Equip`) hebt die Waffe nur von der Hüfte in den Anschlag, die Hand geht darin nie hinter den Rücken (gemessen).
+  Er läuft weiter dort, wo es keine Halterung gibt (Wachen).
+
+Bilder: `bilder/halter-station.jpg` (eigene Figur und eine Mitspieler-Figur in der Bastion), `bilder/halter-ruestung.jpg` (vier Sichten
+über Rüstung und Weste), `bilder/halter-ziehen.jpg` (Ziehen in acht Bildern von vorn).
+
+Offen: Rucksäcke der neuen Figur (das Paket des Nutzers steht aus; danach Lage und Abstand am Bild neu abgleichen). Die Trommel der TF-8
+und das Magazin des Karabiners stehen 20 cm nach hinten ab. Beim Granatwurf mit weggesteckter Waffe fehlt die Wurfbewegung der Figur.
+Von Hand gespielt ist nichts davon.
+
 ## Wie es gebaut ist
 
 - **Lyras Waffen** (`src/game/lyraGuns.ts`): Zuordnung Gegenstand → Waffe (`LYRA_ITEM`), Lage und Mündung (`LYRA_SPEC`), Laden beim
@@ -132,6 +167,8 @@ Mitspieler und Wachen richten ihre Waffe weiter nur nach den Haltungen.
 
 - `(0, eval)(await (await fetch('/scripts/waffentest.js')).text()); await __waffe();` – Figur mit Waffe und Lampe im Hangar.
 - `await __feld('waffe_kg30', false)` – echter Ablauf zu Fuß auf Eisgarten (zweiter Wert: Außensicht), dann `tk(n)` und `show()`.
+- `(0, eval)(await (await fetch('/scripts/haltertest.js')).text()); __halter()` nach `__feld`: `H.weg(true)`, `H.strip`, `H.film`,
+  `await H.blatt([...])` (alle Waffen am Körper), `H.mess()` (Abstand Waffenknochen ↔ Halterung: beim Wechsel 1 mm), `H.set` zum Versetzen.
 - `(0, eval)(await (await fetch('/scripts/schusstest.js')).text()); __schuss()` nach `__feld`: je Fall (Stand, Zielen, Laufen, beide Sichten)
   Winkel Fadenkreuz ↔ Einschlag und Lauf ↔ Leuchtspur.
 - Gemessen: Rückstoß der Figur 4,5 cm in zwei Bildern; Sichtfeld beim Zielen 62,5° statt 72°; Streuung des KG-30 aus dem Stand

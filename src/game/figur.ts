@@ -26,6 +26,16 @@ export interface Tracht { figur: number; teile: Partial<Record<Platz, string>>; 
 let PUPPE_MAT: THREE.MeshStandardMaterial | null = null;
 const puppeMat = () => (PUPPE_MAT ||= Object.assign(new THREE.MeshStandardMaterial({ color: 0x777a7c, roughness: 0.52, metalness: 0 }), { name: 'Schaupuppe', envMapIntensity: 0.3 }));
 export const TEIL_PLATZ = FIGUR_TEILE.teile as Record<string, Platz>;
+// Waffe in der Halterung am Körper (manny/WeaponLayer.js HOLSTER): um so viel steht sie weiter vom Körper ab, je nachdem, was getragen
+// wird – [am Rücken, am Oberschenkel] in Metern, es gilt das dickste Teil. Am Bild abgeglichen (27.11.2026): Der Plattenträger hat eine
+// Rückenplatte über die ganze Breite, die Rüstung einen Rückenschild.
+const HALTER_TIEFE: Record<string, [number, number]> = { weste_01: [0.1, 0], overall_02: [0.06, 0.04], overall_01: [0.015, 0.01] };
+const _ht: [number, number] = [0, 0];
+export function halterTiefe(t?: Tracht | null): [number, number] {
+  _ht[0] = _ht[1] = 0;
+  if (t) for (const p in t.teile) { const h = HALTER_TIEFE[t.teile[p as Platz] || '']; if (h) { _ht[0] = Math.max(_ht[0], h[0]); _ht[1] = Math.max(_ht[1], h[1]); } }
+  return _ht;
+}
 const VERDECKT = FIGUR_TEILE.verdeckt as Partial<Record<Platz, string>>;
 const HAND = '^(hand|thumb|index|middle|ring|pinky|wrist)_';
 

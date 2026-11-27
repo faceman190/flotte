@@ -841,11 +841,11 @@ export class MannyAnimator {
     if (Wp) this._applyWeapon(dt, wi, lk);
   }
 
-  /** wi: { kind, aim, shots, hits, reload } or null (no weapon in hand) */
+  /** wi: { kind, aim, shots, hits, reload } or null (no weapon). wi.hand false: not in the hand; with wi.body it is carried on the body then (wi.hide: unseen) */
   _applyWeapon(dt, wi, lk) {
     const sprint = this.gaitW.sprint || 0, T = this.tuning;
     this.weapon.apply(dt, {
-      armed: !!wi, kind: wi ? wi.kind : undefined, aim: !!(wi && wi.aim) && sprint < 0.5, shots: wi ? wi.shots : undefined, hits: wi ? wi.hits : undefined, toss: wi ? wi.toss : undefined,
+      armed: !!wi && wi.hand !== false, body: !!(wi && wi.body), hide: !!(wi && wi.hide), kind: wi ? wi.kind : undefined, aim: !!(wi && wi.aim) && sprint < 0.5, shots: wi ? wi.shots : undefined, hits: wi ? wi.hits : undefined, toss: wi ? wi.toss : undefined,
       reload: wi && wi.reload !== undefined ? wi.reload : -1, crouchW: this.crouchW, yaw: lk.yaw, pitch: lk.pitch / (T.lookPitch || 1), ms: this._ms, snap: this._wSnap,
       move: clamp(((this._realSpeed ?? this.planarVel.length()) - 0.7) / 1.1, 0, 1) * (['fall', 'jumpStart', 'land'].includes(this.state) ? 0 : 1), sprint, fp: !!this.fpView, late: !!this.lateAdd,
     });

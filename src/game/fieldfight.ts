@@ -407,7 +407,7 @@ export function fieldViewModel(show: boolean, bob: number, walked: number) {
   if (!show || !vm) return null;
   vm.cam.aspect = view.W / view.H; vm.cam.updateProjectionMatrix();
   poseViewModel(vm, { walked, bob, kick: FIGHT.kick, reload: GUN.reload > 0 ? 1 - GUN.reload / GUN.reloadT : -1, ads: aimK(), shots: FIGHT.shots });   // mineArt.ts
-  vm.gun.visible = FIGHT.down <= 0;
+  vm.gun.visible = FIGHT.down <= 0 && !GUN.weg;
   const sup = vm.id === 'smg', f = FIGHT.flash > 0 && (!sup || FIGHT.shots % 3 === 0); vm.flash.visible = f; vm.flashLight.intensity = f ? (sup ? 0.12 : 2.6) : 0;   // SMG mit Schalldämpfer: kleines Mündungsfeuer
   if (f) { ngVmFlash(vm.flash); (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
   if (FIGHT.shots !== vmShots) { vmShots = FIGHT.shots; const port = SHELL_PORT[vm.id]; if (port) vmShell(vm.scene, vm.gun, port); }   // Hülse fliegt rechts heraus

@@ -46,6 +46,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (DUN.prompt) r.push(['E', DUN.prompt, true]);
     if (GUN.max && GUN.reload <= 0 && GUN.mag < GUN.max * 0.5) r.push(['R', 'Nachladen']);
     if (fresh()) r.push(['Rechtsklick halten', 'Zielen']);
+    if (P.gear?.waffe && (fresh() || GUN.weg)) r.push(['H', GUN.weg ? 'Waffe ziehen' : 'Waffe wegstecken']);
     if (grenadeCount() > 0) r.push(['G', 'Granate werfen']);
     if (fresh()) r.push(['Q / E halten', 'Zur Seite lehnen']);
     return { title: DUN.e ? DUN.e.name : 'Mine', rows: r };
@@ -56,6 +57,7 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     if (FOOT.act === 'rover' && !FOOT.prompt) r.push(['F', 'In den Rover steigen', true]);   // steht die Aufforderung schon da (E), nicht doppelt
     if (GUN.max && GUN.reload <= 0 && GUN.mag < GUN.max * 0.5) r.push(['R', 'Nachladen']);
     if (fresh()) r.push(['Rechtsklick halten', 'Zielen']);
+    if (P.gear?.waffe && (fresh() || GUN.weg)) r.push(['H', GUN.weg ? 'Waffe ziehen' : 'Waffe wegstecken']);
     if (grenadeCount() > 0) r.push(['G', 'Granate werfen']);
     if (fresh() || FELD_EXTRA.kampf()) r.push(['Q / E halten', 'Zur Seite lehnen']);      // lehnen.ts
     return { title: 'Zu Fuß', rows: r };

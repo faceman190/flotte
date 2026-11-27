@@ -42,9 +42,59 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const ID = new THREE.Quaternion();
 const _a = new THREE.Quaternion(), _b = new THREE.Quaternion(), _c = new THREE.Quaternion(), _acc = new THREE.Quaternion();
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _v4 = new THREE.Vector3();
+const _m1 = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), ONE = new THREE.Vector3(1, 1, 1);
+const smooth = (x) => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
+const _p1 = new THREE.Vector3(), _p2 = new THREE.Vector3(), _p3 = new THREE.Vector3(), _p4 = new THREE.Vector3(), _p5 = new THREE.Vector3(), _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
+/** turn a bone by a rotation given in world axes (its children follow) */
+function turnBone(bone, qWorld) {
+  bone.parent.getWorldQuaternion(_qb);
+  bone.quaternion.premultiply(_qa.copy(_qb).invert().multiply(qWorld).multiply(_qb));
+  bone.updateMatrixWorld(true);
+}
+/**
+ * Arm onto a point: upper arm ua, forearm la, hand hd; the wrist goes to target (world) and takes the rotation quat, the elbow lies on the
+ * side of pole (world direction). Solved from the positions alone, so it does not depend on which way the elbow is bent now.
+ */
+function solveArm(ua, la, hd, target, quat, pole) {
+  ua.updateWorldMatrix(true, false); la.updateWorldMatrix(false, false); hd.updateWorldMatrix(false, false);
+  const S = ua.getWorldPosition(_p1), K = la.getWorldPosition(_p2), A = hd.getWorldPosition(_p3);
+  const l1 = S.distanceTo(K), l2 = K.distanceTo(A);
+  const dir = _p4.copy(target).sub(S), d = clamp(dir.length(), Math.abs(l1 - l2) + 0.02, l1 + l2 - 0.002);
+  dir.normalize();
+  const x = (l1 * l1 - l2 * l2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
+  const n = _p5.copy(pole).addScaledVector(dir, -pole.dot(dir));
+  if (n.lengthSq() < 1e-8) n.set(0, 1, 0).addScaledVector(dir, -dir.y);
+  n.normalize();
+  const E = n.multiplyScalar(h).addScaledVector(dir, x);      // elbow, seen from the shoulder
+  turnBone(ua, _qa.setFromUnitVectors(K.sub(S).normalize(), _p3.copy(E).normalize()).clone());
+  const K2 = la.getWorldPosition(_p2), A2 = hd.getWorldPosition(_p3);
+  const want = dir.multiplyScalar(d).add(S).sub(K2).normalize();
+  turnBone(la, _qa.setFromUnitVectors(A2.sub(K2).normalize(), want).clone());
+  la.getWorldQuaternion(_qb);
+  hd.quaternion.copy(_qb.invert().multiply(quat));
+  hd.updateMatrixWorld(true);
+}
+
+// Carried on the body (since 2026-11-27): a weapon that is not in the hand hangs in a holder on a body bone instead of vanishing.
+// A holder has the frame of the weapon bone (x = barrel, y = left, z = top of the weapon, origin = grip), so the hand mount with the
+// weapon model is simply moved there. Values in the frame of the figure in its rest pose (x = left, y = up, z = forwards; metres):
+//   off   grip relative to the bone – with end: the corner "rear end of the weapon, its top edge" instead, so that weapons of any
+//         length and height end at the same place behind the shoulder and lie against the back (setFit) · dir barrel · top where the top of the weapon points · out the direction away from the body
+//         (the holder moves that way by the thickness of what is worn, setDepth) · arc [to the right, up]: detour of the hand between
+//         holder and stance (over the shoulder instead of through it) · pole where the elbow points while reaching
+// Long weapons hang beside the spine, muzzle down, turned 42 degrees out of the plane of the back (half on edge): the middle of the
+// back stays free for a backpack, and a second long weapon fits on the left (backL, not used yet).
+export const HOLSTER = {
+  back: { bone: 'spine_05', off: [-0.1, 0.174, 0.05], end: true, dir: [0.05, -1, -0.1], top: [0.9, 0, 1], out: [0, 0, -1], arc: [0.1, 0.2], pole: [-0.55, 0.55, 0.6] },
+  backL: { bone: 'spine_05', off: [0.1, 0.174, 0.05], end: true, dir: [-0.05, -1, -0.1], top: [-0.9, 0, 1], out: [0, 0, -1], arc: [0.1, 0.2], pole: [-0.55, 0.55, 0.6] },
+  thigh: { bone: 'thigh_r', leg: true, off: [-0.095, -0.15, 0.0], dir: [0, -1, 0.12], top: [0, 0.12, 1], out: [-1, 0, 0], arc: [0.05, 0], pole: [-0.5, 0, -0.85] },
+};
+export const SLOT = { rifle: 'back', shotgun: 'back', pistol: 'thigh' };
 
 export const TUNE = {
   blend: 0.18,          // s – weapon up / away
+  reachT: 0.24,         // s – the right hand reaches for the weapon on the body (and returns from it)
+  swingT: 0.36,         // s – the weapon swings between its holder and the stance
   aimRate: 7,           // 1/s – hip <-> ads
   fireGain: 1.6,        // strength of the recoil pose (1 = as animated; Lyra's is small)
   hitGain: 1,           // strength of the hit reaction
@@ -92,7 +142,40 @@ export class WeaponLayer {
     this.tossT = 9; this.tosses = -1;
     this.carryW = 0; this.carryT = 0; this.lowW = 0;
     this.fitW = 0; this._addW = 0; this._addFire = false;
+    // holders on the body and the right arm that reaches them
+    this.holders = {}; this.holder = null; this.depth = 0; this.depthLeg = 0; this.fitRear = 0; this.fitTop = 0;
+    model.updateWorldMatrix(true, true);
+    for (const n of Object.keys(HOLSTER)) this.setHolder(n, HOLSTER[n], bones);
+    const ur = bones.get('upperarm_r'), lr = bones.get('lowerarm_r'), hr = bones.get('hand_r');
+    this.ikR = ur && lr && hr ? new TwoBoneIK(ur, lr, hr) : null;
+    this.hs = 'body'; this.hT = 0; this.u = 0; this.inHand = false;      // hs: 'hand' | 'body' | 'draw' | 'stow'; u: how far the hand is at the holder
   }
+
+  /** place (or move) a holder from its values in the figure's rest pose; call while the skeleton is in that pose */
+  setHolder(name, H, bones) {
+    const bone = bones ? bones.get(H.bone) : this.model.getObjectByName(H.bone);
+    if (!bone) return;
+    let h = this.holders[name];
+    if (!h) { h = this.holders[name] = new THREE.Object3D(); h.name = 'Halter_' + name; h.userData.rest = new THREE.Matrix4().copy(this.model.matrixWorld).invert().multiply(bone.matrixWorld); bone.add(h); }
+    const rest = h.userData.rest;      // the bone in the frame of the figure, rest pose
+    const x = _v1.fromArray(H.dir).normalize(), z = _v2.fromArray(H.top); z.addScaledVector(x, -z.dot(x)).normalize();
+    const y = _v3.crossVectors(z, x);
+    _m1.makeBasis(x, y, z).setPosition(_v4.setFromMatrixPosition(rest).add(_v1.fromArray(H.off)));
+    _m2.copy(rest).invert();
+    h.userData.base = new THREE.Matrix4().multiplyMatrices(_m2, _m1);
+    h.userData.out = new THREE.Vector3().fromArray(H.out).normalize().transformDirection(_m2).multiplyScalar(_v1.setFromMatrixScale(_m2).x);
+    h.userData.spec = H;
+    this._depth(h);
+  }
+  _depth(h) {
+    const B = h.userData.base;
+    B.decompose(h.position, h.quaternion, h.scale); h.position.addScaledVector(h.userData.out, h.userData.spec.leg ? this.depthLeg : this.depth);
+    if (h.userData.spec.end) h.position.addScaledVector(_v1.setFromMatrixColumn(B, 0), -this.fitRear).addScaledVector(_v1.setFromMatrixColumn(B, 2), -this.fitTop);
+  }
+  /** how far the holders stand off the body (m): thickness of what is worn on the back (d) and on the leg (leg) */
+  setDepth(d, leg = 0) { if (d === this.depth && leg === this.depthLeg) return; this.depth = d; this.depthLeg = leg; for (const n in this.holders) this._depth(this.holders[n]); }
+  /** the weapon in the mount: rear = where it ends behind the grip (along the barrel, negative), top = its highest point above the grip (m) */
+  setFit(rear, top) { if (rear === this.fitRear && top === this.fitTop) return; this.fitRear = rear; this.fitTop = top; for (const n in this.holders) this._depth(this.holders[n]); }
 
   _buf() { return { q: new Float32Array(this.N * 4), pel: new Float32Array([0, 0, 0, 1]), wp: new Float32Array(3) }; }
 
@@ -202,16 +285,36 @@ export class WeaponLayer {
    * relative to the body, deg (yaw + = right, pitch + = up) · o.shots / o.hits: counters (a change starts recoil / a hit reaction) ·
    * o.reload: progress 0..1, otherwise −1 · o.ms 0..1: share of the mesh space blend at spine_01 (1 = the chest ignores what the
    * hips do, 0 = it follows them) · o.snap: no blending this frame (teleport) · o.move 0..1: the figure is on the move · o.sprint 0..1 ·
-   * o.fp: seen from the figure's own eyes (the weapon is lowered less, so that it stays in the picture)
+   * o.fp: seen from the figure's own eyes (the weapon is lowered less, so that it stays in the picture) ·
+   * o.body: the weapon of kind o.kind is carried on the body while it is not in the hand (o.armed false) · o.hide: but not shown now
    */
   apply(dt, o) {
     if (!this.ready) return;
-    const want = o.armed ? 1 : 0, T = TUNE;
-    if (o.armed && !this.armed) { this.kind = KINDS[o.kind] ? o.kind : 'rifle'; this.warm(this.kind); if (!o.snap) this.equipT = 0; }
-    else if (o.armed && o.kind !== this.kind && KINDS[o.kind]) { this.kind = o.kind; this.warm(this.kind); this.equipT = o.snap ? 9 : 0; }
-    this.armed = !!o.armed;
+    const T = TUNE;
+    // ---- hand or holder. With a holder the hand fetches the weapon (reach, then swing into the stance) and puts it back the same way.
+    const holder = o.body && KINDS[o.kind] ? this.holders[SLOT[o.kind]] || null : null;
+    this.holder = holder;
+    if (o.snap || !holder) { this.hs = o.armed ? 'hand' : 'body'; this.u = 0; }
+    else if (this.hs === 'hand' && !o.armed) { this.hs = 'stow'; this.hT = 0; }
+    else if (this.hs === 'body' && o.armed) { this.hs = 'draw'; this.hT = 0; }
+    if (this.hs === 'draw' || this.hs === 'stow') {
+      this.hT += dt;
+      const t1 = this.hs === 'draw' ? T.reachT : T.swingT, t2 = this.hs === 'draw' ? T.swingT : T.reachT;
+      if (this.hT < t1) this.u = smooth(this.hT / t1);
+      else if (this.hT < t1 + t2) this.u = smooth(1 - (this.hT - t1) / t2);
+      else { this.u = 0; this.hs = this.hs === 'draw' ? 'hand' : 'body'; }
+    }
+    const inHand = this.hs === 'hand' || (this.hs === 'draw' && this.hT >= T.reachT) || (this.hs === 'stow' && this.hT < T.swingT);
+    // the stance: from the moment the hand has the weapon; gone as soon as it is on its way back
+    const armed = inHand && !!o.armed, want = armed ? 1 : 0;
+    if (armed && !this.armed) { this.kind = KINDS[o.kind] ? o.kind : 'rifle'; this.warm(this.kind); if (!o.snap) this.equipT = holder ? 9 : 0; }
+    else if (armed && o.kind !== this.kind && KINDS[o.kind]) { this.kind = o.kind; this.warm(this.kind); this.equipT = o.snap ? 9 : 0; }
+    this.armed = armed;
     this.w = o.snap ? want : clamp(this.w + Math.sign(want - this.w) * dt / T.blend, 0, 1);
-    this.mount.visible = this.w > 0.35;
+    const par = inHand || !holder ? this.wr : holder;
+    if (par && this.mount.parent !== par) par.add(this.mount);
+    this.mount.visible = holder ? inHand || !o.hide : this.w > 0.35;
+    this.inHand = holder ? inHand : this.w > 0.35;
     // counters: the first value only sets the start
     // a shot brings the weapon up in this very frame: the tracer starts at the muzzle and has to leave along the barrel
     let shotNow = false;
@@ -294,11 +397,29 @@ export class WeaponLayer {
     }
     // how far the barrel may be turned onto the aim point: not while the weapon is carried, lowered or busy (reload, equip, throw)
     this.fitW = W * (1 - busy) * (1 - this.carryW) * (1 - this.lowW * (1 - this.aimW) * (o.fp ? T.lowReadyFp : T.lowReady) / 7);
-    this.fitW = clamp(this.fitW, 0, 1);
+    this.fitW = clamp(this.fitW, 0, 1) * (1 - this.u);      // not while the hand is still bringing the weapon from its holder
     // ---- additive: recoil and hit
     this._addW = W; this._addFire = !reloading;
     if (!o.late) this.additive();
-    this.ikW = W * K.ik * (1 - busy);
+    this.ikW = W * K.ik * (1 - busy) * (1 - this.u);
+  }
+
+  /** right arm: the weapon bone onto the holder by the share u, on a detour over the shoulder (arc) */
+  _reach() {
+    const h = this.holder, wr = this.wr, u = this.u, H = h.userData.spec, s = Math.sin(Math.PI * u);
+    const { thigh: ua, calf: la, foot: hd } = this.ikR;
+    h.updateWorldMatrix(true, false); wr.updateWorldMatrix(true, false);
+    h.matrixWorld.decompose(_v1, _a, _v4); wr.matrixWorld.decompose(_v2, _b, _v4);
+    this.model.getWorldQuaternion(_c);
+    _v2.lerp(_v1, u).add(_v3.set(-H.arc[0] * s, H.arc[1] * s, 0).applyQuaternion(_c)); _b.slerp(_a, u);
+    wr.updateMatrix();
+    _m1.compose(_v2, _b, ONE).multiply(_m2.copy(wr.matrix).invert()).decompose(_v2, _b, _v4);      // the hand that puts the weapon bone there
+    // elbow: from where it points now towards the side the reach needs
+    const S0 = ua.getWorldPosition(_v1), E = la.getWorldPosition(_v3), Hd = hd.getWorldPosition(_v4);
+    Hd.sub(S0); E.sub(S0); E.addScaledVector(Hd, -E.dot(Hd) / Math.max(1e-6, Hd.lengthSq()));
+    if (E.lengthSq() > 1e-6) E.normalize(); else E.set(0, -1, 0);
+    E.lerp(_v1.fromArray(H.pole).normalize().applyQuaternion(_c), smooth(u * 1.5)).normalize();
+    solveArm(ua, la, hd, _v2, _b, E);
   }
 
   /** recoil and hit reaction on top of the pose; with o.late the owner calls this after turning the barrel onto the aim point */
@@ -312,7 +433,9 @@ export class WeaponLayer {
 
   /** after the world transform of this frame is set: left hand onto the fore grip of the carried weapon */
   finalize() {
-    if (!this.ready || !this.ikL || !this.grip || this.ikW < 0.01) return;
+    if (!this.ready) return;
+    if (this.u > 0.001 && this.ikR && this.holder) this._reach();
+    if (!this.ikL || !this.grip || this.ikW < 0.01) return;
     const { thigh: ua, calf: la, foot: hd } = this.ikL;
     this.socket.updateWorldMatrix(true, false);
     const target = this.socket.localToWorld(_v1.copy(this.grip));
