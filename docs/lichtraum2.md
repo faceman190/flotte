@@ -193,6 +193,9 @@ Menü der Artifact-Fassung reichen nicht.
 
 ## Hangar der Bastion (Alpha 1.33)
 
+Seit dem 27.11.2026 gibt es eine zweite Runde mit mehr Detail und dichterer Lichtkarte (`verdeckt`, `teilen`, `schmal`, `fern`, Standflächen
+aus dem Backlauf): `docs/hangar.md`. Die Zahlen in diesem Abschnitt gelten für die erste Runde.
+
 Der Nutzer hat die Umstellung freigegeben („Check mach das“). Der Hangar der Bastion ist jetzt auch Lichtraum 2. Vergleichsbild:
 `docs/bilder/lichtraum2-133-hangar.jpg` (links Alpha 1.32, rechts Alpha 1.33).
 
