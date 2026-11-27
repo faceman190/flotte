@@ -10,6 +10,8 @@ Spiel zu bringen.“
 
 ## Zwei Ebenen (seit dem 27.11.2026)
 
+Freigegeben in Alpha 1.68 (27.11.2026).
+
 Der Nutzer nach der Freigabe von Alpha 1.67: „Bei dem Hangar für die Spieler. Dort soll kein Deck sein, nur Hangarzugang und die beiden Aufzüge.
 Nicht nochmal Treffpunkt und Läden“. Vorher ging man vom Hangar durch Korridor und Vorhalle zu Fuß ins Forum; wer mit dem Aufzug in seine
 Bucht fuhr, stand danach wieder vor demselben Deck.
