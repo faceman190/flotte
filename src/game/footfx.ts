@@ -142,16 +142,31 @@ function chInit() {
 // ---------- Einschläge ----------
 let impAt = 0;
 // kind: 'boden' (Erde, Fels: Staub und wenige Funken), 'metall' (Drohne: viele Funken, Blitz)
-export function impact(p: THREE.Vector3, dir: THREE.Vector3, kind: 'boden' | 'metall', col = '#ffd9a0') {
+// Einschlagsklang je Material (seit 27.11.2026, Aufnahmen aus Epics ShooterGame, asset-src/sound-lazy/imp_*): Zahl der Aufnahmen
+export type ImpStoff = 'default' | 'metall' | 'wasser' | 'fleisch';
+const IMP_N: Record<ImpStoff, number> = { default: 10, metall: 10, wasser: 6, fleisch: 8 };
+const IMP_VOL: Record<ImpStoff, number> = { default: 0.34, metall: 0.38, wasser: 0.36, fleisch: 0.42 };
+/** kind: Funken und Staub (boden) oder viele Funken (metall); stoff: Klang und Bild (Wasser spritzt, Fleisch ohne Staub). Ohne stoff: metall bzw. default */
+export function impact(p: THREE.Vector3, dir: THREE.Vector3, kind: 'boden' | 'metall', col = '#ffd9a0', stoff?: ImpStoff) {
+  const st: ImpStoff = stoff || (kind === 'metall' ? 'metall' : 'default');
   if (kind === 'metall') {
     sparks(p.x, p.y, p.z, -dir.x, -dir.y + 0.2, -dir.z, '#ffc070', 9, 9, 0.28, 0.9, 0.018);
     flash(p.x, p.y, p.z, '#ffb060', 0.45, 0.07);
+  } else if (st === 'wasser') {
+    sparks(p.x, p.y, p.z, 0, 1, 0, '#d8ecf4', 10, 4.5, 0.45, 0.9, 0.016);
+    dust(p.x, p.y + 0.05, p.z, '#cfe2ea', 0.45, 0.5, 0.9, 0.4);
+  } else if (st === 'fleisch') {
+    sparks(p.x, p.y, p.z, -dir.x, -dir.y + 0.2, -dir.z, col, 5, 3.5, 0.25, 0.85, 0.014);
   } else {
     sparks(p.x, p.y, p.z, -dir.x, -dir.y + 0.4, -dir.z, col, 3, 6, 0.2, 0.8, 0.012);
     flash(p.x, p.y, p.z, '#ffe2b0', 0.18, 0.05);
     if (!flip('puff', p.x - dir.x * 0.12, p.y - dir.y * 0.12 + 0.12, p.z - dir.z * 0.12, 0.35, 1.25, 0.75, '#a89c8c', 0.45)) dust(p.x, p.y + 0.05, p.z, '#8a7f70', 0.55, 0.7, 0.5, 0.5);
-    const d = camD(p.x, p.y, p.z), now = performance.now();      // höchstens ein Einschlagsgeräusch je 70 ms (Schrot trifft siebenfach)
-    if (d < 45 && now - impAt > 70) { impAt = now; sfxAny('w_x_imp', 5, 0.3 / (1 + (d / 14) ** 2), 0.95 + Math.random() * 0.1); }
+  }
+  const d = camD(p.x, p.y, p.z), now = performance.now();      // höchstens ein Einschlagsgeräusch je 70 ms (Schrot trifft siebenfach)
+  if (d < 45 && now - impAt > 70) {
+    impAt = now;
+    const v = 1 / (1 + (d / 14) ** 2), r = 0.95 + Math.random() * 0.1;
+    sfxAny('imp_' + st, IMP_N[st], IMP_VOL[st] * v, r, () => { if (kind === 'boden') sfxAny('w_x_imp', 5, 0.3 * v, r); });   // fehlt die Aufnahme noch: der alte Klang (Metall still wie bisher)
   }
 }
 

@@ -12,3 +12,11 @@ am 26.11.2026 ausgewählt, mono, 32 kHz, auf gleiche Spitze (−3 dB) gebracht u
 erde (DirtyGround), matsch (Mud), schnee (HardSnow), pulver (SoftSnow), wasser, metall, beton (Concrete), holz (Wood), teppich (Carpet V1).
 fs_<grund><n> = Schritt · fs_<grund>_land<n> = Aufkommen nach dem Sprung (Jump_Land, beim Wasser Jump_Light) · fs_<grund>_jump<n> = Absprung (Jump_Start).
 Lizenz: Fab-Standardlizenz (laut Projektinhaber außerhalb der Unreal Engine in eigenen Projekten nutzbar).
+
+imp_*, gw_*, koerper_fall*, aufheben_* = Aufnahmen aus Epics Beispielprojekt „ShooterGame“ (UE 4.27, C:\EXTRA\UnrealProjects\ShooterGame, Content\Sounds),
+am 27.11.2026 mit scripts/ue/shooter_export.py exportiert, mono, 44,1 kHz, auf gleiche Spitze (−1 dB) gebracht, lange Aufnahmen gekürzt und ausgeblendet.
+imp_default/metall/wasser/fleisch<n> = Einschläge (sw_Impt_AK_Default/Mtl/Water/Flesh) · gw_schuss<n> = Abschuss (sw_Wep_Launcher_Shoot) ·
+gw_flug<n> = Flug (sw_Proj_Flight_LP) · gw_expl<n> / gw_expl_fern<n> = Explosion nah / fern
+(sw_Impt_Launcher_Close/Dist) · gw_lade_a0 / gw_lade_b0 = Nachladen (Reload_Launcher_Start/End) ·
+koerper_fall<n> = Körper fällt (sw_Foley_Bodyfall) · aufheben_munition0 / aufheben_heilung0 = Aufsammeln (sw_Pickup_Ammo/Health).
+Lizenz: Epic-Beispielinhalt; Nutzung außerhalb der Unreal Engine wie bei Lyra vom Projektinhaber zu prüfen.

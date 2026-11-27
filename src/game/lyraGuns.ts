@@ -12,18 +12,24 @@ import { MANIFEST } from '../core/assets';
 // der Rahmen des Waffenknochens weapon_r der Spielerfigur. Geladen wird beim ersten Gebrauch; je Ansicht eine eigene Kopie
 // (Außensicht an der Hand der Figur: mannyAvatar.ts; Ich-Sicht: mineArt.ts buildViewModel).
 // =====================================================================================
-export type LyraKind = 'rifle' | 'pistol' | 'shotgun';
+// Seit 27.11.2026 läuft der Granatwerfer GW-40 aus Epics ShooterGame (waffe_gw40, lazy/Granatwerfer, scripts/ue/granatwerfer-glb.mjs) auf demselben
+// Weg mit: gleiche Achsen, aber ohne Knochen und Clips; die Figur hält ihn wie ein Gewehr (LYRA_HALT).
+export type LyraKind = 'rifle' | 'pistol' | 'shotgun' | 'launcher';
+/** Haltung der Figur (Art der Clips) je Waffe */
+export const LYRA_HALT: Record<LyraKind, 'rifle' | 'pistol' | 'shotgun'> = { rifle: 'rifle', pistol: 'pistol', shotgun: 'shotgun', launcher: 'rifle' };
 /** Gegenstand → Waffe des Pakets */
-export const LYRA_ITEM: Record<string, LyraKind> = { waffe_kg30: 'rifle', waffe_sp12: 'pistol', waffe_tf8: 'shotgun' };
+export const LYRA_ITEM: Record<string, LyraKind> = { waffe_kg30: 'rifle', waffe_sp12: 'pistol', waffe_tf8: 'shotgun', waffe_gw40: 'launcher' };
 /** Kennung als Waffenmodell (wie die Schlüssel in mineArt WDEFS; geht auch an Mitspieler) */
-export const LYRA_VM: Record<LyraKind, string> = { rifle: 'lyg', pistol: 'lyp', shotgun: 'lyf' };
-export const LYRA_OF_VM: Record<string, LyraKind> = { lyg: 'rifle', lyp: 'pistol', lyf: 'shotgun' };
+export const LYRA_VM: Record<LyraKind, string> = { rifle: 'lyg', pistol: 'lyp', shotgun: 'lyf', launcher: 'gw40' };
+export const LYRA_OF_VM: Record<string, LyraKind> = { lyg: 'rifle', lyp: 'pistol', lyf: 'shotgun', gw40: 'launcher' };
 // muzzle: Mündung im Rahmen der Waffe (lyra.json, sockets.Muzzle) · view: Lage vor der Kamera in der Ich-Sicht (rechts, unten, vorn) ·
 // ads: Lage beim Zielen – Visier in der Bildmitte, so weit vorn, dass der Schaft nicht ins Bild ragt
 export const LYRA_SPEC: Record<LyraKind, { file: string; muzzle: [number, number, number]; view: [number, number, number]; ads: [number, number, number] }> = {
   rifle: { file: 'lazy/LyraGewehr', muzzle: [0.6981, 0, 0.0893], view: [0.13, -0.22, -0.42], ads: [0, -0.158, -0.5] },
   pistol: { file: 'lazy/LyraPistole', muzzle: [0.1913, 0, 0.0837], view: [0.105, -0.165, -0.4], ads: [0, -0.118, -0.42] },
   shotgun: { file: 'lazy/LyraFlinte', muzzle: [0.4374, 0, 0.0995], view: [0.135, -0.235, -0.44], ads: [0, -0.168, -0.52] },
+  // ShooterGame MuzzleFlashSocket (0 / −15,06 / 72,92 cm am Knochen LauncherRoot), umgerechnet in diesen Rahmen; Visier oben auf dem Rohr
+  launcher: { file: 'lazy/Granatwerfer', muzzle: [0.729, 0, 0.151], view: [0.14, -0.27, -0.5], ads: [0, -0.215, -0.62] },
 };
 
 export interface LyraGun { g: THREE.Object3D; mixer: THREE.AnimationMixer; fire: THREE.AnimationAction | null; reload: THREE.AnimationAction | null; shots: number; reloading: boolean }

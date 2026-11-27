@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { scene, camera, ux, view } from '../../core/engine';
-import { gunShot } from '../../core/audio';
+import { gunShot, sfxAny } from '../../core/audio';
 import { MANIFEST } from '../../core/assets';
 import { hashStr } from '../../core/util';
 import { P, G, saveGame } from '../state';
@@ -8,7 +8,7 @@ import { terrainAt, liquidAt } from '../surface';
 import { SALV } from '../salvage';
 import { makeAvatar, driveAvatar, freeAvatar, avatarMuzzle, type Avatar } from '../avatar';
 import type { Tracht } from '../figur';
-import { tracer as fxTracer, impact } from '../footfx';
+import { tracer as fxTracer, impact, type ImpStoff } from '../footfx';
 import { flash } from '../fx';
 import { whiz, noteKill } from '../footgun';
 import { FELD_EXTRA, feldHurt, feldSay, feldKoop } from '../fieldfight';
@@ -215,7 +215,7 @@ function schussBild(p: Pl, ex: number, ey: number, ez: number, traf: boolean) {
   flash(a.x, a.y, a.z, '#ffd9a0', 0.32, 0.05);
   const dist = Math.hypot(a.x - camera.position.x, a.z - camera.position.z);
   gunShot('rifle', 0.5 * Math.max(0.05, 1 - dist / 140), 0.93 + Math.random() * 0.08);
-  if (!traf) impact(_b, _d.copy(_b).sub(a).normalize(), 'boden');
+  if (!traf) { const st = stoffBei(ex, ey, ez); impact(_b, _d.copy(_b).sub(a).normalize(), st === 'metall' ? 'metall' : 'boden', undefined, st); }
   // knapp am Spieler vorbei: Pfeifen
   if (ME.ok) {
     const dx = ex - a.x, dy = ey - a.y, dz = ez - a.z, l = Math.hypot(dx, dy, dz) || 1;
@@ -293,11 +293,17 @@ function schaden(p: Pl, dmg: number, von: number) {
   if (L) L.alarmT = G.time;
 }
 
+// Körper schlägt auf (ShooterGame, koerper_fall*): wenn die Todesbewegung den Boden erreicht
+function koerperFall(p: Pl) {
+  const x = p.x, z = p.z;
+  setTimeout(() => { const d = Math.hypot(x - camera.position.x, z - camera.position.z); if (d < 60) sfxAny('koerper_fall', 2, 0.55 / (1 + (d / 12) ** 2), 0.95 + Math.random() * 0.1); }, 620);
+}
 function toeten(p: Pl, von: number) {
   if (p.tot) return;
   p.tot = true; p.totT = 0; p.hp = 0; stopp(p); p.vx = p.vz = 0;
   if (p.deck) { p.deck.belegt = -1; p.deck = null; }
   L?.trupp.weg(p.id);
+  koerperFall(p);
   if (L) for (const o of L.pl) if (!o.tot && Math.hypot(o.x - p.x, o.z - p.z) < 30) { o.unterFeuer = Math.min(1, o.unterFeuer + 0.3); if (Math.random() < 0.5) rufen(o, ['Mann am Boden!', 'Sie haben ihn erwischt!', 'Verdammt!'][Math.floor(Math.random() * 3)]); }
   const k = feldKoop();
   if (k.mates.length && !k.client) ev.push(['k', p.id, von]);
@@ -309,7 +315,7 @@ function toeten(p: Pl, von: number) {
   if (Math.random() < 0.2) {
     const pool = GEAR_IDS.filter(id => { const d = gearDef(id)!; return d.rar <= 1 && /^waffe_|^helm_|^weste_/.test(id); });
     const id = pool[Math.floor(Math.random() * pool.length)];
-    if (id && canAdd(id) && addItem(id, 1)) feldSay(`Beim Plünderer gefunden: ${gearDef(id)!.n}`, '#5fd0ff');
+    if (id && canAdd(id) && addItem(id, 1)) { feldSay(`Beim Plünderer gefunden: ${gearDef(id)!.n}`, '#5fd0ff'); sfxAny('aufheben_munition', 1, 0.45); }
   }
   if (L && L.pl.every(o => o.tot)) feldSay('Das Lager ist geräumt.', '#3ad06a');
   saveGame();
@@ -559,7 +565,7 @@ onCoop('kst', m => {
     const p = L.pl.find(q => q.id === +a[0]); if (!p) continue;
     p.nx = +a[1]; p.nz = +a[2]; p.nb = +a[3]; p.pitch = +a[4];
     const f = +a[5]; p.geduckt = !!(f & 1); p.zielen = !!(f & 2);
-    if (f & 4 && !p.tot) { p.tot = true; p.totT = 0; }
+    if (f & 4 && !p.tot) { p.tot = true; p.totT = 0; koerperFall(p); }
     p.hp = +a[6]; p.treffer = Math.max(p.treffer, +a[8]);
     if (+a[9] >= 0) { p.aktion = 'nachladen'; p.ladeT = WAFFE.nachladen * (1 - +a[9] / 100); } else if (p.aktion === 'nachladen') p.aktion = 'sichern';
   }
@@ -575,7 +581,14 @@ onCoop('kst', m => {
   }
 });
 
+/** Material an einer Einschlagstelle (Klang und Bild, footfx.ts impact): Container, Fässer und Wracks Metall, am Wasser Wasser, sonst Boden */
+function stoffBei(x: number, y: number, z: number): ImpStoff {
+  if (L) for (const t of L.plan.teile) { const q = t.q; if (y >= q.y0 - 0.1 && y <= q.y0 + q.h + 0.1 && imQuader(q, x, z, 0.12)) return t.art === 'container' || t.art === 'fass' || t.art === 'wrack' ? 'metall' : 'default'; }
+  return liquidAt(x, z) ? 'wasser' : 'default';
+}
+
 // ---------- Anschluss an den Kampf zu Fuß (fieldfight.ts) ----------
+FELD_EXTRA.stoff = stoffBei;
 FELD_EXTRA.update = update;
 FELD_EXTRA.wand = (ox, oy, oz, dx, dy, dz, tMax) => { if (!L) return tMax; let tw = tMax; for (const q of L.quader) { const t = strahlQuader(q, ox, oy, oz, dx, dy, dz, tw); if (t >= 0 && t < tw) tw = t; } return tw; };
 FELD_EXTRA.ziel = (ox, oy, oz, dx, dy, dz, tMax) => {
@@ -602,6 +615,7 @@ FELD_EXTRA.blast = (x, y, z, r, dmg) => {
   }
 };
 FELD_EXTRA.solid = (x, y, z) => !!L && L.quader.some(q => y >= q.y0 && y <= q.y0 + q.h && imQuader(q, x, z));
+FELD_EXTRA.nah = (x, y, z) => !!L && L.pl.some(p => !p.tot && Math.hypot(p.x - x, p.z - z) < 0.5 && y > p.y && y < p.y + (p.geduckt ? 1.3 : 1.85));      // Geschoss des Granatwerfers zündet am Körper
 FELD_EXTRA.laerm = (x, y, z, r) => { if (L && !feldKoop().client) for (const p of L.pl) if (!p.tot) hoeren(p.sinne, p, { x, y, z, r }, G.time); };
 FELD_EXTRA.kampf = () => !!L && L.pl.some(p => !p.tot && p.sinne.kampf);
 FELD_EXTRA.ruhe = () => { if (L) for (const p of L.pl) { p.sinne.wach = 0; p.sinne.kampf = false; p.sinne.zuletzt = null; p.sinne.ziel = -1; } };

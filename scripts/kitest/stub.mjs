@@ -8,6 +8,7 @@ export const camera = { position: { x: 0, y: 2, z: 0 } };
 export const ux = new Proxy({}, { get: () => () => {} });
 export const view = { W: 1280, H: 720 };
 export const gunShot = () => { T.schuesse++; return true; };
+export const sfxAny = () => true;
 const man = JSON.parse(fs.readFileSync(path.resolve('public/assets/manifest.json'), 'utf8'));
 export const MANIFEST = { files: { 'lazy/Recast': { url: pathToFileURL(path.resolve('public', man.files['lazy/Recast'].url)).href } } };
 

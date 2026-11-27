@@ -111,6 +111,8 @@ export const GEAR = {
   waffe_sp12: { n: 'Pistole SP-12', kind: 'waffe', rar: 0, val: 380, desc: 'Zwölf Schuss, schneller Abzug. Wer zu schnell feuert, streut; ein ruhiger Schuss aus dem Stand sitzt.', st: { schaden: 10 }, shop: 0, immer: true, img: 'aus_sp12' },
   waffe_kg30: { n: 'Kampfgewehr KG-30', kind: 'waffe', rar: 1, val: 1500, desc: 'Vollautomatisch, dreißig Schuss. Der erste Schuss sitzt, im Dauerfeuer wandert die Garbe; im Anschlag bleibt sie enger. Ab 28 Metern halbe Wirkung.', st: { schaden: 15 }, shop: 0, immer: true, img: 'aus_kg30' },
   waffe_tf8: { n: 'Trommelflinte TF-8', kind: 'waffe', rar: 2, val: 2800, desc: 'Acht Schuss in der Trommel, neun Kugeln je Schuss. Auf wenige Meter verheerend, danach schnell schwächer.', st: { schaden: 22 }, shop: 0, immer: true, img: 'aus_tf8' },
+  // Aus Epics ShooterGame (seit 2026-11-27, game/granatwerfer.ts): Geschoss mit Bogen, zündet beim Aufschlag; schaden = Mitte der Explosion
+  waffe_gw40: { n: 'Granatwerfer GW-40', kind: 'waffe', rar: 2, val: 4200, desc: 'Vier 40-mm-Granaten in der Trommel. Zündet beim Aufschlag, reißt im Umkreis von gut vier Metern alles mit – auch dich, wenn das Ziel zu nah steht. Langsam nachzuladen.', st: { schaden: 90 }, shop: 0, immer: true },
   waffe_splitter: { n: 'Splitterwerfer', kind: 'waffe', rar: 3, val: 9000, desc: 'Ferrox-Technik. Niemand weiß genau, wie er arbeitet.', st: { schaden: 44 }, img: 'aus_sw' },
   // ----- Werkzeuge -----
   // Bergbau mit der Hand (seit 2026-11-24, dungeon.ts): Kristalladern in den Minen; ohne Handbohrer geht es nicht
