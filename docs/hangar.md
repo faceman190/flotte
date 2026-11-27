@@ -12,6 +12,9 @@ Alle Dateien liegen in `asset-src/neu/bastion/`.
 
 ## Zweite Runde (27.11.2026)
 
+Freigegeben in Alpha 1.68 (27.11.2026), zusammen mit den zwei Ebenen (`docs/deck3.md`). Vor der Freigabe in der gebauten Fassung gestartet
+(„Weiterspielen“ mit einem Spielstand zu Fuß im Hangar): Menü, Laden, neuer Hangar, keine Fehler.
+
 Der Nutzer nach dem neuen Deck 3: „Das Deck ist gut geworden. Hangar auch nochmal überarbeiten mit mehr Details und dann mit möglichst guter
 Qualität ins Spiel, MB spielen keine Rolle, dürfen 50-100 sein“.
 
@@ -85,6 +88,8 @@ Gemessen vor der Runde: 7 bis 14 Bildpunkte je Meter in der Halle, 2 im Dach, di
 - Bildzeit im Testfenster (versteckter Tab, 1024 × 768, `render` plus `finish`): vorher 10 bis 17 ms, jetzt 10 bis 13 ms. Ein Unterschied
   ist dort nicht messbar; im sichtbaren Fenster des Nutzers und auf einem schwachen Rechner ist es nicht gemessen.
 - Grafikspeicher der Lichtkarten (gerechnet, nicht gemessen): etwa 460 MB statt 230 MB.
+- Gebaute Fassung im versteckten Tab: Die Navigation dorthin wurde abgelehnt. Es ging mit einem Rahmen im schon offenen Tab, in den die
+  Seite samt Ersatz für `requestAnimationFrame` geschrieben wird (`document.write`); ein Bild kommt mit `toDataURL` direkt nach dem Bildaufruf.
 - Story-Bot durch Prolog und fünf Kapitel ohne erzwungene Schritte und ohne Fehler; Laufprobe beider Ebenen (`__walkRund`) ohne
   unerreichbare Punkte; der Wisent steht auf dem mittleren Platz frei neben dem Gerät.
 
