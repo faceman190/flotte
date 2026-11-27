@@ -1,16 +1,18 @@
 # Export aus Epics ShooterGame-Beispiel (UE 4.27) für das Browser-Spiel: Kampf-Klänge und Granatwerfer (seit 27.11.2026)
 #
 # So geht's (ShooterGame selbst braucht UE 4.27 und C++; die Assets lassen sich aber in jedem UE5-Projekt öffnen):
-#  1. Aus C:\EXTRA\UnrealProjects\ShooterGame\Content die Ordner Sounds, Weapons und Effects in ein UE5-Projekt kopieren, nach  <Projekt>\Content\ShooterImport\  (Struktur beibehalten: ShooterImport\Sounds, ShooterImport\Weapons …).
+#  1. Aus C:\EXTRA\UnrealProjects\ShooterGame\Content die Ordner Sounds, Weapons und Effects DIREKT nach <UE5-Projekt>\Content\ kopieren
+#     (Originalpfade /Game/Weapons …: die Assets verweisen aufeinander, in einem Unterordner fehlt dem Granatwerfer sein Skelett und
+#     der Export stürzt ab). Erprobt am 27.11.2026 mit UE 5.8 und dem FirstPerson-Projekt.
 #  2. Im Editor:  Tools > Execute Python Script…  diese Datei, oder ohne Fenster:
 #       UnrealEditor-Cmd.exe "<Projekt>.uproject" -run=pythonscript -script="<Pfad>\shooter_export.py" -unattended -nosplash
 #  3. Ergebnis in  <Projekt>\WebExport\shooter\  (sounds\*.wav, meshes\*.fbx/.glb, textures\*.png, liste.txt)
 #
-# Nur Lesen und Exportieren; im Projekt ändert sich nichts außer dem kopierten Ordner ShooterImport.
+# Nur Lesen und Exportieren; im Projekt ändert sich nichts außer den kopierten Ordnern.
 import os
 import unreal
 
-ROOT = '/Game/ShooterImport'
+ROOT = '/Game'
 OUT = os.path.join(unreal.Paths.project_dir(), 'WebExport', 'shooter')
 
 # Klänge: alle SoundWaves unter diesen Ordnern
@@ -52,6 +54,12 @@ def main():
                 sub = d.split('/', 1)[1].replace('/', '_')
                 if export(obj, os.path.join(OUT, 'sounds', sub, str(a.asset_name) + '.wav'), unreal.SoundExporterWAV()):
                     n['wav'] += 1
+    for d in TEX_DIRS:
+        for a in assets(d, recursive=False):
+            obj = a.get_asset()
+            if isinstance(obj, unreal.Texture2D):
+                if export(obj, os.path.join(OUT, 'textures', str(a.asset_name) + '.png'), unreal.TextureExporterPNG()):
+                    n['png'] += 1
     gltf = getattr(unreal, 'GLTFExporter', None)
     for m in MESHES:
         obj = unreal.load_asset(ROOT + '/' + m)
@@ -59,8 +67,11 @@ def main():
             log.append('FEHLT ' + m); continue
         name = m.rsplit('/', 1)[1]
         exp = unreal.SkeletalMeshExporterFBX() if isinstance(obj, unreal.SkeletalMesh) else unreal.StaticMeshExporterFBX()
-        if export(obj, os.path.join(OUT, 'meshes', name + '.fbx'), exp):
-            n['mesh'] += 1
+        try:
+            if export(obj, os.path.join(OUT, 'meshes', name + '.fbx'), exp):
+                n['mesh'] += 1
+        except Exception as e:  # noqa: BLE001
+            log.append('FEHLER fbx ' + name + ': ' + str(e))
         if gltf is not None:
             try:
                 opts = unreal.GLTFExportOptions()
@@ -68,12 +79,6 @@ def main():
                 log.append('OK  glb ' + name)
             except Exception as e:  # noqa: BLE001
                 log.append('glb nicht möglich ' + name + ': ' + str(e))
-    for d in TEX_DIRS:
-        for a in assets(d, recursive=False):
-            obj = a.get_asset()
-            if isinstance(obj, unreal.Texture2D):
-                if export(obj, os.path.join(OUT, 'textures', str(a.asset_name) + '.png'), unreal.TextureExporterPNG()):
-                    n['png'] += 1
     # Waffen-Sockets (Mündung) und Montage-Längen für die Einbindung
     for m in ['Weapons/Launcher', 'Weapons/Rifle']:
         obj = unreal.load_asset(ROOT + '/' + m)
