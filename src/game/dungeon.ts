@@ -6,6 +6,7 @@ import { scene, camera, ambient, rim, sun, view, ux, gl, overlay, BODY_LAYER, bo
 import { keys, mouse, releaseAll } from '../core/input';
 import { clamp, rng, hashStr } from '../core/util';
 import { snd, sfx, shotSfx, gunShot, loopVol, type GunKind } from '../core/audio';
+import { ngMuzzle, ngVmFlash } from './ngfx';
 import { tracer as fxTracer, impact, vmShell, makeBolt, orientBolt, droneFire, boltHit, droneDeath, updateFootFx, clearFootFx, SHELL_PORT } from './footfx';
 import { texMat, std } from '../core/textures';
 import { P, G, settings, saveGame } from './state';
@@ -1032,7 +1033,7 @@ function shoot() {
   const cp = camera.getWorldPosition(_v).clone();
   const tpm = VIEW.tp || fpOn ? avatarMuzzle(me) : null;
   const a = tpm || (vm ? camera.localToWorld(_w.copy(vm.muzzle).applyEuler(vm.gun.rotation).add(vm.gun.position)).clone() : gun ? gun.localToWorld(_w.set(0, 0.008, -0.6)).clone() : cp.clone());
-  if (tpm) flash(tpm.x, tpm.y, tpm.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);
+  if (tpm && !ngMuzzle(tpm, new THREE.Vector3(0, 0, -1).applyEuler(_e.set(DUN.pitch, DUN.yaw, 0)), 1, !!w.sfx)) flash(tpm.x, tpm.y, tpm.z, '#ffd9a0', w.sfx ? 0.18 : 0.38, 0.05);
   if (w.gw) {      // Granatwerfer: Geschoss aus der Mündung in Blickrichtung (Koordinaten der Mine)
     _e.set(DUN.pitch + (Math.random() - 0.5) * 2 * sp, DUN.yaw + (Math.random() - 0.5) * 2 * sp, 0);
     const d = new THREE.Vector3(0, 0, -1).applyEuler(_e);
@@ -1061,10 +1062,20 @@ function shoot() {
     const hp = cp.clone().addScaledVector(d, bt); end = hp;
     if (best && mates.size && !amHost(mates.keys())) { best.hit = 0.12; coopSend('mh', { e: DUN.e!.id, i: best.id, d: w.dmg }); impact(hp, d, 'metall'); G.hitMark = 0.12; }
     else if (best) { if (!best.alert) droneBark('alarm', Math.hypot(best.x - DUN.x, best.z - DUN.z)); best.hp -= w.dmg * gunFalloff(bt); best.hit = 0.12; best.lh = 0; best.alert = true; impact(hp, d, 'metall'); G.hitMark = 0.12; }
-    else impact(hp, d, 'boden', w.col);
+    else impact(hp, d, 'boden', w.col, undefined, mineNormal(hp, d, bt));
     fxTracer(a, hp, w.col, w.n > 1 ? 0.04 : 0.065);                  // Leuchtspur je Kugel
   }
   void end;
+}
+// Flächennormale am Einschlag in der Mine (für das Einschussloch): Boden, sonst die getroffene Felswand (Kacheln, also entlang x oder z).
+// Decke und Wände mit Abstand (WALL_R > 0,5: Treffpunkt liegt vor der Wand) bekommen keins. Legt hp am Boden auf die Bodenhöhe.
+function mineNormal(hp: THREE.Vector3, d: THREE.Vector3, t: number): THREE.Vector3 | null {
+  const ly = EYE() + d.y * t, lx = DUN.x + d.x * t, lz = DUN.z + d.z * t;
+  if (ly <= 0.3) { hp.y = BASE.y + 0.005; return new THREE.Vector3(0, 1, 0); }
+  if (ly >= 5.3 || WALL_R > 0.5) return null;
+  if (Math.abs(d.x) > 0.05 && solidAt(lx + Math.sign(d.x) * 0.3, lz)) return new THREE.Vector3(-Math.sign(d.x), 0, 0);
+  if (Math.abs(d.z) > 0.05 && solidAt(lx, lz + Math.sign(d.z) * 0.3)) return new THREE.Vector3(0, 0, -Math.sign(d.z));
+  return null;
 }
 // Umgebung für Granate und Granatwerfer (granate.ts, granatwerfer.ts): Koordinaten der Mine, Boden bei 0, Fels und Decke fest
 function mineEnv(): GwEnv {
@@ -1321,7 +1332,7 @@ export function dungeonCamera() {
     if (vm.glow) { const k = 0.82 + 0.18 * Math.sin(performance.now() * 0.004); vm.glow.color.setHex(vm.id === 'ef2' ? 0x6fc2ff : 0x8fd0ff).multiplyScalar(k); }
     vm.gun.visible = DUN.dead <= 0;
     const sup = vm.id === 'smg', f = DUN.flash > 0 && (!sup || shotsN % 3 === 0); vm.flash.visible = f; vm.flashLight.intensity = f ? (sup ? 0.12 : 2.6) : 0;   // SMG mit Schalldämpfer: kleines Mündungsfeuer
-    if (f) { (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
+    if (f) { ngVmFlash(vm.flash); (vm.flash.material as THREE.SpriteMaterial).rotation = Math.random() * 6.28; vm.flash.scale.setScalar(sup ? 0.03 + Math.random() * 0.02 : 0.11 + Math.random() * 0.08); }
     if (shotsN !== vmShotsN) { vmShotsN = shotsN; const port = SHELL_PORT[vm.id]; if (port) vmShell(vm.scene, vm.gun, port); }   // Hülse fliegt rechts heraus
   }
   updateFootFx();

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { scene, camera, GLOW } from '../core/engine';
 import { sfxAny, gunShot } from '../core/audio';
 import { grenadeFx, dust, onClearFootFx } from './footfx';
+import { ngTrail } from './ngfx';
 import { camShake } from './footgun';
 import type { NadeEnv } from './granate';
 
@@ -58,7 +59,7 @@ export function updateLauncher(dt: number, px: number, py: number, pz: number, h
     }
     place(s);
     const ox = e.ox || 0, oy = e.oy || 0, oz = e.oz || 0;
-    if ((s.smoke -= dt) <= 0 && !boom) { s.smoke = 0.025; dust(ox + s.p.x, oy + s.p.y, oz + s.p.z, '#9a948c', 0.22, 0.6, 0.15, 0.35); }      // Rauchfahne
+    if ((s.smoke -= dt) <= 0 && !boom) { s.smoke = 0.025; if (!ngTrail(ox + s.p.x, oy + s.p.y, oz + s.p.z)) dust(ox + s.p.x, oy + s.p.y, oz + s.p.z, '#9a948c', 0.22, 0.6, 0.15, 0.35); }      // Rauchfahne
     if (!boom) continue;
     explode(s, px, py, pz, hurtMe);
     scene.remove(s.m); shells.splice(i, 1);
@@ -66,7 +67,7 @@ export function updateLauncher(dt: number, px: number, py: number, pz: number, h
 }
 function explode(s: Shell, px: number, py: number, pz: number, hurtMe: (d: number) => void) {
   const e = s.env, wx = (e.ox || 0) + s.p.x, wy = (e.oy || 0) + s.p.y + 0.15, wz = (e.oz || 0) + s.p.z;
-  grenadeFx(wx, wy, wz);
+  grenadeFx(wx, wy, wz, (e.oy || 0) + e.ground(s.p.x, s.p.z));
   const dc = Math.hypot(wx - camera.position.x, wy - camera.position.y, wz - camera.position.z), k = vol(wx, wy, wz, 24);
   const alt = () => { sfxAny('w_x_ge', 3, 0.9 * Math.max(0.12, k)); sfxAny('w_x_gt', 3, 0.7 * Math.max(0.1, k)); };
   if (dc > 40) sfxAny('gw_expl_fern', 3, 0.85 * Math.max(0.15, k * 2), 1, alt);      // fern: dumpfer Knall

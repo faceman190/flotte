@@ -68,7 +68,7 @@ export function updateGrenades(dt: number, px: number, py: number, pz: number, h
     if ((n.t -= dt) > 0) continue;
     // Zündung
     const wx = ox + n.p.x, wy = oy + n.p.y + 0.2, wz = oz + n.p.z, d = Math.hypot(n.p.x - px, n.p.y - py, n.p.z - pz);
-    grenadeFx(wx, wy, wz);
+    grenadeFx(wx, wy, wz, oy + e.ground(n.p.x, n.p.z));
     const k = vol(wx, wy, wz, 22);
     sfxAny('w_x_ge', 3, 0.9 * Math.max(0.12, k)); sfxAny('w_x_gt', 3, 0.7 * Math.max(0.1, k));
     camShake(Math.min(1, 6 / Math.max(2, d)));
