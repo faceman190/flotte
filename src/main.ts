@@ -40,7 +40,7 @@ import { quartierHooks } from './game/quartier';
 import { fzOrdnen } from './game/fahrzeuge';
 import { setDustVisible } from './core/ambience';
 import type { Mode } from './game/state';
-import { landePose, buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, roverView, liquidAt, ROVER, SURF , fzImLaderaum, fzWeg, fzInHalle, landeHoehe } from './game/surface';
+import { landePose, buildSurface, addOrbitZone, orbitExit, updateSurfaceFlight, landShip, relandShip, boardShip, unloadRover, nearShip, updateRover, roverCamera, resetRoverCamera, syncLandedShip, drawRoverHUD, hideRover, fahrzeugTauschen, roverView, liquidAt, ROVER, SURF , fzImLaderaum, fzWeg, fzInHalle, landeHoehe, roverStehen } from './game/surface';
 import { wieselScan } from './game/wiesel';
 import { initTestlabor, updateTestlabor, testHooks } from './game/testlabor';
 import { mannyHooks } from './game/mannyAvatar';
@@ -1052,6 +1052,7 @@ function loop(now: number, manual = false) {
     // Kanzel der Jäger und der Elster (ausstieg.ts): offen, solange der Pilot draußen ist (am Boden mit Bordleiter, im All beim Außenbord)
     updateKisten(dt);      // Kisten in der Welt, Traktorstrahl zur Rampe (kisten.ts)
     laderaumUpdate(ROVER.model?.g.parent && !ROVER.leih ? ROVER.kind : null);      // draußen = Modell steht in der Szene (auch während man an Bord ist)      // Kisten und Fahrzeug im Laderaum (laderaum.ts)
+    if (ROVER.active && !(G.mode === 'rover' && !FOOT.active && !G.dead)) roverStehen();      // abgestelltes Fahrzeug an seinem Platz (surface.ts)
     if (IN.active && BORD.aktiv) { syncShip(); folgeSchiff(); setGear(SHIP.g, false, dt); setDoors(SHIP.g, false, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }      // im Flug an Bord: Schiff fliegt, Innenraum folgt
     else if (IN.active) { syncParkedShip(); setGear(SHIP.g, hangarGearDown(), dt); setDoors(SHIP.g, hangarGearDown() && RAMP.want, dt); setKanzel(SHIP.g, false, dt); leiterZeigen(false); }
     else if (ROVER.active) { syncLandedShip(); setGear(SHIP.g, true, dt); setDoors(SHIP.g, true, dt); setKanzel(SHIP.g, true, dt); leiterZeigen((kanzelInfo(SHIP.g)?.p || 0) > 0.6 && !eigeneLeiter(SHIP.g), ROVER.ship); }

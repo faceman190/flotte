@@ -881,6 +881,30 @@ function roverMotor(dt: number, vF: number, th: number, radR: number, vB: number
   R.rpm += (want - R.rpm) * Math.min(1, dt * (R.air ? 5 : 14));
 }
 
+// Abgestelltes Fahrzeug (seit 2026-11-28): Lage und Modell auch, solange niemand fährt. Vorher setzte nur updateRover (läuft nur beim Fahren)
+// das Modell an seinen Platz. Nach „Weiterspielen“ oder Wiedereinstieg stand das frisch gebaute Modell deshalb im Ursprung unter dem Gelände
+// (unsichtbar), bis man einmal eingestiegen war; auch das Blender-Modell ersetzte den Platzhalter erst beim Fahren.
+export function roverStehen() {
+  if (!ROVER.active || !ROVER.model || !world.surface) return;
+  let m = ROVER.model;
+  const R = ROVER;
+  if (!m.neu || m.kind !== R.kind) {
+    if (!fzBereit(R.kind)) fzLaden(R.kind);
+    else { const n = buildFahrzeug(R.kind); if (n) { const drin = !!m.g.parent; scene.remove(m.g); ROVER.model = m = n; if (drin) scene.add(n.g); } }
+  }
+  if (!m.g.parent) return;      // im Laderaum abgestellt oder in der Halle: kein Modell draußen
+  // Neigung wie beim Fahren: Ebene durch die Radpunkte
+  const F = FZ[R.kind], fx = -Math.sin(R.yaw), fz = -Math.cos(R.yaw), rx0 = Math.cos(R.yaw), rz0 = -Math.sin(R.yaw);
+  const hAt = (lx: number, lz: number) => bodenAt(R.x + rx0 * lx - fx * lz, R.z + rz0 * lx - fz * lz);
+  const ht = F.trk / 2, axF = F.ax[0], axB = F.ax[F.ax.length - 1];
+  const front = (hAt(-ht, axF) + hAt(ht, axF)) / 2, back = (hAt(-ht, axB) + hAt(ht, axB)) / 2;
+  const left = F.ax.reduce((a, z) => a + hAt(-ht, z), 0) / F.ax.length, right = F.ax.reduce((a, z) => a + hAt(ht, z), 0) / F.ax.length;
+  R.pitch = Math.atan2(front - back, axB - axF); R.roll = Math.atan2(right - left, F.trk);
+  m.g.position.set(R.x, R.y, R.z);
+  m.g.rotation.order = 'YXZ';
+  m.g.rotation.set(R.pitch, R.yaw, R.roll);
+}
+
 const _f = new THREE.Vector3();
 export function updateRover(dt: number) {
   updateFlora(camera.position);
