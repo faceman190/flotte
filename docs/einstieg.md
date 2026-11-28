@@ -36,4 +36,4 @@ Wunsch von Face: Die Marken der Stationen sollen nur im Reisemodus erscheinen; d
 - Die Steuerungsleiste zeigt „Umschalt · Navigationsflug: Stationsmarken, schneller“ jetzt auch, solange kein Navigationsziel gesetzt ist
   (nicht im Gefecht, nicht am Dock); im Navigationsflug „Umschalt · Navigationsflug aus“.
 - HUD-Kürzel: Tempoanzeige „m/s · NAV“, Cockpit „NAV“ / „NAVIGATION“, Statuszeile „· NAVIGATIONSFLUG“.
-- Offen: Ob die Radar-Punkte der Stationen ebenfalls nur im Navigationsflug erscheinen sollen (bisher unverändert).
+- Das Radar zeigt die Stationen bewusst immer (so von Face bestätigt, 28.11.2026).
