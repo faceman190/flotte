@@ -14,7 +14,7 @@ import { ORTE } from './orte';
 // Schnellflug und Kurzsprung (seit Alpha 1.50, für große Sektoren wie Heimstatt mit 60 km Radius; geht in jedem Sektor)
 // H lädt den Antrieb (3,5 s), danach fliegt das Schiff bis 8 km/s. Ohne Navigationsziel lenkt der Spieler selbst (träge, kein Seitwärtsdriften).
 // Mit Navigationsziel (N: Ort im Fadenkreuz, oder Klick auf der Sektorkarte) ist es ein Kurzsprung: Der Autopilot richtet das Schiff aus, fliegt hin
-// und fällt gut 1 km vor dem Ziel in den Reiseflug zurück. Nahe an Stationen, Toren und Feldern wird er langsamer (so überfliegt man nichts);
+// und fällt gut 1 km vor dem Ziel in den Navigationsflug zurück. Nahe an Stationen, Toren und Feldern wird er langsamer (so überfliegt man nichts);
 // kommt man einem Hindernis zu nahe, endet der Schnellflug. Ein Treffer, S oder H beendet ihn ebenfalls. Die Kamera bleibt starr (Wunsch des Spielers).
 export const SF_MAX = 8000;
 const SPOOL = 3.5, DROP_CLEAR = 900, ARRIVE = 1000;
@@ -99,7 +99,7 @@ export function pickNav(dir: THREE.Vector3) {
 function navTip(p: NavPoint) {
   if (used) return;
   const d = d3(P.x, P.y, P.z, p.x, p.y, p.z), near = world.stations.find(s => d3(P.x, P.y, P.z, s.x, s.y, s.z) < s.R + 500);
-  if (d < p.R + ARRIVE + 1500) radio('SYSTEM', `Kurs auf ${p.name} gesetzt. Das ist nah: Umschalt für den Reiseflug, dann der Marke folgen.`);
+  if (d < p.R + ARRIVE + 1500) radio('SYSTEM', `Kurs auf ${p.name} gesetzt. Das ist nah: Umschalt für den Navigationsflug, dann der Marke folgen.`);
   else radio('SYSTEM', `Kurs auf ${p.name} gesetzt. ${near ? 'Flieg ein Stück von der Station weg, dann' : 'Jetzt'} H drücken: Der Kurzsprung fliegt dich in Sekunden hin.`);
 }
 /** Steuerungsleiste: Warum ein Kurzsprung gerade nicht geht (leer = geht) */
@@ -135,7 +135,7 @@ export function toggleSchnellflug() {
   if (inO) { radio('SYSTEM', `Im Bereich „${inO.name}“ geht kein Schnellflug. Flieg erst ein Stück hinaus.`); return; }
   if (world.stations.some(s => d3(P.x, P.y, P.z, s.x, s.y, s.z) < s.R + 500)) { radio('SYSTEM', 'Zu nah an der Station für den Schnellflug. Flieg ein Stück hinaus.'); return; }
   const tgt = navTarget();
-  if (tgt && d3(P.x, P.y, P.z, tgt.x, tgt.y, tgt.z) < tgt.R + ARRIVE + 1500) { radio('SYSTEM', `${tgt.name} ist schon nah. Flieg im Reiseflug hin.`); return; }
+  if (tgt && d3(P.x, P.y, P.z, tgt.x, tgt.y, tgt.z) < tgt.R + ARRIVE + 1500) { radio('SYSTEM', `${tgt.name} ist schon nah. Flieg im Navigationsflug hin.`); return; }
   SF.phase = 'spool'; SF.t = SPOOL; SF.auto = !!tgt; SF.v = 0; markSfUsed();
   charge = sfxHeld('jump_charge', 0.45);
   if (!charge) snd(160, SPOOL, 'sine', 0.035, 220);
@@ -146,7 +146,7 @@ export function endSchnellflug(msg = '') {
   SF.phase = 'off'; SF.auto = false; stopCharge();
   if (wasFly) {
     // Kurzsprung am Ziel: fast im Stand ankommen (sonst rollt das Schiff noch ~900 m auf die Station zu).
-    // Sonst in den Reiseflug zurückfallen: Tempo auf Reiseflug-Höhe, Richtung bleibt.
+    // Sonst in den Navigationsflug zurückfallen: Tempo auf Navigationsflug-Höhe, Richtung bleibt.
     const arrived = wasAuto && !msg, f = fwdOf(), v = Math.min(SF.v, arrived ? 90 : stats().max * 1.07);
     P.vx = f.x * v; P.vy = f.y * v; P.vz = f.z * v;
     G.cruise = !arrived;

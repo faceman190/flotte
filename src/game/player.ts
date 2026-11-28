@@ -61,7 +61,7 @@ export function hurtPlayer(d: number) {
   if (!playerTargetable() || TESTF.gott) return;
   G.sinceHit = 0;
   schnellflugHit();
-  if (G.cruise) { G.cruise = false; radio('SYSTEM', 'Treffer: Reiseflug abgebrochen.'); }
+  if (G.cruise) { G.cruise = false; radio('SYSTEM', 'Treffer: Navigationsflug abgebrochen.'); }
   G.shake = Math.min(1.6, G.shake + d * 0.05);
   (SHIP.shield.material as THREE.MeshBasicMaterial).opacity = P.shield > 0 ? 0.07 : 0;   // die ganze Blase nur schwach, die Welle am Einschlag trägt (impactFx)
   const hadShield = P.shield > 0, hullBefore = P.hull, crit = stats().maxHull * 0.3;
@@ -145,7 +145,7 @@ export function updatePlayer(dt: number) {
   const direct = settings.steer !== 'zeiger';
   if (direct && !keys.ArrowLeft && !keys.ArrowRight && !keys.ArrowUp && !keys.ArrowDown) { mx = 0; my = 0; }   // direkt: kein Zeiger-Ausschlag
   if (settings.invertY) my = -my;
-  const sens = settings.sens * (SF.phase === 'fly' ? 0.3 : G.cruise ? 0.45 : 1);   // im Reiseflug lenkt das Schiff träge, im Schnellflug noch träger
+  const sens = settings.sens * (SF.phase === 'fly' ? 0.3 : G.cruise ? 0.45 : 1);   // im Navigationsflug lenkt das Schiff träge, im Schnellflug noch träger
   const maxYaw = 2.1 * sens * st.turn, maxPitch = 1.6 * sens * st.turn;
   let yawRate = -(mx * 0.5 + mx * Math.abs(mx) * 0.5) * maxYaw, pitchRate = -(my * 0.5 + my * Math.abs(my) * 0.5) * maxPitch;
   if (direct && !look.free) {
@@ -166,7 +166,7 @@ export function updatePlayer(dt: number) {
   G.roll += ((yawRate * 0.42 + (keys.KeyA ? 0.35 : 0) - (keys.KeyD ? 0.35 : 0)) + G.rollOff - G.roll) * Math.min(1, dt * 5);
   const f = fwd(), r = right();
   let th = 0;
-  // Flugstufen: Manöverflug fährt zügig an (Jäger: knapp 2 s bis 140 m/s, seit Alpha 1.40; vorher 4,5 s), Reiseflug baut langsam bis 300 m/s auf
+  // Flugstufen: Manöverflug fährt zügig an (Jäger: knapp 2 s bis 140 m/s, seit Alpha 1.40; vorher 4,5 s), Navigationsflug baut langsam bis 300 m/s auf
   // Schnellflug/Kurzsprung (schnellflug.ts) übernimmt das Tempo ganz
   if (updateSchnellflug(dt)) th = 1;
   else {
@@ -182,7 +182,7 @@ export function updatePlayer(dt: number) {
   const drag = Math.pow(th || sx || sv ? (G.cruise ? 0.9 : 0.75) : keys.KeyS ? 0.25 : 0.78, dt);
   P.vx *= drag; P.vy *= drag; P.vz *= drag;
   const sp = Math.hypot(P.vx, P.vy, P.vz);
-  // über der Grenze (z. B. nach dem Zurückschalten aus dem Reiseflug) weich abbremsen statt hart kappen
+  // über der Grenze (z. B. nach dem Zurückschalten aus dem Navigationsflug) weich abbremsen statt hart kappen
   if (sp > vmax) { const k = Math.max(vmax / sp, Math.pow(0.35, dt)); P.vx *= k; P.vy *= k; P.vz *= k; }
   }
   P.x += P.vx * dt; P.y += P.vy * dt; P.z += P.vz * dt;
@@ -369,7 +369,7 @@ export function syncShip() {
   SHIP.g.rotation.set(P.pitch, P.yaw, G.roll);
   SHIP.extraGuns.visible = P.up.guns >= 2;
   // Triebwerke: kleiner Glühpunkt mit kurzem Düsenstrahl, der mit dem Schub wächst (früher groß und blendend in der Verfolgeransicht)
-  // Größe des blauen Strahls: Leerlauf 0,8, voller Schub 1,7, Reiseflug etwas mehr (vom Nutzer so bestätigt)
+  // Größe des blauen Strahls: Leerlauf 0,8, voller Schub 1,7, Navigationsflug etwas mehr (vom Nutzer so bestätigt)
   const gs = (0.8 + G.thrust * 0.9 + (G.cruise ? 0.35 : 0)) * (1 + P.up.engine * 0.05) * (1 + Math.random() * 0.1);
   SHIP.glows.forEach(g => { g.scale.setScalar(gs * (g.userData.base || 1)); (g.material as THREE.SpriteMaterial).opacity = 0.32 + G.thrust * 0.28; });
   followRipples(P.x, P.y, P.z);

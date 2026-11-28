@@ -218,11 +218,11 @@ export const G = {
   cruise: false,
   rollOff: 0,      // mit Q/E gehaltene Rolllage
   eBusy: false,    // E wird gerade zum Andocken/Landen gebraucht (dann rollt E nicht)
-  jd: 0, jdTo: null as string | null,   // Sprungantrieb: verbleibende Ladezeit (0 = aus) und Zielsektor   // Reiseflug (Umschalt): schneller, träger; sonst Manöverflug
+  jd: 0, jdTo: null as string | null,   // Sprungantrieb: verbleibende Ladezeit (0 = aus) und Zielsektor   // Navigationsflug (Umschalt, früher Reiseflug; zeigt die Stationsmarken): schneller, träger; sonst Manöverflug
   heat: 0, overheat: false,
   inside: false,      // zu Fuß in einer Station
   transT: 0, transTo: null as null | 'surface' | 'orbit',
 };
 
-// Flugstufen: Manöverflug bis zur halben Höchstgeschwindigkeit (Jäger: 140 m/s), Reiseflug etwas darüber (Jäger: 300 m/s)
+// Flugstufen: Manöverflug bis zur halben Höchstgeschwindigkeit (Jäger: 140 m/s), Navigationsflug etwas darüber (Jäger: 300 m/s)
 export const flightMax = () => Math.round(stats().max * (G.cruise ? 1.07 : 0.5));

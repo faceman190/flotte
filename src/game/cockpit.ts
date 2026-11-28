@@ -147,7 +147,7 @@ function zZiel(s: Schirm) {
   } else zeile(222, 'ERFASST', '—', DIM);
   const eng = s.h < 370;
   zeile(eng ? 294 : 318, 'FAHRT', `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} / ${flightMax()} M/S`);
-  zeile(eng ? 322 : 350, 'ANTRIEB', SF.phase === 'fly' ? 'SCHNELLFLUG' : G.jd ? 'SPRUNG LÄDT' : G.cruise ? 'REISE' : 'NORMAL', G.cruise || SF.phase === 'fly' ? GRUEN : PET);
+  zeile(eng ? 322 : 350, 'ANTRIEB', SF.phase === 'fly' ? 'SCHNELLFLUG' : G.jd ? 'SPRUNG LÄDT' : G.cruise ? 'NAVIGATION' : 'NORMAL', G.cruise || SF.phase === 'fly' ? GRUEN : PET);
 }
 function zKlein(s: Schirm, t: string, col = BERN, size = 30, bg = '#120a02') { const x = s.x; grund(s, bg); x.fillStyle = col; x.font = `700 ${size}px ${FM}`; x.textAlign = 'center'; x.fillText(t, s.w / 2, s.h / 2 + size * 0.36); x.textAlign = 'left'; }
 function zHud(s: Schirm) {
@@ -173,7 +173,7 @@ function zHud(s: Schirm) {
   x.beginPath();
   for (let d = -30; d <= 30; d += 5) { const k = Math.round((kurs + d) / 5) * 5, px = cx + (k - kurs) * 6; if (Math.abs(px - cx) < 26 || Math.abs(px - cx) > 170) continue; x.moveTo(px, 38); x.lineTo(px, k % 10 === 0 ? 50 : 45); }
   x.stroke();
-  if (G.cruise) { x.font = `16px ${FM}`; x.fillText('REISE', cx, H - 16); }
+  if (G.cruise) { x.font = `16px ${FM}`; x.fillText('NAV', cx, H - 16); }
   x.textAlign = 'left';
 }
 // ----- Anzeigen im Stil 2 -----
@@ -212,7 +212,7 @@ function zAntrieb(s: Schirm) {
   const x = s.x, v = Math.hypot(P.vx, P.vy, P.vz), vm = flightMax(); kopf2(s, 'ANTRIEB');
   x.font = `700 72px ${FM}`; x.fillStyle = PET; x.textAlign = 'right'; x.fillText(String(Math.round(v)), s.w - 62, 106); x.font = `18px ${FM}`; x.fillStyle = DIM; x.fillText('M/S', s.w - 12, 106); x.textAlign = 'left';
   reihe2(s, 140, 'SCHUB', G.thrust, `${Math.round(G.thrust * 100)} %`, PET);
-  const art = SF.phase === 'fly' ? 'SCHNELLFLUG' : G.jd ? 'SPRUNG LÄDT' : G.cruise ? 'REISEFLUG' : 'MANÖVER', an = G.cruise || SF.phase === 'fly' || !!G.jd;
+  const art = SF.phase === 'fly' ? 'SCHNELLFLUG' : G.jd ? 'SPRUNG LÄDT' : G.cruise ? 'NAVIGATION' : 'MANÖVER', an = G.cruise || SF.phase === 'fly' || !!G.jd;
   x.fillStyle = an ? BERN : LIN; x.globalAlpha = an ? 0.25 : 1; x.fillRect(12, 184, s.w - 24, 50); x.globalAlpha = 1; x.strokeStyle = an ? BERN : PET; x.lineWidth = 2; x.strokeRect(12, 184, s.w - 24, 50);
   x.font = `700 26px ${FM}`; x.fillStyle = an ? BERN : PET; x.textAlign = 'center'; x.fillText(art, s.w / 2, 218); x.textAlign = 'left'; void vm;
 }
@@ -252,7 +252,7 @@ function zHolo(s: Schirm) {      // Sichtgerät Stil 2: schwebt vor dem Piloten.
   leiter(250, v, v > 400 ? 100 : 20, 'M/S', true); leiter(W - 250, hoch, world.ground ? (hoch > 500 ? 100 : 20) : 10, world.ground ? 'HÖHE' : 'SCHUB', false);
   // Meldefelder unten
   const feld = (px: number, t: string, an: boolean, warn = false) => { x.font = `700 18px ${FM}`; x.textAlign = 'center'; x.globalAlpha = an ? 1 : 0.3; x.strokeStyle = x.fillStyle = warn && an ? BERN : PET; x.strokeRect(px - 52, H - 62, 104, 34); x.fillText(t, px, H - 39); x.globalAlpha = 1; x.strokeStyle = x.fillStyle = PET; };
-  feld(110, 'REISE', !!G.cruise, true); feld(230, 'SPRUNG', !!G.jd || SF.phase === 'fly', true); feld(350, P.tool === 'laser' ? 'LASER' : 'KANONE', true);
+  feld(110, 'NAV', !!G.cruise, true); feld(230, 'SPRUNG', !!G.jd || SF.phase === 'fly', true); feld(350, P.tool === 'laser' ? 'LASER' : 'KANONE', true);
   feld(W - 350, 'SCHILD', P.shield > 1); feld(W - 230, 'ZIEL', !!G.lockT, true); feld(W - 110, 'FRACHT', cargoUsed() > 0);
   x.textAlign = 'left';
 }
@@ -274,7 +274,7 @@ function schirmeZeichnen(dt: number) {
   const namen = ['Schirm M', 'Schirm L', 'Schirm M', 'Schirm R', 'Schirm M', 'Schirm UFC', 'Schirm M', 'Schirm Uhr', 'Schirm M', 'Schirm Funk', 'Schirm M', 'Schirm Daten'];
   const n = namen[reihe++ % namen.length], s = SCH[n]; if (!s) return;      // je Bild ein Schirm (Radar jedes zweite)
   if (n === 'Schirm L') zSysteme(s); else if (n === 'Schirm M') zLage(s); else if (n === 'Schirm R') zZiel(s);
-  else if (n === 'Schirm UFC') zKlein(s, `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} M/S   ${G.cruise ? 'REISE' : 'NORMAL'}   ${P.tool === 'guns' ? 'KANONE' : P.tool === 'laser' ? 'LASER' : String(P.tool || '').toUpperCase()}`, BERN, 30);
+  else if (n === 'Schirm UFC') zKlein(s, `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} M/S   ${G.cruise ? 'NAV' : 'NORMAL'}   ${P.tool === 'guns' ? 'KANONE' : P.tool === 'laser' ? 'LASER' : String(P.tool || '').toUpperCase()}`, BERN, 30);
   else if (n === 'Schirm Uhr') zKlein(s, new Date().toLocaleTimeString('de-DE'), BERN, 38);
   else if (n === 'Schirm Funk') zKlein(s, 'KANAL 07 · BASTION', BERN, 20);
   else zKlein(s, `FRACHT ${cargoUsed()} / ${stats().cargo}`, BERN, 22);
