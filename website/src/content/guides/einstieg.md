@@ -33,7 +33,7 @@ was jetzt sofort geht. Gibt es nichts zu tun, verschwindet die Leiste. Alle Tast
 | <kbd>A</kbd> / <kbd>D</kbd> | seitlich ausweichen |
 | <kbd>Leer</kbd> / <kbd>Strg</kbd> | hoch / runter |
 | <kbd>Q</kbd> / <kbd>E</kbd> | rollen |
-| <kbd>Umschalt</kbd> | Reiseflug: schneller, dafür träge |
+| <kbd>Umschalt</kbd> | Navigationsflug: zeigt die Stationsmarken, schneller, dafür träge |
 | <kbd>H</kbd> | Schnellflug bis 8 km/s, mit Ziel als Kurzsprung |
 | <kbd>N</kbd> | Navigationsziel: Ort im Fadenkreuz wählen |
 | <kbd>J</kbd> | Sprungantrieb (zum nächsten Sektor) |
@@ -51,7 +51,7 @@ stehen Werkzeug, Raketen und Fracht. Die Credits blenden oben links nur kurz ein
 
 ## Weite Wege: Schnellflug und Kurzsprung
 
-Mit Schub und Reiseflug kommst du von Station zu Station in der Nähe. Für die langen Strecken in Heimstatt gibt es den **Schnellflug**:
+Mit Schub und Navigationsflug kommst du von Station zu Station in der Nähe. Für die langen Strecken in Heimstatt gibt es den **Schnellflug**:
 
 1. **Ziel wählen.** Richte das Fadenkreuz auf einen Ort, etwa die Eisenkrone, und drück <kbd>N</kbd>. Oder öffne die Karte mit
    <kbd>M</kbd> und klick den Ort auf der **Sektorkarte** an. Ziele sind Stationen, Tore, Asteroidenfelder und Markierungen aus
@@ -61,7 +61,7 @@ Mit Schub und Reiseflug kommst du von Station zu Station in der Nähe. Für die 
 3. **Ohne Ziel** lenkst du im Schnellflug selbst. <kbd>S</kbd> oder <kbd>H</kbd> beendet ihn, ein Treffer auch.
 
 Im Gefecht, in einem Asteroidenfeld und direkt an einer Station lädt der Schnellflug nicht. In einen anderen Sektor kommst du durch
-die Sprungtore oder mit dem Sprungantrieb (<kbd>J</kbd>, nur im Reiseflug).
+die Sprungtore oder mit dem Sprungantrieb (<kbd>J</kbd>, nur im Navigationsflug).
 
 ## Andocken und zu Fuß
 

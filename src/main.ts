@@ -709,8 +709,8 @@ function startJump(g: Gate) {
   releaseAll();
   sfx('jump_out', 0.8, 1, () => { snd(200, 1.4, 'sine', 0.05, 700); snd(80, 1.4, 'sawtooth', 0.03, 300); });
 }
-// Sprungantrieb (J): von überall im All in den nächsten Sektor der geplanten Route. Lädt sechs Sekunden, nur im Reiseflug,
-// nicht nahe an Stationen oder über Planeten; ein Treffer beendet den Reiseflug und damit das Laden. Tore springen weiter sofort.
+// Sprungantrieb (J): von überall im All in den nächsten Sektor der geplanten Route. Lädt sechs Sekunden, nur im Navigationsflug,
+// nicht nahe an Stationen oder über Planeten; ein Treffer beendet den Navigationsflug und damit das Laden. Tore springen weiter sofort.
 const JD_TIME = 6;
 let jdSound: null | (() => void) = null;   // laufende Aufnahme des Aufladens
 const jdStop = () => { jdSound?.(); jdSound = null; };
@@ -720,11 +720,11 @@ function toggleJumpDrive() {
   if (!to) radio('SYSTEM', 'Kein Sprungziel. Setze auf der Galaxiekarte (M) eine Route.');
   else if (world.surface) radio('SYSTEM', 'Der Sprungantrieb arbeitet nur im All. Steig erst in den Orbit auf.');
   else if (world.stations.some(s => d3(P.x, P.y, P.z, s.x, s.y, s.z) < s.R + 500)) radio('SYSTEM', 'Zu nah an einer Station für einen Sprung. Flieg ein Stück hinaus.');
-  else { G.cruise = true; G.jd = JD_TIME; G.jdTo = to; radio('SYSTEM', `Sprungantrieb lädt, Reiseflug ist an. Ziel: ${SECTOR[to]?.name || to}. Kurs halten.`); jdSound = sfxHeld('jump_charge', 0.75); if (!jdSound) snd(180, 0.5, 'sine', 0.05, 240); }
+  else { G.cruise = true; G.jd = JD_TIME; G.jdTo = to; radio('SYSTEM', `Sprungantrieb lädt, Navigationsflug ist an. Ziel: ${SECTOR[to]?.name || to}. Kurs halten.`); jdSound = sfxHeld('jump_charge', 0.75); if (!jdSound) snd(180, 0.5, 'sine', 0.05, 240); }
 }
 function updateJumpDrive(dt: number) {
   if (!G.jd) return;
-  if (!G.cruise || G.dead) { G.jd = 0; jdStop(); radio('SYSTEM', 'Sprung abgebrochen: Reiseflug unterbrochen.'); return; }
+  if (!G.cruise || G.dead) { G.jd = 0; jdStop(); radio('SYSTEM', 'Sprung abgebrochen: Navigationsflug unterbrochen.'); return; }
   const before = Math.ceil(G.jd);
   G.jd = Math.max(0, G.jd - dt);
   if (!jdSound && G.jd > 0 && Math.ceil(G.jd) !== before) snd(240 + (JD_TIME - before) * 70, 0.12, 'sine', 0.04, 90);   // ohne Aufnahme: Ladeton je Sekunde

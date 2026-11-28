@@ -43,6 +43,8 @@ interface Tag { x: number; y: number; name: string; sub: string; col: string; pr
 let tags: Tag[] = [];
 const NAH = 6000;      // Meter: bis hierher steht der Name immer da
 const alleNamen = () => !!(keys.AltLeft || keys.AltRight);
+// Navigationsflug (G.cruise, Umschalt) oder Schnellflug: dann stehen die Stationsmarken da (seit 2026-11-28)
+export const navMarken = () => !!G.cruise || SF.phase === 'fly' || SF.phase === 'spool';
 const amKreuz = (p: { x: number; y: number }) => Math.hypot(p.x - view.W / 2, p.y - view.H / 2) < Math.min(view.W, view.H) * 0.13;
 const tag = (t: Tag) => { tags.push(t); };
 const FONT_M = '"Share Tech Mono",Consolas,monospace';
@@ -134,14 +136,17 @@ export function drawHUD() {
   if (!world.def || (G.mode !== 'play' && G.mode !== 'jump')) return;
   ux.textAlign = 'center';
   const hop = nextHop();
-  // Stationen: Symbol immer, Name in der Nähe, am Fadenkreuz, als Ziel oder mit Alt; Randpfeil nur für Ziel und Heimathafen
-  const nt = navTarget(), alle = alleNamen();
+  // Stationen: Symbol immer, Name in der Nähe, am Fadenkreuz, als Ziel oder mit Alt; Randpfeil nur für Ziel und Heimathafen.
+  // Seit 2026-11-28 (Wunsch des Spielers): Stations- und Ortsmarken nur im Navigationsflug (Umschalt) oder Schnellflug. Im normalen Flug
+  // bleiben nur das gewählte Ziel (N, Karte, Auftrag), Alt (alle Namen) und der Andockrahmen; so bleibt das Bild im Gefecht frei.
+  const nt = navTarget(), alle = alleNamen(), navi = navMarken();
   for (const s of world.stations) {
     const p = proj(s.x, s.y + s.R * 0.9, s.z), d = d3(s.x, s.y, s.z, P.x, P.y, P.z), ziel = nt?.kind === 'st' && nt.id === s.id;
-    if (onScreen(p, 20)) {
+    if (!navi && !ziel && !alle) { /* nur Andockrahmen (unten) */ }
+    else if (onScreen(p, 20)) {
       const name = alle || ziel || d < NAH || amKreuz(p);
       tag({ x: p.x, y: p.y, name: name ? s.name.toUpperCase() : '', sub: fmtD(d), col: '#5fd0ff', prio: ziel ? 95 : d < NAH ? 60 : 40, d, always: ziel, icon: 'dia' });
-    } else if (!ziel && s.id === P.home.station) edgeArrow(p, '#5fd0ff', `⌂ ${s.name} · ${fmtD(d)}`);
+    } else if (!ziel && navi && s.id === P.home.station) edgeArrow(p, '#5fd0ff', `⌂ ${s.name} · ${fmtD(d)}`);
     const dd = d3(s.dock.x, s.dock.y, s.dock.z, P.x, P.y, P.z);
     if (dd < 900 && !G.dead) {
       const q = proj(s.dock.x, s.dock.y, s.dock.z);
@@ -157,6 +162,7 @@ export function drawHUD() {
     const d = d3(o.x, o.y, o.z, P.x, P.y, P.z);
     if (d < o.R * 0.6) continue;
     const p = proj(o.x, o.y + Math.min(o.R * 0.3, 400), o.z), ziel = nt?.kind === 'ort' && nt.id === o.id;
+    if (!navi && !ziel && !alle) continue;
     if (onScreen(p, 20)) tag({ x: p.x, y: p.y, name: alle || ziel || d < NAH || amKreuz(p) ? o.name.toUpperCase() : '', sub: fmtD(d), col: '#a8c8d8', prio: ziel ? 95 : d < NAH ? 50 : 30, d, always: ziel, icon: 'sq' });
   }
   for (const h of orteHud) h({ proj, onScreen, edgeArrow, brackets });
@@ -285,7 +291,7 @@ export function drawHUD() {
       const sp = Math.hypot(P.vx, P.vy, P.vz), vm = fast ? SF_MAX : Math.max(1, flightMax()), sx = a.x - 40, sy = a.y + 4;
       ux.textAlign = 'right'; ux.font = '700 12px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = fast ? '#bfe6ff' : G.cruise ? '#7cc4ff' : 'rgba(228,238,245,.85)';
       ux.fillText(fast ? (sp / 1000).toFixed(1).replace('.', ',') : String(Math.round(sp)), sx, sy);
-      ux.font = '9px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = 'rgba(228,238,245,.5)'; ux.fillText(fast ? 'km/s · SCHNELL' : G.cruise ? 'm/s · REISE' : 'm/s', sx, sy + 11);
+      ux.font = '9px "Share Tech Mono",Consolas,monospace'; ux.fillStyle = 'rgba(228,238,245,.5)'; ux.fillText(fast ? 'km/s · SCHNELL' : G.cruise ? 'm/s · NAV' : 'm/s', sx, sy + 11);
       ux.fillStyle = 'rgba(255,255,255,.12)'; ux.fillRect(sx - 34, sy + 15, 34, 2);
       ux.fillStyle = fast ? '#bfe6ff' : G.cruise ? '#7cc4ff' : 'rgba(255,210,122,.9)'; ux.fillRect(sx - 34, sy + 15, 34 * clamp(sp / vm, 0, 1), 2);
       // Schnellflug: Laden bzw. Ziel und Restzeit unter dem Fadenkreuz
@@ -677,7 +683,7 @@ export function updatePanels(dt: number) {
   np.style.transform = `scale(${settings.hud})`;
   updateObjectives();
   $('objP').style.transform = `scale(${settings.hud})`;
-  $('speed').textContent = `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} / ${flightMax()} m/s${G.cruise ? ' · REISE' : ''}${G.jd ? ` · SPRUNG ${G.jd.toFixed(1)} s` : ''}${SF.phase === 'fly' ? ' · SCHNELLFLUG' : ''}` + (world.ground ? ` · Höhe ${Math.round(P.y - world.ground(P.x, P.z))} m` : '');
+  $('speed').textContent = `${Math.round(Math.hypot(P.vx, P.vy, P.vz))} / ${flightMax()} m/s${G.cruise ? ' · NAVIGATIONSFLUG' : ''}${G.jd ? ` · SPRUNG ${G.jd.toFixed(1)} s` : ''}${SF.phase === 'fly' ? ' · SCHNELLFLUG' : ''}` + (world.ground ? ` · Höhe ${Math.round(P.y - world.ground(P.x, P.z))} m` : '');
   const pr = $('prompt'), st = G.mode === 'play' ? nearDock() : null, li = !st && G.mode === 'play' ? landInfo() : null;
   if (st) { const rd = rechtDock(st.name, stationFaction(st.id, P.sector)); pr.textContent = rd.text ? (rd.ok ? `[E] An „${st.name}“ andocken · ${rd.text}` : rd.text) : `[E] An „${st.name}“ andocken`; pr.classList.remove('hidden'); }
   else if (li) { pr.textContent = li.text; pr.classList.remove('hidden'); }

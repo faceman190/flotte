@@ -85,8 +85,8 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     // Reisen: Sprung entlang der Route, Kurzsprung zum Ziel; in großen Sektoren fern von allem auch Ziel wählen und Schnellflug
     if (G.jd) r.push(['J', 'Sprung abbrechen', true]);
     else if (!world.surface) { const hop = nextHop(); if (hop) r.push(['J', `Sprung → ${SECTOR[hop]?.name || hop}`]); }
-    // Seit 2026-11-26 (Spieltest: Reiseflug und Kurzsprung fand man nicht): Ist das Ziel des Auftrags weit weg, steht „N · Kurs auf …“ da;
-    // mit gesetztem Ziel der Kurzsprung, und wenn er gerade nicht geht, warum. Für nahe Ziele der Reiseflug.
+    // Seit 2026-11-26 (Spieltest: Reiseflug, heute Navigationsflug, und Kurzsprung fand man nicht): Ist das Ziel des Auftrags weit weg, steht „N · Kurs auf …“ da;
+    // mit gesetztem Ziel der Kurzsprung, und wenn er gerade nicht geht, warum. Für nahe Ziele der Navigationsflug.
     let far = false;
     if (!world.surface) {
       const nt = navTarget(), goal = nt ? null : goalNav();
@@ -99,7 +99,9 @@ function rowsFor(): { title: string; rows: Row[] } | null {
     }
     if (!aufstehGrund()) r.push(['G', 'Aufstehen, Autopilot fliegt']);      // begehbare Schiffe im All (bordflug.ts)
     if (look.free) r.push(['V', 'Freie Kamera beenden', true]);
-    if (SF.phase === 'off' && !dock && !foes && (fresh() || G.cruise || (far && !inField))) r.push(['Umschalt', G.cruise ? 'Reiseflug aus' : 'Reiseflug (schneller)']);
+    // Seit 2026-11-28 zeigt nur der Navigationsflug die Stationsmarken: darum steht Umschalt auch da, solange kein Ziel gesetzt ist
+    if (SF.phase === 'off' && !dock && !foes && (fresh() || G.cruise || (far && !inField) || (!world.surface && !navTarget())))
+      r.push(['Umschalt', G.cruise ? 'Navigationsflug aus' : 'Navigationsflug: Stationsmarken, schneller']);
     if (fresh()) r.push(['B', 'Flottenband'], ['M', 'Karte']);
     if (fresh()) r.push(['K', 'Cockpit-Sicht']);
     if (!world.surface) r.push(['Alt', 'halten: alle Namen']);      // Beschriftungen im All (hud.ts, seit 2026-11-26)

@@ -30,7 +30,7 @@ Nutzerwunsch 2026-11-17: Optik und Modelle passen, jetzt soll sich das Spiel bes
 **Flug** (`src/game/player.ts`, `src/ui/hud.ts`)
 - Manöverflug: 0 auf 143 m/s in 2,0 s (vorher 4,5 s). Bremsen/Rückwärts wie bisher.
 - Ohne Schub rollt das Schiff aus (−22 %/s statt −50 %/s).
-- Tempo links am Fadenkreuz mit dünnem Balken bis zur Höchstgeschwindigkeit der Flugstufe (blau im Reiseflug).
+- Tempo links am Fadenkreuz mit dünnem Balken bis zur Höchstgeschwindigkeit der Flugstufe (blau im Navigationsflug, früher Reiseflug).
 
 ## Offen
 - Kühlfenster am Laser (Loslassen kurz vor Rot = schnelle Abkühlung) nur vorgeschlagen, Nutzer fragt nach.
@@ -186,7 +186,7 @@ Wunsch des Spielers: nur was im Moment wichtig ist, keine Grundtasten. `rowsFor`
 - Es bleiben Aktionen, die jetzt gehen (Andocken, Landen, Rakete, Abbauen, Handel, Kurzsprung → Ziel), und Tasten für die Lage: im Feld
   „2 Bergbaulaser“ bzw. „R Scannen“, bei Ferrox mit dem Laser „1 Kanonen“, mit Route „J Sprung → Sektor“, in großen Sektoren mehr als 5 km
   von jeder Station „N Ziel wählen“ und „H Schnellflug“, „V Freie Kamera beenden“ nur während sie läuft.
-- In den ersten zehn Spielminuten kommen Umschalt (Reiseflug), B und M dazu. Ohne Zeilen verschwindet die Leiste.
+- In den ersten zehn Spielminuten kommen Umschalt (Navigationsflug, früher Reiseflug), B und M dazu. Ohne Zeilen verschwindet die Leiste.
 
 ## Töne beim Abdocken (18.11.2026, nach Alpha 1.51)
 
